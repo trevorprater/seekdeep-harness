@@ -1445,6 +1445,17 @@ pub fn compute_outputs(
     for (out, page) in render_cordis_core_api_pages(source_root)? {
         outputs.push((out, Artifact::Text(document_identity(&page))));
     }
+    let revision = seekdeep_repository_tools::doc_source_links::oracle_revision(repo_root)?;
+    for (out, artifact) in &mut outputs {
+        if let Artifact::Text(markdown) = artifact {
+            *markdown = seekdeep_repository_tools::doc_source_links::pin_oracle_source_links(
+                markdown,
+                Path::new(out),
+                source_root,
+                &revision,
+            )?;
+        }
+    }
     Ok(outputs)
 }
 

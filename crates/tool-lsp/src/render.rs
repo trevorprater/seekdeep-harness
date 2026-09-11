@@ -348,7 +348,8 @@ pub fn present_lsp_call(args: &LspToolArgs) -> ToolCallView {
             args.file_path,
             js_number(args.line),
             js_number(args.character)
-        ),
+        )
+        .into(),
         kind: Some(ToolCallKind::Search),
         raw_input: None,
         content: None,

@@ -312,7 +312,7 @@ fn hmr_module_source() -> &'static str {
 }
 
 #[tokio::test]
-async fn host_hmr_prepares_dependencies_then_reloads_and_recovers_transactionally() {
+async fn host_hmr_keeps_import_rollback_distinct_from_committed_body_failure() {
     let temporary = tempfile::tempdir().unwrap();
     let config_path = temporary.path().join("cordis.yml");
     let module_path = temporary.path().join("main.mjs");
@@ -369,12 +369,17 @@ async fn host_hmr_prepares_dependencies_then_reloads_and_recovers_transactionall
         "export const value = 'bad'; export const fail = true;\n",
     )
     .unwrap();
-    let apply = composition
-        .reload_module(&dependency_path)
-        .await
-        .unwrap_err();
+    assert_eq!(
+        composition.reload_module(&dependency_path).await.unwrap(),
+        HostHmrOutcome::Reloaded(vec![EntryId::new("hmr").unwrap()])
+    );
+    let apply = context.get(LOADER).unwrap().wait().await.unwrap_err();
     assert!(apply.to_string().contains("candidate apply failed"));
-    assert_eq!(context.get(HMR_VALUE).as_deref(), Some(&json!("old")));
+    assert!(context.get(HMR_VALUE).is_none());
+    assert_eq!(
+        composition.fibers()[0].fiber().state(),
+        seekdeep_cordis::FiberState::Failed
+    );
 
     std::fs::write(
         &dependency_path,
@@ -385,6 +390,7 @@ async fn host_hmr_prepares_dependencies_then_reloads_and_recovers_transactionall
         composition.reload_module(&dependency_path).await.unwrap(),
         HostHmrOutcome::Reloaded(vec![EntryId::new("hmr").unwrap()])
     );
+    context.get(LOADER).unwrap().wait().await.unwrap();
     assert_eq!(context.get(HMR_VALUE).as_deref(), Some(&json!("new")));
     assert_eq!(
         composition.reload_module(&external_path).await.unwrap(),
@@ -394,12 +400,15 @@ async fn host_hmr_prepares_dependencies_then_reloads_and_recovers_transactionall
         composition.reload_module(&untracked_path).await.unwrap(),
         HostHmrOutcome::Untracked
     );
-    assert_eq!(&*hmr_events.lock(), &["hmr/reload", "hmr/change"]);
+    assert_eq!(
+        &*hmr_events.lock(),
+        &["hmr/reload", "hmr/reload", "hmr/change"]
+    );
     composition.dispose().await.unwrap();
 }
 
 #[tokio::test]
-async fn host_hmr_rolls_back_earlier_plugin_replacements_when_a_later_apply_fails() {
+async fn host_hmr_rolls_back_earlier_registrations_when_a_later_publication_fails() {
     let temporary = tempfile::tempdir().unwrap();
     let config_path = temporary.path().join("cordis.yml");
     let dependency_path = temporary.path().join("dep.mjs");
@@ -443,17 +452,40 @@ async fn host_hmr_rolls_back_earlier_plugin_replacements_when_a_later_apply_fail
         .unwrap();
     assert_eq!(context.get(HMR_A).as_deref(), Some(&json!("old")));
     assert_eq!(context.get(HMR_B).as_deref(), Some(&json!("old")));
+    let reject = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    context
+        .events()
+        .on(
+            &context,
+            "internal/plugin",
+            move |_, args| {
+                let reject = reject.clone();
+                let fiber = args.get::<seekdeep_cordis::PluginFiber>(0).unwrap();
+                Box::pin(async move {
+                    anyhow::ensure!(
+                        fiber.uid().is_none()
+                            || fiber.entry_id().as_deref() != Some("second")
+                            || !reject.swap(false, std::sync::atomic::Ordering::AcqRel),
+                        "later registration failed"
+                    );
+                    Ok(seekdeep_cordis::EventReply::Undefined)
+                })
+            },
+            seekdeep_cordis::EventOptions::default(),
+        )
+        .unwrap();
 
     std::fs::write(
         &dependency_path,
-        "export const value = 'bad'; export const fail = true;\n",
+        "export const value = 'bad'; export const fail = false;\n",
     )
     .unwrap();
     let error = composition
         .reload_module(&dependency_path)
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("later apply failed"));
+    assert!(error.to_string().contains("later registration failed"));
+    context.get(LOADER).unwrap().wait().await.unwrap();
     assert_eq!(context.get(HMR_A).as_deref(), Some(&json!("old")));
     assert_eq!(context.get(HMR_B).as_deref(), Some(&json!("old")));
 
@@ -469,6 +501,7 @@ async fn host_hmr_rolls_back_earlier_plugin_replacements_when_a_later_apply_fail
             EntryId::new("second").unwrap(),
         ])
     );
+    context.get(LOADER).unwrap().wait().await.unwrap();
     assert_eq!(context.get(HMR_A).as_deref(), Some(&json!("new")));
     assert_eq!(context.get(HMR_B).as_deref(), Some(&json!("new")));
     composition.dispose().await.unwrap();
@@ -501,12 +534,30 @@ async fn host_hmr_observes_but_does_not_surface_old_generation_disposal_failure(
         composition.reload_module(&dependency_path).await.unwrap(),
         HostHmrOutcome::Reloaded(vec![EntryId::new("hmr").unwrap()])
     );
+    context.get(LOADER).unwrap().wait().await.unwrap();
     assert_eq!(context.get(HMR_VALUE).as_deref(), Some(&json!("new")));
     composition.dispose().await.unwrap();
 }
 
 #[tokio::test]
-async fn host_hmr_invalidates_commonjs_plugin_generations() {
+async fn host_hmr_matches_source_commonjs_entry_cache_and_require_only_dependency_behavior() {
+    let source_root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness");
+    let output = std::process::Command::new("node")
+        .args(["--experimental-transform-types", "--expose-internals"])
+        .arg(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/cjs_hmr_oracle.mjs"),
+        )
+        .arg(source_root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let temporary = tempfile::tempdir().unwrap();
     let config_path = temporary.path().join("cordis.yml");
     let module_path = temporary.path().join("plugin.cjs");
@@ -518,17 +569,56 @@ async fn host_hmr_invalidates_commonjs_plugin_generations() {
     .unwrap();
     std::fs::write(&dependency_path, "module.exports = { value: 'old' };\n").unwrap();
     let context = Context::new();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    for name in ["hmr/change", "hmr/reload"] {
+        let events = events.clone();
+        context
+            .events()
+            .on(
+                &context,
+                name,
+                move |_, args| {
+                    let events = events.clone();
+                    Box::pin(async move {
+                        let event = if name == "hmr/change" {
+                            let path = args.get::<std::path::PathBuf>(0).unwrap();
+                            json!(["change", path.file_name().unwrap().to_str().unwrap()])
+                        } else {
+                            let reload = args.get::<seekdeep_loader::HostHmrReload>(0).unwrap();
+                            json!([
+                                "reload",
+                                [reload.changed.file_name().unwrap().to_str().unwrap()]
+                            ])
+                        };
+                        events.lock().push(event);
+                        Ok(seekdeep_cordis::EventReply::Undefined)
+                    })
+                },
+                seekdeep_cordis::EventOptions::default(),
+            )
+            .unwrap();
+    }
     let composition = PluginCatalog::new()
         .load_yaml_at(&context, "- id: cjs\n  name: ./plugin.cjs\n", config_path)
         .await
         .unwrap();
-    assert_eq!(context.get(HMR_VALUE).as_deref(), Some(&json!("old")));
+    let initial = context.get(HMR_VALUE).unwrap().as_ref().clone();
     std::fs::write(&dependency_path, "module.exports = { value: 'new' };\n").unwrap();
     assert_eq!(
         composition.reload_module(&dependency_path).await.unwrap(),
+        HostHmrOutcome::Untracked
+    );
+    let after_dependency = context.get(HMR_VALUE).unwrap().as_ref().clone();
+    std::fs::write(&module_path, "const dep = require('./dep.cjs'); module.exports = ctx => ctx.provide('hmrValue', dep.value + ':changed');\n").unwrap();
+    assert_eq!(
+        composition.reload_module(&module_path).await.unwrap(),
         HostHmrOutcome::Reloaded(vec![EntryId::new("cjs").unwrap()])
     );
-    assert_eq!(context.get(HMR_VALUE).as_deref(), Some(&json!("new")));
+    context.get(LOADER).unwrap().wait().await.unwrap();
+    assert_eq!(
+        json!({"initial":initial,"afterDependency":after_dependency,"afterPlugin":context.get(HMR_VALUE).unwrap().as_ref(),"events":*events.lock()}),
+        expected
+    );
     composition.dispose().await.unwrap();
 }
 

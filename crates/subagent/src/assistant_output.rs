@@ -1,13 +1,13 @@
 //! Canonical selection of a child's final assistant output.
 
 use seekdeep_core::session::SessionEvent;
-use seekdeep_llm::ContentBlock;
+use seekdeep_llm::{ContentBlock, JsonString};
 
 /// Incremental fold of the final-output selection rule.
 #[derive(Default)]
 pub struct AssistantOutputFold {
     message: Option<Vec<ContentBlock>>,
-    partial: Vec<String>,
+    partial: Vec<JsonString>,
 }
 
 impl AssistantOutputFold {
@@ -24,20 +24,22 @@ impl AssistantOutputFold {
                 .data
                 .get("message")
                 .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_array());
-            if let Some(content) = content {
-                let blocks = content
-                    .iter()
-                    .filter_map(|block| serde_json::from_value::<ContentBlock>(block.clone()).ok())
-                    .collect::<Vec<_>>();
-                if !blocks.is_empty() {
-                    self.message = Some(blocks);
-                }
+                .and_then(|content| content.deserialize::<Vec<ContentBlock>>().ok());
+            if let Some(content) = content
+                && !content.is_empty()
+            {
+                self.message = Some(content);
             }
         } else if event.event_type == "assistant/chunk" {
             let chunk = event.data.get("chunk");
-            if chunk.and_then(|c| c.get("type")).and_then(|t| t.as_str()) == Some("text-delta")
-                && let Some(text) = chunk.and_then(|c| c.get("text")).and_then(|t| t.as_str())
+            if chunk
+                .and_then(|c| c.get("type"))
+                .and_then(|t| t.deserialize::<String>().ok())
+                .as_deref()
+                == Some("text-delta")
+                && let Some(text) = chunk
+                    .and_then(|c| c.get("text"))
+                    .and_then(|t| t.deserialize::<JsonString>().ok())
             {
                 self.push_text(text);
             }
@@ -45,9 +47,10 @@ impl AssistantOutputFold {
     }
 
     /// Extends the streamed fallback with raw text.
-    pub fn push_text(&mut self, text: &str) {
+    pub fn push_text(&mut self, text: impl Into<JsonString>) {
+        let text = text.into();
         if !text.is_empty() {
-            self.partial.push(text.to_owned());
+            self.partial.push(text);
         }
     }
 
@@ -57,11 +60,11 @@ impl AssistantOutputFold {
         if let Some(message) = &self.message {
             return Some(message.clone());
         }
-        let text = self.partial.concat();
+        let text = JsonString::join(&self.partial, "");
         if text.is_empty() {
             None
         } else {
-            Some(vec![ContentBlock::Text { text }])
+            Some(vec![ContentBlock::text(text)])
         }
     }
 }
@@ -87,7 +90,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq: 0,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -110,7 +113,7 @@ mod tests {
         assert_eq!(
             output,
             vec![ContentBlock::Text {
-                text: "second".to_owned()
+                text: "second".into()
             }]
         );
     }
@@ -128,7 +131,7 @@ mod tests {
         assert_eq!(
             output,
             vec![ContentBlock::Text {
-                text: "hello".to_owned()
+                text: "hello".into()
             }]
         );
     }
@@ -153,7 +156,7 @@ mod tests {
         assert_eq!(
             final_assistant_output(&events),
             Some(vec![ContentBlock::Text {
-                text: "complete".to_owned()
+                text: "complete".into()
             }])
         );
     }
@@ -201,7 +204,7 @@ mod tests {
         assert_eq!(
             final_assistant_output(&events),
             Some(vec![ContentBlock::Text {
-                text: "partial answer".to_owned()
+                text: "partial answer".into()
             }])
         );
     }

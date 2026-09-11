@@ -7,7 +7,6 @@ use seekdeep_core::{session::SessionEvent, session_store::SESSIONS};
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use serde_json::Value;
 
 use crate::index::PERMISSION_PRESETS;
 
@@ -35,17 +34,18 @@ fn validate_event(
     let preset = event
         .data
         .get("preset")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+        .filter(|preset| preset.is_string())
+        .map(|preset| preset.to_owned())
+        .unwrap_or_else(|| serde_json::json!("").into());
     let known = context
         .get(PERMISSION_PRESETS)
-        .is_some_and(|service| service.names().iter().any(|name| name == preset));
+        .is_some_and(|service| service.names().iter().any(|name| preset == name.as_str()));
     if !known {
         return Err(fail_invariant(
             fail,
             format!(
                 "permission/preset names unknown preset {}",
-                serde_json::to_string(preset).unwrap_or_default()
+                serde_json::to_string(&preset).unwrap_or_default()
             ),
         ));
     }

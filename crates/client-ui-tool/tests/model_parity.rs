@@ -6,13 +6,14 @@ use seekdeep_client_ui_tool::{
     relativize_to_cwd, result_text, search_card_model, terminal_card_model, terminal_failed,
     tool_row_model, web_card_model,
 };
+use seekdeep_lossless_json::{JsonString, JsonValue};
 use serde_json::json;
 
 fn running(args: &str, view: Option<serde_json::Value>) -> ToolCallBlock {
     ToolCallBlock::Running {
         call_id: "call-1".to_owned(),
-        args_raw: args.to_owned(),
-        call_view: view,
+        args_raw: args.into(),
+        call_view: view.map(Into::into),
     }
 }
 
@@ -24,11 +25,11 @@ fn settled(
     ToolCallBlock::Settled {
         call_id: "call-1".to_owned(),
         call: args.map(|args| ToolCallHead {
-            args_raw: args.to_owned(),
+            args_raw: args.into(),
         }),
-        call_view,
-        result_view,
-        content: vec![json!({"type":"text","text":"done\nsecond"})],
+        call_view: call_view.map(Into::into),
+        result_view: result_view.map(Into::into),
+        content: vec![json!({"type":"text","text":"done\nsecond"}).into()],
         is_error: false,
         error: None,
     }
@@ -48,12 +49,7 @@ fn generic_row_classifies_summarizes_relativizes_and_handles_code_and_errors() {
     assert_eq!(bash.title, "Bash");
     assert_eq!(bash.summary, "Show cwd");
     assert_eq!(bash.state, ToolRowState::Running);
-    assert!(
-        bash.body
-            .as_deref()
-            .unwrap()
-            .contains("\"command\": \"pwd\"")
-    );
+    assert!(bash.body.as_ref().unwrap().contains("\"command\": \"pwd\""));
     assert_eq!(
         tool_row_model(
             "mystery",
@@ -69,7 +65,10 @@ fn generic_row_classifies_summarizes_relativizes_and_handles_code_and_errors() {
         &running(r#"{"description":"inspect","code":"return 42"}"#, None),
         None,
     );
-    assert_eq!(code.body.as_deref(), Some("return 42"));
+    assert_eq!(
+        code.body.as_ref().and_then(JsonString::as_str),
+        Some("return 42")
+    );
     assert_eq!(relativize_to_cwd("/work/a.rs", Some("/work/")), "a.rs");
     assert_eq!(
         relativize_to_cwd("/workspace/a.rs", Some("/work")),
@@ -91,7 +90,10 @@ fn generic_row_classifies_summarizes_relativizes_and_handles_code_and_errors() {
     assert_eq!(result_text(&error), "ToolError: BROKEN");
     let row = tool_row_model("mystery", &error, None);
     assert_eq!(row.summary, "mystery · failed");
-    assert_eq!(row.error_summary.as_deref(), Some("ToolError: BROKEN"));
+    assert_eq!(
+        row.error_summary.as_ref().and_then(JsonString::as_str),
+        Some("ToolError: BROKEN")
+    );
 }
 
 #[test]
@@ -182,21 +184,24 @@ fn search_card_preserves_both_shapes_titles_and_capped_recovery() {
         call_id: "grep-1".to_owned(),
         call: None,
         call_view: None,
-        result_view: Some(json!({
-            "card":"search",
-            "shape":"matches",
-            "files":[{
-                "path":"a.rs",
-                "matches":[{"lineNumber":12,"line":"let found = true;"}],
-            }],
-            "truncated":true,
-            "total":42,
-            "title":"42 matches",
-        })),
+        result_view: Some(
+            json!({
+                "card":"search",
+                "shape":"matches",
+                "files":[{
+                    "path":"a.rs",
+                    "matches":[{"lineNumber":12,"line":"let found = true;"}],
+                }],
+                "truncated":true,
+                "total":42,
+                "title":"42 matches",
+            })
+            .into(),
+        ),
         content: vec![
-            json!({"type":"image","data":"ignored"}),
-            json!({"type":"text","text":"shown rows"}),
-            json!({"type":"text","text":"Full result at spill://grep-1"}),
+            json!({"type":"image","data":"ignored"}).into(),
+            json!({"type":"text","text":"shown rows"}).into(),
+            json!({"type":"text","text":"Full result at spill://grep-1"}).into(),
         ],
         is_error: false,
         error: None,
@@ -204,7 +209,7 @@ fn search_card_preserves_both_shapes_titles_and_capped_recovery() {
     let model = search_card_model(&matches).unwrap();
     assert_eq!(model.title.as_deref(), Some("42 matches"));
     assert_eq!(
-        model.recovery.as_deref(),
+        model.recovery.as_ref().and_then(JsonString::as_str),
         Some("shown rows\nFull result at spill://grep-1")
     );
     let SearchCard::Matches {
@@ -410,19 +415,22 @@ fn terminal_card_handles_window_truncation_and_generic_fallbacks() {
 #[test]
 fn plan_summary_counts_parallel_work_and_rejects_only_the_first_unusable_name() {
     let summary = plan_summary(&[
-        json!({"content":"done","status":"completed"}),
-        json!({"content":"first","status":"in_progress"}),
-        json!({"content":"second","status":"in_progress"}),
-        json!({"content":"later","status":"pending"}),
+        json!({"content":"done","status":"completed"}).into(),
+        json!({"content":"first","status":"in_progress"}).into(),
+        json!({"content":"second","status":"in_progress"}).into(),
+        json!({"content":"later","status":"pending"}).into(),
     ]);
     assert_eq!(summary.done, 1);
     assert_eq!(summary.total, 4);
-    assert_eq!(summary.active_content.as_deref(), Some("first"));
+    assert_eq!(
+        summary.active_content.as_ref().and_then(JsonString::as_str),
+        Some("first")
+    );
     assert_eq!(summary.active_extra, 1);
 
     let unusable = plan_summary(&[
-        json!({"content":"   ","status":"in_progress"}),
-        json!({"content":"second","status":"in_progress"}),
+        json!({"content":"   ","status":"in_progress"}).into(),
+        json!({"content":"second","status":"in_progress"}).into(),
     ]);
     assert_eq!(unusable.active_content, None);
     assert_eq!(unusable.active_extra, 0);
@@ -436,4 +444,87 @@ fn plan_summary_counts_parallel_work_and_rejects_only_the_first_unusable_name() 
             active_extra: 0,
         }
     );
+}
+
+#[test]
+fn generic_rows_preserve_utf16_arguments_output_and_error_summaries() {
+    let raw =
+        r#"{"description":"inspect \ud800\nnext","code":"return '\udfff'","\ud800":"\udc00"}"#;
+    let code = tool_row_model("run_code", &running(raw, None), None);
+    assert_eq!(code.summary.as_raw(), r#""inspect \ud800""#);
+    assert_eq!(code.body.unwrap().as_raw(), r#""return '\udfff'""#);
+
+    let block = ToolCallBlock::Settled {
+        call_id: "call-1".to_owned(),
+        call: None,
+        call_view: Some(
+            JsonValue::parse(
+                r#"{"card":"generic","title":"\ud800","rawInput":{"\udfff":"\ud800"}}"#.to_owned(),
+            )
+            .unwrap(),
+        ),
+        result_view: None,
+        content: vec![
+            JsonValue::parse(r#"{"type":"text","text":"\ud800\nsecond"}"#.to_owned()).unwrap(),
+            JsonValue::parse(r#"{"type":"custom","\udfff":"\udc00"}"#.to_owned()).unwrap(),
+        ],
+        is_error: true,
+        error: None,
+    };
+    let row = tool_row_model("echo", &block, None);
+    assert_eq!(row.error_summary.unwrap().to_utf16(), [0xd800]);
+    let output = row.output.unwrap();
+    assert_eq!(output.utf16_units()[0], 0xd800);
+    assert!(output.contains("\"\\udfff\": \"\\udc00\""));
+
+    let raw = JsonString::from_utf16(&[0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xd800]);
+    let block = ToolCallBlock::Running {
+        call_id: "partial".to_owned(),
+        args_raw: raw.clone(),
+        call_view: None,
+    };
+    let row = tool_row_model("run_code", &block, None);
+    assert_eq!(row.body, Some(raw.clone()));
+    assert_eq!(row.summary, raw);
+}
+
+#[test]
+fn generic_argument_summaries_and_pretty_bodies_use_javascript_json_order_and_numbers() {
+    let row = tool_row_model(
+        "echo",
+        &running(
+            r#"{"later":"last","9":"\ud800","1":"\udfff","later":"replaced","n":1.0}"#,
+            None,
+        ),
+        None,
+    );
+    assert_eq!(row.summary.as_raw(), r#""echo · \udfff""#);
+    assert_eq!(
+        row.body.unwrap().as_str(),
+        Some(
+            "{\n  \"1\": \"\\udfff\",\n  \"9\": \"\\ud800\",\n  \"later\": \"replaced\",\n  \"n\": 1\n}"
+        ),
+    );
+    let row = tool_row_model(
+        "read",
+        &running(r#"{"path":"/work/\ud800"}"#, None),
+        Some("/work"),
+    );
+    assert_eq!(row.summary.to_utf16(), [0xd800]);
+    assert_eq!(row.file_path.unwrap().as_raw(), r#""/work/\ud800""#);
+}
+
+#[test]
+fn plan_summary_preserves_lone_surrogates_and_uses_ecmascript_whitespace() {
+    let todos = JsonValue::parse(r#"[{"content":"\ufeff \ud800 ","status":"in_progress"},{"content":"second","status":"in_progress"}]"#.to_owned()).unwrap();
+    let summary = plan_summary(todos.as_array().unwrap());
+    assert_eq!(
+        summary.active_content.unwrap().to_utf16(),
+        [0xfeff, 0x20, 0xd800, 0x20]
+    );
+    assert_eq!(summary.active_extra, 1);
+    let blank =
+        JsonValue::parse(r#"[{"content":"\ufeff\u00a0","status":"in_progress"}]"#.to_owned())
+            .unwrap();
+    assert_eq!(plan_summary(blank.as_array().unwrap()).active_content, None);
 }

@@ -186,7 +186,7 @@ fn text(result: &ToolExecutionResult) -> &str {
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )

@@ -7,10 +7,10 @@ use std::sync::{
 
 use parking_lot::Mutex;
 use seekdeep_core::session::SessionId;
-use seekdeep_llm::{AbortSignal, ContentBlock};
+use seekdeep_llm::{AbortSignal, ContentBlock, JsonString};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_subagent::{SubagentResult, SubagentRun, SubagentStartRequest, SubagentStopReason};
 use seekdeep_subprocess::{SubprocessHandleRef, SubprocessService};
-use serde_json::Value;
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader},
     sync::Notify,
@@ -46,18 +46,18 @@ pub struct ClaudeCodeRunSpec {
 /// # Errors
 ///
 /// Returns source-compatible empty, blank, or non-text diagnostics.
-pub fn text_task(prompt: &[ContentBlock]) -> anyhow::Result<String> {
+pub fn text_task(prompt: &[ContentBlock]) -> anyhow::Result<seekdeep_llm::JsonString> {
     if prompt.is_empty() {
         anyhow::bail!("subagent-claude-code: the one-shot task must contain only text blocks");
     }
-    let mut task = String::new();
+    let mut task = seekdeep_llm::JsonString::default();
     let mut nonblank = false;
     for block in prompt {
         let ContentBlock::Text { text } = block else {
             anyhow::bail!("subagent-claude-code: the one-shot task must contain only text blocks");
         };
         nonblank |= !text.trim().is_empty();
-        task.push_str(text);
+        task.push_utf16(text.utf16_units());
     }
     anyhow::ensure!(
         nonblank,
@@ -71,29 +71,33 @@ pub fn text_task(prompt: &[ContentBlock]) -> anyhow::Result<String> {
 /// # Errors
 ///
 /// Rejects every error subtype, error-marked success, or blank answer.
-pub fn successful_result(message: &Value) -> anyhow::Result<String> {
+pub fn successful_result(message: &JsonValue) -> anyhow::Result<JsonString> {
     let subtype = message
-        .get("subtype")
-        .and_then(Value::as_str)
+        .get_value("subtype")
+        .and_then(JsonValue::as_str)
         .unwrap_or("unknown");
     if subtype == "success" {
-        let answer = message.get("result").and_then(Value::as_str).unwrap_or("");
+        let answer = message
+            .get("result")
+            .and_then(|answer| answer.deserialize::<JsonString>().ok())
+            .unwrap_or_default();
         let is_error = message
-            .get("is_error")
-            .and_then(Value::as_bool)
+            .get_value("is_error")
+            .and_then(JsonValue::as_bool)
             .unwrap_or(true);
         anyhow::ensure!(
             !is_error && !answer.trim().is_empty(),
             "subagent-claude-code: Claude Code failed: success result was marked as an error or contained no answer"
         );
-        return Ok(answer.to_owned());
+        return Ok(answer);
     }
     let errors = message
-        .get("errors")
-        .and_then(Value::as_array)
+        .get_value("errors")
+        .and_then(JsonValue::as_array)
         .into_iter()
         .flatten()
-        .filter_map(Value::as_str)
+        .filter(|value| value.is_string())
+        .map(|value| value.as_str().unwrap_or_else(|| value.as_raw()))
         .collect::<Vec<_>>()
         .join("; ");
     let detail = if errors.is_empty() { subtype } else { &errors };
@@ -261,7 +265,7 @@ pub async fn start_claude_code_run(
         anyhow::bail!("subagent-claude-code: managed process stdin was already claimed");
     };
     let input = stdout.take_reader().await;
-    let mut frame = serde_json::to_vec(&prompt_frame(&task))?;
+    let mut frame = serde_json::to_vec(&prompt_frame(task))?;
     frame.push(b'\n');
     if let Err(error) = async {
         output.write_all(&frame).await?;
@@ -316,10 +320,10 @@ pub async fn start_claude_code_run(
                 if line.trim().is_empty() {
                     continue;
                 }
-                let Ok(message) = serde_json::from_str::<Value>(&line) else {
+                let Ok(message) = JsonValue::parse(line) else {
                     continue;
                 };
-                if message.get("type").and_then(Value::as_str) == Some("result") {
+                if message.get_value("type").and_then(JsonValue::as_str) == Some("result") {
                     answer = Some(successful_result(&message)?);
                 }
             }
@@ -346,7 +350,7 @@ pub async fn start_claude_code_run(
         } else {
             match attempt {
                 Ok(answer) => SubagentResult {
-                    output: vec![ContentBlock::Text { text: answer }],
+                    output: vec![ContentBlock::text(answer)],
                     structured: None,
                     stop_reason: SubagentStopReason::Completed,
                 },

@@ -1,0 +1,18 @@
+[
+  "return \"snow ☃\";",
+  "return \"\ud800\";",
+  "return \"\udfff\";",
+  "return \"😀\";",
+  "return String.raw`\ud800`;",
+  "return `\udfff`;",
+  "// \ud800\nreturn 1;",
+  "const f = () => \"\ud800\"; return f.toString();",
+  "const \ud800 = 1; return 1;",
+  "\ud800",
+  "return \"\\ud800\";",
+  "return String.raw`\\ud800`;",
+  "return \"\ud800x\udfff\";",
+  "const value: string = \"\ud800😀\"; return value;",
+  "return {\"\ud800\": 1, \"\udfff\": 2};",
+  "return /\ud800/.source;"
+]

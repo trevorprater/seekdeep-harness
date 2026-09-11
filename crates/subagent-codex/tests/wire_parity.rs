@@ -204,7 +204,7 @@ async fn sends_fixed_product_payloads_and_selects_the_last_final_answer() {
     assert_eq!(
         result.output,
         [seekdeep_llm::ContentBlock::Text {
-            text: "last final".to_owned()
+            text: "last final".into()
         }]
     );
     wire.close();
@@ -232,7 +232,7 @@ async fn uses_nullable_fallback_and_maps_only_explicit_context_exhaustion() {
     assert_eq!(
         result.output,
         [seekdeep_llm::ContentBlock::Text {
-            text: "fallback".to_owned()
+            text: "fallback".into()
         }]
     );
     wire.close();

@@ -7,7 +7,9 @@ use seekdeep_client_runtime::{
     ConversationMatchResult, ConversationMatchRole,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node};
 
@@ -153,10 +155,10 @@ fn trajectory_session_end_definition() -> AssemblerNodeDefinition {
             let Some(state) = context.state.as_deref() else {
                 return Ok(None);
             };
-            let seq = state.get("seq").and_then(Value::as_u64).ok_or_else(|| {
+            let seq = state.get_value("seq").and_then(Value::as_u64).ok_or_else(|| {
                 ConversationAssemblerError::new("trajectory Session-end state omitted seq")
             })?;
-            let time = state.get("time").and_then(Value::as_i64).ok_or_else(|| {
+            let time = state.get_value("time").and_then(Value::as_i64).ok_or_else(|| {
                 ConversationAssemblerError::new("trajectory Session-end state omitted time")
             })?;
             Ok(Some(trajectory_node(
@@ -172,12 +174,12 @@ fn checkpoint_id(event: &ConversationLocationEvent) -> Option<String> {
     if event.event_type != "user/message" {
         return None;
     }
-    let source = event.data.get("source")?.as_object()?;
-    (source.get("kind").and_then(Value::as_str) == Some("plugin")
-        && source.get("plugin").and_then(Value::as_str) == Some("compact"))
+    let source = event.data.get_value("source")?.as_object()?;
+    (source.get_value("kind").and_then(Value::as_str) == Some("plugin")
+        && source.get_value("plugin").and_then(Value::as_str) == Some("compact"))
     .then(|| {
         source
-            .get("compactionId")
+            .get_value("compactionId")
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty())
             .map(ToOwned::to_owned)
@@ -193,7 +195,7 @@ fn event_compaction_id(event: &ConversationLocationEvent) -> Option<String> {
     .then(|| {
         event
             .data
-            .get("compactionId")
+            .get_value("compactionId")
             .and_then(Value::as_str)
             .filter(|id| !id.is_empty())
             .map(ToOwned::to_owned)
@@ -210,7 +212,7 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
         ("startSeq".to_owned(), json!(state.start.seq)),
         (
             "turn".to_owned(),
-            state.start.data.get("turn").cloned().unwrap_or(Value::Null),
+            state.start.data.get_value("turn").cloned().unwrap_or(null().clone()),
         ),
         ("step".to_owned(), json!(0)),
         ("startedAt".to_owned(), json!(state.start.time)),
@@ -219,14 +221,14 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
             state
                 .end
                 .as_ref()
-                .map_or(Value::Null, |end| json!(end.time)),
+                .map_or(null().clone(), |end| json!(end.time)),
         ),
     ]);
     let ended = state
         .end
         .as_ref()
         .filter(|end| end.event_type == "compaction/end");
-    let has_error = ended.is_some_and(|end| end.data.get("error").is_some());
+    let has_error = ended.is_some_and(|end| end.data.get_value("error").is_some());
     request.insert(
         "status".to_owned(),
         json!(if ended.is_none() {
@@ -237,7 +239,7 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
             "complete"
         }),
     );
-    if let Some(error) = ended.and_then(|end| end.data.get("error")).cloned() {
+    if let Some(error) = ended.and_then(|end| end.data.get_value("error")).cloned() {
         request.insert("error".to_owned(), error);
     }
     if let Some(summary) = state
@@ -248,11 +250,11 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
         request.insert("resultSeq".to_owned(), json!(summary.seq));
         request.insert(
             "summary".to_owned(),
-            summary.data.get("summary").cloned().unwrap_or(Value::Null),
+            summary.data.get_value("summary").cloned().unwrap_or(null().clone()),
         );
         copy_present(&mut request, &summary.data, "rawOutput");
-        let provider = summary.data.get("provider").cloned().unwrap_or(Value::Null);
-        let model = summary.data.get("model").cloned().unwrap_or(Value::Null);
+        let provider = summary.data.get_value("provider").cloned().unwrap_or(null().clone());
+        let model = summary.data.get_value("model").cloned().unwrap_or(null().clone());
         request.insert(
             "provenance".to_owned(),
             json!({"provider": provider, "model": model}),
@@ -263,7 +265,7 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
             ("purpose".to_owned(), json!("compaction")),
         ]);
         copy_present(&mut config, &summary.data, "maxTokens");
-        request.insert("requestConfig".to_owned(), Value::Object(config));
+        request.insert("requestConfig".to_owned(), Value::object(config));
         copy_present(&mut request, &summary.data, "usage");
     }
     if let Some(checkpoint) = state
@@ -273,7 +275,7 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
     {
         request.insert("replacementSeq".to_owned(), json!(checkpoint.seq));
     }
-    Some(Value::Object(request))
+    Some(Value::object(request))
 }
 
 fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
@@ -283,12 +285,12 @@ fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value.deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

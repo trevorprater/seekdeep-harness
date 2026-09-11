@@ -8,11 +8,12 @@ use std::sync::{
 use parking_lot::Mutex;
 use path_clean::PathClean as _;
 use seekdeep_core::session::{SessionEvent, SessionId};
-use seekdeep_llm::ContentBlock;
+use seekdeep_llm::{ContentBlock, JsonString, assistant_text};
+use seekdeep_lossless_json::JsonRef;
 use seekdeep_sdk_protocol::InitializeParams;
-use serde_json::Value;
 use tokio::sync::Notify;
 
+use crate::client::param_string;
 use crate::{
     HarnessClient, HarnessNotification, RunResult, SdkProtocolError, TransportClosedError,
     types::DeepSeekHarnessOptions,
@@ -240,6 +241,12 @@ impl From<Vec<ContentBlock>> for RunInput {
     }
 }
 
+impl From<JsonString> for RunInput {
+    fn from(value: JsonString) -> Self {
+        Self::Blocks(vec![ContentBlock::text(value)])
+    }
+}
+
 /// Per-run target and notification observer.
 #[derive(Clone, Default)]
 pub struct RunOptions {
@@ -283,33 +290,28 @@ impl HarnessSession {
             let notification = subscription.next().await?;
             if !received {
                 if notification.method != "session.event"
-                    || notification.params.get("sessionId").and_then(Value::as_str)
+                    || param_string(&notification.params, "sessionId").as_deref()
                         != Some(self.id.as_str())
-                    || !is_inbox_receipt(
-                        notification.params.get("event").unwrap_or(&Value::Null),
-                        message_id.as_str(),
-                    )
+                    || !is_inbox_receipt(notification.params.get("event"), message_id.as_str())
                 {
                     continue;
                 }
                 received = true;
             }
             if notification.method == "session.event"
-                && notification.params.get("sessionId").and_then(Value::as_str)
+                && param_string(&notification.params, "sessionId").as_deref()
                     == Some(self.id.as_str())
             {
-                let event = validated_session_event(
-                    notification.params.get("event").unwrap_or(&Value::Null),
-                )?;
+                let event = validated_session_event(notification.params.get("event"))?;
                 events.push(event);
             }
             if let Some(observer) = &options.on_notification {
                 observer(&notification);
             }
             let idle = notification.method == "session.status"
-                && notification.params.get("sessionId").and_then(Value::as_str)
+                && param_string(&notification.params, "sessionId").as_deref()
                     == Some(self.id.as_str())
-                && notification.params.get("status") == Some(&Value::String("idle".to_owned()));
+                && param_string(&notification.params, "status").as_deref() == Some("idle");
             notifications.push(notification);
             if idle {
                 break;
@@ -327,76 +329,81 @@ impl HarnessSession {
 
 fn normalize_input(input: RunInput) -> Vec<ContentBlock> {
     match input {
-        RunInput::Text(text) => vec![ContentBlock::Text { text }],
+        RunInput::Text(text) => vec![ContentBlock::text(text)],
         RunInput::Blocks(blocks) => blocks,
     }
 }
 
-fn final_response(events: &[SessionEvent]) -> String {
-    events
+fn final_response(events: &[SessionEvent]) -> JsonString {
+    let content = events
         .iter()
         .rev()
         .find(|event| event.event_type == "assistant/message")
         .and_then(|event| event.data.get("message"))
         .and_then(|message| message.get("content"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|block| {
-            (block.get("type")?.as_str()? == "text")
-                .then(|| block.get("text")?.as_str().map(str::to_owned))?
-        })
-        .collect()
+        .and_then(|content| content.deserialize::<Vec<ContentBlock>>().ok())
+        .unwrap_or_default();
+    assistant_text(&content)
 }
 
-fn is_inbox_receipt(value: &Value, message_id: &str) -> bool {
-    value.get("type").and_then(Value::as_str) == Some("agent/inbox/spliced")
+fn is_inbox_receipt(value: Option<JsonRef<'_>>, message_id: &str) -> bool {
+    let Some(value) = value else { return false };
+    value
+        .get("type")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        == Some("agent/inbox/spliced")
         && value
             .get("data")
             .and_then(|data| data.get("inserted"))
-            .and_then(Value::as_array)
+            .and_then(JsonRef::array_items)
             .is_some_and(|messages| {
-                messages
-                    .iter()
-                    .any(|message| message.get("id").and_then(Value::as_str) == Some(message_id))
+                messages.iter().any(|message| {
+                    message
+                        .get("id")
+                        .and_then(|value| value.deserialize::<String>().ok())
+                        .as_deref()
+                        == Some(message_id)
+                })
             })
 }
 
-fn validated_session_event(value: &Value) -> anyhow::Result<SessionEvent> {
+fn validated_session_event(value: Option<JsonRef<'_>>) -> anyhow::Result<SessionEvent> {
+    let raw = value.map_or("null", JsonRef::as_raw);
     let valid_envelope = value
-        .as_object()
         .and_then(|event| event.get("type"))
-        .is_some_and(Value::is_string);
+        .is_some_and(JsonRef::is_string);
     if !valid_envelope {
         return Err(anyhow::Error::new(crate::SdkProtocolError {
-            message: format!("session.event carried no event envelope: {value}"),
+            message: format!("session.event carried no event envelope: {raw}"),
         }));
     }
-    if value.get("type").and_then(Value::as_str) == Some("assistant/message") {
+    let value = value.expect("valid envelope is present");
+    if value
+        .get("type")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        == Some("assistant/message")
+    {
         let content = value
             .get("data")
-            .and_then(Value::as_object)
             .and_then(|data| data.get("message"))
-            .and_then(Value::as_object)
             .and_then(|message| message.get("content"))
-            .and_then(Value::as_array);
+            .and_then(JsonRef::array_items);
         let valid_content = content.is_some_and(|content| {
-            content.iter().all(|block| {
-                block
-                    .as_object()
-                    .and_then(|block| block.get("type"))
-                    .is_some_and(Value::is_string)
-            })
+            content
+                .iter()
+                .all(|block| block.get("type").is_some_and(JsonRef::is_string))
         });
         if !valid_content {
             return Err(anyhow::Error::new(crate::SdkProtocolError {
-                message: format!("assistant/message event carried malformed content: {value}"),
+                message: format!("assistant/message event carried malformed content: {raw}"),
             }));
         }
     }
-    serde_json::from_value(value.clone()).map_err(|_| {
+    value.deserialize().map_err(|_| {
         anyhow::Error::new(crate::SdkProtocolError {
-            message: format!("session.event carried no event envelope: {value}"),
+            message: format!("session.event carried no event envelope: {raw}"),
         })
     })
 }
@@ -412,7 +419,7 @@ mod tests {
         assert_eq!(
             normalize_input("hello".into()),
             [ContentBlock::Text {
-                text: "hello".to_owned()
+                text: "hello".into()
             }]
         );
         let blocks = vec![ContentBlock::Text { text: "x".into() }];
@@ -422,7 +429,7 @@ mod tests {
                 event_type: "assistant/message".to_owned(),
                 seq: 1,
                 time: 1,
-                data: json!({"message":{"content":[{"type":"text","text":"first"}]}}),
+                data: json!({"message":{"content":[{"type":"text","text":"first"}]}}).into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,
@@ -431,7 +438,7 @@ mod tests {
                 event_type: "assistant/message".to_owned(),
                 seq: 2,
                 time: 2,
-                data: json!({"message":{"content":[{"type":"reasoning","text":"hidden"},{"type":"text","text":"last"}]}}),
+                data: json!({"message":{"content":[{"type":"reasoning","text":"hidden"},{"type":"text","text":"last"}]}}).into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,

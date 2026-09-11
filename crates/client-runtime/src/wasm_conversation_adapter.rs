@@ -22,7 +22,7 @@ use crate::{
     StepLocation, TurnLocation,
     wasm_session::json_to_js,
     wasm_session::render_js,
-    wasm_value_bridge::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing},
+    wasm_value_bridge::{js_to_lossless_value as js_to_value, js_to_lossless_value_reusing as js_to_value_reusing, lossless_value_to_js as value_to_js, lossless_value_to_js_reusing as value_to_js_reusing},
 };
 
 type BrowserNode = ConversationNodeDefinition<JsValue>;
@@ -138,7 +138,7 @@ pub(crate) fn recover_node(face: &JsValue) -> Option<Rc<ConversationViewNode>> {
 }
 
 /// Recovers the immutable JSON value behind one face the adapter handed out.
-pub(crate) fn recover_value(face: &JsValue) -> Option<Rc<serde_json::Value>> {
+pub(crate) fn recover_value(face: &JsValue) -> Option<Rc<crate::ConversationValue>> {
     VALUE_FACES.with(|cache| cache.borrow().recover(face))
 }
 
@@ -149,7 +149,7 @@ thread_local! {
     static STEP_FACES: RefCell<FaceCache<StepLocation>> = RefCell::new(FaceCache::new());
     static STORE_FACES: RefCell<FaceCache<ConversationLocationDataStore>> = RefCell::new(FaceCache::new());
     static NODE_FACES: RefCell<FaceCache<ConversationViewNode>> = RefCell::new(FaceCache::new());
-    static VALUE_FACES: RefCell<FaceCache<serde_json::Value>> = RefCell::new(FaceCache::new());
+    static VALUE_FACES: RefCell<FaceCache<crate::ConversationValue>> = RefCell::new(FaceCache::new());
     static MATCH_LISTS: RefCell<HashMap<usize, MatchListEntry>> = RefCell::new(HashMap::new());
     static NODE_DATA_FACES: RefCell<RetainedFaces> = RefCell::new(RetainedFaces::new());
 }
@@ -173,7 +173,7 @@ fn match_face(accepted: &Rc<ConversationMatch>) -> Result<JsValue, JsValue> {
     })
 }
 
-fn value_face(value: &Rc<serde_json::Value>) -> Result<JsValue, JsValue> {
+fn value_face(value: &Rc<crate::ConversationValue>) -> Result<JsValue, JsValue> {
     VALUE_FACES.with(|cache| {
         cache
             .borrow_mut()
@@ -184,7 +184,7 @@ fn value_face(value: &Rc<serde_json::Value>) -> Result<JsValue, JsValue> {
 /// Faces retained by Node key, so the next data of a streaming Node reuses the previous face's
 /// unchanged subtrees and grows its text by the appended suffix instead of re-marshalling.
 struct RetainedFaces {
-    entries: HashMap<String, (Rc<serde_json::Value>, JsValue)>,
+    entries: HashMap<String, (Rc<crate::ConversationValue>, JsValue)>,
     prune_at: usize,
 }
 
@@ -199,8 +199,8 @@ impl RetainedFaces {
     fn reuse(
         &mut self,
         key: &str,
-        value: &Rc<serde_json::Value>,
-        build: impl FnOnce(Option<(&serde_json::Value, &JsValue)>) -> Result<JsValue, JsValue>,
+        value: &Rc<crate::ConversationValue>,
+        build: impl FnOnce(Option<(&crate::ConversationValue, &JsValue)>) -> Result<JsValue, JsValue>,
     ) -> Result<JsValue, JsValue> {
         let face = build(
             self.entries
@@ -299,6 +299,15 @@ struct BrowserEventDefinitions {
 }
 
 impl BrowserEventDefinitions {
+    /// The registry Definition behind one adapted Definition.
+    fn node_for(&self, adapted: &Rc<AssemblerNodeDefinition>) -> Option<Rc<BrowserNode>> {
+        self.cache
+            .borrow()
+            .iter()
+            .find(|(_, known)| Rc::ptr_eq(known, adapted))
+            .map(|(node, _)| node.clone())
+    }
+
     fn adapt(&self, definition: &Rc<BrowserNode>) -> Rc<AssemblerNodeDefinition> {
         if let Some((_, adapted)) = self
             .cache
@@ -327,6 +336,45 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
 
     fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>> {
         self.registry.fallback().map(|entry| self.adapt(&entry))
+    }
+
+    fn batches_updates(&self, definition: &Rc<AssemblerNodeDefinition>) -> bool {
+        self.node_for(definition)
+            .is_some_and(|node| optional_function(&node.payload, "updateMany").is_some())
+    }
+
+    /// Folds a run of update Matches through the Definition's `updateMany` face: one Context
+    /// face and one array of Match faces cross, and the final state comes back.
+    fn update_many(
+        &self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        context: &ConversationNodeContext,
+        batch: &[Rc<ConversationMatch>],
+    ) -> Result<Option<Rc<crate::ConversationValue>>, ConversationAssemblerError> {
+        let node = self.node_for(definition).ok_or_else(|| {
+            ConversationAssemblerError::new(format!(
+                "conversation Definition \"{}\" is not registered in this browser",
+                definition.kind
+            ))
+        })?;
+        let function = optional_function(&node.payload, "updateMany").ok_or_else(|| {
+            ConversationAssemblerError::new(format!(
+                "conversation Definition \"{}\" does not fold update batches",
+                definition.kind
+            ))
+        })?;
+        let faces = Array::new();
+        for accepted in batch {
+            faces.push(&match_face(accepted).map_err(adapter_error)?);
+        }
+        let result = function
+            .call2(
+                &node.payload,
+                &context_to_js(context).map_err(adapter_error)?,
+                &faces,
+            )
+            .map_err(adapter_error)?;
+        optional_json(&result)
     }
 
     /// Asks each Definition that exposes `matchMany` about the whole window in one call: the
@@ -632,14 +680,14 @@ fn adapt_view_definition(definition: &BrowserView) -> Rc<AssemblerViewDefinition
 
 struct BrowserViewBuilder {
     builder: JsValue,
-    empty: Rc<serde_json::Value>,
+    empty: Rc<crate::ConversationValue>,
     /// The last snapshot and its encoded face, so the next crossing in either direction reuses
     /// unchanged subtrees and grows streamed text by its suffix.
-    previous: RefCell<Option<(Rc<serde_json::Value>, JsValue)>>,
+    previous: RefCell<Option<(Rc<crate::ConversationValue>, JsValue)>>,
 }
 
 impl AssemblerViewBuilder for BrowserViewBuilder {
-    fn snapshot_to_browser(&self, snapshot: &serde_json::Value) -> Result<JsValue, JsValue> {
+    fn snapshot_to_browser(&self, snapshot: &crate::ConversationValue) -> Result<JsValue, JsValue> {
         let encoded = match &*self.previous.borrow() {
             Some((previous, previous_js)) => value_to_js_reusing(previous, previous_js, snapshot)?,
             None => value_to_js(snapshot)?,
@@ -654,7 +702,7 @@ impl AssemblerViewBuilder for BrowserViewBuilder {
         }
     }
 
-    fn empty(&self) -> Rc<serde_json::Value> {
+    fn empty(&self) -> Rc<crate::ConversationValue> {
         self.empty.clone()
     }
 
@@ -662,7 +710,7 @@ impl AssemblerViewBuilder for BrowserViewBuilder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<serde_json::Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<crate::ConversationValue>, ConversationAssemblerError> {
         self.call("replace", nodes, &timeline)
     }
 
@@ -670,7 +718,7 @@ impl AssemblerViewBuilder for BrowserViewBuilder {
         &mut self,
         upserts: &[Rc<ConversationViewNode>],
         timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<serde_json::Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<crate::ConversationValue>, ConversationAssemblerError> {
         self.call("apply", upserts, &timeline)
     }
 }
@@ -681,7 +729,7 @@ impl BrowserViewBuilder {
         method: &str,
         nodes: &[Rc<ConversationViewNode>],
         timeline: &ConversationTimelineSnapshot,
-    ) -> Result<Rc<serde_json::Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<crate::ConversationValue>, ConversationAssemblerError> {
         let input = Object::new();
         let nodes_array = Array::new();
         for node in nodes {
@@ -707,7 +755,7 @@ impl BrowserViewBuilder {
         self.decode(&result).map_err(adapter_error)
     }
 
-    fn decode(&self, snapshot: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+    fn decode(&self, snapshot: &JsValue) -> Result<Rc<crate::ConversationValue>, JsValue> {
         let encoded = native_view_snapshot(&self.builder, snapshot)?;
         let value = match &*self.previous.borrow() {
             Some((previous, previous_js)) => js_to_value_reusing(previous, previous_js, &encoded)?,
@@ -1154,7 +1202,7 @@ pub(crate) fn location_data_from_js(
 
 fn optional_json(
     value: &JsValue,
-) -> Result<Option<Rc<serde_json::Value>>, ConversationAssemblerError> {
+) -> Result<Option<Rc<crate::ConversationValue>>, ConversationAssemblerError> {
     if value.is_undefined() {
         return Ok(None);
     }

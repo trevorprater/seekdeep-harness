@@ -4,7 +4,7 @@
 
 [seekdeep-user-questions](../../packages/interaction/user-questions) 的用户交互 seam。它是工具或权限插件需要人类回答后 agent（智能体）才能继续时所使用的、提供方无关的词汇。UI 界面提供活跃的 `UserQuestionProvider`；host 运行时把请求转发给其连接的客户端。
 
-源码：[`packages/interaction/user-questions/src/index.ts`](../../packages/interaction/user-questions/src/index.ts)
+源码：[`packages/interaction/user-questions/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/user-questions/src/index.ts)
 
 ## 问题选项
 
@@ -174,5 +174,5 @@ registerProvider(provider: UserQuestionProvider): () => void
 async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>
 ```
 
-Source: [`packages/interaction/user-questions/src/index.ts:51`](../../packages/interaction/user-questions/src/index.ts)
+Source: [`packages/interaction/user-questions/src/index.ts:51`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/user-questions/src/index.ts)
 <!-- END GENERATED cordis-surface -->

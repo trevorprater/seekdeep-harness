@@ -127,7 +127,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                     format_hover(hover.as_ref(), resolved.max_result_chars)
                 }
             };
-            Ok(vec![ContentBlock::Text { text }])
+            Ok(vec![ContentBlock::text(text)])
         }),
     );
     let execute_lsp = lsp;

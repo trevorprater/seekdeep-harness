@@ -754,7 +754,7 @@ async fn automation_output_excludes_tools_reasoning_trace_and_foreign_agents() {
                 Arc::new(|_: Value, _| {
                     Box::pin(async {
                         Ok(vec![ContentBlock::Text {
-                            text: "tool result".to_owned(),
+                            text: "tool result".into(),
                         }])
                     })
                 }),
@@ -818,7 +818,7 @@ async fn automation_output_excludes_tools_reasoning_trace_and_foreign_agents() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "autonomous".to_owned(),
+                text: "autonomous".into(),
             }],
             MessageSource::plugin("test"),
         ))
@@ -919,7 +919,7 @@ async fn pre_step_rewrite_preserves_prompt_correlation() {
                     Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
                         messages: vec![UserMessage::new(
                             vec![ContentBlock::Text {
-                                text: "rewritten prompt".to_owned(),
+                                text: "rewritten prompt".into(),
                             }],
                             MessageSource::plugin("test"),
                         )],
@@ -950,7 +950,7 @@ async fn pre_step_rewrite_preserves_prompt_correlation() {
             .iter()
             .flat_map(seekdeep_llm::Message::content)
             .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text.as_str()),
+                ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
                 _ => None,
             })
             .collect::<Vec<_>>()
@@ -1127,7 +1127,7 @@ async fn cancellation_distinguishes_client_hook_idle_and_autonomous_work() {
     agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "autonomous work".to_owned(),
+                text: "autonomous work".into(),
             }],
             MessageSource::plugin("test"),
         ))
@@ -1298,7 +1298,7 @@ async fn synchronous_injection_and_autonomous_work_do_not_steal_prompt_identity(
                 {
                     event.agent.inject(UserMessage::new(
                         vec![ContentBlock::Text {
-                            text: "context".to_owned(),
+                            text: "context".into(),
                         }],
                         MessageSource::plugin("test"),
                     ))?;
@@ -1329,7 +1329,7 @@ async fn synchronous_injection_and_autonomous_work_do_not_steal_prompt_identity(
     agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "autonomous work".to_owned(),
+                text: "autonomous work".into(),
             }],
             MessageSource::plugin("test"),
         ))

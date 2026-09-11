@@ -294,7 +294,7 @@ fn append_user(session: &Session, text: &str) -> SessionEvent {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: text.to_owned(),
+                    text: text.into(),
                 }],
                 MessageSource::user(),
             ))
@@ -315,7 +315,7 @@ fn append_assistant(session: &Session, text: &str, step: u64) -> SessionEvent {
                 "turn": 1,
                 "step": step,
                 "message": Message::assistant(
-                    vec![ContentBlock::Text { text: text.to_owned() }],
+                    vec![ContentBlock::Text { text: text.into() }],
                     "provider",
                     "model",
                 ),
@@ -466,7 +466,7 @@ async fn history_attaches_replay_safe_call_and_result_views_with_backscan_pairin
     let result = Message::tool_result(
         &call_id,
         vec![ContentBlock::Text {
-            text: "raw output".to_owned(),
+            text: "raw output".into(),
         }],
         false,
     );
@@ -593,7 +593,7 @@ async fn pagination_counts_only_append_messages_and_keeps_compaction_transaction
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "<context_checkpoint>summary</context_checkpoint>".to_owned(),
+                    text: "<context_checkpoint>summary</context_checkpoint>".into(),
                 }],
                 MessageSource::plugin("compact"),
             ))

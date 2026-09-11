@@ -75,7 +75,7 @@ impl LlmAdapter for ScriptedAdapter {
             ScriptEntry::Text(text) => AdapterStream::new(stream::iter([
                 Ok(StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text { text },
+                    block: ContentBlock::text(text),
                 }),
                 Ok(StreamChunk::Finish {
                     reason: FinishReason::Stop,
@@ -261,7 +261,7 @@ fn reference(goal: &GoalView) -> GoalRef {
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         seekdeep_llm::MessageSource::user(),
     )
@@ -270,7 +270,7 @@ fn user(text: &str) -> UserMessage {
 fn goal_message(text: &str, round: u64) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         seekdeep_llm::MessageSource {
             kind: "goal".to_owned(),
@@ -289,7 +289,7 @@ fn request_text(request: &GenerateOptions) -> String {
         .iter()
         .flat_map(seekdeep_llm::Message::content)
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -1351,7 +1351,7 @@ async fn blocked_goal_observer_work_remains_queued_without_reserving_again() {
     assert_eq!(
         test.agent().inbox().next_turn()[0].content()[0],
         ContentBlock::Text {
-            text: "inspect the blocker".to_owned()
+            text: "inspect the blocker".into()
         }
     );
     test.shutdown().await;
@@ -1435,13 +1435,13 @@ async fn stale_claim_restores_non_goal_context_without_reviving_round_zero() {
     .await;
     let claimed = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "claimed context to restore".to_owned(),
+            text: "claimed context to restore".into(),
         }],
         seekdeep_llm::MessageSource::plugin("test"),
     );
     let round_zero = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "obsolete goal context".to_owned(),
+            text: "obsolete goal context".into(),
         }],
         seekdeep_llm::MessageSource {
             kind: "goal".to_owned(),
@@ -1454,13 +1454,13 @@ async fn stale_claim_restores_non_goal_context_without_reviving_round_zero() {
     );
     let queued_step = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "context already queued for the next step".to_owned(),
+            text: "context already queued for the next step".into(),
         }],
         seekdeep_llm::MessageSource::plugin("test"),
     );
     let queued_turn = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "context already queued for the next turn".to_owned(),
+            text: "context already queued for the next turn".into(),
         }],
         seekdeep_llm::MessageSource::plugin("test"),
     );

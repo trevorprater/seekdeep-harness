@@ -49,7 +49,7 @@ impl OpenBlock {
 
     fn close(&self) -> ContentBlock {
         match self {
-            Self::Text { text, .. } => ContentBlock::Text { text: text.clone() },
+            Self::Text { text, .. } => ContentBlock::text(text.clone()),
             Self::Reasoning { text, .. } => ContentBlock::Reasoning { text: text.clone() },
             Self::ToolCall {
                 text,

@@ -1,8 +1,8 @@
 //! Provider-neutral render intents for pending and completed tool calls.
 
+use seekdeep_code_runtime::{CodeJsonString, CodeJsonValue};
 use seekdeep_llm::ContentBlock;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize, de::Error as _};
 
 /// Category used by clients to choose a call icon or treatment.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,13 +80,17 @@ pub struct FileDiff {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct GenericCallView {
     /// Always-visible call label.
-    pub title: String,
+    pub title: CodeJsonString,
     /// Optional category; clients default it to other.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<ToolCallKind>,
     /// Salient raw input.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub raw_input: Option<Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "seekdeep_code_runtime::json::deserialize_optional"
+    )]
+    pub raw_input: Option<CodeJsonValue>,
     /// Additional pending-state content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<Vec<ContentBlock>>,
@@ -123,7 +127,7 @@ pub struct DiffCallView {
 }
 
 /// Provider-neutral pending-call render intent.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "card", rename_all = "lowercase")]
 pub enum ToolCallView {
     /// Generic call card.
@@ -132,6 +136,37 @@ pub enum ToolCallView {
     Terminal(TerminalCallView),
     /// Inline-diff call card.
     Diff(DiffCallView),
+}
+
+impl<'de> Deserialize<'de> for ToolCallView {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (card, payload) = deserialize_card(deserializer)?;
+        match card.as_str() {
+            "generic" => payload.deserialize().map(Self::Generic),
+            "terminal" => payload.deserialize().map(Self::Terminal),
+            "diff" => payload.deserialize().map(Self::Diff),
+            _ => {
+                return Err(D::Error::unknown_variant(
+                    &card,
+                    &["generic", "terminal", "diff"],
+                ));
+            }
+        }
+        .map_err(D::Error::custom)
+    }
+}
+
+fn deserialize_card<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<(String, CodeJsonValue), D::Error> {
+    let mut value = <CodeJsonValue as Deserialize>::deserialize(deserializer)?;
+    let card = value
+        .remove("card")
+        .map_err(D::Error::custom)?
+        .ok_or_else(|| D::Error::missing_field("card"))?
+        .deserialize()
+        .map_err(D::Error::custom)?;
+    Ok((card, value))
 }
 
 /// One numbered source line returned by a read.
@@ -327,7 +362,7 @@ pub enum WebResultView {
 }
 
 /// Provider-neutral completed-call render intent.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "card", rename_all = "lowercase")]
 pub enum ToolResultView {
     /// Generic result card.
@@ -344,6 +379,27 @@ pub enum ToolResultView {
     Web(WebResultView),
 }
 
+impl<'de> Deserialize<'de> for ToolResultView {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (card, payload) = deserialize_card(deserializer)?;
+        match card.as_str() {
+            "generic" => payload.deserialize().map(Self::Generic),
+            "terminal" => payload.deserialize().map(Self::Terminal),
+            "diff" => payload.deserialize().map(Self::Diff),
+            "search" => payload.deserialize().map(Self::Search),
+            "read" => payload.deserialize().map(Self::Read),
+            "web" => payload.deserialize().map(Self::Web),
+            _ => {
+                return Err(D::Error::unknown_variant(
+                    &card,
+                    &["generic", "terminal", "diff", "search", "read", "web"],
+                ));
+            }
+        }
+        .map_err(D::Error::custom)
+    }
+}
+
 /// Durable result projection handed to replay-safe presenters.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -353,8 +409,12 @@ pub struct ToolResult {
     /// Whether the call failed.
     pub is_error: bool,
     /// Tool-private presentation metadata.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub meta: Option<Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "seekdeep_code_runtime::json::deserialize_optional"
+    )]
+    pub meta: Option<CodeJsonValue>,
 }
 
 #[cfg(test)]
@@ -366,9 +426,9 @@ mod tests {
     #[test]
     fn pending_views_use_the_exact_card_tagged_wire_shapes() {
         let generic = ToolCallView::Generic(GenericCallView {
-            title: "Open /a".to_owned(),
+            title: "Open /a".into(),
             kind: Some(ToolCallKind::Read),
-            raw_input: Some(json!("/a")),
+            raw_input: Some(json!("/a").into()),
             content: None,
             locations: Some(vec![FileLocation {
                 path: "/a".to_owned(),
@@ -393,6 +453,60 @@ mod tests {
         }))
         .expect("terminal");
         assert!(matches!(terminal, ToolCallView::Terminal(_)));
+    }
+
+    #[test]
+    fn pending_generic_view_preserves_title_raw_input_and_present_null() {
+        let raw = r#"{"card":"generic","title":"Run \ud800","rawInput":{"\udfff":["\ud800",null,{"__proto__":"\udc00"}]},"content":[{"type":"text","text":"\udfff"}]}"#;
+        let view: ToolCallView = serde_json::from_str(raw).expect("lossless call view");
+        let ToolCallView::Generic(generic) = &view else {
+            panic!("generic view");
+        };
+        assert_eq!(generic.title.to_utf16(), [0x52, 0x75, 0x6e, 0x20, 0xd800]);
+        let encoded = CodeJsonValue::from_serialize(&view).expect("encode call view");
+        assert_eq!(
+            encoded,
+            CodeJsonValue::parse(raw.to_owned()).expect("fixture")
+        );
+        assert_eq!(encoded.deserialize::<ToolCallView>().expect("replay"), view);
+
+        for (raw, expected) in [
+            (
+                r#"{"card":"generic","title":"Run","rawInput":null}"#,
+                Some(json!(null).into()),
+            ),
+            (r#"{"card":"generic","title":"Run"}"#, None),
+        ] {
+            let ToolCallView::Generic(generic) =
+                serde_json::from_str::<ToolCallView>(raw).expect("call view")
+            else {
+                panic!("generic view");
+            };
+            assert_eq!(generic.raw_input, expected);
+            assert_eq!(
+                CodeJsonValue::from_serialize(&ToolCallView::Generic(generic)).expect("encode"),
+                CodeJsonValue::parse(raw.to_owned()).expect("fixture")
+            );
+        }
+    }
+
+    #[test]
+    fn completed_views_preserve_nested_content_code_units() {
+        for raw in [
+            r#"{"card":"generic","content":[{"type":"text","text":"\ud800"}]}"#,
+            r#"{"card":"read","path":"a","offset":1,"lines":[],"totalLines":0,"content":[{"type":"text","text":"\udfff"}]}"#,
+        ] {
+            let view: ToolResultView = serde_json::from_str(raw).expect("lossless result view");
+            let encoded = CodeJsonValue::from_serialize(&view).expect("encode result view");
+            assert_eq!(
+                encoded,
+                CodeJsonValue::parse(raw.to_owned()).expect("fixture")
+            );
+            assert_eq!(
+                encoded.deserialize::<ToolResultView>().expect("replay"),
+                view
+            );
+        }
     }
 
     #[test]
@@ -486,7 +600,7 @@ mod tests {
             new_text: "fn main() {}\n".to_owned(),
         };
         let content = vec![ContentBlock::Text {
-            text: "rendered".to_owned(),
+            text: "rendered".into(),
         }];
         let completed = [
             ToolResultView::Generic(GenericResultView {
@@ -602,11 +716,9 @@ mod tests {
     #[test]
     fn durable_presenter_result_round_trips_content_failure_and_meta() {
         let result = ToolResult {
-            content: vec![ContentBlock::Text {
-                text: "ok".to_owned(),
-            }],
+            content: vec![ContentBlock::Text { text: "ok".into() }],
             is_error: false,
-            meta: Some(json!({"path": "/a"})),
+            meta: Some(json!({"path": "/a"}).into()),
         };
         let encoded = serde_json::to_value(&result).expect("encode");
         assert_eq!(

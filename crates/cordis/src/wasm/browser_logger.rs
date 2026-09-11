@@ -124,16 +124,13 @@ fn emit(logger: &JsValue, kind: &JsValue, level: &JsValue, args: &Array) -> Resu
     let service = values::get(logger, &"service".into())?;
     let exporters = values::get(&service, &"exporters".into())?;
     let iterator = method(&exporters, "values", &Array::new())?;
-    let iterator = js_sys::try_iter(&iterator)?
-        .ok_or_else(|| js_sys::TypeError::new("exporters are not iterable"))?;
-    for exporter in iterator {
-        let exporter = exporter?;
+    values::for_each(&iterator, |exporter| {
         let threshold = target_level(&exporter, logger)?;
         if Function::new_with_args("threshold,level", "return threshold < level;")
             .call2(&JsValue::UNDEFINED, &threshold, level)?
             .is_truthy()
         {
-            continue;
+            return Ok(());
         }
         let message = super::object(&[
             ("sn", sn.clone()),
@@ -142,11 +139,11 @@ fn emit(logger: &JsValue, kind: &JsValue, level: &JsValue, args: &Array) -> Resu
             ("level", level.clone()),
             ("name", values::get(logger, &"name".into())?),
         ])?;
-        values::assign(&message, &Array::of1(&values::get(logger, &"meta".into())?))?;
-        values::set(&message, &"args".into(), args)?;
+        values::spread_into(&message, &values::get(logger, &"meta".into())?)?;
+        values::define_data(&message, &"args".into(), args)?;
         method(&exporter, "export", &Array::of1(&message))?;
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 fn invoke_severity(logger: &JsValue, kind: &JsValue, args: &Array) -> Result<JsValue, JsValue> {

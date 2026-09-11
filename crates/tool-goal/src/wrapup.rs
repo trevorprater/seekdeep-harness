@@ -19,5 +19,5 @@ pub fn render_wrapup_context(objective: &str, blocked_reason: Option<&str>) -> V
             json!(reason)
         ),
     };
-    vec![ContentBlock::Text { text }]
+    vec![ContentBlock::text(text)]
 }

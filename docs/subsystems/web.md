@@ -4,7 +4,7 @@ English | [中文](web.zh.md)
 
 The web access seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) that spans **two operations** (search and fetch) on one `ctx.web` service, split across packages: Service Definition ([seekdeep-web](../../packages/web/web), `ctx.web` + the provider registries), Service Providers ([seekdeep-web-search-exa](../../packages/web/web-search-exa), [seekdeep-web-search-perplexity](../../packages/web/web-search-perplexity), [seekdeep-web-search-deepseek](../../packages/web/web-search-deepseek), [seekdeep-web-fetch-http](../../packages/web/web-fetch-http)), and Consumer ([seekdeep-tool-web](../../packages/web/tool-web), the `web_search`/`web_fetch` tool schemas). Web is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A search-provider swap does not change how the model asks for a query, and a fetch-provider swap does not change how the model asks for a URL.
 
-Source: [`packages/web/web/src/types.ts`](../../packages/web/web/src/types.ts)
+Source: [`packages/web/web/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web/src/types.ts)
 
 ## Why one capability has two operations
 
@@ -195,5 +195,5 @@ async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearch
 async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
 ```
 
-Source: [`packages/web/web/src/index.ts:74`](../../packages/web/web/src/index.ts)
+Source: [`packages/web/web/src/index.ts:74`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web/src/index.ts)
 <!-- END GENERATED cordis-surface -->

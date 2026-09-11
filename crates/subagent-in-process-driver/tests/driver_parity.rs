@@ -152,7 +152,7 @@ impl Harness {
             request: SubagentStartRequest {
                 label: Some("child task".to_owned()),
                 prompt: vec![ContentBlock::Text {
-                    text: "do the task".to_owned(),
+                    text: "do the task".into(),
                 }],
                 parent: self.parent.agent.clone(),
                 signal,
@@ -175,7 +175,7 @@ fn text(blocks: &[ContentBlock]) -> String {
     blocks
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -213,7 +213,7 @@ fn assert_inherited_policy_request(adapter: &ScriptedAdapter) {
         .iter()
         .flat_map(seekdeep_llm::Message::content)
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -288,7 +288,7 @@ async fn published_fresh_child_inherits_route_cwd_depth_and_disposes_quiescently
         Arc::new(|_args: Value, _run| {
             Box::pin(async {
                 Ok(vec![ContentBlock::Text {
-                    text: "preset".to_owned(),
+                    text: "preset".into(),
                 }])
             })
         }),

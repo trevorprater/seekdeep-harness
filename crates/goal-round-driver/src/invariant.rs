@@ -118,11 +118,12 @@ fn validate_event(
     if event.event_type != "user/message" {
         return Ok(());
     }
-    let source: MessageSource =
-        match serde_json::from_value(event.data.get("source").cloned().unwrap_or(Value::Null)) {
-            Ok(source) => source,
-            Err(_) => return Ok(()),
-        };
+    let Some(source) = event.data.get("source") else {
+        return Ok(());
+    };
+    let Ok(source) = source.deserialize::<MessageSource>() else {
+        return Ok(());
+    };
     let Some(source) = goal_source(&source) else {
         return Ok(());
     };
@@ -130,9 +131,11 @@ fn validate_event(
         &goal_view(&fold_checked(prior, fail)?, &source, fail)?,
         source.round,
     );
-    let content: Vec<ContentBlock> =
-        serde_json::from_value(event.data.get("content").cloned().unwrap_or(Value::Null))
-            .unwrap_or_default();
+    let content: Vec<ContentBlock> = event
+        .data
+        .get("content")
+        .and_then(|content| content.deserialize().ok())
+        .unwrap_or_default();
     if content != expected {
         return Err(fail_invariant(
             fail,

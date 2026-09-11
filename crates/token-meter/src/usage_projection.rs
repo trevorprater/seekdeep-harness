@@ -1,6 +1,6 @@
 //! Pure durable provider-usage and approximate context-pressure folds.
 
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonValue, SessionEvent};
 use seekdeep_llm::TokenUsage;
 use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use serde::{Deserialize, Serialize};
@@ -148,7 +148,12 @@ fn pressure_view(state: &Value) -> anyhow::Result<Value> {
 
 fn usage_sample(event: &SessionEvent) -> anyhow::Result<Option<(u64, u64, TokenUsage)>> {
     let usage = if event.event_type == "assistant/chunk"
-        && event.data.pointer("/chunk/type").and_then(Value::as_str) == Some("usage")
+        && event
+            .data
+            .pointer("/chunk/type")
+            .and_then(|kind| kind.deserialize::<String>().ok())
+            .as_deref()
+            == Some("usage")
     {
         event.data.pointer("/chunk/usage")
     } else if event.event_type == "assistant/message" {
@@ -161,7 +166,7 @@ fn usage_sample(event: &SessionEvent) -> anyhow::Result<Option<(u64, u64, TokenU
     };
     let turn = required_u64(&event.data, "turn")?;
     let step = required_u64(&event.data, "step")?;
-    Ok(Some((turn, step, serde_json::from_value(usage.clone())?)))
+    Ok(Some((turn, step, usage.deserialize()?)))
 }
 
 fn buckets_from(usage: &TokenUsage) -> TokenUsageProjection {
@@ -217,16 +222,17 @@ fn pressure_from(usage: &TokenUsage) -> anyhow::Result<u64> {
         .ok_or_else(|| anyhow::anyhow!("contextPressure prompt token sum overflowed"))
 }
 
-fn required_u64(value: &Value, field: &str) -> anyhow::Result<u64> {
+fn required_u64(value: &JsonValue, field: &str) -> anyhow::Result<u64> {
     value
         .get(field)
-        .and_then(Value::as_u64)
+        .and_then(|value| value.as_u64())
         .ok_or_else(|| anyhow::anyhow!("token projection {field} must be a non-negative integer"))
 }
 
-fn optional_u64(value: &Value, field: &str) -> anyhow::Result<Option<u64>> {
+fn optional_u64(value: &JsonValue, field: &str) -> anyhow::Result<Option<u64>> {
     match value.get(field) {
-        None | Some(Value::Null) => Ok(None),
+        None => Ok(None),
+        Some(value) if value.is_null() => Ok(None),
         Some(value) => value.as_u64().map(Some).ok_or_else(|| {
             anyhow::anyhow!("token projection {field} must be a non-negative integer")
         }),

@@ -50,7 +50,9 @@ fn observe(header: &Value) -> Value {
     }))
     .unwrap();
     match Session::create(&SessionId::new("header-seed"), Some(vec![event]), None) {
-        Ok(session) => json!({ "ok": true, "header": session.events()[0].data["header"] }),
+        Ok(session) => {
+            json!({ "ok": true, "header": session.events()[0].data.as_serde_json().unwrap()["header"] })
+        }
         Err(error) => json!({ "ok": false, "error": error.to_string() }),
     }
 }

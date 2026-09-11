@@ -199,6 +199,26 @@ fn fit_with_suffix(content: &str, suffix: &str, max_bytes: Option<usize>, omitte
     format!("{}{}", retain_tail(content, max_bytes - fixed_bytes), fixed)
 }
 
+fn fit_json_with_suffix(
+    content: &seekdeep_llm::JsonString,
+    suffix: &str,
+    max_bytes: Option<usize>,
+    omitted: &str,
+) -> seekdeep_llm::JsonString {
+    let mut complete = content.clone();
+    complete.push_str(suffix);
+    if max_bytes.is_none_or(|max| complete.len_utf8() <= max) {
+        return complete;
+    }
+    fit_with_suffix(
+        &String::from_utf16_lossy(content.utf16_units()),
+        suffix,
+        max_bytes,
+        omitted,
+    )
+    .into()
+}
+
 /// One-line account of a settled job for the notice form's collapsed row.
 fn completion_summary(snapshot: &JobSnapshot) -> String {
     bound_context_summary(&format!(
@@ -253,7 +273,7 @@ fn fit_completion_notice(snapshot: &JobSnapshot) -> String {
     )
 }
 
-fn raw_single_text(content: &[ContentBlock]) -> Option<&str> {
+fn raw_single_text(content: &[ContentBlock]) -> Option<&seekdeep_llm::JsonString> {
     if content.len() != 1 {
         return None;
     }
@@ -266,7 +286,7 @@ fn raw_single_text(content: &[ContentBlock]) -> Option<&str> {
 fn bound_single_text(content: &[ContentBlock], max_bytes: usize) -> Option<Vec<ContentBlock>> {
     let text = raw_single_text(content)?;
     Some(vec![ContentBlock::Text {
-        text: fit_with_suffix(text, "", Some(max_bytes), "\n[result truncated]"),
+        text: fit_json_with_suffix(text, "", Some(max_bytes), "\n[result truncated]"),
     }])
 }
 
@@ -274,7 +294,7 @@ fn visible_output_limit(ctx: &Context, exec: &ToolExecution) -> Option<usize> {
     if exec.name != "job_output" && exec.name != "job_kill" {
         return None;
     }
-    let job_id = exec.arguments.get("job_id")?.as_str()?;
+    let job_id: String = exec.arguments.get("job_id")?.deserialize().ok()?;
     if job_id.is_empty() {
         return None;
     }
@@ -322,9 +342,9 @@ fn present_task_call(
     raw_input: Option<Value>,
 ) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        title: title.into(),
+        title: title.into().into(),
         kind: Some(kind),
-        raw_input,
+        raw_input: raw_input.map(Into::into),
         content: None,
         locations: None,
     })
@@ -345,26 +365,29 @@ fn finalize_task_content(
         && !is_error
         && let Some(value) = value
     {
-        let text = value
+        let text: seekdeep_llm::JsonString = value
             .get("text")
-            .and_then(Value::as_str)
+            .and_then(|text| text.deserialize().ok())
             .unwrap_or_default();
         if let Some(job) = value
             .get("job")
-            .and_then(|job| serde_json::from_value::<PublicJobSnapshot>(job.clone()).ok())
+            .and_then(|job| job.deserialize::<PublicJobSnapshot>().ok())
         {
             let body = if text.is_empty() {
-                "(no new output)"
+                seekdeep_llm::JsonString::from("(no new output)")
             } else {
                 text
             };
-            let content_str = body.strip_suffix('\n').unwrap_or(body);
+            let units = body.utf16_units();
+            let end = units.len() - usize::from(units.last() == Some(&u16::from(b'\n')));
+            let content_str = seekdeep_llm::JsonString::from_utf16(&units[..end]);
             let suffix = format!("\n{}", status_line(job.status, job.detail.as_deref()));
-            let expected = format!("{content_str}{suffix}");
-            if raw_single_text(content).is_some_and(|rendered| rendered == expected) {
+            let mut expected = content_str.clone();
+            expected.push_str(&suffix);
+            if raw_single_text(content).is_some_and(|rendered| rendered == &expected) {
                 return Some(vec![ContentBlock::Text {
-                    text: fit_with_suffix(
-                        content_str,
+                    text: fit_json_with_suffix(
+                        &content_str,
                         &suffix,
                         Some(max_bytes),
                         "\n[output truncated]",
@@ -392,7 +415,7 @@ struct JobOutputArgs {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct JobOutputValue {
-    text: String,
+    text: seekdeep_llm::JsonString,
     job: PublicJobSnapshot,
 }
 
@@ -502,7 +525,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         };
         let message = UserMessage::new(
             vec![ContentBlock::Text {
-                text: fit_completion_notice(snapshot),
+                text: fit_completion_notice(snapshot).into(),
             }],
             notice_source(&completion_summary(snapshot)),
         );
@@ -554,18 +577,16 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                     })
                 },
                 Arc::new(|_args: &JobOutputArgs, value: &JobOutputValue| {
-                    let body = if value.text.is_empty() {
-                        "(no new output)"
+                    let mut text = if value.text.is_empty() {
+                        seekdeep_llm::JsonString::from("(no new output)")
                     } else {
-                        value.text.as_str()
+                        value.text.clone()
                     };
-                    let separator = if body.ends_with('\n') { "" } else { "\n" };
-                    Ok(vec![ContentBlock::Text {
-                        text: format!(
-                            "{body}{separator}{}",
-                            status_line(value.job.status, value.job.detail.as_deref())
-                        ),
-                    }])
+                    if !text.ends_with("\n") {
+                        text.push_str("\n");
+                    }
+                    text.push_str(&status_line(value.job.status, value.job.detail.as_deref()));
+                    Ok(vec![ContentBlock::text(text)])
                 }),
             ),
             Arc::new(move |args: JobOutputArgs, exec| {
@@ -628,7 +649,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                             .collect::<Vec<_>>()
                             .join("\n")
                     };
-                    Ok(vec![ContentBlock::Text { text }])
+                    Ok(vec![ContentBlock::text(text)])
                 }),
             ),
             Arc::new(move |_args: NoArgs, exec| {
@@ -687,7 +708,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                     } else {
                         format!("requested cancellation of job {}", value.job.id)
                     };
-                    Ok(vec![ContentBlock::Text { text }])
+                    Ok(vec![ContentBlock::text(text)])
                 }),
             ),
             Arc::new(move |args: JobKillArgs, exec| {

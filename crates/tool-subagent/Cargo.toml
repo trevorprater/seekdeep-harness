@@ -14,10 +14,12 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-code-runtime = { path = "../code-runtime" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-jobs = { path = "../jobs" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-subagent = { path = "../subagent" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }

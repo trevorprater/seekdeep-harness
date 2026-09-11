@@ -41,7 +41,7 @@ fn assistant(content: Vec<PiAssistantBlock>, stop_reason: PiStopReason) -> PiAss
 
 fn text(text: &str) -> PiAssistantBlock {
     PiAssistantBlock::Text {
-        text: text.to_owned(),
+        text: text.into(),
         text_signature: None,
     }
 }
@@ -196,7 +196,7 @@ async fn translates_every_content_event_then_usage_and_replay_finish() {
         },
         PiAssistantEvent::TextEnd {
             content_index: 0,
-            content: "hi".to_owned(),
+            content: "hi".into(),
             partial: empty.clone(),
         },
         PiAssistantEvent::ThinkingStart {

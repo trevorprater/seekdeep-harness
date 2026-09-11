@@ -141,7 +141,7 @@ fn mount(config: &TmuxContextConfig, with_shell: bool) -> Harness {
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -428,7 +428,7 @@ async fn shadowed_reading_still_schedules_a_resumed_session_from_the_raw_log() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "compacted history".to_owned(),
+                    text: "compacted history".into(),
                 }],
                 MessageSource::plugin("compaction-basic"),
             ))
@@ -489,7 +489,7 @@ async fn malformed_prior_readings_are_treated_as_absent() {
             text: "not a location".to_owned(),
         },
         ContentBlock::Text {
-            text: "single line, no newline".to_owned(),
+            text: "single line, no newline".into(),
         },
     ] {
         let harness = mount(&TmuxContextConfig::default(), true);

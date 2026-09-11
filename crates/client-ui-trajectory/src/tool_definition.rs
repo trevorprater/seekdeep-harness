@@ -9,7 +9,9 @@ use seekdeep_client_runtime::{
     ConversationNodeContext,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node_at};
 
@@ -41,16 +43,16 @@ pub fn trajectory_tool_definition() -> AssemblerNodeDefinition {
                     id: js_member_string(
                         event
                             .data
-                            .get("message")
-                            .and_then(|message| message.get("source"))
-                            .unwrap_or(&Value::Null),
+                            .get_value("message")
+                            .and_then(|message| message.get_value("source"))
+                            .unwrap_or(null()),
                         "callId",
                     ),
                     role: ConversationMatchRole::Update,
                 }),
                 "tool/code-dispatch-start" | "tool/code-dispatch" => event
                     .data
-                    .get("rootCallId")
+                    .get_value("rootCallId")
                     .and_then(Value::as_str)
                     .filter(|id| !id.is_empty())
                     .map(|id| ConversationMatchResult {
@@ -120,7 +122,7 @@ fn build_tool_view_node(
     let anchor_seq = context.start.as_ref().map_or_else(
         || {
             if is_settled(&root) {
-                root.get("seq")
+                root.get_value("seq")
                     .and_then(Value::as_f64)
                     .unwrap_or_else(first_match_seq)
             } else {
@@ -145,12 +147,12 @@ fn root_call(accepted: &ConversationMatch) -> Result<Value, ConversationAssemble
     let data = &accepted.event.data;
     Ok(json!({
         "callId": js_member_string(data, "callId"),
-        "name": data.get("name").cloned().unwrap_or(Value::Null),
-        "argsRaw": data.get("arguments").cloned().unwrap_or(Value::Null),
-        "turn": data.get("turn").cloned().unwrap_or(Value::Null),
-        "step": data.get("step").cloned().unwrap_or(Value::Null),
+        "name": data.get_value("name").cloned().unwrap_or(null().clone()),
+        "argsRaw": data.get_value("arguments").cloned().unwrap_or(null().clone()),
+        "turn": data.get_value("turn").cloned().unwrap_or(null().clone()),
+        "step": data.get_value("step").cloned().unwrap_or(null().clone()),
         "time": accepted.event.time,
-        "callView": match_view(accepted, "call").unwrap_or(Value::Null),
+        "callView": match_view(accepted, "call").unwrap_or(null().clone()),
         "subCalls": [],
     }))
 }
@@ -164,15 +166,15 @@ fn root_result(
     }
     let data = &accepted.event.data;
     let result = data
-        .get("message")
-        .and_then(|message| message.get("content"))
+        .get_value("message")
+        .and_then(|message| message.get_value("content"))
         .and_then(Value::as_array)
         .and_then(|content| content.first())
         .ok_or_else(|| ConversationAssemblerError::new("tool/result omitted first content"))?;
     let source = data
-        .get("message")
-        .and_then(|message| message.get("source"))
-        .unwrap_or(&Value::Null);
+        .get_value("message")
+        .and_then(|message| message.get_value("source"))
+        .unwrap_or(null());
     let mut block = Map::from_iter([
         ("kind".to_owned(), json!("tool-result")),
         ("seq".to_owned(), json!(accepted.event.seq)),
@@ -183,44 +185,44 @@ fn root_result(
         ),
         (
             "call".to_owned(),
-            previous.map_or(Value::Null, |previous| {
+            previous.map_or(null().clone(), |previous| {
                 json!({
-                    "name": previous.get("name").cloned().unwrap_or(Value::Null),
-                    "argsRaw": previous.get("argsRaw").cloned().unwrap_or(Value::Null),
+                    "name": previous.get_value("name").cloned().unwrap_or(null().clone()),
+                    "argsRaw": previous.get_value("argsRaw").cloned().unwrap_or(null().clone()),
                 })
             }),
         ),
         (
             "callTime".to_owned(),
             previous
-                .and_then(|previous| previous.get("time"))
+                .and_then(|previous| previous.get_value("time"))
                 .cloned()
-                .unwrap_or(Value::Null),
+                .unwrap_or(null().clone()),
         ),
         (
             "content".to_owned(),
-            result.get("content").cloned().unwrap_or(Value::Null),
+            result.get_value("content").cloned().unwrap_or(null().clone()),
         ),
         (
             "isError".to_owned(),
-            json!(result.get("isError").and_then(Value::as_bool) == Some(true)),
+            json!(result.get_value("isError").and_then(Value::as_bool) == Some(true)),
         ),
         (
             "callView".to_owned(),
             previous
-                .and_then(|previous| previous.get("callView"))
+                .and_then(|previous| previous.get_value("callView"))
                 .cloned()
-                .unwrap_or(Value::Null),
+                .unwrap_or(null().clone()),
         ),
         (
             "resultView".to_owned(),
-            match_view(accepted, "result").unwrap_or(Value::Null),
+            match_view(accepted, "result").unwrap_or(null().clone()),
         ),
         ("subCalls".to_owned(), json!([])),
     ]);
     copy_present(&mut block, data, "error");
     copy_present(&mut block, data, "meta");
-    Ok(Some(Value::Object(block)))
+    Ok(Some(Value::object(block)))
 }
 
 fn child_call(
@@ -229,8 +231,8 @@ fn child_call(
 ) -> Result<Value, ConversationAssemblerError> {
     Ok(json!({
         "callId": required_string(data, "subCallId")?,
-        "name": data.get("name").cloned().unwrap_or(Value::Null),
-        "argsRaw": json_stringify(data.get("arguments"))?,
+        "name": data.get_value("name").cloned().unwrap_or(null().clone()),
+        "argsRaw": json_stringify(data.get_value("arguments"))?,
         "turn": location_turn(&accepted.location),
         "step": location_step(&accepted.location),
         "time": accepted.event.time,
@@ -250,13 +252,13 @@ fn child_result(
         "time": accepted.event.time,
         "callId": required_string(data, "subCallId")?,
         "call": {
-            "name": data.get("name").cloned().unwrap_or(Value::Null),
-            "argsRaw": json_stringify(data.get("arguments"))?,
+            "name": data.get_value("name").cloned().unwrap_or(null().clone()),
+            "argsRaw": json_stringify(data.get_value("arguments"))?,
         },
         "callTime": previous.filter(|block| !is_settled(block))
-            .and_then(|block| block.get("time")).cloned().unwrap_or(Value::Null),
-        "content": data.get("content").cloned().unwrap_or_else(|| json!([])),
-        "isError": data.get("isError").and_then(Value::as_bool) == Some(true),
+            .and_then(|block| block.get_value("time")).cloned().unwrap_or(null().clone()),
+        "content": data.get_value("content").cloned().unwrap_or_else(|| json!([])),
+        "isError": data.get_value("isError").and_then(Value::as_bool) == Some(true),
         "callView": null,
         "resultView": null,
         "subCalls": [],
@@ -379,16 +381,16 @@ fn project_call(
         "kind": "tool-result",
         "seq": u64_as_f64(seq) - 0.8,
         "time": time,
-        "callId": block.get("callId").cloned().unwrap_or(Value::Null),
+        "callId": block.get_value("callId").cloned().unwrap_or(null().clone()),
         "call": {
-            "name": block.get("name").cloned().unwrap_or(Value::Null),
-            "argsRaw": block.get("argsRaw").cloned().unwrap_or(Value::Null),
+            "name": block.get_value("name").cloned().unwrap_or(null().clone()),
+            "argsRaw": block.get_value("argsRaw").cloned().unwrap_or(null().clone()),
         },
-        "callTime": block.get("time").cloned().unwrap_or(Value::Null),
+        "callTime": block.get_value("time").cloned().unwrap_or(null().clone()),
         "content": [],
         "isError": true,
         "error": {"name": "Interrupted", "code": "interrupted"},
-        "callView": block.get("callView").cloned().unwrap_or(Value::Null),
+        "callView": block.get_value("callView").cloned().unwrap_or(null().clone()),
         "resultView": null,
         "subCalls": sub_calls,
     })))
@@ -445,21 +447,21 @@ fn with_sub_calls(
     block
         .as_object_mut()
         .ok_or_else(|| ConversationAssemblerError::new("trajectory Tool block must be an object"))?
-        .insert("subCalls".to_owned(), Value::Array(sub_calls));
+        .insert("subCalls".to_owned(), Value::array(&sub_calls));
     Ok(block)
 }
 
 fn block_call_id(block: &Value) -> Result<&str, ConversationAssemblerError> {
     block
-        .get("callId")
+        .get_value("callId")
         .and_then(Value::as_str)
         .ok_or_else(|| ConversationAssemblerError::new("trajectory Tool block omitted callId"))
 }
 
 fn match_view(accepted: &ConversationMatch, expected: &str) -> Option<Value> {
     let view = accepted.view.as_deref()?;
-    (view.get("for").and_then(Value::as_str) == Some(expected))
-        .then(|| view.get("view").cloned())
+    (view.get_value("for").and_then(Value::as_str) == Some(expected))
+        .then(|| view.get_value("view").cloned())
         .flatten()
 }
 
@@ -480,7 +482,7 @@ fn location_step(location: &ConversationLocation) -> u64 {
 }
 
 fn is_settled(block: &Value) -> bool {
-    block.get("kind").is_some()
+    block.get_value("kind").is_some()
 }
 
 fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ConversationAssemblerError> {
@@ -491,7 +493,7 @@ fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, Conversat
 }
 
 fn json_stringify(value: Option<&Value>) -> Result<Value, ConversationAssemblerError> {
-    value.map_or(Ok(Value::Null), |value| {
+    value.map_or(Ok(null().clone()), |value| {
         serde_json::to_string(value)
             .map(Value::String)
             .map_err(|error| ConversationAssemblerError::new(error.to_string()))
@@ -507,11 +509,11 @@ fn js_member_string(value: &Value, key: &str) -> String {
 fn js_string(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
-        Value::Null => "null".to_owned(),
+        null().clone() => "null".to_owned(),
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => value.to_string(),
-        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
+        Value::object(_) => "[object Object]".to_owned(),
     }
 }
 
@@ -522,13 +524,13 @@ fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
 }
 
 fn encode(state: &ToolState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(state)
+    Value::from_serialize(state)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode(value: &Value) -> Result<ToolState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value.deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

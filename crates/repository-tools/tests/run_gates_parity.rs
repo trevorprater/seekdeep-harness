@@ -254,6 +254,43 @@ fn windows_blocking_and_observational_dispositions_remain_distinct() {
 }
 
 #[test]
+fn coverage_gate_uses_the_public_compiled_reporter_entry_and_worker_budget() {
+    let mut environment = environment();
+    environment.variables.insert(
+        OsString::from("SEEKDEEP_COVERAGE_MAX_WORKERS"),
+        OsString::from("9"),
+    );
+    let gates = gates_for_mode(GateMode::CiCoverage, &environment).unwrap();
+    let coverage = gates.iter().find(|gate| gate.id == "coverage").unwrap();
+    assert_eq!(
+        coverage.args,
+        [
+            "/private/pnpm.cjs",
+            "run",
+            "test:coverage",
+            "--maxWorkers=6"
+        ]
+        .map(OsString::from)
+    );
+    assert_eq!(
+        coverage.display_command,
+        "pnpm run test:coverage --maxWorkers=6"
+    );
+    assert!(
+        coverage
+            .environment
+            .values()
+            .any(|value| value.as_deref() == Some("1"))
+    );
+    let exempt = gates
+        .iter()
+        .find(|gate| gate.id == "coverage-exempt-heavy")
+        .unwrap();
+    assert!(exempt.args.contains(&OsString::from("--maxWorkers=3")));
+    assert!(!exempt.args.contains(&OsString::from("--coverage")));
+}
+
+#[test]
 fn lint_and_typert_consumers_preserve_command_and_dependency_contracts() {
     let mut environment = environment();
     environment

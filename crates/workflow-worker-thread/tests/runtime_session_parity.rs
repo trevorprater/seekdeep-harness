@@ -186,7 +186,7 @@ impl ChildPort for ScriptedChildren {
 fn text_result(text: &str) -> ChildResult {
     ChildResult {
         output: vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         structured: None,
         stop_reason: "completed".to_owned(),
@@ -890,7 +890,7 @@ return null",
             Ok(ChildResult {
                 output: vec![
                     ContentBlock::Text {
-                        text: "first ".to_owned(),
+                        text: "first ".into(),
                     },
                     ContentBlock::ToolCall {
                         id: CallId::new("c1"),
@@ -898,7 +898,7 @@ return null",
                         arguments: "{}".to_owned(),
                     },
                     ContentBlock::Text {
-                        text: "second".to_owned(),
+                        text: "second".into(),
                     },
                 ],
                 structured: None,

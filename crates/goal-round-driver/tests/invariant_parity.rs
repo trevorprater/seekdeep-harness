@@ -131,7 +131,7 @@ async fn reconstructs_existing_rounds_and_accepts_the_next_canonical_prompt() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "ordinary human message".to_owned(),
+                    text: "ordinary human message".into(),
                 }],
                 MessageSource::user(),
             ))
@@ -158,7 +158,7 @@ async fn reconstructs_existing_rounds_and_accepts_the_next_canonical_prompt() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "round zero is not a driver continuation".to_owned(),
+                    text: "round zero is not a driver continuation".into(),
                 }],
                 goal_source(0),
             ))
@@ -182,7 +182,7 @@ async fn rejects_a_continuation_whose_content_differs_from_the_renderer() {
         &session,
         2,
         Some(vec![ContentBlock::Text {
-            text: "counterfeit continuation".to_owned(),
+            text: "counterfeit continuation".into(),
         }]),
     )
     .expect_err("counterfeit prompt");

@@ -25,7 +25,7 @@
 
 消费方通过 `ctx.agents` 创建 agent——`create()` 在一个调用方提供的 `SessionId` 下构建全新会话与 agent，`resume()` 先加载持久会话——或者通过循环的声明式配置条目创建。编程式创建返回归属所有者的句柄：
 
-源码：[`packages/core/agent/src/index.ts`](../../packages/core/agent/src/index.ts)
+源码：[`packages/core/agent/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/index.ts)
 
 ```ts type-equiv
 /**
@@ -58,7 +58,7 @@ interface AgentHandle {
 
 `Agent` 是每个插件（UI、钩子、orchestrator）面向编程的 surface；`ctx.agents.get(id)` 返回它，[发起者作用域](#initiating-agent)携带它。具体实现为 seekdeep-agent-loop 包内部细节；循环外没有任何组件依赖它。统一的 `send` 方法直接暴露 target 与 wakeup 路由；`followup`、`steer` 与 `inject` 是固定预设的别名方法。
 
-源码：[`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
+源码：[`packages/core/agent/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/types.ts)
 
 ```ts type-equiv
 /** Public live-agent handle. */
@@ -218,7 +218,7 @@ cause 是由 TypeScript 强制约束的同进程输入。活跃的取消持有�
 
 pre-step 决策使用与持久 user-role 输入相同、带标识的 `UserMessage` 类型。进入步骤的批次具有权威性，并保留每条消息的 `id` 和 `source`。钩子桥接层把其原生决策字段映射到这一类型化结果上。
 
-源码：[`packages/core/agent/src/types.ts`](../../packages/core/agent/src/types.ts)
+源码：[`packages/core/agent/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/types.ts)
 
 `agent/pre-step` 接收一个 payload，携带独占的已领取批次（`messages`）、拟进入步骤的坐标（`turn`、`step`）与当前轮次的取消 `signal`。首次提案在已打开的轮次内、任何步骤开始前运行；工具 continuation 可以在步骤之间提交空的已领取批次：
 
@@ -307,7 +307,7 @@ declare module '@seekdeep-ai/seekdeep-llm' {
 
 `Branded<B>` 原语位于独立的纯类型包 [seekdeep-brand](../../packages/util/brand) 中（没有运行时代码，也不依赖 harness 包），因此任何包都能品牌化其拥有的 id，而无需依赖无关的能力包。
 
-源码：[`packages/util/brand/src/index.ts`](../../packages/util/brand/src/index.ts)
+源码：[`packages/util/brand/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/brand/src/index.ts)
 
 ```ts type-equiv
 /** A string carrying a compile-time-only brand `B`. */
@@ -346,7 +346,7 @@ currentSelection(): ModelSelection
 async saveSelection(next: ModelSelection): Promise<void>
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:64`](../../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:64`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-default-model/src/index.ts)
 
 <a id="ctxagentloop--agentloop"></a>
 
@@ -385,7 +385,7 @@ async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandl
 
 Types: [SessionHeader](persistence.md)
 
-Source: [`packages/core/agent-loop/src/index.ts:296`](../../packages/core/agent-loop/src/index.ts)
+Source: [`packages/core/agent-loop/src/index.ts:296`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-loop/src/index.ts)
 
 <a id="ctxagentpresets--agentpresets"></a>
 
@@ -556,7 +556,7 @@ async standingKeyFor(id?: string): Promise<ScopeKey>
 
 Types: [ScopeKey](scope.md)
 
-Source: [`packages/preset/agent-presets/src/index.ts:82`](../../packages/preset/agent-presets/src/index.ts)
+Source: [`packages/preset/agent-presets/src/index.ts:82`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/preset/agent-presets/src/index.ts)
 
 <a id="ctxagents--agentregistry"></a>
 
@@ -728,7 +728,7 @@ list(): Agent[]
 roots(): Agent[]
 ```
 
-Source: [`packages/core/agent/src/index.ts:256`](../../packages/core/agent/src/index.ts)
+Source: [`packages/core/agent/src/index.ts:256`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/index.ts)
 
 <a id="agent-events"></a>
 
@@ -756,7 +756,7 @@ A fully configured agent and live session were published. Setup is composition-o
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:159`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:159`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentdisposed--emit"></a>
 
@@ -778,7 +778,7 @@ An agent left the registry; AgentLoop emits this after driver quiescence and sco
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:168`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:168`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agenterror--emit"></a>
 
@@ -802,7 +802,7 @@ A step or turn errored. The machine reports a failure here even when the error h
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:290`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:290`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxclaimed--emit"></a>
 
@@ -826,7 +826,7 @@ One message left the inbox inside its open turn. If the proposed step is rejecte
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:197`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:197`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxdiscarded--emit"></a>
 
@@ -847,7 +847,7 @@ One message was discarded from the live inbox.
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:205`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:205`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentinboxinserted--emit"></a>
 
@@ -868,7 +868,7 @@ One message entered the live inbox.
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:186`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:186`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentpre-step--waterfall"></a>
 
@@ -893,7 +893,7 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
 
 Types: [Scoped](scope.md) · [UserMessage](session.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:231`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:231`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentrequest--waterfall"></a>
 
@@ -919,7 +919,7 @@ Replace the frozen call configuration. `await next()` yields the config the mach
 
 Types: [LlmCallConfig](llm-streaming.md) · [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:244`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:244`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentrequest-error--waterfall"></a>
 
@@ -948,7 +948,7 @@ Handle one failed model-request attempt before the loop retries or closes its st
 
 Types: [LlmFailure](llm-streaming.md) · [ResolvedRetryPolicy](llm-streaming.md) · [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:260`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:260`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentsession-start--emit"></a>
 
@@ -972,7 +972,7 @@ The session lifecycle began, once before the first turn. Use `agent.inject()` to
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:217`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:217`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentstatus--emit"></a>
 
@@ -995,7 +995,7 @@ Agent status changed (`idle` ⇄ `running`). A waking delivery enters `running` 
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:178`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:178`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agentturn-stopping--serial"></a>
 
@@ -1026,7 +1026,7 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/core/agent/src/runtime-types.ts:278`](../../packages/core/agent/src/runtime-types.ts)
+Source: [`packages/core/agent/src/runtime-types.ts:278`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/runtime-types.ts)
 
 <a id="agent-loop-events"></a>
 
@@ -1051,7 +1051,7 @@ A declarative agent entry failed before it could publish a live agent. Consumers
 'agent-loop/config-start-failed'(payload: { sessionId: SessionId; error: unknown }): void
 ```
 
-Source: [`packages/core/agent-loop/src/index.ts:183`](../../packages/core/agent-loop/src/index.ts)
+Source: [`packages/core/agent-loop/src/index.ts:183`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-loop/src/index.ts)
 
 <a id="agent-preset-events"></a>
 
@@ -1074,5 +1074,5 @@ One session committed a different agent preset to its durable log. Consumers inv
 'agent-preset/selected'(sessionId: SessionId, agentPreset: string): void
 ```
 
-Source: [`packages/preset/agent-presets/src/types.ts:13`](../../packages/preset/agent-presets/src/types.ts)
+Source: [`packages/preset/agent-presets/src/types.ts:13`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/preset/agent-presets/src/types.ts)
 <!-- END GENERATED cordis-surface -->

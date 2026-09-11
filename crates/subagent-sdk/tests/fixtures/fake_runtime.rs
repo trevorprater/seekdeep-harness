@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use seekdeep_core::session::JsonValue;
 use serde_json::{Value, json};
 
 const SERVER_NAME: &str = "seekdeep-harness-sdk-runtime";
@@ -16,12 +17,42 @@ fn variable(name: &str) -> Option<String> {
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn send(value: Value) -> anyhow::Result<()> {
+fn send(value: impl serde::Serialize) -> anyhow::Result<()> {
     let mut stdout = std::io::stdout().lock();
     serde_json::to_writer(&mut stdout, &value)?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())
+}
+
+fn raw_prompt(frame: &JsonValue, mode: &str) -> anyhow::Result<()> {
+    let session = frame["params"]["sessionId"].as_raw();
+    let text = &frame["params"]["contentBlocks"][0]["text"];
+    anyhow::ensure!(text.to_utf16() == Some(vec![0x41, 0xd800, 0x42, 0xdc00]));
+    let text = text.as_raw();
+    let content = if mode == "stream" {
+        "[]".to_owned()
+    } else {
+        format!(r#"[{{"type":"text","text":{text}}}]"#)
+    };
+    let events = [
+        r#"{"type":"agent/inbox/spliced","seq":0,"time":0,"data":{"target":"next-turn","start":0,"inserted":[{"id":"fixture-user-1"}]}}"#.to_owned(),
+        format!(r#"{{"type":"assistant/chunk","seq":1,"time":1,"data":{{"chunk":{{"type":"text-delta","index":0,"text":{text}}},"ignored":{{"\ud800":"\udfff"}}}}}}"#),
+        format!(r#"{{"type":"assistant/message","seq":2,"time":2,"data":{{"message":{{"content":{content}}},"ignored":{{"\ud800":"\udfff","huge":9007199254740993,"tiny":1e-400}}}}}}"#),
+        r#"{"type":"turn/end","seq":3,"time":3,"data":{"reason":{"kind":"completed","ignored":{"\ud800":"\udfff"}}}}"#.to_owned(),
+    ];
+    for event in events {
+        send(JsonValue::parse(format!(
+            r#"{{"jsonrpc":"2.0","method":"session.event","params":{{"sessionId":{session},"event":{event},"ignored":"\ud800"}}}}"#
+        ))?)?;
+    }
+    send(JsonValue::parse(format!(
+        r#"{{"jsonrpc":"2.0","method":"session.status","params":{{"sessionId":{session},"status":"idle"}}}}"#
+    ))?)?;
+    send(JsonValue::parse(format!(
+        r#"{{"jsonrpc":"2.0","id":{},"result":{{"messageId":"fixture-user-1"}}}}"#,
+        frame["id"].as_raw()
+    ))?)
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -192,7 +223,14 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(3);
     }
     for line in std::io::stdin().lock().lines() {
-        let frame: Value = serde_json::from_str(&line?)?;
+        let frame = JsonValue::parse(line?)?;
+        if frame["method"] == "session/prompt"
+            && let Some(mode) = variable("SEEKDEEP_SDK_FIXTURE_RAW_TEXT")
+        {
+            raw_prompt(&frame, &mode)?;
+            continue;
+        }
+        let frame = frame.try_into_serde_json()?;
         match frame.get("method").and_then(Value::as_str) {
             Some("initialize") => initialize(&frame)?,
             Some("session/prompt") => prompt(&frame)?,

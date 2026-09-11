@@ -69,7 +69,7 @@ impl LlmAdapter for RetrySnapshotAdapter {
                 StreamChunk::BlockEnd {
                     index: 0,
                     block: ContentBlock::Text {
-                        text: "RETRY_OK".to_owned(),
+                        text: "RETRY_OK".into(),
                     },
                 },
                 StreamChunk::Usage {

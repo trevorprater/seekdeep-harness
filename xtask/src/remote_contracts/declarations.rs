@@ -129,6 +129,14 @@ mod tests {
         let directory = tempfile::tempdir()?;
         run(directory.path(), false, None)?;
         run(directory.path(), true, None)?;
+        let cordis_output = directory.path().join("vendor/cordis/lib");
+        let cordis_index = cordis_output.join("types/index.d.ts");
+        let cordis_header = std::fs::read_to_string(&cordis_index)?;
+        assert!(cordis_header.ends_with(crate::cordis_test_invariant_declarations()));
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        write_package(&root, "@seekdeep-ai/cordis", &cordis_output)?;
+        assert_eq!(std::fs::read_to_string(&cordis_index)?, cordis_header);
+        run(directory.path(), true, None)?;
         let goal = directory
             .path()
             .join("packages/goal/goal/lib/typert.remote-client.d.ts");

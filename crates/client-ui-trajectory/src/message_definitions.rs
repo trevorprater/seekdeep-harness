@@ -9,7 +9,9 @@ use seekdeep_client_runtime::{
     context_form, context_provenance,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node};
 
@@ -44,7 +46,7 @@ fn trajectory_inbox_definition() -> AssemblerNodeDefinition {
         target: None,
         match_event: Rc::new(|event| {
             Ok((event.event_type == "agent/inbox/spliced"
-                && event.data.get("target").and_then(Value::as_str) == Some("next-step"))
+                && event.data.get_value("target").and_then(Value::as_str) == Some("next-step"))
             .then(|| ConversationMatchResult {
                 id: event.seq.to_string(),
                 role: ConversationMatchRole::Start,
@@ -91,17 +93,17 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
             }
             let event = &accepted.event;
             let source =
-                event.data.get("source").cloned().ok_or_else(|| {
+                event.data.get_value("source").cloned().ok_or_else(|| {
                     ConversationAssemblerError::new("user/message omitted source")
                 })?;
-            let source_kind = source.get("kind").and_then(Value::as_str).ok_or_else(|| {
+            let source_kind = source.get_value("kind").and_then(Value::as_str).ok_or_else(|| {
                 ConversationAssemblerError::new("user/message source omitted kind")
             })?;
-            let content = event.data.get("content").cloned().unwrap_or(Value::Null);
+            let content = event.data.get_value("content").cloned().unwrap_or(null().clone());
             let state = if source_kind == "user" {
                 let id = event
                     .data
-                    .get("id")
+                    .get_value("id")
                     .map_or_else(|| "undefined".to_owned(), js_string);
                 let claimed = reader
                     .previous(TRAJECTORY_INBOX_KIND)
@@ -111,7 +113,7 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
                 if claimed {
                     json!({
                         "kind": "steering",
-                        "messageId": event.data.get("id").cloned().unwrap_or(Value::Null),
+                        "messageId": event.data.get_value("id").cloned().unwrap_or(null().clone()),
                         "seq": event.seq,
                         "time": event.time,
                         "content": content,
@@ -139,7 +141,7 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
                 if let Some(form) = context_form(&source) {
                     state.insert("form".to_owned(), json!(form_name(form)));
                 }
-                Value::Object(state)
+                Value::object(state)
             };
             Ok(Some(Rc::new(state)))
         }),
@@ -150,7 +152,7 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
             let Some(state) = context.state.as_deref() else {
                 return Ok(None);
             };
-            let seq = state.get("seq").and_then(Value::as_u64).ok_or_else(|| {
+            let seq = state.get_value("seq").and_then(Value::as_u64).ok_or_else(|| {
                 ConversationAssemblerError::new("trajectory input state omitted seq")
             })?;
             Ok(Some(trajectory_node(
@@ -169,13 +171,13 @@ fn apply_splice(
     let mut pending = previous.map_or_else(Vec::new, |state| state.pending.clone());
     let mut claimed = previous.map_or_else(IndexSet::new, |state| state.claimed.clone());
     let start = splice
-        .get("start")
+        .get_value("start")
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
         .ok_or_else(|| ConversationAssemblerError::new("inbox splice start must be a u64"))?
         .min(pending.len());
     let removed_count = splice
-        .get("removedCount")
+        .get_value("removedCount")
         .map(|value| {
             value
                 .as_u64()
@@ -187,13 +189,13 @@ fn apply_splice(
         .transpose()?
         .unwrap_or(0);
     let inserted = splice
-        .get("inserted")
+        .get_value("inserted")
         .and_then(Value::as_array)
         .ok_or_else(|| ConversationAssemblerError::new("inbox splice inserted must be an array"))?
         .iter()
         .map(|identity| {
             identity
-                .get("id")
+                .get_value("id")
                 .and_then(Value::as_str)
                 .map(|id| InboxIdentity { id: id.to_owned() })
                 .ok_or_else(|| {
@@ -208,7 +210,7 @@ fn apply_splice(
     for identity in &inserted {
         claimed.shift_remove(&identity.id);
     }
-    if splice.get("outcome").and_then(Value::as_str) != Some("canceled") {
+    if splice.get_value("outcome").and_then(Value::as_str) != Some("canceled") {
         for identity in removed {
             claimed.insert(identity.id);
         }
@@ -227,7 +229,7 @@ fn provenance_value(provenance: &ContextProvenanceView) -> Value {
     if let Some(label) = &provenance.label {
         value.insert("label".to_owned(), json!(label));
     }
-    Value::Object(value)
+    Value::object(value)
 }
 
 const fn form_name(form: KnownContextForm) -> &'static str {
@@ -244,24 +246,24 @@ const fn form_name(form: KnownContextForm) -> &'static str {
 fn js_string(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
-        Value::Null => "null".to_owned(),
+        null().clone() => "null".to_owned(),
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => value.to_string(),
-        Value::Array(_) => value
+        Value::array(&_) => value
             .as_array()
             .map(|values| values.iter().map(js_string).collect::<Vec<_>>().join(","))
             .unwrap_or_default(),
-        Value::Object(_) => "[object Object]".to_owned(),
+        Value::object(_) => "[object Object]".to_owned(),
     }
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode_inbox(value: &Value) -> Result<InboxState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value.deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

@@ -77,7 +77,7 @@ fn echo_tool(name: &str) -> ToolDefinition {
             schema,
             Arc::new(|_, value| {
                 Ok(vec![ContentBlock::Text {
-                    text: value.as_str().unwrap_or_default().to_owned(),
+                    text: value.as_str().unwrap_or_default().into(),
                 }])
             }),
         ),
@@ -117,7 +117,7 @@ fn ask(harness: &Harness, reason: Option<&str>) -> seekdeep_cordis::fiber::Effec
 
 fn failure_text(result: &ToolExecutionResult) -> &str {
     match result.content().first() {
-        Some(ContentBlock::Text { text }) => text,
+        Some(ContentBlock::Text { text }) => text.as_str().expect("ordinary fixture text"),
         other => panic!("expected text failure, got {other:?}"),
     }
 }
@@ -235,7 +235,7 @@ async fn caller_cancellation_overtaking_approval_is_aborted_before_dispatch() {
     let mut probe = echo_tool("approval-probe");
     probe.execute = Arc::new(move |_, _| {
         body_dispatched.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Ok(json!("ran")) })
+        Box::pin(async { Ok(json!("ran").into()) })
     });
     harness.tools.register(&harness.root, probe).expect("probe");
     let service = harness.root.get(seekdeep_user_approval::APPROVAL).unwrap();

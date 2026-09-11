@@ -93,17 +93,6 @@ impl ExpressionEnvironment {
         )
     }
 
-    pub(crate) fn process_facade(&self) -> Value {
-        json!({
-            "env": self.environment,
-            "cwd": self.cwd.to_string_lossy(),
-            "execPath": self.executable.to_string_lossy(),
-            "platform": self.platform,
-            "version": self.version,
-            "seekdeepHome": self.seekdeep_home.to_string_lossy(),
-        })
-    }
-
     pub(crate) fn evaluate(
         &self,
         context: &Context,

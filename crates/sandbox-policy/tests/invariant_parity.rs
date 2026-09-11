@@ -14,7 +14,7 @@ fn raw_mode(mode: &str) -> SessionEvent {
         event_type: "sandbox/mode".into(),
         seq: 0,
         time: 0,
-        data: serde_json::json!({"mode": mode}),
+        data: serde_json::json!({"mode": mode}).into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,

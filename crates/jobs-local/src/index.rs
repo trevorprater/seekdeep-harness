@@ -156,7 +156,7 @@ struct TrackedTask {
     hooks: Arc<Mutex<Box<dyn JobHooks>>>,
     status: JobStatus,
     detail: Option<String>,
-    output: Option<String>,
+    output: Option<seekdeep_llm::JsonString>,
     started_at: u64,
     finished_at: Option<u64>,
     reported: bool,
@@ -649,12 +649,12 @@ impl JobRegistry for LocalJobRegistry {
         let job = expect_mut(&mut inner, id)?;
         assert_access(job, caller)?;
         let text = match job.hooks.lock().read_output() {
-            Some(text) => text,
+            Some(text) => text.into(),
             None => {
                 if job.status.is_terminal() {
                     job.output.clone().unwrap_or_default()
                 } else {
-                    String::new()
+                    seekdeep_llm::JsonString::default()
                 }
             }
         };

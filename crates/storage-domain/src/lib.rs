@@ -21,6 +21,7 @@ use seekdeep_cordis::{
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{
     FormMount, KvSnapshot, KvUnit, KvUnitDescriptor, STORAGE, Storage, StorageError, UNIT_NAME_RE,
     storage_backend_service_key,
@@ -136,7 +137,7 @@ impl DomainError {
 }
 
 /// Runtime JSON validator/parser corresponding to a source Zod schema.
-type ValueParser = dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync;
+type ValueParser = dyn Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync;
 
 /// Cloneable durable-boundary JSON parser and normalizer.
 #[derive(Clone)]
@@ -151,9 +152,21 @@ impl fmt::Debug for ValueSchema {
 }
 
 impl ValueSchema {
-    /// Creates a schema from one pure parser/normalizer.
+    /// Creates a Unicode-scalar schema from one pure parser/normalizer.
+    /// Values outside Serde JSON's string domain fail before the parser runs.
     #[must_use]
     pub fn new(parse: impl Fn(&Value) -> anyhow::Result<Value> + Send + Sync + 'static) -> Self {
+        Self::new_json(move |value| {
+            let scalar = value.clone().try_into_serde_json()?;
+            parse(&scalar).map(JsonValue::from)
+        })
+    }
+
+    /// Creates a parser that retains arbitrary JSON strings and object keys.
+    #[must_use]
+    pub fn new_json(
+        parse: impl Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync + 'static,
+    ) -> Self {
         Self {
             parse: Arc::new(parse),
         }
@@ -165,9 +178,9 @@ impl ValueSchema {
     where
         T: DeserializeOwned + Serialize + Send + Sync + 'static,
     {
-        Self::new(|value| {
-            let parsed: T = serde_json::from_value(value.clone())?;
-            Ok(serde_json::to_value(parsed)?)
+        Self::new_json(|value| {
+            let parsed: T = value.deserialize()?;
+            Ok(JsonValue::from_serialize(&parsed)?)
         })
     }
 
@@ -176,7 +189,7 @@ impl ValueSchema {
     /// # Errors
     ///
     /// Returns the schema-owned validation failure.
-    pub fn parse(&self, value: &Value) -> anyhow::Result<Value> {
+    pub fn parse(&self, value: &JsonValue) -> anyhow::Result<JsonValue> {
         (self.parse)(value)
     }
 }
@@ -187,7 +200,7 @@ pub struct DomainGlobalSpec {
     /// Durable-boundary schema.
     pub schema: ValueSchema,
     /// Value served before the first write.
-    pub initial: Value,
+    pub initial: JsonValue,
 }
 
 /// One record-table declaration.
@@ -241,7 +254,7 @@ pub fn define_domain(spec: DomainSpec) -> anyhow::Result<DomainSpec> {
     }
     if let Some(global) = &spec.global {
         anyhow::ensure!(
-            global.schema.parse(&Value::Null).is_err(),
+            global.schema.parse(&Value::Null.into()).is_err(),
             "domain '{}' global schema must not accept null: null is the medium's \"never written\" sentinel, so a stored null could not round-trip",
             spec.name
         );
@@ -274,7 +287,7 @@ pub enum DomainChanged {
         /// Key, empty for global.
         key: String,
         /// New complete snapshot.
-        value: Value,
+        value: JsonValue,
     },
     /// A record was deleted.
     #[serde(rename = "deleted")]
@@ -639,9 +652,9 @@ impl DomainFacility {
     }
 }
 
-type RecordMap = IndexMap<String, Value>;
+type RecordMap = IndexMap<String, JsonValue>;
 type DomainTables = IndexMap<String, RecordMap>;
-type PreparedSnapshot = (DomainTables, Option<Value>);
+type PreparedSnapshot = (DomainTables, Option<JsonValue>);
 
 fn prepare_snapshot(spec: &DomainSpec, snapshot: &KvSnapshot) -> anyhow::Result<PreparedSnapshot> {
     let mut tables = IndexMap::new();
@@ -678,7 +691,7 @@ pub struct Domain {
     unit: Arc<dyn KvUnit>,
     tables: HashMap<String, Arc<Mutex<RecordMap>>>,
     table_handles: Mutex<HashMap<String, Weak<KvTable>>>,
-    global: Option<Arc<Mutex<Value>>>,
+    global: Option<Arc<Mutex<JsonValue>>>,
     sender: mpsc::UnboundedSender<QueueMessage>,
     disposing: AtomicBool,
     closed: AtomicBool,
@@ -707,8 +720,8 @@ impl Domain {
         context: Context,
         spec: DomainSpec,
         unit: Arc<dyn KvUnit>,
-        records: IndexMap<String, IndexMap<String, Value>>,
-        global: Option<Value>,
+        records: IndexMap<String, IndexMap<String, JsonValue>>,
+        global: Option<JsonValue>,
         facility: Weak<DomainFacility>,
         changes: Arc<ChangeHub>,
     ) -> Arc<Self> {
@@ -783,7 +796,7 @@ impl Domain {
     /// # Errors
     ///
     /// Returns an error when closed or when no global is declared.
-    pub fn global_get(&self) -> anyhow::Result<Value> {
+    pub fn global_get(&self) -> anyhow::Result<JsonValue> {
         self.assert_readable()?;
         self.global
             .as_ref()
@@ -792,19 +805,23 @@ impl Domain {
     }
 
     /// Replaces the global durably through the write queue.
-    pub fn global_set(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    pub fn global_set(
+        &self,
+        value: impl Into<JsonValue>,
+    ) -> BoxFuture<'static, anyhow::Result<()>> {
         self.global_set_with_commit(value, |_| {})
     }
 
     /// Replaces the global and invokes one callback after memory changes but before its event.
     pub fn global_set_with_commit<C>(
         &self,
-        value: Value,
+        value: impl Into<JsonValue>,
         on_commit: C,
     ) -> BoxFuture<'static, anyhow::Result<()>>
     where
-        C: FnOnce(&Value) + Send + 'static,
+        C: FnOnce(&JsonValue) + Send + 'static,
     {
+        let value = value.into();
         let Some(global) = self.global.clone() else {
             let name = self.name.clone();
             return async move { anyhow::bail!("domain '{name}' declares no global") }.boxed();
@@ -932,13 +949,13 @@ async fn run_queue(domain: Weak<Domain>, mut receiver: mpsc::UnboundedReceiver<Q
 pub struct KvTable {
     domain: Arc<Domain>,
     name: String,
-    records: Arc<Mutex<IndexMap<String, Value>>>,
+    records: Arc<Mutex<IndexMap<String, JsonValue>>>,
 }
 
 struct UpdateJob {
     domain: Arc<Domain>,
     unit: Arc<dyn KvUnit>,
-    records: Arc<Mutex<IndexMap<String, Value>>>,
+    records: Arc<Mutex<IndexMap<String, JsonValue>>>,
     table: String,
     domain_name: String,
     key: String,
@@ -962,7 +979,7 @@ impl KvTable {
     ///
     /// Returns `closed` after domain teardown or an ownership error if the
     /// domain was dropped before this handle.
-    pub fn get(&self, key: &str) -> anyhow::Result<Option<Value>> {
+    pub fn get(&self, key: &str) -> anyhow::Result<Option<JsonValue>> {
         self.domain.assert_readable()?;
         Ok(self.records.lock().get(key).cloned())
     }
@@ -973,7 +990,7 @@ impl KvTable {
     ///
     /// Returns `closed` after domain teardown or an ownership error if the
     /// domain was dropped before this handle.
-    pub fn entries(&self) -> anyhow::Result<Vec<(String, Value)>> {
+    pub fn entries(&self) -> anyhow::Result<Vec<(String, JsonValue)>> {
         self.domain.assert_readable()?;
         Ok(self
             .records
@@ -1016,7 +1033,12 @@ impl KvTable {
     }
 
     /// Durably inserts or replaces one record.
-    pub fn put(&self, key: String, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    pub fn put(
+        &self,
+        key: String,
+        value: impl Into<JsonValue>,
+    ) -> BoxFuture<'static, anyhow::Result<()>> {
+        let value = value.into();
         let domain = self.domain.clone();
         let unit = domain.unit.clone();
         let records = self.records.clone();
@@ -1063,9 +1085,13 @@ impl KvTable {
     }
 
     /// Atomic queued read-modify-write.
-    pub fn update<F>(&self, key: String, transform: F) -> BoxFuture<'static, anyhow::Result<Value>>
+    pub fn update<F>(
+        &self,
+        key: String,
+        transform: F,
+    ) -> BoxFuture<'static, anyhow::Result<JsonValue>>
     where
-        F: FnOnce(&Value) -> anyhow::Result<Value> + Send + 'static,
+        F: FnOnce(&JsonValue) -> anyhow::Result<JsonValue> + Send + 'static,
     {
         let domain = self.domain.clone();
         let unit = domain.unit.clone();
@@ -1094,10 +1120,10 @@ impl KvTable {
         key: String,
         transform: F,
         on_commit: C,
-    ) -> BoxFuture<'static, anyhow::Result<Value>>
+    ) -> BoxFuture<'static, anyhow::Result<JsonValue>>
     where
-        F: FnOnce(&Value) -> anyhow::Result<Value> + Send + 'static,
-        C: FnOnce(&Value) + Send + 'static,
+        F: FnOnce(&JsonValue) -> anyhow::Result<JsonValue> + Send + 'static,
+        C: FnOnce(&JsonValue) + Send + 'static,
     {
         let domain = self.domain.clone();
         let unit = domain.unit.clone();
@@ -1124,10 +1150,10 @@ impl KvTable {
         job: UpdateJob,
         transform: F,
         on_commit: C,
-    ) -> BoxFuture<'static, anyhow::Result<Value>>
+    ) -> BoxFuture<'static, anyhow::Result<JsonValue>>
     where
-        F: FnOnce(&Value) -> anyhow::Result<Value> + Send + 'static,
-        C: FnOnce(&Value) + Send + 'static,
+        F: FnOnce(&JsonValue) -> anyhow::Result<JsonValue> + Send + 'static,
+        C: FnOnce(&JsonValue) + Send + 'static,
     {
         job.domain.clone().enqueue(async move {
             let current = job.records.lock().get(&job.key).cloned().ok_or_else(|| {
@@ -1194,16 +1220,19 @@ fn decode_change_argument(args: &EventArgs) -> anyhow::Result<Option<DomainChang
         return Ok(Some((*change).clone()));
     }
     let value = args
-        .get::<Value>(0)
+        .get::<JsonValue>(0)
+        .map(|value| (*value).clone())
+        .or_else(|| {
+            args.get::<Value>(0)
+                .map(|value| JsonValue::from((*value).clone()))
+        })
         .ok_or_else(|| anyhow::anyhow!("domain/changed lacks change payload"))?;
-    let operation = value
-        .as_object()
-        .and_then(|object| object.get("operation"))
-        .and_then(Value::as_str);
-    match operation {
-        Some("put" | "deleted") => Ok(Some(serde_json::from_value((*value).clone())?)),
-        Some(_) => Ok(None),
-        None => Err(anyhow::anyhow!("domain/changed payload lacks operation")),
+    match value.get("operation") {
+        Some(operation) if operation == "put" || operation == "deleted" => {
+            Ok(Some(value.deserialize()?))
+        }
+        Some(operation) if operation.is_string() => Ok(None),
+        _ => Err(anyhow::anyhow!("domain/changed payload lacks operation")),
     }
 }
 

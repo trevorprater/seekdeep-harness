@@ -9,8 +9,9 @@ use futures::{FutureExt as _, future::BoxFuture};
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension as _, params};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{KvSnapshot, KvUnit, KvUnitDescriptor, StorageError, StorageErrorCode};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::{BackendInner, record_table_name, release_unit};
 
@@ -83,8 +84,8 @@ impl SqliteKvUnit {
         }
     }
 
-    fn parse_value(&self, text: &str, slot: &str) -> anyhow::Result<Value> {
-        serde_json::from_str(text).map_err(|error| {
+    fn parse_value(&self, text: &str, slot: &str) -> anyhow::Result<JsonValue> {
+        JsonValue::parse(text.to_owned()).map_err(|error| {
             StorageError::with_source(
                 StorageErrorCode::MalformedMedium,
                 format!(
@@ -109,7 +110,7 @@ impl KvUnit for SqliteKvUnit {
                 let rows = statement.query_map([], |row| {
                     Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
                 })?;
-                let mut records = Map::new();
+                let mut records = IndexMap::new();
                 for row in rows {
                     let (key, text) = row?;
                     let value = self.parse_value(&text, &format!("table '{table}' key '{key}'"))?;
@@ -125,11 +126,11 @@ impl KvUnit for SqliteKvUnit {
                         |row| row.get::<_, String>(0),
                     )
                     .optional()?;
-                text.map_or(Ok(Value::Null), |text| {
+                text.map_or(Ok(Value::Null.into()), |text| {
                     self.parse_value(&text, "global slot")
                 })?
             } else {
-                Value::Null
+                Value::Null.into()
             };
             Ok(KvSnapshot { tables, global })
         });
@@ -140,12 +141,12 @@ impl KvUnit for SqliteKvUnit {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
         let result = self.ensure_open().and_then(|()| {
             self.table(&table).and_then(|physical| {
                 self.database(|database| {
-                    let text = serde_json::to_string(&value)?;
+                    let text = value.stringify();
                     database.execute(
                         &format!(
                             "INSERT INTO \"{physical}\" (key, value) VALUES (?1, ?2) \
@@ -173,11 +174,11 @@ impl KvUnit for SqliteKvUnit {
         futures::future::ready(result).boxed()
     }
 
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>> {
         let result = self.ensure_open().and_then(|()| {
             if self.descriptor.has_global {
                 self.database(|database| {
-                    let text = serde_json::to_string(&value)?;
+                    let text = value.stringify();
                     database.execute(
                         "INSERT INTO unit_globals (unit, value) VALUES (?1, ?2) \
                          ON CONFLICT(unit) DO UPDATE SET value = excluded.value",

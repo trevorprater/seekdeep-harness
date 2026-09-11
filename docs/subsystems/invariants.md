@@ -4,7 +4,7 @@ English | [中文](invariants.zh.md)
 
 [seekdeep-invariants](../../packages/runtime-diagnostics/invariants) is the configurable registry service (`ctx.invariants`) for package-owned runtime invariant checks. It is one support-group package, not a three-package capability seam, and not part of the agent-loop spine: the registry owns selection, name reservation, child-fiber lifecycle, and package-attributed failure, while every workspace package publishes a `./invariant` companion plugin that registers checks under its exact npm package name. What a check may assert — authoritative event streams or mutable data, never service or method presence — is the runtime-invariants convention in [AGENTS.md](../../AGENTS.md#conventions); the registry design is owned by the [invariant-service Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.md).
 
-Source: [`packages/runtime-diagnostics/invariants/src/index.ts`](../../packages/runtime-diagnostics/invariants/src/index.ts)
+Source: [`packages/runtime-diagnostics/invariants/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/runtime-diagnostics/invariants/src/index.ts)
 
 ## Selection
 
@@ -84,5 +84,5 @@ Package-owned invariant registry with global and regex-based selection.
 register(packageName: string, installer: InvariantInstaller): () => void
 ```
 
-Source: [`packages/runtime-diagnostics/invariants/src/index.ts:94`](../../packages/runtime-diagnostics/invariants/src/index.ts)
+Source: [`packages/runtime-diagnostics/invariants/src/index.ts:94`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/runtime-diagnostics/invariants/src/index.ts)
 <!-- END GENERATED cordis-surface -->

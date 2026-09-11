@@ -1,7 +1,7 @@
 //! ACP version, method, content, permission, and terminal vocabulary.
 
+use seekdeep_lossless_json::JsonValue;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Pinned `@agentclientprotocol/sdk@0.25.1` protocol version.
 pub const PROTOCOL_VERSION: u64 = 1;
@@ -127,5 +127,5 @@ pub struct AcpSessionUpdate {
     /// Remote session.
     pub session_id: AcpSessionId,
     /// Raw merge-extensible update.
-    pub update: Value,
+    pub update: JsonValue,
 }

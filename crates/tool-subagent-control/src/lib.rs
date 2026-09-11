@@ -146,7 +146,7 @@ fn send_definition(subagents: Arc<SubagentRuntime>) -> anyhow::Result<ToolDefini
                     text: format!(
                         "message queued as the next turn for subagent {}",
                         args.subagent_id
-                    ),
+                    ).into(),
                 }])
             }),
         ),
@@ -163,7 +163,7 @@ fn send_definition(subagents: Arc<SubagentRuntime>) -> anyhow::Result<ToolDefini
                     .followup(
                         &parent,
                         &seekdeep_core::session::SessionId::new(args.subagent_id),
-                        vec![ContentBlock::Text { text: args.message }],
+                        vec![ContentBlock::Text { text: args.message.into() }],
                         SubagentFollowupOptions {
                             source,
                             signal: run.signal(),
@@ -210,7 +210,7 @@ fn interrupt_definition(subagents: Arc<SubagentRuntime>) -> anyhow::Result<ToolD
             }),
             Arc::new(|args: &InterruptArgs, _value: &InterruptValue| {
                 Ok(vec![ContentBlock::Text {
-                    text: format!("interrupt requested for agent {}", args.agent_id),
+                    text: format!("interrupt requested for agent {}", args.agent_id).into(),
                 }])
             }),
         ),
@@ -269,7 +269,7 @@ pub fn install_list_agents(context: &Context) -> anyhow::Result<EffectHandle> {
                         .collect::<Vec<_>>()
                         .join("\n")
                 };
-                Ok(vec![ContentBlock::Text { text }])
+                Ok(vec![ContentBlock::text(text)])
             }),
         ),
         Arc::new(move |args: ListArgs, run| {

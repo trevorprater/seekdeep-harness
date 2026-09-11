@@ -101,7 +101,7 @@ fn event(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEvent {
         event_type: event_type.to_owned(),
         seq,
         time,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,
@@ -255,7 +255,9 @@ fn hostile_projection_definition() -> ProjectionDefinition {
         || Ok(json!({})),
         |_state, event| {
             if event.event_type == "subagent/descriptor" && event.data["label"] == "poison me" {
-                Ok(ProjectionTransition::Changed(json!({ "poisoned": true })))
+                Ok(ProjectionTransition::Changed(
+                    json!({ "poisoned": true }).into(),
+                ))
             } else {
                 Ok(ProjectionTransition::Unchanged)
             }

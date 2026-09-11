@@ -10,7 +10,8 @@ use seekdeep_client_runtime::{
     AssemblerViewBuilder, AssemblerViewDefinition, ConversationAssemblerError,
     ConversationPromptSnapshot, ConversationTimelineSnapshot, ConversationViewNode,
 };
-use serde_json::{Value, json};
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{TrajectoryLocation, TrajectoryRequestHeaderState};
 
@@ -118,13 +119,13 @@ impl TrajectorySnapshotBuilder {
     fn snapshot(&self) -> TrajectorySnapshot {
         let mut headers_by_step = IndexMap::<String, TrajectoryRequestHeaderState>::new();
         for contribution in &self.contributions {
-            if contribution.data.get("kind").and_then(Value::as_str) != Some("request-header") {
+            if contribution.data.get_value("kind").and_then(Value::as_str) != Some("request-header") {
                 continue;
             }
-            let Some(header) = contribution.data.get("header").cloned() else {
+            let Some(header) = contribution.data.get_value("header").cloned() else {
                 continue;
             };
-            let Ok(header) = serde_json::from_value::<TrajectoryRequestHeaderState>(header) else {
+            let Ok(header) = crate::json_value::decode::<TrajectoryRequestHeaderState>(header) else {
                 continue;
             };
             if let Some(key) = header_step_key(&header) {
@@ -146,18 +147,18 @@ impl TrajectorySnapshotBuilder {
 
         for contribution in &self.contributions {
             let data = contribution.data.as_ref();
-            match data.get("kind").and_then(Value::as_str) {
+            match data.get_value("kind").and_then(Value::as_str) {
                 Some("request-header") => {
-                    if let Some(header) = data.get("header").cloned().and_then(|header| {
-                        serde_json::from_value::<TrajectoryRequestHeaderState>(header).ok()
+                    if let Some(header) = data.get_value("header").cloned().and_then(|header| {
+                        crate::json_value::decode::<TrajectoryRequestHeaderState>(header).ok()
                     }) {
                         previous_tools = index_tools(&header.prompt);
                         previous_header = Some(header);
                     }
                 }
                 Some("node") => {
-                    if let Some(node) = data.get("node").cloned() {
-                        if let Some(seq) = node.get("seq").and_then(Value::as_f64)
+                    if let Some(node) = data.get_value("node").cloned() {
+                        if let Some(seq) = node.get_value("seq").and_then(Value::as_f64)
                             && let Some(placement) = &contribution.placement
                         {
                             event_locations.insert(
@@ -169,17 +170,17 @@ impl TrajectorySnapshotBuilder {
                     }
                 }
                 Some("assistant") => {
-                    let request = data.get("request").cloned();
+                    let request = data.get_value("request").cloned();
                     let header = request.as_ref().and_then(|request| {
                         header_for(request, &headers_by_step, previous_header.as_ref())
                     });
-                    if let Some(node) = data.get("node").cloned() {
+                    if let Some(node) = data.get_value("node").cloned() {
                         finalized.push(with_request_config(
                             node,
                             header.map(|header| &header.prompt),
                         ));
                     }
-                    if let Some(value) = data.get("partial").filter(|value| !value.is_null()) {
+                    if let Some(value) = data.get_value("partial").filter(|value| !value.is_null()) {
                         partial = Some(value.clone());
                     }
                     if let Some(request) = request {
@@ -193,8 +194,8 @@ impl TrajectorySnapshotBuilder {
                     }
                 }
                 Some("tool") => {
-                    if let Some(root) = data.get("root").cloned() {
-                        if root.get("kind").is_some() {
+                    if let Some(root) = data.get_value("root").cloned() {
+                        if root.get_value("kind").is_some() {
                             finalized.push(root.clone());
                         } else {
                             running_calls.push(root.clone());
@@ -208,27 +209,27 @@ impl TrajectorySnapshotBuilder {
                     }
                 }
                 Some("compaction") => {
-                    if let Some(request) = data.get("request") {
+                    if let Some(request) = data.get_value("request") {
                         requests.push(request.clone());
                     }
                 }
                 Some("session-end") => {
                     if let (Some(seq), Some(time)) = (
-                        data.get("seq").and_then(Value::as_f64),
-                        data.get("time").and_then(Value::as_i64),
+                        data.get_value("seq").and_then(Value::as_f64),
+                        data.get_value("time").and_then(Value::as_i64),
                     ) {
                         boundaries.push((seq, time));
                     }
                 }
                 _ => {
                     if let (Some(turn), Some(time)) = (
-                        data.get("turn").and_then(Value::as_i64),
-                        data.get("time").and_then(Value::as_i64),
+                        data.get_value("turn").and_then(Value::as_i64),
+                        data.get_value("time").and_then(Value::as_i64),
                     ) {
                         turn_endings.push((
                             turn,
                             time,
-                            data.get("error")
+                            data.get_value("error")
                                 .and_then(Value::as_str)
                                 .map(ToOwned::to_owned),
                         ));
@@ -319,13 +320,13 @@ fn header_for<'a>(
     headers_by_step: &'a IndexMap<String, TrajectoryRequestHeaderState>,
     previous: Option<&'a TrajectoryRequestHeaderState>,
 ) -> Option<&'a TrajectoryRequestHeaderState> {
-    let turn = request.get("turn").and_then(Value::as_i64)?;
-    let step = request.get("step").and_then(Value::as_i64)?;
+    let turn = request.get_value("turn").and_then(Value::as_i64)?;
+    let step = request.get_value("step").and_then(Value::as_i64)?;
     headers_by_step.get(&step_key(turn, step)).or_else(|| {
         previous.filter(|header| {
             u64_as_f64(header.seq)
                 < request
-                    .get("startSeq")
+                    .get_value("startSeq")
                     .and_then(Value::as_f64)
                     .unwrap_or_default()
         })
@@ -342,26 +343,26 @@ fn apply_header(
     };
     request.insert(
         "prompt".to_owned(),
-        serde_json::to_value(&header.prompt).unwrap_or(Value::Null),
+        Value::from_serialize(&header.prompt).unwrap_or(null().clone()),
     );
     request.insert(
         "requestConfig".to_owned(),
-        serde_json::to_value(&header.prompt.config).unwrap_or(Value::Null),
+        Value::from_serialize(&header.prompt.config).unwrap_or(null().clone()),
     );
     if include_change && let Some(change) = &header.change {
         request.insert(
             "promptChange".to_owned(),
-            serde_json::to_value(change).unwrap_or(Value::Null),
+            Value::from_serialize(change).unwrap_or(null().clone()),
         );
     }
-    Value::Object(request.clone())
+    Value::object(request.clone())
 }
 
 fn with_request_config(mut node: Value, prompt: Option<&ConversationPromptSnapshot>) -> Value {
     if let (Some(prompt), Some(node)) = (prompt, node.as_object_mut()) {
         node.insert(
             "requestConfig".to_owned(),
-            serde_json::to_value(&prompt.config).unwrap_or(Value::Null),
+            Value::from_serialize(&prompt.config).unwrap_or(null().clone()),
         );
     }
     node
@@ -372,7 +373,7 @@ fn index_tools(prompt: &ConversationPromptSnapshot) -> IndexMap<String, Value> {
         .tools
         .iter()
         .filter_map(|tool| {
-            tool.get("name")
+            tool.get_value("name")
                 .and_then(Value::as_str)
                 .map(|name| (name.to_owned(), tool.clone()))
         })
@@ -384,22 +385,22 @@ fn capture_schemas(
     tools_by_name: &IndexMap<String, Value>,
     output: &mut IndexMap<String, Value>,
 ) {
-    let name = if block.get("kind").is_some() {
+    let name = if block.get_value("kind").is_some() {
         block
-            .get("call")
-            .and_then(|call| call.get("name"))
+            .get_value("call")
+            .and_then(|call| call.get_value("name"))
             .and_then(Value::as_str)
     } else {
-        block.get("name").and_then(Value::as_str)
+        block.get_value("name").and_then(Value::as_str)
     };
     if let (Some(call_id), Some(schema)) = (
-        block.get("callId").and_then(Value::as_str),
+        block.get_value("callId").and_then(Value::as_str),
         name.and_then(|name| tools_by_name.get(name)),
     ) {
         output.insert(call_id.to_owned(), schema.clone());
     }
     for child in block
-        .get("subCalls")
+        .get_value("subCalls")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -416,8 +417,8 @@ fn interrupt_compactions(requests: &mut [Value], boundaries: &[(f64, i64)]) {
             if request_start_seq(request) >= *seq {
                 break;
             }
-            if request.get("purpose").and_then(Value::as_str) == Some("compaction")
-                && request.get("status").and_then(Value::as_str) == Some("running")
+            if request.get_value("purpose").and_then(Value::as_str) == Some("compaction")
+                && request.get_value("status").and_then(Value::as_str) == Some("running")
             {
                 running.push(next_request);
             }
@@ -427,7 +428,7 @@ fn interrupt_compactions(requests: &mut [Value], boundaries: &[(f64, i64)]) {
             let Some(index) = running.pop() else {
                 break None;
             };
-            if requests[index].get("status").and_then(Value::as_str) == Some("running") {
+            if requests[index].get_value("status").and_then(Value::as_str) == Some("running") {
                 break Some(index);
             }
         };
@@ -449,8 +450,8 @@ fn interrupt_compactions(requests: &mut [Value], boundaries: &[(f64, i64)]) {
 fn apply_turn_errors(requests: &mut [Value], endings: &[(i64, i64, Option<String>)]) {
     let mut last_assistant = IndexMap::<i64, usize>::new();
     for (index, request) in requests.iter().enumerate() {
-        if request.get("purpose").and_then(Value::as_str) == Some("assistant")
-            && let Some(turn) = request.get("turn").and_then(Value::as_i64)
+        if request.get_value("purpose").and_then(Value::as_str) == Some("assistant")
+            && let Some(turn) = request.get_value("turn").and_then(Value::as_i64)
         {
             last_assistant.insert(turn, index);
         }
@@ -462,7 +463,7 @@ fn apply_turn_errors(requests: &mut [Value], endings: &[(i64, i64, Option<String
         let Some(request) = requests[index].as_object_mut() else {
             continue;
         };
-        if request.get("completedAt").is_none_or(Value::is_null) {
+        if request.get_value("completedAt").is_none_or(Value::is_null) {
             request.insert("completedAt".to_owned(), json!(time));
         }
         request.insert("status".to_owned(), json!("error"));
@@ -494,13 +495,13 @@ fn placement_anchor(node: &ConversationViewNode) -> Option<f64> {
 
 fn request_start_seq(request: &Value) -> f64 {
     request
-        .get("startSeq")
+        .get_value("startSeq")
         .and_then(Value::as_f64)
         .unwrap_or_default()
 }
 
 fn node_seq(node: &Value) -> f64 {
-    node.get("seq").and_then(Value::as_f64).unwrap_or_default()
+    node.get_value("seq").and_then(Value::as_f64).unwrap_or_default()
 }
 
 fn u64_as_f64(value: u64) -> f64 {

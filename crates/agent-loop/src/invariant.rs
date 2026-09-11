@@ -128,7 +128,7 @@ mod tests {
             .expect("turn");
         let message = Message::user(
             vec![ContentBlock::Text {
-                text: "hi".to_owned(),
+                text: "hi".into(),
             }],
             MessageSource::user(),
         );
@@ -221,7 +221,7 @@ mod tests {
         let mut divergent = session.derive_messages();
         divergent.push(Message::user(
             vec![ContentBlock::Text {
-                text: "phantom".to_owned(),
+                text: "phantom".into(),
             }],
             MessageSource::user(),
         ));

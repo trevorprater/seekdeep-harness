@@ -162,7 +162,7 @@ impl Harness {
                     let tool_name = tool_name.clone();
                     Box::pin(async move {
                         Ok(vec![ContentBlock::Text {
-                            text: format!("ran {tool_name}"),
+                            text: format!("ran {tool_name}").into(),
                         }])
                     })
                 }),
@@ -273,7 +273,7 @@ impl Harness {
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -335,7 +335,7 @@ fn plugin_notices(events: &[SessionEvent]) -> Vec<String> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.clone()),
+                    ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text").to_owned()),
                     _ => None,
                 })
                 .collect::<Vec<_>>()

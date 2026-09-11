@@ -1,6 +1,9 @@
 //! Canonical foreign-language headers; runtime implementations remain compiled Rust.
 
-use std::path::{Component, Path};
+use std::{
+    borrow::Cow,
+    path::{Component, Path},
+};
 
 use serde::Deserialize;
 
@@ -62,7 +65,7 @@ fn read_model(root: &Path) -> anyhow::Result<Model> {
 pub(super) fn write_all(root: &Path, output: &Path, check: bool) -> anyhow::Result<()> {
     let model = read_model(root)?;
     for module in &model.modules {
-        write(&output.join(&module.output), &module.content, check)?;
+        write(&output.join(&module.output), &module_content(module), check)?;
     }
     println!(
         "published {} canonical compatibility declarations",
@@ -87,9 +90,21 @@ pub(super) fn write_package(root: &Path, module_id: &str, output: &Path) -> anyh
         .filter(|module| module.package_root == package.root)
     {
         let relative = Path::new(&module.output).strip_prefix(&prefix)?;
-        write(&output.join(relative), &module.content, false)?;
+        write(&output.join(relative), &module_content(module), false)?;
     }
     Ok(())
+}
+
+fn module_content(module: &Module) -> Cow<'_, str> {
+    if module.output == "vendor/cordis/lib/types/index.d.ts" {
+        Cow::Owned(format!(
+            "{}{}",
+            module.content,
+            crate::cordis_test_invariant_declarations()
+        ))
+    } else {
+        Cow::Borrowed(&module.content)
+    }
 }
 
 fn write(path: &Path, content: &str, check: bool) -> anyhow::Result<()> {

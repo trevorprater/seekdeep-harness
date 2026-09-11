@@ -316,9 +316,14 @@ pub fn effective_sandbox_mode(
 ) -> Option<SandboxMode> {
     events.iter().rev().find_map(|event| {
         (event.event_type == "sandbox/mode")
-            .then(|| event.data.get("mode").and_then(serde_json::Value::as_str))
+            .then(|| {
+                event
+                    .data
+                    .get("mode")
+                    .and_then(|value| value.deserialize::<String>().ok())
+            })
             .flatten()
-            .and_then(SandboxMode::parse)
+            .and_then(|mode| SandboxMode::parse(&mode))
     })
 }
 
@@ -335,13 +340,13 @@ fn validated_effective_sandbox_mode(
     let Some(mode) = event
         .data
         .get("mode")
-        .and_then(serde_json::Value::as_str)
-        .and_then(SandboxMode::parse)
+        .and_then(|value| value.deserialize::<String>().ok())
+        .and_then(|mode| SandboxMode::parse(&mode))
     else {
-        let rendered = event.data.get("mode").map_or_else(
-            || "undefined".to_owned(),
-            |value| serde_json::to_string(value).unwrap_or_else(|_| "undefined".to_owned()),
-        );
+        let rendered = event
+            .data
+            .get("mode")
+            .map_or_else(|| "undefined".to_owned(), |value| value.as_raw().to_owned());
         anyhow::bail!("sandbox/mode carries unknown mode {rendered}");
     };
     Ok(Some(mode))

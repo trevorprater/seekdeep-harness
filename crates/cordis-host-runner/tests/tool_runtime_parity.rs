@@ -73,11 +73,11 @@ async fn dynamic_tool_executes_and_renders_in_its_worker_then_unregisters_at_sto
     match result {
         ToolExecutionResult::Success(success) => {
             assert_eq!(success.value, json!("desserts"));
-            assert_eq!(success.meta, Some(json!({"length": 8})));
+            assert_eq!(success.meta, Some(json!({"length": 8}).into()));
             assert_eq!(
                 success.content,
                 [ContentBlock::Text {
-                    text: "desserts".to_owned()
+                    text: "desserts".into()
                 }]
             );
         }
@@ -88,6 +88,111 @@ async fn dynamic_tool_executes_and_renders_in_its_worker_then_unregisters_at_sto
 
     runner.stop(&session, &defined.plugin_id).await;
     assert!(tools.get("reverse_text", None).is_none());
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn dynamic_tool_keeps_raw_arguments_results_metadata_and_rejections() {
+    use seekdeep_core::session::JsonValue;
+    use seekdeep_llm::JsonString;
+
+    let context = Context::new();
+    let tools = ToolRuntime::new(context.clone(), ToolRuntimeConfig::default()).unwrap();
+    tools.provide(&context).unwrap();
+    let runner = DynamicCordisRunner::install(&context, 5_000);
+    let session = SessionId::new("lossless-dynamic-tool");
+    let definition = runner
+        .define(DynamicCordisDefineRequest {
+            session_id: session.clone(),
+            plugin: DynamicCordisPluginSelector::New {
+                id_prefix: "raw".to_owned(),
+            },
+            name: "raw tool".to_owned(),
+            purpose: "Keep JavaScript string code units through every tool callback.".to_owned(),
+            code: DynamicCordisCode {
+                host: Some(
+                    r#"return { inject: ['tools'], apply(ctx) {
+                harness.registerTool(ctx, harness.defineTool({
+                    name: 'raw_echo', description: 'Return the supplied JSON payload.',
+                    parameters: { payload: { type: 'json', required: true } },
+                    output: { schema: { type: 'object' },
+                        render(_args, value) { return [{type: 'text', text: value['\ud800']}]; },
+                        presentationMeta(args, value) { return {args, value, literal: '\\ud800'}; }
+                    },
+                    async execute(args) { return args.payload; }
+                }));
+                harness.registerTool(ctx, harness.defineTool({
+                    name: 'raw_reject', description: 'Reject with a JavaScript string.',
+                    parameters: {}, output: { schema: { type: 'string' }, render() { return []; } },
+                    async execute() { throw '\udfff x \ud800'; }
+                }));
+            }};"#
+                        .to_owned(),
+                ),
+                client: None,
+            },
+        })
+        .unwrap();
+    let started = runner
+        .run(
+            &session,
+            &definition.plugin_id,
+            &definition.package_id,
+            DynamicCordisRunMode::Run,
+        )
+        .await;
+    assert!(
+        matches!(started, DynamicCordisRunResponse::Success { .. }),
+        "{started:?}"
+    );
+    let arguments = JsonValue::parse(r#"{"payload":{"\ud800":"\udfff","__proto__":{"x":"\ud800"},"pair":"😀","literal":"\\ud800"}}"#.to_owned()).unwrap();
+    let result = tools
+        .execute(ToolExecutionInput::new(
+            CallId::new("raw-echo"),
+            "raw_echo",
+            arguments.clone(),
+            AbortSignal::default(),
+        ))
+        .await;
+    let ToolExecutionResult::Success(success) = result else {
+        panic!("{result:?}");
+    };
+    let payload = arguments.get("payload").unwrap().to_owned();
+    assert_eq!(success.value, payload);
+    assert_eq!(
+        success.content,
+        [ContentBlock::Text {
+            text: JsonString::from_utf16(&[0xdfff])
+        }]
+    );
+    let meta = success.meta.unwrap();
+    assert_eq!(meta.get("args").unwrap().to_owned(), arguments);
+    assert_eq!(meta.get("value").unwrap().to_owned(), payload);
+    assert_eq!(
+        meta.get("literal")
+            .unwrap()
+            .deserialize::<String>()
+            .unwrap(),
+        "\\ud800"
+    );
+    let result = tools
+        .execute(ToolExecutionInput::new(
+            CallId::new("raw-reject"),
+            "raw_reject",
+            json!({}),
+            AbortSignal::default(),
+        ))
+        .await;
+    let ToolExecutionResult::Failure(failure) = result else {
+        panic!("{result:?}");
+    };
+    assert_eq!(
+        failure.error.message.to_utf16(),
+        [0xdfff, 0x20, 0x78, 0x20, 0xd800]
+    );
+    runner.stop(&session, &definition.plugin_id).await;
+    assert!(tools.get("raw_echo", None).is_none());
+    assert!(tools.get("raw_reject", None).is_none());
     context.fiber().dispose().await.unwrap();
 }
 

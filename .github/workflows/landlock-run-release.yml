@@ -21,6 +21,9 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
+env:
+  CARGO_INCREMENTAL: '0'
+
 defaults:
   run:
     working-directory: native/landlock-run
@@ -34,8 +37,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+
       - id: matrix
-        run: echo "prebuilds=$(node ./scripts/github-matrix.mjs release-prebuild)" >> "$GITHUB_OUTPUT"
+        run: echo "prebuilds=$(cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-github-matrix -- release-prebuild)" >> "$GITHUB_OUTPUT"
 
   build-prebuilds:
     name: ${{ matrix.package }}
@@ -46,6 +51,12 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.prebuilds) }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: landlock-prebuild-${{ matrix.package }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -64,12 +75,13 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -yq musl-tools
+          rustup target add "$(rustc -vV | sed -n 's/^host: //p' | sed 's/-gnu$/-musl/')"
 
       - name: Build native binaries
         run: pnpm build:native
 
       - name: Verify binary metadata
-        run: node ./scripts/verify-launcher-binary.mjs ${{ matrix.dir }}
+        run: cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-verify-launcher-binary -- ${{ matrix.dir }}
 
       - name: Upload prebuild artifact
         uses: actions/upload-artifact@v4
@@ -86,6 +98,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: landlock-pack
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: package.json
@@ -99,11 +122,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --filter @seekdeep-ai/node-addon-landlock-run-workspace... --frozen-lockfile
 
-      - name: Build TypeScript
+      - name: Build compiled Rust/WASM entry
         run: pnpm build:ts
 
       - name: Verify release version
-        run: node ./scripts/verify-release.mjs
+        run: pnpm release:verify
         env:
           RELEASE_PUBLISH: ${{ inputs.publish }}
 
@@ -114,18 +137,18 @@ jobs:
           path: native/landlock-run/.release/prebuild-artifacts
 
       - name: Assemble and verify prebuilds
-        run: node ./scripts/assemble-prebuilds.mjs .release/prebuild-artifacts
+        run: pnpm release:assemble-prebuilds .release/prebuild-artifacts
 
       - name: Verify release payload
-        run: node ./scripts/verify-release.mjs --prebuilds
+        run: pnpm release:verify --prebuilds
         env:
           RELEASE_PUBLISH: ${{ inputs.publish }}
 
       - name: Pack release tarballs
-        run: node ./scripts/pack-release.mjs dist/npm
+        run: pnpm release:pack dist/npm
 
       - name: Verify packed install
-        run: node ./scripts/verify-packed-install.mjs dist/npm
+        run: pnpm release:verify-packed-install dist/npm
         env:
           NALR_REQUIRE_LANDLOCK: 1
 
@@ -147,11 +170,15 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # The publish script is the only repository file this job needs, and it
-      # imports nothing outside Node's builtins, so there is no install step.
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: landlock-publish
 
       - uses: actions/setup-node@v4
         with:
@@ -177,4 +204,4 @@ jobs:
         # this job over the same artifact skips what already landed instead of
         # failing on it. A bare `npm publish` loop could not be retried: the
         # registry answers a repeat of an existing version permanently.
-        run: node ./scripts/publish-release.mjs dist/npm
+        run: cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-publish-release -- dist/npm

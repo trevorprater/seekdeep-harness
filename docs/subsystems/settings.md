@@ -2,9 +2,9 @@
 
 English | [中文](settings.zh.md)
 
-The user-settings seam of [seekdeep-settings](../../packages/settings/settings) holds one user-owned document of per-namespace sections and resolves each registered namespace as schema defaults, then the registrant's composition `base`, then the user section. Providers such as [seekdeep-settings-file](../../packages/settings/settings-file) store the raw document and push external edits; consumer plugins register a schema and read or observe the resolved value. Composition config stays in `cordis.yml` — a namespace carries only the user-editable subset.
+The user-settings seam of [seekdeep-settings](../../packages/settings/settings) holds one user-owned document of per-namespace sections and resolves each registered namespace as schema defaults, then the registrant's composition `base`, then the user section. Providers such as [seekdeep-settings-file](../../crates/settings-file) store the raw document and push external edits; consumer plugins register a schema and read or observe the resolved value. Composition config stays in `cordis.yml` — a namespace carries only the user-editable subset.
 
-Source: [`packages/settings/settings/src/index.ts`](../../packages/settings/settings/src/index.ts)
+Source: [`packages/settings/settings/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/index.ts)
 
 ## Identity
 
@@ -252,7 +252,7 @@ async replace(ns: SettingsNamespace, section: object, expectedRevision?: number)
 async mutate(ns: SettingsNamespace, ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<void>
 ```
 
-Source: [`packages/settings/settings/src/index.ts:350`](../../packages/settings/settings/src/index.ts)
+Source: [`packages/settings/settings/src/index.ts:350`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/index.ts)
 
 <a id="settings-events"></a>
 
@@ -279,7 +279,7 @@ One registered namespace's RAW user section changed, whether or not the resolved
 'settings/document-updated'(ns: SettingsNamespace, revision: number): void
 ```
 
-Source: [`packages/settings/settings/src/types.ts:48`](../../packages/settings/settings/src/types.ts)
+Source: [`packages/settings/settings/src/types.ts:48`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/types.ts)
 
 <a id="settingsupdated--emit"></a>
 
@@ -306,5 +306,5 @@ Committed change to one registered namespace's resolved value. Emitted after the
 'settings/updated'(ns: SettingsNamespace, next: unknown, prev: unknown, source: SettingsUpdateSource): void
 ```
 
-Source: [`packages/settings/settings/src/types.ts:35`](../../packages/settings/settings/src/types.ts)
+Source: [`packages/settings/settings/src/types.ts:35`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/types.ts)
 <!-- END GENERATED cordis-surface -->

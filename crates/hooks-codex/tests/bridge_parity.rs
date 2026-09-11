@@ -199,7 +199,7 @@ fn tool(body_calls: Arc<AtomicUsize>) -> seekdeep_tools::ToolDefinition {
         json!({"command":{"type":"string","required":true}}),
         Arc::new(move |args: BashArgs, _| {
             body_calls.fetch_add(1, Ordering::AcqRel);
-            Box::pin(async move { Ok(vec![ContentBlock::Text { text: args.command }]) })
+            Box::pin(async move { Ok(vec![ContentBlock::Text { text: args.command.into() }]) })
         }),
     ))
     .unwrap()
@@ -300,7 +300,7 @@ async fn post_tool_context_is_attached_after_success() {
     assert_eq!(
         result.additional_contexts()[0].content(),
         [ContentBlock::Text {
-            text: "post context".to_owned()
+            text: "post context".into()
         }]
     );
 }
@@ -321,7 +321,7 @@ async fn prompt_hook_blocks_or_appends_plain_stdout_after_downstream_messages() 
     let events = AgentEvents::new(context.clone(), owner.clone());
     let message = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "hello".to_owned(),
+            text: "hello".into(),
         }],
         MessageSource::user(),
     );
@@ -346,7 +346,7 @@ async fn prompt_hook_blocks_or_appends_plain_stdout_after_downstream_messages() 
 
     let original = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "original".to_owned(),
+            text: "original".into(),
         }],
         MessageSource::user(),
     );
@@ -374,7 +374,7 @@ async fn prompt_hook_blocks_or_appends_plain_stdout_after_downstream_messages() 
     assert_eq!(
         messages[1].content(),
         [ContentBlock::Text {
-            text: "plain context".to_owned()
+            text: "plain context".into()
         }]
     );
 }
@@ -509,7 +509,7 @@ async fn blocking_stop_steers_with_reason_or_default() {
         assert_eq!(
             messages[0].0.content(),
             [ContentBlock::Text {
-                text: expected.to_owned()
+                text: expected.into()
             }]
         );
     }

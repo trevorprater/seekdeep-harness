@@ -58,9 +58,13 @@ fn open_error(result: anyhow::Result<Arc<dyn KvUnit>>) -> anyhow::Error {
 async fn memory_and_file_media_obey_the_full_round_trip_contract() {
     let memory = SqliteStorageBackend::new(memory_config());
     let unit = kv(&memory).open(descriptor()).await.unwrap();
-    unit.put_record("records".to_owned(), "k".to_owned(), json!({ "n": 1 }))
-        .await
-        .unwrap();
+    unit.put_record(
+        "records".to_owned(),
+        "k".to_owned(),
+        json!({ "n": 1 }).into(),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         unit.load_all().await.unwrap().tables["records"]["k"],
         json!({ "n": 1 })
@@ -75,20 +79,30 @@ async fn memory_and_file_media_obey_the_full_round_trip_contract() {
     assert!(empty.tables["records"].is_empty());
     assert!(empty.tables["other"].is_empty());
     assert!(empty.global.is_null());
-    unit.put_record("records".to_owned(), "k".to_owned(), json!({ "v": "old" }))
-        .await
-        .unwrap();
-    unit.put_record("records".to_owned(), "k".to_owned(), json!({ "v": "new" }))
-        .await
-        .unwrap();
     unit.put_record(
-        "other".to_owned(),
-        "weird key / with:stuff".to_owned(),
-        json!([1, 2, 3]),
+        "records".to_owned(),
+        "k".to_owned(),
+        json!({ "v": "old" }).into(),
     )
     .await
     .unwrap();
-    unit.set_global(json!({ "counter": 7 })).await.unwrap();
+    unit.put_record(
+        "records".to_owned(),
+        "k".to_owned(),
+        json!({ "v": "new" }).into(),
+    )
+    .await
+    .unwrap();
+    unit.put_record(
+        "other".to_owned(),
+        "weird key / with:stuff".to_owned(),
+        json!([1, 2, 3]).into(),
+    )
+    .await
+    .unwrap();
+    unit.set_global(json!({ "counter": 7 }).into())
+        .await
+        .unwrap();
     unit.delete_record("records".to_owned(), "absent".to_owned())
         .await
         .unwrap();
@@ -222,7 +236,7 @@ async fn validates_names_reservations_reopen_and_closed_precedence() {
     let error = open_error(kv(&backend).open(descriptor()).await);
     assert_eq!(storage_error(&error).code, StorageErrorCode::Closed);
     let error = second
-        .put_record("undeclared".to_owned(), "k".to_owned(), json!(1))
+        .put_record("undeclared".to_owned(), "k".to_owned(), json!(1).into())
         .await
         .unwrap_err();
     assert_eq!(storage_error(&error).code, StorageErrorCode::Closed);
@@ -235,18 +249,22 @@ async fn arbitrary_record_keys_and_undeclared_slots_are_exact() {
     unit.put_record(
         "records".to_owned(),
         "__proto__".to_owned(),
-        json!({ "evil": true }),
+        json!({ "evil": true }).into(),
     )
     .await
     .unwrap();
-    unit.put_record("records".to_owned(), "constructor".to_owned(), json!(1))
-        .await
-        .unwrap();
+    unit.put_record(
+        "records".to_owned(),
+        "constructor".to_owned(),
+        json!(1).into(),
+    )
+    .await
+    .unwrap();
     let records = unit.load_all().await.unwrap().tables["records"].clone();
     assert_eq!(records["__proto__"], json!({ "evil": true }));
     assert_eq!(records["constructor"], json!(1));
     assert!(
-        unit.put_record("undeclared".to_owned(), "k".to_owned(), json!(1))
+        unit.put_record("undeclared".to_owned(), "k".to_owned(), json!(1).into())
             .await
             .unwrap_err()
             .to_string()
@@ -260,7 +278,7 @@ async fn arbitrary_record_keys_and_undeclared_slots_are_exact() {
     let unit = kv(&backend).open(no_global).await.unwrap();
     assert!(unit.load_all().await.unwrap().global.is_null());
     assert!(
-        unit.set_global(json!(1))
+        unit.set_global(json!(1).into())
             .await
             .unwrap_err()
             .to_string()
@@ -275,10 +293,10 @@ async fn unparsable_record_and_global_json_are_malformed_medium() {
     let path = root.path().join("storage.db");
     let backend = SqliteStorageBackend::new(config(&path));
     let unit = kv(&backend).open(descriptor()).await.unwrap();
-    unit.put_record("records".to_owned(), "bad".to_owned(), json!(1))
+    unit.put_record("records".to_owned(), "bad".to_owned(), json!(1).into())
         .await
         .unwrap();
-    unit.set_global(json!(1)).await.unwrap();
+    unit.set_global(json!(1).into()).await.unwrap();
     backend.close().await.unwrap();
     let database = Connection::open(&path).unwrap();
     database
@@ -362,7 +380,7 @@ async fn plugin_registers_service_and_disposes_backend_in_source_order() {
         .unwrap();
     assert!(storage.backend.get("sqlite").is_ok());
     let unit = kv(&backend).open(descriptor()).await.unwrap();
-    unit.put_record("records".to_owned(), "k".to_owned(), json!(1))
+    unit.put_record("records".to_owned(), "k".to_owned(), json!(1).into())
         .await
         .unwrap();
     mounted.dispose().await.unwrap();

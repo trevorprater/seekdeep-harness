@@ -5,7 +5,7 @@ use std::sync::Arc;
 use seekdeep_cordis::{Context, EventOptions, Fiber, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_llm::{CallId, ContentBlock};
+use seekdeep_llm::{CallId, ContentBlock, JsonString};
 use seekdeep_spill::{SPILL_STORE, SaveTextSpill, SpillOwner, SpillRef, SpillSource};
 use seekdeep_tools::{
     CodeDispatchLog, PostToolDecision, ToolExecution, ToolExecutionResult, ToolRuntime,
@@ -164,7 +164,7 @@ async fn shape_post_decision(
     let Some(text) = flatten_plain_text(content) else {
         return Ok(decision);
     };
-    let total_bytes = text.len();
+    let total_bytes = text.len_utf8();
     if total_bytes <= cap {
         return Ok(decision);
     }
@@ -181,7 +181,7 @@ async fn shape_post_decision(
     .await;
     Ok(
         replacement.map_or(decision, |text| PostToolDecision::Accept {
-            content: Some(vec![ContentBlock::Text { text }]),
+            content: Some(vec![ContentBlock::text(text)]),
             additional_contexts,
         }),
     )
@@ -196,7 +196,7 @@ async fn shape_dispatch_content(
     let Some(text) = flatten_plain_text(&content) else {
         return Ok(content);
     };
-    let total_bytes = text.len();
+    let total_bytes = text.len_utf8();
     if total_bytes <= cap {
         return Ok(content);
     }
@@ -211,16 +211,16 @@ async fn shape_dispatch_content(
         "dispatch",
     )
     .await;
-    Ok(replacement.map_or(content, |text| vec![ContentBlock::Text { text }]))
+    Ok(replacement.map_or(content, |text| vec![ContentBlock::text(text)]))
 }
 
-fn flatten_plain_text(content: &[ContentBlock]) -> Option<String> {
-    let mut text = String::new();
+fn flatten_plain_text(content: &[ContentBlock]) -> Option<JsonString> {
+    let mut text = JsonString::default();
     for block in content {
         let ContentBlock::Text { text: block_text } = block else {
             return None;
         };
-        text.push_str(block_text);
+        text.push_utf16(block_text.utf16_units());
     }
     Some(text)
 }
@@ -233,7 +233,7 @@ fn owner_session_id(execution: &ToolExecution) -> Option<&SessionId> {
 async fn spill_replacement(
     context: &Context,
     cap: usize,
-    text: &str,
+    text: &JsonString,
     total_bytes: usize,
     session_id: Option<&SessionId>,
     tool_name: &str,
@@ -265,7 +265,7 @@ async fn spill_replacement(
                 label: label.to_owned(),
             },
             suggested_name: format!("{tool_name}.txt"),
-            content: text.to_owned(),
+            content: text.clone(),
         })
         .await;
     let reference = match saved {
@@ -290,7 +290,7 @@ async fn spill_replacement(
         head_bytes,
         tail_bytes,
     });
-    retainer.push_str(text);
+    retainer.push_str(&String::from_utf16_lossy(text.utf16_units()));
     let snapshot = retainer.finish();
     let notice = spill_notice(snapshot.omitted_bytes, &reference);
     let replacement = if snapshot.text.is_empty() {
@@ -364,23 +364,23 @@ mod tests {
             self.saves.lock().push(input.clone());
             Ok(SpillRef {
                 locator: SpillLocator::new(format!("/spill/{}", input.suggested_name)),
-                bytes: input.content.len() as u64,
+                bytes: input.content.len_utf8() as u64,
                 retrieval_hint: "Use the stub retrieval path.".to_owned(),
             })
         }
     }
 
     fn blocks(text: &str) -> Vec<ContentBlock> {
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }]
+        vec![ContentBlock::Text { text: text.into() }]
     }
 
     fn text_of(content: &[ContentBlock]) -> String {
         content
             .iter()
             .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text.as_str()),
+                ContentBlock::Text { text } => {
+                    Some(text.as_str().expect("fixture uses scalar text"))
+                }
                 _ => None,
             })
             .collect()
@@ -523,6 +523,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn surrogate_text_is_kept_exact_until_the_source_byte_retention_step() {
+        let (context, tools, backend) = harness(true);
+        let _policy = install(
+            &context,
+            &tools,
+            SpillPolicyConfig {
+                max_inline_bytes: Some(200.0),
+            },
+        )
+        .await
+        .unwrap();
+        let small = ContentBlock::text_utf16(&[0xd800]);
+        tools
+            .register(&context, tool("small", vec![small.clone()]))
+            .unwrap();
+        let result = tools.execute(input("small", Some(session("small")))).await;
+        assert_eq!(result.content(), &[small]);
+        assert!(backend.saves.lock().is_empty());
+
+        let mut text = JsonString::from_utf16(&[0xd800]);
+        text.push_str(&"body".repeat(300));
+        tools
+            .register(
+                &context,
+                tool("big", vec![ContentBlock::text(text.clone())]),
+            )
+            .unwrap();
+        let result = tools.execute(input("big", Some(session("big")))).await;
+        assert!(!result.is_error());
+        assert_eq!(backend.saves.lock()[0].content, text);
+        let ContentBlock::Text { text: preview } = &result.content()[0] else {
+            panic!("text preview")
+        };
+        assert!(preview.len_utf8() <= 200);
+        assert!(preview.starts_with("�"));
+        assert!(preview.contains("Full formatted result stored"));
+    }
+
+    #[tokio::test]
     async fn small_mixed_read_and_nested_results_pass_unchanged() {
         let (context, tools, backend) = harness(true);
         let _policy = install(
@@ -544,7 +583,7 @@ mod tests {
                     "mixed",
                     vec![
                         ContentBlock::Text {
-                            text: "x".repeat(100),
+                            text: "x".repeat(100).into(),
                         },
                         ContentBlock::Reasoning {
                             text: "why".to_owned(),
@@ -719,7 +758,7 @@ mod tests {
                 |execution, _, _| async move {
                     if execution.name == "value" {
                         Ok(PostToolDecision::ReplaceValue {
-                            value: Value::String("v".repeat(500)),
+                            value: Value::String("v".repeat(500)).into(),
                             additional_contexts: Vec::new(),
                         })
                     } else {
@@ -846,7 +885,7 @@ mod tests {
             "mixed",
             vec![
                 ContentBlock::Text {
-                    text: "x".repeat(100),
+                    text: "x".repeat(100).into(),
                 },
                 ContentBlock::Reasoning {
                     text: "why".to_owned(),

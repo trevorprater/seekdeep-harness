@@ -113,9 +113,7 @@ fn live_key() -> Option<String> {
 
 fn ask(text: &str) -> Vec<Message> {
     vec![Message::user(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::plugin("test"),
     )]
 }
@@ -136,7 +134,7 @@ fn text_of(result: &AssembledResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -269,7 +267,7 @@ async fn pro_tool_round_trip(effort: &str) -> anyhow::Result<()> {
     history.push(Message::tool_result(
         &CallId::new(id.as_str()),
         vec![ContentBlock::Text {
-            text: "Sunny, 22°C".to_owned(),
+            text: "Sunny, 22°C".into(),
         }],
         false,
     ));

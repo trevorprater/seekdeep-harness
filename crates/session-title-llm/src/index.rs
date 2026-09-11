@@ -288,7 +288,7 @@ pub async fn generate_session_title_with_llm(
     let system = system_prompt(config);
     let messages: Vec<Message> = vec![
         UserMessage::new(
-            vec![ContentBlock::Text { text: framed_input }],
+            vec![ContentBlock::text(framed_input)],
             MessageSource::plugin("seekdeep-session-title-llm"),
         )
         .into_message(),
@@ -355,11 +355,12 @@ pub async fn generate_session_title_with_llm(
     let text = blocks
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.clone()),
             _ => None,
         })
-        .collect::<Vec<_>>()
-        .join(" ");
+        .collect::<Vec<_>>();
+    let text = seekdeep_llm::JsonString::join(&text, " ").try_into_string()
+        .map_err(|_| anyhow::anyhow!("session-title-llm: title output contains an unpaired UTF-16 surrogate"))?;
     let title = normalize_session_title(&text, usize::MAX);
     if title.is_empty() {
         anyhow::bail!("session-title-llm: title model produced no text");

@@ -3,15 +3,15 @@
 use std::cell::RefCell;
 
 use js_sys::{Array, Function, Reflect};
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::{
     ToolCallBlock, ToolRowState, ToolRowVariant,
     browser::{
-        bool_or_undefined, class_props, create_element, extend_object, inject_style, object,
-        optional_property, required_function, required_property, required_string, tag, translated,
-        translated_with,
+        bool_or_undefined, class_props, create_element, extend_object, inject_style, json_text,
+        object, optional_property, required_function, required_property, required_string, tag,
+        translated, translated_with,
     },
     browser_apply::{BrowserModules, CONVERSATION_NS, configured_modules},
     browser_model::{
@@ -212,7 +212,7 @@ fn render_generic(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, 
         .as_ref()
         .and_then(|value| value.description.as_deref())
         .or_else(|| search.as_ref().and_then(|value| value.title.as_deref()))
-        .unwrap_or(&model.summary);
+        .map_or_else(|| model.summary.clone(), JsonString::from);
     let row = tool_row_component()?;
     create_element(
         &modules.react,
@@ -223,27 +223,24 @@ fn render_generic(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, 
             ("toolName", JsValue::from_str(&block.tool_name)),
             ("icon", variant_icon(modules, model.variant)?),
             ("title", JsValue::from_str(&model.title)),
-            ("summary", JsValue::from_str(summary)),
+            ("summary", json_text(&summary)),
             (
                 "body",
                 if single_file {
                     JsValue::NULL
                 } else {
-                    option_string(model.body.as_deref())
+                    option_string(model.body.as_ref())
                 },
             ),
-            ("output", option_string(model.output.as_deref())),
-            (
-                "errorSummary",
-                option_string(model.error_summary.as_deref()),
-            ),
+            ("output", option_string(model.output.as_ref())),
+            ("errorSummary", option_string(model.error_summary.as_ref())),
             ("terminal", terminal_model_value(terminal.as_ref())?),
             ("diff", diff_model_value(diff.as_ref())?),
             ("read", read_model_value(read.as_ref())?),
             ("search", search_model_value(search.as_ref())?),
             ("web", web_model_value(web.as_ref())?),
             ("state", JsValue::from_str(state_name(state))),
-            ("filePath", option_string(model.file_path.as_deref())),
+            ("filePath", option_string(model.file_path.as_ref())),
             (
                 "onOpenFile",
                 if single_file {
@@ -317,7 +314,7 @@ fn render_search(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, J
     let summary = search
         .as_ref()
         .and_then(|value| value.title.as_deref())
-        .unwrap_or(&model.summary);
+        .map_or_else(|| model.summary.clone(), JsonString::from);
     let row_icon = modules.primitive("IconSearchOutline16")?;
     render_standard_row(
         modules,
@@ -326,7 +323,7 @@ fn render_search(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, J
         &model,
         &row_icon,
         &[("size", JsValue::from_f64(14.0))],
-        Some((title, summary)),
+        Some((title, &summary)),
         JsValue::NULL,
         JsValue::NULL,
         JsValue::NULL,
@@ -365,7 +362,7 @@ fn render_todo(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsV
     let block = parsed_from_props(props)?;
     let model = tool_row_model(&block.tool_name, &block.model, None);
     let translate = required_function(props, "t", "TodoRow props")?;
-    let summary = todo_summary(block.raw_arguments(), &translate)?;
+    let summary = todo_summary(&block.raw_arguments(), &translate)?;
     let (summary, extra) = summary.unwrap_or((model.summary.clone(), 0));
     let title = translated(&translate, "todo.rowTitle")?;
     let row = tool_row_component()?;
@@ -386,7 +383,7 @@ fn render_todo(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsV
                 )?,
             ),
             ("title", title),
-            ("summary", JsValue::from_str(&summary)),
+            ("summary", json_text(&summary)),
             (
                 "summarySuffix",
                 if extra == 0 {
@@ -395,12 +392,9 @@ fn render_todo(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsV
                     JsValue::from_str(&format!("+{extra}"))
                 },
             ),
-            ("body", option_string(model.body.as_deref())),
-            ("output", option_string(model.output.as_deref())),
-            (
-                "errorSummary",
-                option_string(model.error_summary.as_deref()),
-            ),
+            ("body", option_string(model.body.as_ref())),
+            ("output", option_string(model.output.as_ref())),
+            ("errorSummary", option_string(model.error_summary.as_ref())),
             ("state", JsValue::from_str(state_name(model.state))),
             (
                 "inspect",
@@ -421,18 +415,21 @@ fn render_ask(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsVa
         Some("ASK_CANCELLED") => {
             summary = translated(&translate, "ask.cancelled")?
                 .as_string()
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into();
         }
         Some("ASK_ABORTED") => {
             summary = translated(&translate, "ask.interrupted")?
                 .as_string()
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into();
             state = ToolRowState::Stopped;
         }
         _ if model.state == ToolRowState::Running => {
             summary = translated(&translate, "ask.waiting")?
                 .as_string()
-                .unwrap_or_default();
+                .unwrap_or_default()
+                .into();
         }
         _ if model.state == ToolRowState::Ok
             && matches!(block.model, ToolCallBlock::Settled { .. }) =>
@@ -461,9 +458,9 @@ fn render_ask(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsVa
                 )?,
             ),
             ("title", translated(&translate, "ask.rowTitle")?),
-            ("summary", JsValue::from_str(&summary)),
-            ("body", option_string(model.body.as_deref())),
-            ("output", option_string(model.output.as_deref())),
+            ("summary", json_text(&summary)),
+            ("body", option_string(model.body.as_ref())),
+            ("output", option_string(model.output.as_ref())),
             ("state", JsValue::from_str(state_name(state))),
             (
                 "inspect",
@@ -565,14 +562,14 @@ fn render_bash(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsV
         bash_state_icon(modules, state)?
     };
     let failure_line = (model.state == ToolRowState::Error)
-        .then_some(model.error_summary.as_deref())
+        .then_some(model.error_summary.as_ref())
         .flatten();
+    let terminal_description = terminal
+        .as_ref()
+        .and_then(|terminal| terminal.description.as_deref())
+        .map(JsonString::from);
     let summary = failure_line
-        .or_else(|| {
-            terminal
-                .as_ref()
-                .and_then(|terminal| terminal.description.as_deref())
-        })
+        .or(terminal_description.as_ref())
         .unwrap_or(&model.summary);
     let summary_class = if failure_line.is_some() {
         format!("{BASH_SUMMARY} {BASH_ERROR_SUMMARY}")
@@ -613,7 +610,7 @@ fn render_bash(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsV
             &modules.react,
             "span",
             Some(&class_props(&summary_class)?),
-            &[JsValue::from_str(summary)],
+            &[json_text(summary)],
         )?,
     ]);
     let row = tag(
@@ -726,7 +723,7 @@ fn render_standard_row(
     model: &crate::ToolRowModel,
     icon_kind: &JsValue,
     icon_props: &[(&str, JsValue)],
-    title_summary: Option<(&str, &str)>,
+    title_summary: Option<(&str, &JsonString)>,
     terminal: JsValue,
     diff: JsValue,
     read: JsValue,
@@ -748,13 +745,10 @@ fn render_standard_row(
                 create_element(&modules.react, icon_kind, Some(&object(icon_props)?), &[])?,
             ),
             ("title", JsValue::from_str(title)),
-            ("summary", JsValue::from_str(summary)),
+            ("summary", json_text(summary)),
             ("body", JsValue::NULL),
-            ("output", option_string(model.output.as_deref())),
-            (
-                "errorSummary",
-                option_string(model.error_summary.as_deref()),
-            ),
+            ("output", option_string(model.output.as_ref())),
+            ("errorSummary", option_string(model.error_summary.as_ref())),
             ("terminal", terminal),
             ("diff", diff),
             ("read", read),
@@ -764,7 +758,7 @@ fn render_standard_row(
             (
                 "filePath",
                 if file_link {
-                    option_string(model.file_path.as_deref())
+                    option_string(model.file_path.as_ref())
                 } else {
                     JsValue::UNDEFINED
                 },
@@ -881,7 +875,7 @@ fn bash_io_card(modules: &BrowserModules, model: &crate::ToolRowModel) -> Result
 fn bash_io_section(
     modules: &BrowserModules,
     label: &str,
-    text: &str,
+    text: &JsonString,
     error: bool,
 ) -> Result<JsValue, JsValue> {
     tag(
@@ -902,7 +896,7 @@ fn bash_io_section(
                     ("className", JsValue::from_str(BASH_IO_TEXT)),
                     ("data-error", bool_or_undefined(error)),
                 ])?),
-                &[JsValue::from_str(text)],
+                &[json_text(text)],
             )?,
         ],
     )
@@ -938,7 +932,13 @@ fn search_model_value(model: Option<&crate::SearchCardModel>) -> Result<JsValue,
         object(&[
             ("card", search_card_props(model)?.into()),
             ("title", option_undefined(model.title.as_deref())),
-            ("recovery", option_undefined(model.recovery.as_deref())),
+            (
+                "recovery",
+                model
+                    .recovery
+                    .as_ref()
+                    .map_or(JsValue::UNDEFINED, json_text),
+            ),
         ])
         .map(Into::into)
     })
@@ -950,24 +950,27 @@ fn web_model_value(model: Option<&crate::WebCardModel>) -> Result<JsValue, JsVal
     })
 }
 
-fn option_string(value: Option<&str>) -> JsValue {
-    value.map_or(JsValue::NULL, JsValue::from_str)
+fn option_string(value: Option<&JsonString>) -> JsValue {
+    value.map_or(JsValue::NULL, json_text)
 }
 
 fn option_undefined(value: Option<&str>) -> JsValue {
     value.map_or(JsValue::UNDEFINED, JsValue::from_str)
 }
 
-fn answered_summary(text: &str, translate: &Function) -> Result<Option<String>, JsValue> {
-    let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+fn answered_summary(
+    text: &JsonString,
+    translate: &Function,
+) -> Result<Option<JsonString>, JsValue> {
+    let Ok(parsed) = Value::parse_text(text) else {
         return Ok(None);
     };
-    let Some(answers) = parsed.get("answers").and_then(Value::as_array) else {
+    let Some(answers) = parsed.get_value("answers").and_then(Value::as_array) else {
         return Ok(None);
     };
     if answers
         .iter()
-        .any(|answer| !matches!(answer, Value::Object(_) | Value::Array(_)))
+        .any(|answer| !answer.is_object() && !answer.is_array())
     {
         return Ok(None);
     }
@@ -975,12 +978,12 @@ fn answered_summary(text: &str, translate: &Function) -> Result<Option<String>, 
         .iter()
         .filter(|answer| {
             answer
-                .get("selected")
+                .get_value("selected")
                 .and_then(Value::as_array)
                 .is_some_and(|selected| !selected.is_empty())
                 || answer
-                    .get("custom")
-                    .and_then(Value::as_str)
+                    .get_value("custom")
+                    .and_then(crate::model::json_string)
                     .is_some_and(|custom| !custom.is_empty())
         })
         .count();
@@ -992,19 +995,23 @@ fn answered_summary(text: &str, translate: &Function) -> Result<Option<String>, 
             ("total", usize_number(answers.len())?),
         ])?,
     )?
-    .as_string())
+    .as_string()
+    .map(Into::into))
 }
 
-fn todo_summary(raw: &str, translate: &Function) -> Result<Option<(String, usize)>, JsValue> {
-    let Ok(parsed) = serde_json::from_str::<Value>(raw) else {
+fn todo_summary(
+    raw: &JsonString,
+    translate: &Function,
+) -> Result<Option<(JsonString, usize)>, JsValue> {
+    let Ok(parsed) = Value::parse_text(raw) else {
         return Ok(None);
     };
-    let Some(todos) = parsed.get("todos").and_then(Value::as_array) else {
+    let Some(todos) = parsed.get_value("todos").and_then(Value::as_array) else {
         return Ok(None);
     };
     if todos
         .iter()
-        .any(|todo| !matches!(todo, Value::Object(_) | Value::Array(_)))
+        .any(|todo| !todo.is_object() && !todo.is_array())
     {
         return Ok(None);
     }
@@ -1019,9 +1026,11 @@ fn todo_summary(raw: &str, translate: &Function) -> Result<Option<(String, usize
     )?
     .as_string()
     .unwrap_or_default();
-    let text = summary
-        .active_content
-        .map_or_else(|| head.clone(), |active| format!("{head} · {active}"));
+    let mut text = JsonString::from(head);
+    if let Some(active) = summary.active_content {
+        text.push_str(" · ");
+        text.push_utf16(active.utf16_units());
+    }
     Ok(Some((text, summary.active_extra)))
 }
 

@@ -349,7 +349,9 @@ fn formatting_exporter(config: &Config, node: bool) -> LogExporter {
     }
     if node {
         let inspect: LogFormatter =
-            Arc::new(|value: &Value, _: &LogExporter, _: &LogMessage| inspect_value(value));
+            Arc::new(|value: Option<&Value>, _: &LogExporter, _: &LogMessage| {
+                value.map_or_else(|| "undefined".to_owned(), inspect_value)
+            });
         exporter.formatters.insert('o', Arc::clone(&inspect));
         exporter.formatters.insert('O', inspect);
     }

@@ -74,7 +74,7 @@ impl SpillBackend for LocalSpillStore {
             root: self.root.clone(),
             session_id: input.owner.session_id.into_string(),
             suggested_name: input.suggested_name,
-            content: input.content,
+            content: String::from_utf16_lossy(input.content.utf16_units()),
         })
         .await?;
         Ok(SpillRef {
@@ -147,7 +147,7 @@ mod tests {
                 label: "result".to_owned(),
             },
             suggested_name: "web_fetch.txt".to_owned(),
-            content: content.to_owned(),
+            content: content.into(),
         }
     }
 
@@ -165,6 +165,20 @@ mod tests {
         );
         assert_eq!(first.file_name().unwrap().len(), "session-".len() + 12);
         assert_ne!(first, session_dir("/spill", "sess-2"));
+    }
+
+    #[tokio::test]
+    async fn source_utf8_file_encoding_replaces_unpaired_surrogates_at_write_time() {
+        let temp = TempDir::new().unwrap();
+        let store = LocalSpillStore::new(&LocalSpillConfig {
+            root: Some(temp.path().to_path_buf()),
+        })
+        .unwrap();
+        let mut input = request("");
+        input.content = seekdeep_llm::JsonString::from_utf16(&[0xd800, 0xd83d, 0xde00, 0xdfff]);
+        let saved = store.save_text(input).await.unwrap();
+        assert_eq!(saved.bytes, 10);
+        assert_eq!(fs::read(saved.locator.as_str()).unwrap(), "�😀�".as_bytes());
     }
 
     #[tokio::test]

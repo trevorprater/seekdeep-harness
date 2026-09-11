@@ -4,7 +4,7 @@ English | [中文](feedback.zh.md)
 
 [`@seekdeep-ai/seekdeep-message-feedback`](../../packages/feedback/message-feedback) owns editable feedback for individual assistant messages. It is deliberately separate from the immutable Session-level `feedback/record` event: message feedback is a local storage-domain sidecar, not Session-log content or a projection, and it performs no telemetry handoff.
 
-Source: [`packages/feedback/message-feedback/src/types.ts`](../../packages/feedback/message-feedback/src/types.ts)
+Source: [`packages/feedback/message-feedback/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/feedback/message-feedback/src/types.ts)
 
 ## Public types
 
@@ -262,5 +262,5 @@ Storage-domain sidecar service. It inspects persisted Session history and never 
 @Remote('delete') delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>
 ```
 
-Source: [`packages/feedback/message-feedback/src/index.ts:150`](../../packages/feedback/message-feedback/src/index.ts)
+Source: [`packages/feedback/message-feedback/src/index.ts:150`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/feedback/message-feedback/src/index.ts)
 <!-- END GENERATED cordis-surface -->

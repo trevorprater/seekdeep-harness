@@ -309,7 +309,7 @@ mod tests {
             attempt: Box::new(|| Box::pin(async { anyhow::bail!("transport died") })),
             collect_output: Box::new(|| {
                 vec![ContentBlock::Text {
-                    text: "partial".to_owned(),
+                    text: "partial".into(),
                 }]
             }),
             cancelled: Box::new(|| true),
@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(
             result.output,
             [ContentBlock::Text {
-                text: "partial".to_owned()
+                text: "partial".into()
             }]
         );
 

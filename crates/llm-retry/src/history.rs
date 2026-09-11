@@ -1,6 +1,6 @@
 //! Durable request-route and retry-chain lookup.
 
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonRef, SessionEvent};
 use seekdeep_llm::ProviderId;
 
 use crate::{brand::RetryPolicyKey, types::LlmRetryEventData};
@@ -14,8 +14,8 @@ pub(crate) fn provider_for_open_step(
 ) -> Option<ProviderId> {
     let step_start = events.iter().rposition(|event| {
         event.event_type == "step/start"
-            && event.data.get("turn").and_then(serde_json::Value::as_u64) == Some(turn)
-            && event.data.get("step").and_then(serde_json::Value::as_u64) == Some(step)
+            && event.data.get("turn").and_then(JsonRef::as_u64) == Some(turn)
+            && event.data.get("step").and_then(JsonRef::as_u64) == Some(step)
     })?;
     if events[step_start + 1..]
         .iter()
@@ -29,7 +29,7 @@ pub(crate) fn provider_for_open_step(
                 event
                     .data
                     .pointer("/header/config/provider")
-                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| value.deserialize::<String>().ok())
                     .filter(|provider| !provider.is_empty())
                     .map(ProviderId::new)
             })
@@ -50,7 +50,7 @@ pub(crate) fn prior_policy_retry(
         if event.event_type != "llm/retry" {
             return None;
         }
-        let retry = serde_json::from_value::<LlmRetryEventData>(event.data.clone()).ok()?;
+        let retry = event.data.deserialize::<LlmRetryEventData>().ok()?;
         (retry.turn() == turn
             && retry.step() == step
             && retry.provider() == provider

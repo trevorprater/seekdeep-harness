@@ -584,7 +584,12 @@ impl LoopAgent {
             .into_iter()
             .rev()
             .find(|event| event.event_type == "turn/start")
-            .and_then(|event| event.data.get("turn").and_then(serde_json::Value::as_u64))
+            .and_then(|event| {
+                event
+                    .data
+                    .get("turn")
+                    .and_then(seekdeep_core::session::JsonRef::as_u64)
+            })
             .unwrap_or(0);
         let controller = LoopController::new(Arc::downgrade(&agent), last_turn, driver);
         agent.install_controller(controller.clone())?;
@@ -624,9 +629,7 @@ mod tests {
 
     fn message(text: &str) -> UserMessage {
         UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         )
     }

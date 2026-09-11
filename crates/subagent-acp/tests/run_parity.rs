@@ -45,7 +45,7 @@ impl Harness {
         SubagentStartRequest {
             label: None,
             prompt: vec![ContentBlock::Text {
-                text: "do the task".to_owned(),
+                text: "do the task".into(),
             }],
             parent: parent(
                 &self.context,
@@ -107,7 +107,7 @@ fn text(result: &seekdeep_subagent::SubagentResult) -> String {
         .output
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()

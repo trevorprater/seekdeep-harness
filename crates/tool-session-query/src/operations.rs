@@ -6,7 +6,7 @@ use std::{
 };
 
 use seekdeep_cordis::Context;
-use seekdeep_llm::{AbortSignal, HarnessError};
+use seekdeep_llm::{AbortSignal, HarnessError, JsonString};
 use seekdeep_session_query::{
     SESSION_QUERY, SessionEventSearchHit, SessionRecord, SessionSearchCursor, SessionSearchHit,
     types::{
@@ -44,7 +44,7 @@ pub async fn execute_session_search(
     args: &SessionSearchArgs,
     run: &ToolRunContext,
     max_results: usize,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<JsonString> {
     let caller = workspace_access::caller_of(run)?;
     let cwd = caller.header.cwd.clone().ok_or_else(|| {
         HarnessError::new(
@@ -84,7 +84,7 @@ pub async fn execute_session_search(
             values.push(None);
         }
         if values.is_empty() {
-            return Ok(presentation::format_empty_session_search().to_owned());
+            return Ok(presentation::format_empty_session_search().into());
         }
         session_filters.push(seekdeep_session_query::SessionResultFilter::Parent { values });
     }
@@ -142,11 +142,7 @@ pub async fn execute_session_search(
         .map(|hit| hit.record.header.id.clone())
         .collect::<Vec<_>>();
     let titles = workspace_access::read_titles(context, &caller, &ids, &signal).await?;
-    Ok(presentation::format_session_search(
-        &collected,
-        &titles,
-        &authorized_parents,
-    ))
+    Ok(presentation::format_session_search(&collected, &titles, &authorized_parents).into())
 }
 
 /// Executes within-session event search with current-step exclusion.
@@ -160,7 +156,7 @@ pub async fn execute_event_search(
     args: &EventSearchArgs,
     run: &ToolRunContext,
     max_results: usize,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<JsonString> {
     let caller = workspace_access::caller_of(run)?;
     let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
     let signal = run.signal();
@@ -213,7 +209,8 @@ pub async fn execute_event_search(
                 items: Vec::new(),
                 capped: false,
             },
-        ));
+        )
+        .into());
     }
     let filters = input::build_event_filters(EventFilterInput {
         seq_from: args.seq_from,
@@ -267,11 +264,7 @@ pub async fn execute_event_search(
         |_hit: &SessionEventSearchHit| true,
     )
     .await?;
-    Ok(presentation::format_event_search(
-        &session_id,
-        &title,
-        &collected,
-    ))
+    Ok(presentation::format_event_search(&session_id, &title, &collected).into())
 }
 
 /// Executes one workspace-redacted lineage trace.
@@ -283,7 +276,7 @@ pub async fn execute_session_trace(
     context: &Context,
     args: &SessionTargetArgs,
     run: &ToolRunContext,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<JsonString> {
     let caller = workspace_access::caller_of(run)?;
     let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
     let signal = run.signal();
@@ -321,7 +314,8 @@ pub async fn execute_session_trace(
         ancestor_boundary,
         &descendants,
         &titles,
-    ))
+    )
+    .into())
 }
 
 /// Executes one event relationship trace.
@@ -333,7 +327,7 @@ pub async fn execute_event_trace(
     context: &Context,
     args: &EventTargetArgs,
     run: &ToolRunContext,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<JsonString> {
     let seq = input::non_negative_safe("seq", args.seq)?;
     let caller = workspace_access::caller_of(run)?;
     let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
@@ -352,11 +346,7 @@ pub async fn execute_event_trace(
     .await?;
     workspace_access::assert_observed_target_authorized(&caller, &session_id, &trace.session)?;
     let title = workspace_access::read_title(context, &caller, &session_id, &signal).await?;
-    Ok(presentation::format_event_trace(
-        &session_id,
-        &title,
-        &trace,
-    ))
+    Ok(presentation::format_event_trace(&session_id, &title, &trace).into())
 }
 
 /// Executes one exact event read plus optional neighbors.
@@ -368,7 +358,7 @@ pub async fn execute_event_read(
     context: &Context,
     args: &EventReadArgs,
     run: &ToolRunContext,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<JsonString> {
     let seq = input::non_negative_safe("seq", args.seq)?;
     let before = args
         .before

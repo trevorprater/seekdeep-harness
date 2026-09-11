@@ -3,7 +3,9 @@
 use std::rc::Rc;
 
 use indexmap::{IndexMap, IndexSet};
-use serde_json::{Map, Value, json};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 use url::Url;
 
 use crate::{
@@ -132,7 +134,7 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
             }),
             Some("assistant") => {
                 if let (Some(change), Some(_)) =
-                    (request.get("promptChange"), request.get("prompt"))
+                    (request.get_value("promptChange"), request.get_value("prompt"))
                 {
                     entries.push(LayoutEntry::System {
                         request: request.clone(),
@@ -196,8 +198,8 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
                     prompt_change_label(&change),
                 );
                 cell.source_seq = safe_seq(&change, "seq");
-                cell.prompt_detail = request.get("prompt").cloned();
-                cell.previous_prompt_detail = change.get("previous").cloned();
+                cell.prompt_detail = request.get_value("prompt").cloned();
+                cell.previous_prompt_detail = change.get_value("previous").cloned();
                 cell.time_seconds = Some(0.0);
                 cell.started_at = finite_member(&change, "time");
                 push_message(
@@ -209,10 +211,10 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
             }
             LayoutEntry::Compaction { request } => {
                 cell_index += 1;
-                let raw_output = request.get("rawOutput").or_else(|| request.get("summary"));
+                let raw_output = request.get_value("rawOutput").or_else(|| request.get_value("summary"));
                 let thinking_detail = raw_output.map_or_else(String::new, detail_reasoning);
                 let status = string(&request, "status").unwrap_or_default();
-                let summary = request.get("summary");
+                let summary = request.get_value("summary");
                 let text = match status {
                     "running" => "Compacting context…".to_owned(),
                     "error" => string(&request, "error")
@@ -244,14 +246,14 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
                 cell.time_seconds =
                     completed_at.and_then(|later| duration_seconds(later, started_at));
                 cell.started_at = started_at;
-                attach_usage(&mut cell, request.get("usage"));
+                attach_usage(&mut cell, request.get_value("usage"));
                 let compaction = TurnBucket {
                     groups: vec![LaidGroup {
                         title: format!("Compaction {}", display_number(&request, "startSeq")),
                         laid: vec![LaidCell::plain(cell, started_at)],
                     }],
                 };
-                if request.get("turn").is_none_or(Value::is_null) {
+                if request.get_value("turn").is_none_or(Value::is_null) {
                     standalone_compactions.push(compaction);
                 } else {
                     turns
@@ -288,9 +290,9 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
             "kind": "assistant",
             "seq": 9_007_199_254_740_991_f64,
             "time": 0,
-            "turn": partial.get("turn").cloned().unwrap_or(Value::Null),
-            "step": partial.get("step").cloned().unwrap_or(Value::Null),
-            "blocks": partial.get("blocks").cloned().unwrap_or_else(|| json!([])),
+            "turn": partial.get_value("turn").cloned().unwrap_or(null().clone()),
+            "step": partial.get_value("step").cloned().unwrap_or(null().clone()),
+            "blocks": partial.get_value("blocks").cloned().unwrap_or_else(|| json!([])),
         });
         let laid = with_sub_calls(expand_assistant(
             &fake,
@@ -552,7 +554,7 @@ fn fold_node(
             let call_id = string(node, "callId").unwrap_or_default();
             if !emitted_call_ids.contains(call_id) {
                 let tool_name = node
-                    .get("call")
+                    .get_value("call")
                     .filter(|call| !call.is_null())
                     .and_then(|call| string(call, "name"));
                 let result_preview = summarize_result(node);
@@ -560,7 +562,7 @@ fn fold_node(
                 let mut cell =
                     TrajectoryCell::new(*cell_index, TrajectoryCellKind::Tool, String::new());
                 cell.source_seq = safe_seq(node, "seq");
-                if let Some(call) = node.get("call").filter(|call| !call.is_null()) {
+                if let Some(call) = node.get_value("call").filter(|call| !call.is_null()) {
                     summarize_call_into(
                         &mut cell,
                         string(call, "name").unwrap_or_default(),
@@ -605,10 +607,10 @@ fn fold_node(
 
 fn input_cell(node: &Value, index: usize) -> TrajectoryCell {
     let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::User, "");
-    let content = node.get("content").unwrap_or(&Value::Null);
+    let content = node.get_value("content").unwrap_or(null());
     cell.preview_markdown = preview_content(content);
     cell.source_seq = safe_seq(node, "seq");
-    cell.message_source = node.get("source").cloned();
+    cell.message_source = node.get_value("source").cloned();
     cell.input_detail = Some(detail_content(content));
     cell.source_blocks = blocks(content).iter().map(source_block).collect();
     cell.time_seconds = Some(0.0);
@@ -633,7 +635,7 @@ fn expand_assistant(
     let mut output = Vec::new();
     let mut index = start_index - 1;
     let recorded_start = node
-        .get("timing")
+        .get_value("timing")
         .and_then(|timing| finite_member(timing, "stepStartTime"));
     let message_duration = if streaming {
         None
@@ -666,20 +668,20 @@ fn expand_assistant(
     message.source_blocks = node_blocks.iter().map(assistant_source_block).collect();
     message.time_seconds = message_duration;
     message.started_at = recorded_start;
-    attach_usage(&mut message, node.get("usage"));
-    let usage = node.get("usage");
+    attach_usage(&mut message, node.get_value("usage"));
+    let usage = node.get_value("usage");
     message.assistant_metrics = Some(AssistantMetricDetail {
-        timing_recorded: node.get("timing").is_some(),
+        timing_recorded: node.get_value("timing").is_some(),
         step_start_time: node
-            .get("timing")
+            .get_value("timing")
             .and_then(|timing| number(timing, "stepStartTime")),
         first_token_time: node
-            .get("timing")
+            .get_value("timing")
             .and_then(|timing| number(timing, "firstTokenTime")),
         completed_time: (!streaming).then(|| finite_member(node, "time")).flatten(),
         usage_provided: usage.is_some(),
         output_tokens: usage
-            .and_then(|usage| usage.get("outputTokens"))
+            .and_then(|usage| usage.get_value("outputTokens"))
             .and_then(Value::as_u64),
     });
     output.push(LaidCell::plain(
@@ -758,10 +760,10 @@ fn expand_sub_calls(subs: &[Value], start_index: usize) -> Vec<LaidCell> {
     let mut output = Vec::new();
     let mut index = start_index;
     for sub in subs {
-        let settled = sub.get("kind").is_some();
+        let settled = sub.get_value("kind").is_some();
         let call_id = string(sub, "callId").unwrap_or_default();
         let name = if settled {
-            sub.get("call")
+            sub.get_value("call")
                 .filter(|call| !call.is_null())
                 .and_then(|call| string(call, "name"))
                 .unwrap_or(call_id)
@@ -769,7 +771,7 @@ fn expand_sub_calls(subs: &[Value], start_index: usize) -> Vec<LaidCell> {
             string(sub, "name").unwrap_or_default()
         };
         let args = if settled {
-            sub.get("call")
+            sub.get_value("call")
                 .filter(|call| !call.is_null())
                 .and_then(|call| string(call, "argsRaw"))
         } else {
@@ -978,11 +980,11 @@ fn attach_usage(cell: &mut TrajectoryCell, usage: Option<&Value>) {
     let Some(usage) = usage else {
         return;
     };
-    cell.input = usage.get("inputTokens").and_then(Value::as_u64);
-    cell.cache_read = usage.get("cacheReadTokens").and_then(Value::as_u64);
-    cell.cache_write = usage.get("cacheWriteTokens").and_then(Value::as_u64);
-    cell.output = usage.get("outputTokens").and_then(Value::as_u64);
-    cell.think = usage.get("reasoningTokens").and_then(Value::as_u64);
+    cell.input = usage.get_value("inputTokens").and_then(Value::as_u64);
+    cell.cache_read = usage.get_value("cacheReadTokens").and_then(Value::as_u64);
+    cell.cache_write = usage.get_value("cacheWriteTokens").and_then(Value::as_u64);
+    cell.output = usage.get_value("outputTokens").and_then(Value::as_u64);
+    cell.think = usage.get_value("reasoningTokens").and_then(Value::as_u64);
 }
 
 fn summarize_assistant_activity(blocks: &[Value]) -> String {
@@ -1019,13 +1021,13 @@ fn assistant_source_block(block: &Value) -> TrajectorySourceBlock {
         },
         Some("image") => TrajectorySourceBlock {
             kind: "image".to_owned(),
-            content: stringify_source_value(block.get("attachment").unwrap_or(&Value::Null)),
+            content: stringify_source_value(block.get_value("attachment").unwrap_or(null())),
             image_src: None,
             image_alt: None,
             call_id: None,
             tool_name: None,
         },
-        Some("other") => source_block(block.get("block").unwrap_or(&Value::Null)),
+        Some("other") => source_block(block.get_value("block").unwrap_or(null())),
         Some(_) | None => source_block(block),
     }
 }
@@ -1035,10 +1037,10 @@ fn source_block(value: &Value) -> TrajectorySourceBlock {
         return source_text("unknown", &stringify_source_value(value));
     };
     let kind = block
-        .get("type")
+        .get_value("type")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
-    if let Some(text) = block.get("text").and_then(Value::as_str) {
+    if let Some(text) = block.get_value("text").and_then(Value::as_str) {
         return source_text(
             if kind == "reasoning" {
                 "thinking"
@@ -1056,7 +1058,7 @@ fn source_block(value: &Value) -> TrajectorySourceBlock {
             .map_or_else(|| stringify_source_value(value), |_| String::new()),
         image_src,
         image_alt: block
-            .get("alt")
+            .get_value("alt")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
         call_id: None,
@@ -1076,7 +1078,7 @@ fn source_text(kind: &str, content: &str) -> TrajectorySourceBlock {
 }
 
 fn source_image(block: &Map<String, Value>) -> Option<String> {
-    let kind = block.get("type")?.as_str()?;
+    let kind = block.get_value("type")?.as_str()?;
     if !kind.to_lowercase().contains("image") {
         return None;
     }
@@ -1085,7 +1087,7 @@ fn source_image(block: &Map<String, Value>) -> Option<String> {
             return safe_image_source(value);
         }
     }
-    if let Some(data) = block.get("data").and_then(Value::as_str) {
+    if let Some(data) = block.get_value("data").and_then(Value::as_str) {
         let media = ["mimeType", "mediaType", "media_type"]
             .iter()
             .find_map(|key| block.get(*key).and_then(Value::as_str))
@@ -1099,13 +1101,13 @@ fn source_image(block: &Map<String, Value>) -> Option<String> {
             .as_str(),
         );
     }
-    let source = block.get("source")?.as_object()?;
-    if let Some(url) = source.get("url").and_then(Value::as_str) {
+    let source = block.get_value("source")?.as_object()?;
+    if let Some(url) = source.get_value("url").and_then(Value::as_str) {
         return safe_image_source(url);
     }
-    let data = source.get("data")?.as_str()?;
+    let data = source.get_value("data")?.as_str()?;
     let media = source
-        .get("media_type")
+        .get_value("media_type")
         .and_then(Value::as_str)
         .unwrap_or("image/png");
     safe_image_source(format!("data:{media};base64,{data}").as_str())
@@ -1259,7 +1261,7 @@ fn summarize_result(node: &Value) -> ResultPreview {
     if bool_member(node, "isError") {
         return ResultPreview {
             result: Some(
-                node.get("error")
+                node.get_value("error")
                     .and_then(|error| string(error, "code"))
                     .unwrap_or("error")
                     .to_owned(),
@@ -1305,7 +1307,7 @@ fn summarize_call_into(cell: &mut TrajectoryCell, name: &str, args: &str) {
 
 fn detail_result(node: &Value) -> String {
     if bool_member(node, "isError") {
-        return node.get("error").map_or_else(
+        return node.get_value("error").map_or_else(
             || "error".to_owned(),
             |error| {
                 format!(
@@ -1414,12 +1416,12 @@ fn display_number(value: &Value, key: &str) -> String {
 
 fn js_string(value: &Value) -> String {
     match value {
-        Value::Null => "null".to_owned(),
+        null().clone() => "null".to_owned(),
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => value.to_string(),
         Value::String(value) => value.clone(),
-        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
+        Value::object(_) => "[object Object]".to_owned(),
     }
 }
 

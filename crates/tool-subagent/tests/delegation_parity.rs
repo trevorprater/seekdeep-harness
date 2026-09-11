@@ -99,7 +99,7 @@ impl ScriptedProvider {
             behavior: Mutex::new(RunBehavior {
                 result: SubagentResult {
                     output: vec![ContentBlock::Text {
-                        text: reply.to_owned(),
+                        text: reply.into(),
                     }],
                     structured: None,
                     stop_reason: SubagentStopReason::Completed,
@@ -134,7 +134,7 @@ impl ScriptedProvider {
         *self.behavior.lock() = RunBehavior {
             result: SubagentResult {
                 output: vec![ContentBlock::Text {
-                    text: "partial".to_owned(),
+                    text: "partial".into(),
                 }],
                 structured: None,
                 stop_reason,
@@ -277,7 +277,7 @@ fn text(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()

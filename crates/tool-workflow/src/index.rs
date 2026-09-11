@@ -305,7 +305,8 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                     value.agents_started,
                     &value.result,
                     max_result_chars,
-                ),
+                )
+                .into(),
             }])
         }),
     );
@@ -389,9 +390,9 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         )
         .present_call(Arc::new(|args: &WorkflowCallArgs| {
             Some(ToolCallView::Generic(GenericCallView {
-                title: format!("workflow: {}", args.meta.name),
+                title: format!("workflow: {}", args.meta.name).into(),
                 kind: None,
-                raw_input: Some(json!(args.script)),
+                raw_input: Some(json!(args.script).into()),
                 content: None,
                 locations: None,
             }))

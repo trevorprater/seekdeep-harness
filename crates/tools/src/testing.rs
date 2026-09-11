@@ -110,7 +110,11 @@ mod tests {
             "fixture",
             json!({"text": {"type": "string", "required": true}}),
             Arc::new(|args: Args, _| {
-                Box::pin(async move { Ok(vec![ContentBlock::Text { text: args.text }]) })
+                Box::pin(async move {
+                    Ok(vec![ContentBlock::Text {
+                        text: args.text.into(),
+                    }])
+                })
             }),
         ))
         .expect("fixture");
@@ -120,10 +124,8 @@ mod tests {
         );
         let value = json!([{"type": "text", "text": "ok"}]);
         assert_eq!(
-            (fixture.output.render)(&json!({"text": "ok"}), &value).expect("render"),
-            [ContentBlock::Text {
-                text: "ok".to_owned(),
-            }]
+            (fixture.output.render)(&json!({"text": "ok"}).into(), &value.into()).expect("render"),
+            [ContentBlock::Text { text: "ok".into() }]
         );
     }
 }

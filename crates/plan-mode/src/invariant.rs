@@ -100,11 +100,14 @@ fn validate_event(event: &SessionEvent, failure: &InvariantFailure) -> anyhow::R
         return Ok(());
     }
     let active = event.data.get("active");
-    if !active.is_some_and(serde_json::Value::is_boolean) {
+    if !active.is_some_and(|active| active.as_bool().is_some()) {
         return Err(failure
             .fail(format!(
                 "plan/mode carries invalid active state {}; expected a boolean",
-                active.map_or_else(|| "undefined".to_owned(), std::string::ToString::to_string,)
+                active.map_or_else(
+                    || "undefined".to_owned(),
+                    |active| active.as_raw().to_owned()
+                )
             ))
             .into());
     }

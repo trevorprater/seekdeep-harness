@@ -124,7 +124,7 @@ fn projection_is_null_before_create_tracks_mutations_and_stays_null_after_clear_
             InboxTarget::NextStep,
             UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "unrelated pending context".to_owned(),
+                    text: "unrelated pending context".into(),
                 }],
                 MessageSource::plugin("test"),
             ),

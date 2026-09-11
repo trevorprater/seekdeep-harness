@@ -4,7 +4,7 @@ English | [中文](token-meter.zh.md)
 
 `@seekdeep-ai/seekdeep-token-meter` exposes one detached replay snapshot for request pressure and positional surface pricing. `logRevision` is the number of durable events consumed for every field in the measurement.
 
-Source: [`packages/llm/token-meter/src/types.ts`](../../packages/llm/token-meter/src/types.ts)
+Source: [`packages/llm/token-meter/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/token-meter/src/types.ts)
 
 ## `TokenMeasurement`
 
@@ -86,5 +86,5 @@ estimateMessage(message: Message): number
 
 Types: [EpochHeader](session.md) · [Message](llm-streaming.md) · [Session](session.md)
 
-Source: [`packages/llm/token-meter/src/index.ts:74`](../../packages/llm/token-meter/src/index.ts)
+Source: [`packages/llm/token-meter/src/index.ts:74`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/token-meter/src/index.ts)
 <!-- END GENERATED cordis-surface -->

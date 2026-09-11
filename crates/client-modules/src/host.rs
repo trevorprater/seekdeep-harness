@@ -448,8 +448,17 @@ impl ClientModuleHost {
         };
         let pair = web_bundle_pair(&client_path);
         let path = match (resource, pair) {
-            (BundleResource::SourceMap, _) => {
+            (BundleResource::SourceMap, Some((web, _))) => {
+                PathBuf::from(format!("{}.map", web.display()))
+            }
+            (BundleResource::SourceMap, None) => {
                 PathBuf::from(format!("{}.map", client_path.display()))
+            }
+            (BundleResource::WasmSourceMap, Some((_, wasm))) => {
+                PathBuf::from(format!("{}.map", wasm.display()))
+            }
+            (BundleResource::WasmSourceMap, None) => {
+                return BundleResponse::empty(StatusCode::NOT_FOUND);
             }
             (BundleResource::Bundle, Some((web, _))) => web,
             (BundleResource::Bundle, None) => client_path,
@@ -615,6 +624,7 @@ enum BundleResource {
     Bundle,
     Sidecar,
     SourceMap,
+    WasmSourceMap,
 }
 
 impl BundleResource {
@@ -622,6 +632,7 @@ impl BundleResource {
     fn split(rest: &str) -> Option<(&str, Self)> {
         for (suffix, resource) in [
             ("/client.js.map", Self::SourceMap),
+            ("/client_bg.wasm.map", Self::WasmSourceMap),
             ("/client_bg.wasm", Self::Sidecar),
             ("/client.js", Self::Bundle),
         ] {
@@ -636,7 +647,7 @@ impl BundleResource {
         match self {
             Self::Bundle => "text/javascript; charset=utf-8",
             Self::Sidecar => "application/wasm",
-            Self::SourceMap => "application/json; charset=utf-8",
+            Self::SourceMap | Self::WasmSourceMap => "application/json; charset=utf-8",
         }
     }
 }

@@ -181,14 +181,14 @@ fn single_text(content: &[ContentBlock]) -> Option<&str> {
     let [ContentBlock::Text { text }] = content else {
         return None;
     };
-    Some(text)
+    text.as_str()
 }
 
 fn generic_call(title: impl Into<String>, kind: ToolCallKind, raw_input: Value) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        title: title.into(),
+        title: title.into().into(),
         kind: Some(kind),
-        raw_input: Some(raw_input),
+        raw_input: Some(raw_input.into()),
         content: None,
         locations: None,
     })
@@ -198,7 +198,7 @@ fn finalizer(max_bytes: usize) -> ToolContentFinalizer {
     Arc::new(move |_execution, result| {
         Ok(raw_content_text(result).map(|text| {
             vec![ContentBlock::Text {
-                text: bound_terminal_text(text, max_bytes),
+                text: bound_terminal_text(text, max_bytes).into(),
             }]
         }))
     })
@@ -465,7 +465,7 @@ fn open_definition(
         DefineToolOutput::new(
             json!({ "type": "object", "additionalProperties": false, "properties": properties }),
             Arc::new(move |_args: &SpawnArgs, value: &TerminalSpawnResult| {
-                Ok(vec![ContentBlock::Text { text: render_spawn(value, max_bytes) }])
+                Ok(vec![ContentBlock::Text { text: render_spawn(value, max_bytes).into() }])
             }),
         ),
         Arc::new(move |args: SpawnArgs, run| {
@@ -520,7 +520,7 @@ fn send_definition(
                     max_bytes,
                 ),
             };
-            Ok(vec![ContentBlock::Text { text }])
+            Ok(vec![ContentBlock::text(text)])
         }),
     )
     .presentation_meta(Arc::new(|_args: &SendArgs, value: &SendValue| {
@@ -624,7 +624,7 @@ fn read_definition(
                     }
                 }),
                 Arc::new(move |_args: &ReadArgs, value: &TerminalReadResult| {
-                    Ok(vec![ContentBlock::Text { text: render_read(value, max_bytes) }])
+                    Ok(vec![ContentBlock::Text { text: render_read(value, max_bytes).into() }])
                 }),
             ),
             Arc::new(move |args: ReadArgs, run| {
@@ -677,7 +677,7 @@ fn signal_definition(
                             "delivered {:?} to foreground process group {}",
                             args.signal,
                             value.target_pgid.as_i64()
-                        ),
+                        ).into(),
                     }])
                 }),
             ),
@@ -725,10 +725,10 @@ fn close_definition(
                 }),
                 Arc::new(|_args: &SessionArgs, value: &CloseValue| {
                     Ok(vec![ContentBlock::Text {
-                        text: match value.outcome {
+                        text: (match value.outcome {
                             CloseOutcome::Closed => format!("closed terminal session {}", value.session_id),
                             CloseOutcome::AlreadyClosing => format!("terminal session {} was already closing", value.session_id),
-                        },
+                        }).into(),
                     }])
                 }),
             ),
@@ -773,7 +773,7 @@ fn list_definition(
                 Arc::new(
                     move |_args: &NoArgs, value: &Vec<TerminalSessionSnapshot>| {
                         Ok(vec![ContentBlock::Text {
-                            text: render_list(value, max_bytes),
+                            text: render_list(value, max_bytes).into(),
                         }])
                     },
                 ),

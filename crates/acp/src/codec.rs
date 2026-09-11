@@ -2,6 +2,8 @@
 
 use std::fmt::Write as _;
 
+use seekdeep_llm::JsonString;
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use seekdeep_subagent::SubagentStopReason;
 use serde_json::Value;
 
@@ -78,14 +80,79 @@ pub fn acp_content_text(content: &Value) -> &str {
 
 /// Translates Harness prompt blocks to ACP text blocks, dropping non-text blocks.
 #[must_use]
-pub fn to_acp_prompt(prompt: &[seekdeep_llm::ContentBlock]) -> Vec<Value> {
+pub fn to_acp_prompt(prompt: &[seekdeep_llm::ContentBlock]) -> Vec<JsonValue> {
     prompt
         .iter()
         .filter_map(|block| match block {
-            seekdeep_llm::ContentBlock::Text { text } => {
-                Some(serde_json::json!({"type":"text","text":text}))
-            }
+            seekdeep_llm::ContentBlock::Text { text } => Some(
+                JsonValue::from_serialize(&seekdeep_llm::ContentBlock::text(text.clone()))
+                    .expect("text block is JSON"),
+            ),
             _ => None,
         })
         .collect()
+}
+
+/// Reads text from an ACP update without converting its code units to UTF-8.
+#[must_use]
+pub fn acp_content_text_json(content: JsonRef<'_>) -> JsonString {
+    if content
+        .get("type")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        == Some("text")
+    {
+        content
+            .get("text")
+            .and_then(|value| value.deserialize().ok())
+            .unwrap_or_default()
+    } else {
+        JsonString::default()
+    }
+}
+
+/// Concatenates exact prompt text and renders resource links as JSON-quoted fields.
+#[must_use]
+pub fn acp_prompt_to_text_json(prompt: &[JsonValue]) -> JsonString {
+    let mut text = JsonString::default();
+    for block in prompt {
+        match block
+            .get("type")
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+        {
+            Some("text") => text.push_utf16(acp_content_text_json(block.as_ref()).utf16_units()),
+            Some("resource_link") => {
+                let name: JsonString = block
+                    .get("name")
+                    .and_then(|value| value.deserialize().ok())
+                    .unwrap_or_default();
+                let uri: JsonString = block
+                    .get("uri")
+                    .and_then(|value| value.deserialize().ok())
+                    .unwrap_or_default();
+                text.push_str(&format!(
+                    "\n[resource_link name={} uri={}]\n",
+                    name.as_raw(),
+                    uri.as_raw()
+                ));
+            }
+            Some(_) | None => {}
+        }
+    }
+    text
+}
+
+/// Whether an exact prompt contains content outside baseline ACP support.
+#[must_use]
+pub fn prompt_has_unsupported_content_json(prompt: &[JsonValue]) -> bool {
+    prompt.iter().any(|block| {
+        !matches!(
+            block
+                .get("type")
+                .and_then(|value| value.deserialize::<String>().ok())
+                .as_deref(),
+            Some("text" | "resource_link"),
+        )
+    })
 }

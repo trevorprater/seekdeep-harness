@@ -2,9 +2,9 @@
 
 English | [中文](spill.zh.md)
 
-The spill storage seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) that persists a tool's oversized text and returns a model-facing locator plus retrieval guidance, split across packages: Service Definition ([seekdeep-spill](../../packages/spill/spill), `ctx.spillStore`), Service Provider ([seekdeep-spill-local](../../packages/spill/spill-local), private session-scoped files on the host filesystem), and Consumer ([seekdeep-spill-policy](../../packages/spill/spill-policy), the `tools/post-execute` policy). Spill is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). Preview mechanics stay in [seekdeep-output-retention](../../packages/util/output-retention); this seam only saves the final text the policy hands it.
+The spill storage seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) that persists a tool's oversized text and returns a model-facing locator plus retrieval guidance, split across packages: Service Definition ([seekdeep-spill](../../packages/spill/spill), `ctx.spillStore`), Service Provider ([seekdeep-spill-local](../../packages/spill/spill-local), private session-scoped files on the host filesystem), and Consumer ([seekdeep-spill-policy](../../packages/spill/spill-policy), the `tools/post-execute` policy). Spill is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). Preview mechanics stay in [seekdeep-output-retention](../../crates/util/output-retention); this seam only saves the final text the policy hands it.
 
-Source: [`packages/spill/spill/src/types.ts`](../../packages/spill/spill/src/types.ts)
+Source: [`packages/spill/spill/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill/src/types.ts)
 
 ## The save request
 
@@ -80,7 +80,7 @@ type SpillLocator = Branded<'SpillLocator'>
 
 ## The service
 
-`SpillStore` (`ctx.spillStore`, defined in [`packages/spill/spill/src/index.ts`](../../packages/spill/spill/src/index.ts)) is a one-method abstract service: `saveText(input) → Promise<SpillRef>`. It persists the FULL `content` and REJECTS on a real storage failure (permissions, ENOSPC, backend unavailable). The seam owns storage only: no retention policy, no tool-result replacement, no retrieval/search API.
+`SpillStore` (`ctx.spillStore`, defined in [`packages/spill/spill/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill/src/index.ts)) is a one-method abstract service: `saveText(input) → Promise<SpillRef>`. It persists the FULL `content` and REJECTS on a real storage failure (permissions, ENOSPC, backend unavailable). The seam owns storage only: no retention policy, no tool-result replacement, no retrieval/search API.
 
 The local backend ([seekdeep-spill-local](../../packages/spill/spill-local)) writes under `<root>/session-<hash>/<random>-<safeName>` — a configured or lazily-created private (0700) root, a `sha256(sessionId)` session subdir, and an exclusive owner-only (`open(path, 'wx', 0o600)`) write so a planted symlink cannot redirect it. Its `locator` is the local path and its `retrievalHint` tells the model to use `read` or `grep` on that path. The policy consumer ([seekdeep-spill-policy](../../packages/spill/spill-policy)) replaces an over-`maxInlineBytes` plain-text final result with a retention-library head/tail preview plus the spill reference, best-effort: a save failure keeps the original inline result rather than turning a successful call into an `isError`.
 
@@ -113,5 +113,5 @@ Semantics every implementation must honor:
 abstract saveText(input: SaveTextSpill): Promise<SpillRef>
 ```
 
-Source: [`packages/spill/spill/src/index.ts:45`](../../packages/spill/spill/src/index.ts)
+Source: [`packages/spill/spill/src/index.ts:45`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill/src/index.ts)
 <!-- END GENERATED cordis-surface -->

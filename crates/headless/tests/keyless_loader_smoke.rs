@@ -66,7 +66,7 @@ impl LlmAdapter for KeylessAdapter {
                     content
                         .iter()
                         .filter_map(|block| match block {
-                            ContentBlock::Text { text } => Some(text.as_str()),
+                            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
                             _ => None,
                         })
                         .collect::<String>(),
@@ -129,7 +129,7 @@ impl LlmAdapter for KeylessAdapter {
                     },
                     StreamChunk::BlockEnd {
                         index: 0,
-                        block: ContentBlock::Text { text: reply },
+                        block: ContentBlock::text(reply),
                     },
                     StreamChunk::Usage {
                         usage: TokenUsage {

@@ -152,9 +152,7 @@ fn normal_one_retry() -> ResolvedRetryPolicy {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }

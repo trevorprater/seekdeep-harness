@@ -68,7 +68,7 @@ fn message_text(message: &Message) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -283,7 +283,7 @@ fn open_turn_with_user(session: &Arc<Session>, text: &str) {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: text.to_owned(),
+                    text: text.into(),
                 }],
                 MessageSource::user(),
             ))
@@ -604,7 +604,7 @@ async fn bundled_retry_recovers_inside_one_step_and_titles_the_session() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "recover".to_owned(),
+                text: "recover".into(),
             }],
             MessageSource::user(),
         ))
@@ -706,7 +706,7 @@ async fn workspace_instructions_precede_the_configured_skill_catalog() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "hi".to_owned(),
+                text: "hi".into(),
             }],
             MessageSource::user(),
         ))
@@ -768,7 +768,7 @@ async fn zero_workspace_budget_keeps_only_the_original_user_message() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "hi".to_owned(),
+                text: "hi".into(),
             }],
             MessageSource::user(),
         ))
@@ -822,7 +822,7 @@ async fn project_skill_refreshes_and_progressively_loads_through_real_tools() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "Create and load the project skill.".to_owned(),
+                text: "Create and load the project skill.".into(),
             }],
             MessageSource::user(),
         ))

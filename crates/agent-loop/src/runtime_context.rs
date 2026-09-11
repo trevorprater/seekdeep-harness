@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::session::{Session, SessionEvent, is_replacement_surface_event};
-use seekdeep_llm::{ContentBlock, ContextSnapshotSection, MessageSource, UserMessage};
+use seekdeep_llm::{ContentBlock, ContextSnapshotSection, JsonString, MessageSource, UserMessage};
 use serde_json::Value;
 
 const SOURCE: &str = "@seekdeep-ai/seekdeep-system-prompt";
@@ -15,7 +15,7 @@ const CLEARED: &str =
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Retained {
     seq: u64,
-    text: Option<String>,
+    text: Option<JsonString>,
 }
 
 /// `None` means no snapshot ever existed; `Some(None)` means none is retained.
@@ -41,7 +41,7 @@ impl RuntimeContextProjection {
             if event.event_type != "user/message" {
                 continue;
             }
-            let Ok(message) = serde_json::from_value::<UserMessage>(event.data) else {
+            let Ok(message) = event.data.deserialize::<UserMessage>() else {
                 continue;
             };
             if !is_owned(&message) {
@@ -98,8 +98,8 @@ impl RuntimeContextProjection {
         if retained
             .as_ref()
             .and_then(Option::as_ref)
-            .and_then(|retained| retained.text.as_deref())
-            == Some(snapshot)
+            .and_then(|retained| retained.text.as_ref())
+            .is_some_and(|text| text == snapshot)
         {
             return None;
         }
@@ -114,7 +114,7 @@ impl RuntimeContextProjection {
         }
         Some(UserMessage::new(
             vec![ContentBlock::Text {
-                text: snapshot.to_owned(),
+                text: snapshot.into(),
             }],
             source,
         ))
@@ -123,7 +123,7 @@ impl RuntimeContextProjection {
 
 fn update_retained(retained: &mut RetainedState, event: &SessionEvent) {
     if event.event_type == "user/message"
-        && let Ok(message) = serde_json::from_value::<UserMessage>(event.data.clone())
+        && let Ok(message) = event.data.deserialize::<UserMessage>()
         && is_owned(&message)
     {
         *retained = Some(Some(Retained {
@@ -155,7 +155,7 @@ fn is_owned(message: &UserMessage) -> bool {
             == Some(SOURCE)
 }
 
-fn text_of(message: &UserMessage) -> Option<String> {
+fn text_of(message: &UserMessage) -> Option<JsonString> {
     match message.content() {
         [ContentBlock::Text { text }] => Some(text.clone()),
         _ => None,
@@ -173,9 +173,7 @@ mod tests {
 
     fn append_snapshot(session: &Session, text: &str) -> SessionEvent {
         let message = UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::plugin(SOURCE),
         );
         session
@@ -206,7 +204,7 @@ mod tests {
 
         assert!(projection.project("", &[]).is_none());
         let first = projection.project("cwd: /tmp", &[]).expect("first");
-        assert_eq!(text_of(&first).as_deref(), Some("cwd: /tmp"));
+        assert_eq!(text_of(&first), Some("cwd: /tmp".into()));
         session
             .append(
                 "user/message",
@@ -219,7 +217,7 @@ mod tests {
             .expect("commit first");
         assert!(projection.project("cwd: /tmp", &[]).is_none());
         let cleared = projection.project("", &[]).expect("cleared");
-        assert_eq!(text_of(&cleared).as_deref(), Some(CLEARED));
+        assert_eq!(text_of(&cleared), Some(CLEARED.into()));
         detach.dispose().await.expect("detach");
     }
 
@@ -241,7 +239,7 @@ mod tests {
 
         let replacement = UserMessage::new(
             vec![ContentBlock::Text {
-                text: "ordinary".to_owned(),
+                text: "ordinary".into(),
             }],
             MessageSource::user(),
         );

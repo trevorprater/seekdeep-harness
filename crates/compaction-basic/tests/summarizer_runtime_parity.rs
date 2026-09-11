@@ -67,7 +67,7 @@ impl LlmAdapter for ScriptedAdapter {
                 ContentBlock::Text { text } => {
                     chunks.push(Ok(StreamChunk::TextDelta {
                         index,
-                        text: text.clone(),
+                        text: text.as_str().expect("fixture uses scalar text").to_owned(),
                     }));
                 }
                 ContentBlock::Reasoning { text } => {
@@ -129,7 +129,7 @@ fn prompt_input(text: &str) -> SummarizationInput {
         tools: None,
         messages: vec![Message::user(
             vec![ContentBlock::Text {
-                text: text.to_owned(),
+                text: text.into(),
             }],
             MessageSource::plugin("test"),
         )],
@@ -197,7 +197,7 @@ fn region_session(id: &str, with_header: bool) -> Arc<Session> {
         "user/message",
         serde_json::to_value(Message::user(
             vec![ContentBlock::Text {
-                text: "warm prefix ".repeat(100),
+                text: "warm prefix ".repeat(100).into(),
             }],
             MessageSource::user(),
         ))
@@ -229,7 +229,7 @@ fn region_session(id: &str, with_header: bool) -> Arc<Session> {
             "turn": 1,
             "step": 1,
             "message": Message::assistant(
-                vec![ContentBlock::Text { text: "answer ".repeat(100) }],
+                vec![ContentBlock::Text { text: "answer ".repeat(100).into() }],
                 MODEL,
                 MODEL,
             )
@@ -252,7 +252,7 @@ async fn configured_route_cap_signal_and_safe_text_projection_are_exact() {
             text: "private".to_owned(),
         },
         ContentBlock::Text {
-            text: "public summary".to_owned(),
+            text: "public summary".into(),
         },
         ContentBlock::ToolCall {
             id: CallId::new("unexpected"),
@@ -288,7 +288,7 @@ async fn configured_route_cap_signal_and_safe_text_projection_are_exact() {
     assert_eq!(
         output.summary,
         [ContentBlock::Text {
-            text: "public summary".to_owned()
+            text: "public summary".into()
         }]
     );
     assert_eq!(output.raw_output, raw);
@@ -315,13 +315,13 @@ async fn configured_route_cap_signal_and_safe_text_projection_are_exact() {
 #[tokio::test]
 async fn replays_prefix_system_tools_and_appends_instruction_last() {
     let adapter = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "summary".to_owned(),
+        text: "summary".into(),
     }]);
     let harness = Harness::new(MODEL, &adapter);
     let prefix = Message::user(
         vec![
             ContentBlock::Text {
-                text: "earlier turn".to_owned(),
+                text: "earlier turn".into(),
             },
             image('a'),
         ],
@@ -364,7 +364,7 @@ async fn replays_prefix_system_tools_and_appends_instruction_last() {
 #[tokio::test]
 async fn latest_durable_route_precedes_fallback_and_complete_fallback_is_used_when_headerless() {
     let routed = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "summary".to_owned(),
+        text: "summary".into(),
     }]);
     let harness = Harness::new("routed", &routed);
     let owner = session("routed-summary");
@@ -392,7 +392,7 @@ async fn latest_durable_route_precedes_fallback_and_complete_fallback_is_used_wh
     assert_eq!(output.model, "routed");
 
     let fallback = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "summary".to_owned(),
+        text: "summary".into(),
     }]);
     let fallback_harness = Harness::new(MODEL, &fallback);
     let output = fallback_harness
@@ -412,11 +412,11 @@ async fn latest_durable_route_precedes_fallback_and_complete_fallback_is_used_wh
 #[tokio::test]
 async fn records_route_actually_dispatched_after_one_shot_middleware() {
     let initial = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "unused".to_owned(),
+        text: "unused".into(),
     }]);
     let harness = Harness::new(MODEL, &initial);
     let routed = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "routed summary".to_owned(),
+        text: "routed summary".into(),
     }]);
     let llm = harness.context.get(LLM).unwrap();
     llm.register_adapter(&["routed-summary-provider".to_owned()], routed.clone())
@@ -445,7 +445,7 @@ async fn records_route_actually_dispatched_after_one_shot_middleware() {
     assert_eq!(
         output.summary[0],
         ContentBlock::Text {
-            text: "routed summary".to_owned()
+            text: "routed summary".into()
         }
     );
     assert_eq!(output.provider, "routed-summary-provider");
@@ -464,11 +464,11 @@ async fn records_route_actually_dispatched_after_one_shot_middleware() {
 #[tokio::test]
 async fn production_engine_applies_exact_routed_summary_policy() {
     let default_adapter = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "unused default summary".to_owned(),
+        text: "unused default summary".into(),
     }]);
     let harness = Harness::new(MODEL, &default_adapter);
     let policy_adapter = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "policy summary".to_owned(),
+        text: "policy summary".into(),
     }]);
     let llm = harness.context.get(LLM).unwrap();
     llm.register_adapter(&["policy-summary".to_owned()], policy_adapter.clone())
@@ -520,7 +520,7 @@ async fn production_engine_applies_exact_routed_summary_policy() {
     assert_eq!(
         options.messages[0].content()[0],
         ContentBlock::Text {
-            text: "warm prefix ".repeat(100)
+            text: "warm prefix ".repeat(100).into()
         }
     );
 }
@@ -528,7 +528,7 @@ async fn production_engine_applies_exact_routed_summary_policy() {
 #[tokio::test]
 async fn production_engine_rejects_every_incomplete_agent_fallback() {
     let adapter = ScriptedAdapter::new(vec![ContentBlock::Text {
-        text: "unused".to_owned(),
+        text: "unused".into(),
     }]);
     let harness = Harness::new(MODEL, &adapter);
     let _meter = seekdeep_token_meter::install(
@@ -658,7 +658,7 @@ async fn rejects_empty_reasoning_only_and_image_output() {
             vec![
                 image('b'),
                 ContentBlock::Text {
-                    text: "partial".to_owned(),
+                    text: "partial".into(),
                 },
             ],
             Some("UNSUPPORTED_CONTENT"),

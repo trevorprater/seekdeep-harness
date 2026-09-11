@@ -217,7 +217,7 @@ async fn message_entry_steers_trimmed_text_and_off_cancels_pending_without_loggi
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str()),
+                    ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
                     _ => None,
                 })
                 .collect::<String>(),

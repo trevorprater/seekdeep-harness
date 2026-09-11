@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use futures::StreamExt as _;
 use parking_lot::Mutex;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use seekdeep_llm_deepseek::sse::{ByteStream, DONE, parse_sse};
 use serde_json::{Map, Value, json};
 
@@ -13,7 +13,7 @@ use crate::{
     adapter::{BoxPiEventStream, PiExecutionRequest, PiProtocolExecutor},
     catalog::{PiModel, PiThinkingLevel},
     context::{PiContext, PiMessage, PiToolResultMessage, PiUserContent, PiUserContentBlock},
-    json::stringify_object,
+    json::{sanitize_surrogates, stringify_object, text_is_blank},
     provider::{PiProtocol, PiProviderDispatch},
     replay::{
         PiAssistantBlock, PiAssistantMessage, PiAssistantRole, PiCost, PiStopReason, PiUsage,
@@ -574,7 +574,9 @@ fn convert_messages(
     for message in &context.messages {
         match message {
             PiMessage::User(message) => match &message.content {
-                PiUserContent::Text(text) => messages.push(json!({"role":"user","content":text})),
+                PiUserContent::Text(text) => {
+                    messages.push(json!({"role":"user","content":sanitize_surrogates(text)}));
+                }
                 PiUserContent::Blocks(blocks) => {
                     let wire_content = blocks.iter().map(user_block).collect::<Vec<_>>();
                     if !wire_content.is_empty() {
@@ -595,7 +597,9 @@ fn convert_messages(
 
 fn user_block(block: &PiUserContentBlock) -> Value {
     match block {
-        PiUserContentBlock::Text { text } => json!({"type":"text","text":text}),
+        PiUserContentBlock::Text { text } => {
+            json!({"type":"text","text":sanitize_surrogates(text)})
+        }
         PiUserContentBlock::Image { data, mime_type } => {
             json!({"type":"image_url","image_url":{"url":format!("data:{mime_type};base64,{data}")}})
         }
@@ -611,7 +615,9 @@ fn assistant_message(
         .content
         .iter()
         .filter_map(|block| match block {
-            PiAssistantBlock::Text { text, .. } if !text.trim().is_empty() => Some(text.as_str()),
+            PiAssistantBlock::Text { text, .. } if !text_is_blank(text) => {
+                Some(sanitize_surrogates(text))
+            }
             _ => None,
         })
         .collect::<String>();
@@ -696,19 +702,29 @@ fn append_tool_result(model: &PiModel, message: &PiToolResultMessage, output: &m
         .content
         .iter()
         .filter_map(|block| match block {
-            PiUserContentBlock::Text { text } => Some(text.as_str()),
+            PiUserContentBlock::Text { text } => Some(text.clone()),
             PiUserContentBlock::Image { .. } => None,
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+    let text = JsonString::join(&text, "\n");
     let images = message
         .content
         .iter()
         .filter(|block| matches!(block, PiUserContentBlock::Image { .. }))
         .collect::<Vec<_>>();
+    let wire_text = if text.is_empty() {
+        if images.is_empty() {
+            "(no tool output)"
+        } else {
+            "(see attached image)"
+        }
+        .to_owned()
+    } else {
+        sanitize_surrogates(&text)
+    };
     output.push(json!({
         "role":"tool",
-        "content":if text.is_empty() { if images.is_empty() { "(no tool output)" } else { "(see attached image)" } } else { &text },
+        "content":wire_text,
         "tool_call_id":message.tool_call_id,
     }));
     if !images.is_empty() && model.input.contains(&crate::catalog::PiModality::Image) {
@@ -879,7 +895,7 @@ fn ensure_text(output: &mut PiAssistantMessage, slot: &mut Option<usize>) -> (us
     }
     let index = output.content.len();
     output.content.push(PiAssistantBlock::Text {
-        text: String::new(),
+        text: JsonString::default(),
         text_signature: None,
     });
     *slot = Some(index);

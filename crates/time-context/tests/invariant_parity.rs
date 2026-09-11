@@ -49,7 +49,7 @@ fn push(events: &mut Vec<SessionEvent>, event_type: &str, data: Value, surface: 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -147,7 +147,7 @@ fn reading_event(text: &str, time: i64) -> SessionEvent {
         time,
         serde_json::to_value(UserMessage::new(
             vec![ContentBlock::Text {
-                text: text.to_owned(),
+                text: text.into(),
             }],
             source,
         ))
@@ -266,7 +266,7 @@ async fn invalid_or_mixed_corrupt_browser_provenance_is_rejected_first() {
     );
     let invalid_message = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "second browser prompt".to_owned(),
+            text: "second browser prompt".into(),
         }],
         invalid_source,
     );

@@ -2,15 +2,16 @@
 
 use std::sync::Arc;
 
-use seekdeep_llm::assistant_text;
-use serde::{Deserialize, Serialize};
+use seekdeep_llm::{JsonString, assistant_text};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
+use serde::{Deserialize, Serialize, de::Error as _};
 
 use crate::types::{SubagentResult, SubagentRun, SubagentStopReason};
 
 /// A background task's terminal outcome.
 ///
 /// Canonical home: the jobs package; mirrored here until that package lands.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(
     tag = "status",
     rename_all = "lowercase",
@@ -20,7 +21,7 @@ pub enum JobOutcome {
     /// The task completed with final text.
     Completed {
         /// Flattened final text.
-        output: String,
+        output: JsonString,
     },
     /// The task was killed.
     Killed,
@@ -30,6 +31,39 @@ pub enum JobOutcome {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
     },
+}
+
+impl<'de> Deserialize<'de> for JobOutcome {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let status: String = value
+            .get("status")
+            .ok_or_else(|| D::Error::missing_field("status"))?
+            .deserialize()
+            .map_err(D::Error::custom)?;
+        match status.as_str() {
+            "completed" => Ok(Self::Completed {
+                output: value
+                    .get("output")
+                    .ok_or_else(|| D::Error::missing_field("output"))?
+                    .deserialize()
+                    .map_err(D::Error::custom)?,
+            }),
+            "killed" => Ok(Self::Killed),
+            "failed" => Ok(Self::Failed {
+                detail: value
+                    .get("detail")
+                    .map(JsonRef::deserialize)
+                    .transpose()
+                    .map_err(D::Error::custom)?
+                    .flatten(),
+            }),
+            _ => Err(D::Error::unknown_variant(
+                &status,
+                &["completed", "killed", "failed"],
+            )),
+        }
+    }
 }
 
 /// Flattens final output blocks to the task's final text.
@@ -111,7 +145,7 @@ mod tests {
         std::sync::Arc::new(Run {
             result: Ok(SubagentResult {
                 output: vec![ContentBlock::Text {
-                    text: "partial".to_owned(),
+                    text: "partial".into(),
                 }],
                 structured: None,
                 stop_reason,
@@ -125,7 +159,7 @@ mod tests {
         assert_eq!(
             settle_run(&run(SubagentStopReason::Completed, Ok(()))).await,
             JobOutcome::Completed {
-                output: "partial".to_owned()
+                output: "partial".into()
             }
         );
         assert_eq!(

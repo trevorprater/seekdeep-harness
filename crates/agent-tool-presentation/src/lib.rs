@@ -142,7 +142,7 @@ mod tests {
                 ),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap_or_default().to_owned(),
+                        text: value.as_str().unwrap_or_default().into(),
                     }])
                 }),
             ),

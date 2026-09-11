@@ -19,7 +19,7 @@
     "prebuilds.json"
   ],
   "scripts": {
-    "prepack": "node ../../scripts/verify-launcher-binary.mjs"
+    "prepack": "cargo run --locked --quiet --manifest-path ../../../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-verify-launcher-binary"
   },
   "engines": {
     "node": ">=20"

@@ -69,7 +69,7 @@ async fn ready_go_child_rpc_and_terminal_result_round_trip() {
             call_id,
             result: ChildResult {
                 output: vec![seekdeep_llm::ContentBlock::Text {
-                    text: "answer".to_owned(),
+                    text: "answer".into(),
                 }],
                 structured: None,
                 stop_reason: "completed".to_owned(),

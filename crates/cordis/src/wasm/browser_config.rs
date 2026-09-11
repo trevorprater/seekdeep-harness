@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use js_sys::{Array, JsString, Object, Reflect};
+use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use super::{FaceSlot, empty_face_slot, required_function};
@@ -25,31 +25,42 @@ pub fn configure_validation_error_prototype(prototype: Object) {
 /// Propagates issue getter and path conversion failures.
 #[wasm_bindgen(js_name = validationErrorMessage)]
 pub fn validation_error_message(issues: &Array) -> Result<String, JsValue> {
-    let mut lines = Vec::new();
-    for issue in issues.iter() {
-        let message = String::from(JsString::from(Reflect::get(&issue, &"message".into())?));
-        let path = Reflect::get(&issue, &"path".into())?;
-        lines.push(if path.is_truthy() {
-            let path = required_function(&path, "join")?.call1(&path, &".".into())?;
-            format!("  - {message} (at {})", String::from(JsString::from(path)))
+    let format = Closure::wrap(Box::new(|issue: JsValue| {
+        let has_path = super::browser_values::get(&issue, &"path".into())?.is_truthy();
+        let message = super::browser_values::template_string(&super::browser_values::get(
+            &issue,
+            &"message".into(),
+        )?)?;
+        let line = if has_path {
+            let path = super::browser_values::get(&issue, &"path".into())?;
+            let path = super::browser_registry::method(&path, "join", &Array::of1(&".".into()))?;
+            format!(
+                "  - {message} (at {})",
+                super::browser_values::template_string(&path)?,
+            )
         } else {
             format!("  - {message}")
-        });
-    }
-    Ok(format!("invalid config:\n{}", lines.join("\n")))
+        };
+        Ok(JsValue::from_str(&line))
+    }) as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let lines = super::browser_registry::method(issues, "map", &Array::of1(&format))?;
+    let joined = super::browser_registry::method(&lines, "join", &Array::of1(&"\n".into()))?;
+    Function::new_with_args("value", "return 'invalid config:\\n' + value;")
+        .call1(&JsValue::UNDEFINED, &joined)?
+        .as_string()
+        .ok_or_else(|| js_sys::TypeError::new("validation message is not a string").into())
 }
 
 #[derive(Clone)]
 pub(super) struct BrowserConfig {
-    descriptor: JsValue,
     activation: FaceSlot,
     lifecycle: Arc<Mutex<Option<super::browser_fiber::BrowserLifecycle>>>,
 }
 
 impl BrowserConfig {
-    pub(super) fn new(descriptor: JsValue) -> Self {
+    pub(super) fn new() -> Self {
         Self {
-            descriptor,
             activation: empty_face_slot(),
             lifecycle: Arc::default(),
         }
@@ -60,10 +71,6 @@ impl BrowserConfig {
             .lock()
             .take()
             .unwrap_or_else(|| fallback.clone())
-    }
-
-    pub(super) fn runtime_name(&self) -> Result<JsValue, JsValue> {
-        Reflect::get(&self.descriptor, &"name".into())
     }
 
     pub(super) fn attach(&self, native: &Arc<super::PluginFiber>, core: FaceSlot) {
@@ -137,7 +144,10 @@ pub fn resolve_config(runtime: &JsValue, config: &JsValue) -> Result<JsValue, Js
     let schema = super::browser_values::get(runtime, &"Config".into())?;
     let standard = Reflect::get(&schema, &"~standard".into())?;
     let result = super::browser_registry::method(&standard, "validate", &Array::of1(config))?;
-    if Reflect::has(&result, &"then".into())? {
+    if Function::new_with_args("value", "return 'then' in value;")
+        .call1(&JsValue::UNDEFINED, &result)?
+        .is_truthy()
+    {
         return Err(js_sys::TypeError::new("Async config validation is not supported").into());
     }
     let issues = Reflect::get(&result, &"issues".into())?;
@@ -151,6 +161,6 @@ pub fn resolve_config(runtime: &JsValue, config: &JsValue) -> Result<JsValue, Js
             Object::set_prototype_of(error.unchecked_ref::<Object>(), prototype);
         }
     });
-    error.set_name("ValidationError");
+    super::browser_fiber::data_field(error.unchecked_ref(), "name", "ValidationError".into())?;
     Err(error.into())
 }

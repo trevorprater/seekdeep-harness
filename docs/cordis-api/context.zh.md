@@ -11,7 +11,7 @@ Cordis 插件的根依赖容器和子依赖容器。
 
 上下文是一个代理：普通属性读取通过服务解析器进行，而 `extend()`、`isolate()` 和 `intercept()` 会创建有作用域的子上下文，且不修改其父上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L42)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L42)
 
 ### ctx.extend(meta?)
 
@@ -36,7 +36,7 @@ extend(meta = {}): this
 
 **返回**继承自当前上下文的子上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L99)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L99)
 
 ### ctx.isolate(name, label?)
 
@@ -65,7 +65,7 @@ isolate(name: string, label?: symbol)
 
 **返回**一个子上下文，其 `name` 服务在新作用域中解析。
 
-[源码](../../vendor/cordis/src/context.ts#L121)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L121)
 
 ### ctx.intercept(name, config)
 
@@ -95,7 +95,7 @@ intercept(name: string, config: any): this
 
 **返回**一个携带额外拦截条目的子上下文。
 
-[源码](../../vendor/cordis/src/context.ts#L139)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L139)
 
 ### ctx.root
 
@@ -106,7 +106,7 @@ root: this
 
 应用的根上下文，所有子上下文均共享它。@experimental
 
-[源码](../../vendor/cordis/src/context.ts#L22)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L22)
 
 ### ctx.baseUrl
 
@@ -117,7 +117,7 @@ baseUrl?: string
 
 用于解析相对插件／模块说明符的基础 URL，前提是运行时设置了该值。
 
-[源码](../../vendor/cordis/src/context.ts#L24)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L24)
 
 ### ctx.events
 
@@ -128,7 +128,7 @@ events: EventsService
 
 事件总线。它的方法也会混入 `ctx`（`ctx.on`、`ctx.emit` 等）。
 
-[源码](../../vendor/cordis/src/context.ts#L26)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L26)
 
 ### ctx.logger
 
@@ -139,7 +139,7 @@ logger: LoggerService
 
 日志服务。调用 `ctx.logger(name)` 可获取具名 logger。
 
-[源码](../../vendor/cordis/src/context.ts#L28)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L28)
 
 ### ctx.reflect
 
@@ -150,7 +150,7 @@ reflect: ReflectService
 
 为上下文代理提供支持的反射层（`ctx.get`、`ctx.provide` 等）。
 
-[源码](../../vendor/cordis/src/context.ts#L30)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L30)
 
 ### ctx.registry
 
@@ -161,7 +161,7 @@ registry: RegistryService
 
 插件注册表。它的方法会混入 `ctx`（`ctx.plugin`、`ctx.inject`）。
 
-[源码](../../vendor/cordis/src/context.ts#L32)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L32)
 
 ## 静态成员
 
@@ -174,7 +174,7 @@ static readonly effect: unique symbol
 
 资源释放函数用于公开其 EffectMeta 诊断树的 symbol 键。
 
-[源码](../../vendor/cordis/src/context.ts#L44)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L44)
 
 ### Context.filter
 
@@ -185,7 +185,7 @@ static readonly filter: unique symbol
 
 上下文监听器过滤器的 symbol 键，每次分派事件时都会查询该过滤器。
 
-[源码](../../vendor/cordis/src/context.ts#L46)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L46)
 
 ### Context.isolate
 
@@ -196,7 +196,7 @@ static readonly isolate: unique symbol
 
 隔离映射的 symbol 键（见 `Context[symbols.isolate]` 属性）。
 
-[源码](../../vendor/cordis/src/context.ts#L48)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L48)
 
 ### Context.intercept
 
@@ -207,7 +207,7 @@ static readonly intercept: unique symbol
 
 拦截映射的 symbol 键（见 `Context[symbols.intercept]` 属性）。
 
-[源码](../../vendor/cordis/src/context.ts#L50)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L50)
 
 ### Context.is(value)
 
@@ -232,7 +232,7 @@ static is(value: any): value is Context
 
 **返回** `true` 时，`value` 是 Cordis 上下文，并会收窄其类型。
 
-[源码](../../vendor/cordis/src/context.ts#L61)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/context.ts#L61)
 
 ## 服务存储与混入
 
@@ -258,7 +258,7 @@ get(name: string, strict?: boolean): any
 
 **返回**服务值；如果尚未提供，则返回 `undefined`。
 
-[源码](../../vendor/cordis/src/reflect.ts#L17)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/reflect.ts#L17)
 
 ### ctx.set(name, value)
 
@@ -283,7 +283,7 @@ set(name: string, value: any): void
 - `name`：服务名称。
 - `value`：新的服务值。
 
-[源码](../../vendor/cordis/src/reflect.ts#L29)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/reflect.ts#L29)
 
 ### ctx.provide(name, value)
 
@@ -313,7 +313,7 @@ fiber 激活后，该服务对同一隔离作用域内的依赖方可见；当�
 
 **返回**一个用于取消注册该服务的资源释放函数。
 
-[源码](../../vendor/cordis/src/reflect.ts#L44)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/reflect.ts#L44)
 
 ### ctx.accessor(name, options)
 
@@ -337,7 +337,7 @@ accessor(name: string, options: Omit<Property.Accessor, 'type'>): void
 - `name`：上下文属性名称。
 - `options`：`get` 钩子和可选的 `set` 钩子。
 
-[源码](../../vendor/cordis/src/reflect.ts#L56)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/reflect.ts#L56)
 
 ### ctx.mixin(name, mixins)
 
@@ -363,4 +363,4 @@ mixin<T extends {}>(source: T, mixins: (keyof this & keyof T)[] | Dict<string>):
 - `name`：存放源服务的上下文属性。
 - `mixins`：要转发的键，或从源键到 ctx 键的映射。
 
-[源码](../../vendor/cordis/src/reflect.ts#L67)
+[源码](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/reflect.ts#L67)

@@ -9,8 +9,10 @@ use std::{
 
 use parking_lot::{Mutex, ReentrantMutex};
 pub use seekdeep_llm::SessionId;
-use seekdeep_llm::{ContentBlock, Message, MessageRole, ModelId, ProviderId};
-use serde::{Deserialize, Serialize};
+use seekdeep_llm::{ContentBlock, Message, ModelId, ProviderId};
+use seekdeep_lossless_json::JsonToken;
+pub use seekdeep_lossless_json::{JsonRef, JsonValue};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use serde_json::Value;
 use thiserror::Error;
 
@@ -200,7 +202,7 @@ impl SurfaceOp {
 }
 
 /// One immutable durable log entry.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SessionEvent {
     /// Merge-extensible event type.
@@ -211,7 +213,7 @@ pub struct SessionEvent {
     /// Unix epoch milliseconds.
     pub time: i64,
     /// Event-specific lossless JSON.
-    pub data: Value,
+    pub data: JsonValue,
     /// Earlier event sequences cited as sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_event_seqs: Option<Vec<u64>>,
@@ -221,6 +223,60 @@ pub struct SessionEvent {
     /// True only when an older reader may safely skip the event.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ignorable: Option<bool>,
+}
+
+impl<'de> Deserialize<'de> for SessionEvent {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        const FIELDS: &[&str] = &[
+            "type",
+            "seq",
+            "time",
+            "data",
+            "sourceEventSeqs",
+            "surfaceOp",
+            "ignorable",
+        ];
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let entries = value
+            .object_entries()
+            .ok_or_else(|| D::Error::custom("session event must be an object"))?;
+        for (key, _) in entries {
+            let key = key.deserialize::<String>().map_err(D::Error::custom)?;
+            if !FIELDS.contains(&key.as_str()) {
+                return Err(D::Error::unknown_field(&key, FIELDS));
+            }
+        }
+        let required =
+            |name: &'static str| value.get(name).ok_or_else(|| D::Error::missing_field(name));
+        Ok(Self {
+            event_type: required("type")?.deserialize().map_err(D::Error::custom)?,
+            seq: required("seq")?.deserialize().map_err(D::Error::custom)?,
+            time: required("time")?.deserialize().map_err(D::Error::custom)?,
+            data: required("data")?.to_owned(),
+            source_event_seqs: value
+                .get("sourceEventSeqs")
+                .map(JsonRef::deserialize::<Option<Vec<u64>>>)
+                .transpose()
+                .map_err(D::Error::custom)?
+                .flatten(),
+            surface_op: value
+                .get("surfaceOp")
+                .map(|field| {
+                    field
+                        .deserialize::<Value>()
+                        .and_then(serde_json::from_value::<Option<SurfaceOp>>)
+                })
+                .transpose()
+                .map_err(D::Error::custom)?
+                .flatten(),
+            ignorable: value
+                .get("ignorable")
+                .map(JsonRef::deserialize::<Option<bool>>)
+                .transpose()
+                .map_err(D::Error::custom)?
+                .flatten(),
+        })
+    }
 }
 
 /// Metadata accepted by an append operation.
@@ -427,7 +483,7 @@ impl Session {
                         invalid("session log length exceeds the supported event sequence range")
                     })?,
                     time: i64::try_from(now_millis()).unwrap_or(i64::MAX),
-                    data: Value::Object(serde_json::Map::new()),
+                    data: Value::Object(serde_json::Map::new()).into(),
                     source_event_seqs: None,
                     surface_op: None,
                     ignorable: None,
@@ -514,6 +570,20 @@ impl Session {
         &self,
         event_type: impl Into<String>,
         data: Value,
+        options: AppendOptions,
+    ) -> Result<SessionEvent, SessionError> {
+        self.append_json(event_type, data.into(), options)
+    }
+
+    /// Appends an event whose strings and keys may contain any UTF-16 code unit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SessionError`] when envelope, provenance, or surface invariants fail.
+    pub fn append_json(
+        &self,
+        event_type: impl Into<String>,
+        data: JsonValue,
         options: AppendOptions,
     ) -> Result<SessionEvent, SessionError> {
         validate_lossless_json(&data)?;
@@ -603,7 +673,7 @@ impl Session {
             .iter()
             .rev()
             .find(|event| event.event_type == "request/context")
-            .and_then(|event| serde_json::from_value(event.data.clone()).ok())
+            .and_then(|event| event.data.deserialize().ok())
     }
 }
 
@@ -724,7 +794,13 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
     if event.event_type != "request/header" {
         return Ok(());
     }
-    if event.data.get("reason").and_then(Value::as_str) == Some("fallback") {
+    if event
+        .data
+        .get("reason")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        == Some("fallback")
+    {
         return Err(invalid(format!(
             "seed event at index {index} uses unsupported legacy request/header reason \"fallback\""
         )));
@@ -732,7 +808,7 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
     let header = event
         .data
         .get("header")
-        .and_then(Value::as_object)
+        .filter(|value| value.is_object())
         .ok_or_else(|| {
             invalid(format!(
                 "seed request/header at index {index} lacks provider/model"
@@ -740,7 +816,7 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
         })?;
     let config = header
         .get("config")
-        .and_then(Value::as_object)
+        .filter(|value| value.is_object())
         .ok_or_else(|| {
             invalid(format!(
                 "seed request/header at index {index} lacks provider/model"
@@ -748,9 +824,9 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
         })?;
     if ["provider", "model"].iter().any(|name| {
         config
-            .get(*name)
-            .and_then(Value::as_str)
-            .is_none_or(str::is_empty)
+            .get(name)
+            .and_then(JsonRef::to_utf16)
+            .is_none_or(|value| value.is_empty())
     }) {
         return Err(invalid(format!(
             "seed request/header at index {index} lacks provider/model"
@@ -758,18 +834,19 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
     }
     if config
         .get("reasoningEffort")
-        .is_some_and(|value| value.as_str().is_none_or(str::is_empty))
+        .is_some_and(|value| value.to_utf16().is_none_or(|value| value.is_empty()))
     {
         return Err(invalid(format!(
             "seed request/header at index {index} has an invalid reasoningEffort"
         )));
     }
     if let Some(defaults) = header.get("adapterDefaults") {
-        let invalid_marker = defaults.as_object().is_none_or(|defaults| {
+        let invalid_marker = defaults.object_entries().is_none_or(|defaults| {
             defaults.iter().any(|(name, marker)| {
-                !matches!(name.as_str(), "reasoningEffort" | "maxTokens")
-                    || marker != &Value::Bool(true)
-                    || !config.contains_key(name)
+                let name = name.deserialize::<String>().ok();
+                !matches!(name.as_deref(), Some("reasoningEffort" | "maxTokens"))
+                    || marker.as_bool() != Some(true)
+                    || name.is_none_or(|name| config.get(&name).is_none())
             })
         });
         if invalid_marker {
@@ -781,24 +858,73 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
     Ok(())
 }
 
-fn validate_lossless_json(value: &Value) -> Result<(), SessionError> {
-    let mut pending = vec![value];
-    while let Some(value) = pending.pop() {
-        match value {
-            Value::Number(number) => {
-                if number
-                    .as_f64()
-                    .is_some_and(|number| number == 0.0 && number.is_sign_negative())
+enum JsonValidationFrame {
+    Array(Option<&'static str>),
+    Object {
+        key: Option<Vec<u16>>,
+        fields: indexmap::IndexMap<Vec<u16>, Option<&'static str>>,
+    },
+}
+
+fn validate_lossless_json(value: &JsonValue) -> Result<(), SessionError> {
+    let mut frames = Vec::new();
+    for token in value.tokens() {
+        let error = match token {
+            JsonToken::ArrayStart => {
+                frames.push(JsonValidationFrame::Array(None));
+                continue;
+            }
+            JsonToken::ObjectStart => {
+                frames.push(JsonValidationFrame::Object {
+                    key: None,
+                    fields: indexmap::IndexMap::new(),
+                });
+                continue;
+            }
+            JsonToken::Key(value) => {
+                let Some(JsonValidationFrame::Object { key, .. }) = frames.last_mut() else {
+                    unreachable!("validated object keys have an owning object")
+                };
+                *key = value.to_utf16();
+                continue;
+            }
+            JsonToken::Scalar(value) => json_number_error(value),
+            JsonToken::ArrayEnd | JsonToken::ObjectEnd => {
+                match frames
+                    .pop()
+                    .expect("validated JSON containers are balanced")
                 {
-                    return Err(invalid("session data contains negative zero"));
+                    JsonValidationFrame::Array(error) => error,
+                    JsonValidationFrame::Object { fields, .. } => {
+                        fields.into_values().find_map(|error| error)
+                    }
                 }
             }
-            Value::Array(items) => pending.extend(items),
-            Value::Object(object) => pending.extend(object.values()),
-            Value::Null | Value::Bool(_) | Value::String(_) => {}
+        };
+        match frames.last_mut() {
+            Some(JsonValidationFrame::Array(first_error)) => {
+                *first_error = first_error.or(error);
+            }
+            Some(JsonValidationFrame::Object { key, fields }) => {
+                fields.insert(
+                    key.take().expect("validated object values have keys"),
+                    error,
+                );
+            }
+            None => return error.map_or(Ok(()), |error| Err(invalid(error))),
         }
     }
     Ok(())
+}
+
+fn json_number_error(value: JsonRef<'_>) -> Option<&'static str> {
+    if !matches!(value.as_raw().as_bytes().first(), Some(b'-' | b'0'..=b'9')) {
+        return None;
+    }
+    let Some(number) = value.as_f64().filter(|number| number.is_finite()) else {
+        return Some("session data contains a non-finite number");
+    };
+    (number == 0.0 && number.is_sign_negative()).then_some("session data contains negative zero")
 }
 
 fn validate_sources(event: &SessionEvent, shadowed: &[u64]) -> Result<(), SessionError> {
@@ -865,10 +991,8 @@ fn validate_tool_result_rewrite(
         .ok_or_else(|| {
             invalid("tool/result surface replacement must target a current tool/result")
         })?;
-    let mut original_data = original.data.clone();
-    let mut replacement_data = event.data.clone();
-    erase_tool_result_text(&mut original_data)?;
-    erase_tool_result_text(&mut replacement_data)?;
+    let original_data = erase_tool_result_text(&original.data)?;
+    let replacement_data = erase_tool_result_text(&event.data)?;
     if original_data == replacement_data {
         Ok(())
     } else {
@@ -878,16 +1002,60 @@ fn validate_tool_result_rewrite(
     }
 }
 
-fn erase_tool_result_text(value: &mut Value) -> Result<(), SessionError> {
-    let content = value
-        .get_mut("message")
-        .and_then(|value| value.get_mut("content"))
-        .and_then(Value::as_array_mut)
-        .and_then(|items| items.first_mut())
-        .and_then(Value::as_object_mut)
+fn erase_tool_result_text(value: &JsonValue) -> Result<JsonValue, SessionError> {
+    replace_json_member(value.as_ref(), &["message", "content", "0", "content"])
+}
+
+fn replace_json_member(value: JsonRef<'_>, path: &[&str]) -> Result<JsonValue, SessionError> {
+    let Some((field, rest)) = path.split_first() else {
+        return Ok(Value::Null.into());
+    };
+    if let Some(items) = value.array_items() {
+        let index: usize = field
+            .parse()
+            .map_err(|_| invalid("tool/result carries an invalid message"))?;
+        if index >= items.len() {
+            return Err(invalid("tool/result carries an invalid message"));
+        }
+        let items = items
+            .into_iter()
+            .enumerate()
+            .map(|(position, item)| {
+                if position == index {
+                    replace_json_member(item, rest)
+                } else {
+                    Ok(item.to_owned())
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(JsonValue::array(&items));
+    }
+    let entries = value
+        .object_entries()
         .ok_or_else(|| invalid("tool/result carries an invalid message"))?;
-    content.insert("content".to_owned(), Value::Null);
-    Ok(())
+    let mut found = false;
+    let mut encoded = String::from("{");
+    for (index, (key, item)) in entries.into_iter().enumerate() {
+        if index > 0 {
+            encoded.push(',');
+        }
+        encoded.push_str(key.as_raw());
+        encoded.push(':');
+        if key
+            .to_utf16()
+            .is_some_and(|units| units.iter().copied().eq(field.encode_utf16()))
+        {
+            found = true;
+            encoded.push_str(replace_json_member(item, rest)?.as_raw());
+        } else {
+            encoded.push_str(item.as_raw());
+        }
+    }
+    if !found {
+        return Err(invalid("tool/result carries an invalid message"));
+    }
+    encoded.push('}');
+    JsonValue::parse(encoded).map_err(|error| invalid(error.to_string()))
 }
 
 fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), SessionError> {
@@ -895,7 +1063,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
         return Ok(());
     }
     let message_value = if event.event_type == "user/message" {
-        &event.data
+        event.data.as_ref()
     } else {
         event
             .data
@@ -904,42 +1072,42 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     };
     if message_value
         .get("id")
-        .and_then(Value::as_str)
-        .is_none_or(str::is_empty)
+        .and_then(JsonRef::to_utf16)
+        .is_none_or(|value| value.is_empty())
     {
         return Err(invalid(format!("{subject} lacks an identified message")));
     }
-    let expected_role = if event.event_type == "assistant/message" {
-        MessageRole::Assistant
-    } else {
-        MessageRole::User
-    };
-    let role = if expected_role == MessageRole::Assistant {
+    let role = if event.event_type == "assistant/message" {
         "assistant"
     } else {
         "user"
     };
-    if message_value.get("role").and_then(Value::as_str) != Some(role) {
-        let role = if expected_role == MessageRole::Assistant {
-            "assistant"
-        } else {
-            "user"
-        };
+    if message_value
+        .get("role")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        != Some(role)
+    {
         return Err(invalid(format!(
             "{subject} message must have role \"{role}\""
         )));
     }
     if message_value
-        .pointer("/source/kind")
-        .and_then(Value::as_str)
-        .is_none_or(str::is_empty)
+        .get("source")
+        .and_then(|value| value.get("kind"))
+        .and_then(JsonRef::to_utf16)
+        .is_none_or(|value| value.is_empty())
     {
         return Err(invalid(format!("{subject} message has invalid source")));
     }
-    if !message_value.get("content").is_some_and(Value::is_array) {
+    if message_value
+        .get("content")
+        .is_none_or(|value| !value.is_array())
+    {
         return Err(invalid(format!("{subject} message has invalid content")));
     }
-    let message: Message = serde_json::from_value(message_value.clone())
+    let message: Message = message_value
+        .deserialize()
         .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
     if message.source().kind.is_empty() {
         return Err(invalid(format!("{subject} message has invalid source")));
@@ -993,17 +1161,17 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
 #[must_use]
 pub fn derive_event_message(event: &SessionEvent) -> Option<Message> {
     match event.event_type.as_str() {
-        "user/message" => serde_json::from_value(event.data.clone()).ok(),
+        "user/message" => event.data.deserialize().ok(),
         "assistant/message" => {
             let message = event.data.get("message")?;
-            let message: Message = serde_json::from_value(message.clone()).ok()?;
+            let message: Message = message.deserialize().ok()?;
             if message.content().is_empty() {
                 None
             } else {
                 Some(message)
             }
         }
-        "tool/result" => serde_json::from_value(event.data.get("message")?.clone()).ok(),
+        "tool/result" => event.data.get("message")?.deserialize().ok(),
         _ => None,
     }
 }
@@ -1032,9 +1200,7 @@ mod tests {
             Message::user(Vec::new(), seekdeep_llm::MessageSource::user())
         } else {
             Message::assistant(
-                vec![ContentBlock::Text {
-                    text: "x".to_owned(),
-                }],
+                vec![ContentBlock::Text { text: "x".into() }],
                 "mock",
                 "mock",
             )
@@ -1044,14 +1210,211 @@ mod tests {
             seq,
             time: i64::try_from(seq).expect("test seq fits i64"),
             data: if event_type == "user/message" {
-                serde_json::to_value(message).expect("serialize message")
+                serde_json::to_value(message)
+                    .expect("serialize message")
+                    .into()
             } else {
-                json!({"message": message})
+                json!({"message": message}).into()
             },
             source_event_seqs: None,
             surface_op: Some(SurfaceOp::append()),
             ignorable: None,
         }
+    }
+
+    #[test]
+    fn code_dispatch_payloads_and_tool_text_survive_durable_event_reconstruction() {
+        let session = Session::create(&SessionId::new("lossless-code"), None, None).unwrap();
+        let dispatch = JsonValue::parse(r#"{"rootCallId":"lossless-call","parentCallId":"lossless-call","subCallId":"lossless-call:code:1","name":"echo","arguments":{"payload":{"\ud800":["\udfff","😀","\\ud800"]}}}"#.to_owned()).unwrap();
+        let started = session
+            .append_json(
+                "tool/code-dispatch-start",
+                dispatch.clone(),
+                AppendOptions::default(),
+            )
+            .unwrap();
+        assert_eq!(started.data.as_raw(), dispatch.as_raw());
+        let tool_result = JsonValue::parse(r#"{"message":{"source":{"kind":"tool","callId":"lossless-call"},"content":[{"type":"tool-result","toolCallId":"lossless-call","content":[{"type":"text","text":"\ud800"}]}],"role":"user","id":"lossless-result"}}"#.to_owned()).unwrap();
+        session
+            .append_json(
+                "tool/result",
+                tool_result,
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .unwrap();
+
+        let encoded = serde_json::to_string(&session.events()).unwrap();
+        assert!(!encoded.contains('\u{fffd}'));
+        let decoded: Vec<SessionEvent> = serde_json::from_str(&encoded).unwrap();
+        let restored = Session::create(session.id(), Some(decoded), None).unwrap();
+        assert_eq!(restored.events()[0].data, dispatch);
+        let keys = restored.events()[0]
+            .data
+            .pointer("/arguments/payload")
+            .unwrap()
+            .object_entries()
+            .unwrap()
+            .into_iter()
+            .map(|(key, _)| key.to_utf16().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(keys, [vec![0xd800]]);
+        assert_eq!(restored.derive_messages(), session.derive_messages());
+        let messages = JsonValue::from_serialize(&restored.derive_messages()).unwrap();
+        let text = messages.pointer("/0/content/0/content/0/text").unwrap();
+        assert_eq!(text.to_utf16().unwrap(), [0xd800]);
+        assert_eq!(text.as_raw(), r#""\ud800""#);
+    }
+
+    #[test]
+    fn tool_result_surface_rewrites_compare_all_raw_metadata() {
+        let session = Session::create(&SessionId::new("lossless-rewrite"), None, None).unwrap();
+        let original = r#"{"metadata":{"\ud800":"\udfff"},"message":{"source":{"kind":"tool","callId":"call"},"content":[{"type":"tool-result","toolCallId":"call","content":[{"type":"text","text":"\ud800"}]}],"role":"user","id":"result"}}"#;
+        session
+            .append_json(
+                "tool/result",
+                JsonValue::parse(original.to_owned()).unwrap(),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .unwrap();
+        let replacement = original.replace(r#""text":"\ud800""#, r#""text":"\udc00""#);
+        session
+            .append_json(
+                "tool/result",
+                JsonValue::parse(replacement.clone()).unwrap(),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::replace(0, 0)),
+                    source_event_seqs: Some(vec![0]),
+                    ..AppendOptions::default()
+                },
+            )
+            .unwrap();
+        let corrupted = replacement.replace(r#""\ud800":"\udfff""#, r#""\ud800":"\udffe""#);
+        let failure = session
+            .append_json(
+                "tool/result",
+                JsonValue::parse(corrupted).unwrap(),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::replace(1, 1)),
+                    source_event_seqs: Some(vec![1]),
+                    ..AppendOptions::default()
+                },
+            )
+            .unwrap_err();
+        assert!(failure.to_string().contains("may change only content"));
+        let messages = JsonValue::from_serialize(&session.derive_messages()).unwrap();
+        assert_eq!(
+            messages
+                .pointer("/0/content/0/content/0/text")
+                .unwrap()
+                .to_utf16()
+                .unwrap(),
+            [0xdc00]
+        );
+    }
+
+    #[test]
+    fn raw_append_retains_the_negative_zero_validation() {
+        let session = Session::create(&SessionId::new("lossless-numbers"), None, None).unwrap();
+        assert!(
+            session
+                .append(
+                    "tool/code-dispatch-start",
+                    json!({"value": -0.0}),
+                    AppendOptions::default(),
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("negative zero")
+        );
+        for raw in [r#"{"\ud800":-0}"#, r#"{"value":[-0.0]}"#] {
+            assert!(
+                session
+                    .append_json(
+                        "tool/code-dispatch-start",
+                        JsonValue::parse(raw.to_owned()).unwrap(),
+                        AppendOptions::default(),
+                    )
+                    .unwrap_err()
+                    .to_string()
+                    .contains("negative zero")
+            );
+        }
+        assert!(
+            session
+                .append_json(
+                    "tool/code-dispatch-start",
+                    JsonValue::parse(r#"{"value":1e9999}"#.to_owned()).unwrap(),
+                    AppendOptions::default(),
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("non-finite number")
+        );
+    }
+
+    #[test]
+    fn raw_append_validation_observes_last_duplicate_properties() {
+        let session = Session::create(&SessionId::new("duplicate-properties"), None, None).unwrap();
+        for raw in [
+            r#"{"value":-0,"value":1}"#,
+            r#"{"\ud800":[-0],"\uD800":[1]}"#,
+            r#"{"nested":{"x":1e999},"nested":{"x":"\ud800"}}"#,
+        ] {
+            session
+                .append_json(
+                    "tool/code-dispatch-start",
+                    JsonValue::parse(raw.to_owned()).unwrap(),
+                    AppendOptions::default(),
+                )
+                .unwrap();
+        }
+        for raw in [
+            r#"{"value":1,"value":-0}"#,
+            r#"{"\ud800":[1],"\uD800":[-0]}"#,
+            r#"{"nested":{"x":"\ud800"},"nested":{"x":1e999}}"#,
+        ] {
+            assert!(
+                session
+                    .append_json(
+                        "tool/code-dispatch-start",
+                        JsonValue::parse(raw.to_owned()).unwrap(),
+                        AppendOptions::default()
+                    )
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn stored_envelopes_keep_last_duplicate_fields_and_exact_data() {
+        let raw = r#"{"type":false,"type":"tool/code-dispatch-start","seq":99,"seq":0,"time":false,"time":1,"data":{"discarded":"\ud800"},"d\u0061ta":{"payload":{"\ud800":"\udfff"}},"ignorable":false,"ignorable":true}"#;
+        let event: SessionEvent = serde_json::from_str(raw).unwrap();
+        assert_eq!(event.event_type, "tool/code-dispatch-start");
+        assert_eq!(event.seq, 0);
+        assert_eq!(event.time, 1);
+        assert_eq!(event.ignorable, Some(true));
+        assert_eq!(event.data.as_raw(), r#"{"payload":{"\ud800":"\udfff"}}"#);
+        let session = Session::create(
+            &SessionId::new("duplicate-envelope"),
+            Some(vec![event]),
+            None,
+        )
+        .unwrap();
+        let stored = JsonValue::from_serialize(&session.events()[0]).unwrap();
+        assert_eq!(
+            stored.get("data").unwrap().as_raw(),
+            r#"{"payload":{"\ud800":"\udfff"}}"#
+        );
+
+        let metadata: SessionEvent = serde_json::from_str(r#"{"type":"user/message","seq":0,"time":1,"data":{},"surfaceOp":{"op":"replace","start":9,"start":0,"end":0},"sourceEventSeqs":[9],"sourceEventSeqs":[0]}"#).unwrap();
+        assert_eq!(metadata.surface_op, Some(SurfaceOp::replace(0, 0)));
+        assert_eq!(metadata.source_event_seqs, Some(vec![0]));
     }
 
     #[test]
@@ -1121,7 +1484,7 @@ mod tests {
             event_type: "turn/start".to_owned(),
             seq,
             time: 1,
-            data: json!({"turn": 1}),
+            data: json!({"turn": 1}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -1144,7 +1507,7 @@ mod tests {
             event_type: "request/context".to_owned(),
             seq,
             time: 1,
-            data: Value::Object(data),
+            data: Value::Object(data).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -1284,9 +1647,7 @@ mod tests {
 
     fn user_text(session: &Session, text: &str) -> SessionEvent {
         let message = Message::user(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         );
         session
@@ -1303,9 +1664,7 @@ mod tests {
 
     fn assistant_text(session: &Session, text: &str, step: i64) -> SessionEvent {
         let message = Message::assistant(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             "mock",
             "mock",
         );
@@ -1376,7 +1735,7 @@ mod tests {
         let nodes = session.surface_nodes();
         let summary = Message::user(
             vec![ContentBlock::Text {
-                text: "summary".to_owned(),
+                text: "summary".into(),
             }],
             MessageSource::plugin("compact"),
         );

@@ -107,7 +107,16 @@ fn initialize_method(instance: JsValue, value: JsValue, inject: JsValue) -> Resu
         let callback = Closure::wrap(Box::new(move |context: JsValue| {
             let receiver = if property.is_truthy() {
                 let props = Object::new();
-                values::set(&props, &property, &context)?;
+                js_sys::Reflect::define_property(
+                    &props,
+                    &property,
+                    &super::object(&[
+                        ("value", context),
+                        ("writable", true.into()),
+                        ("enumerable", true.into()),
+                        ("configurable", true.into()),
+                    ])?,
+                )?;
                 super::tracing::with_props(&owner, &props)?
             } else {
                 owner.clone()

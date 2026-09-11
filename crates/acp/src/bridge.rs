@@ -18,8 +18,9 @@ use seekdeep_agent::{
 use seekdeep_agent_loop::{AgentErrorEvent, AgentInboxClaimed};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::session::{Session, SessionEvent, SessionId};
-use seekdeep_llm::{MessageSource, ModelId, ProviderId, UserMessage};
-use seekdeep_sdk_protocol::{JsonRpcLineTransport, JsonRpcResponseError};
+use seekdeep_llm::{ContentBlock, JsonString, MessageSource, ModelId, ProviderId, UserMessage};
+use seekdeep_lossless_json::JsonValue;
+use seekdeep_sdk_protocol::{JsonRpcLineTransport, JsonRpcRawResponseError, JsonRpcResponseError};
 use seekdeep_subagent::SUBAGENTS;
 use seekdeep_system_prompt::SYSTEM_PROMPT;
 use seekdeep_user_approval::{
@@ -32,7 +33,9 @@ use tokio::{
 };
 
 use crate::{
-    codec::{acp_prompt_to_text, prompt_has_unsupported_content, turn_end_to_stop_reason},
+    codec::{
+        acp_prompt_to_text_json, prompt_has_unsupported_content_json, turn_end_to_stop_reason,
+    },
     types::{AcpSessionId, AcpStopReason, PROTOCOL_VERSION, agent_methods, client_methods},
 };
 
@@ -66,7 +69,7 @@ struct SessionRecord {
 }
 
 enum NotificationCommand {
-    Send(Map<String, Value>),
+    Send(JsonValue),
     Flush(oneshot::Sender<()>),
     Shutdown(oneshot::Sender<()>),
 }
@@ -84,7 +87,7 @@ impl NotificationQueue {
                 match command {
                     NotificationCommand::Send(params) => {
                         if let Err(error) = transport
-                            .notify(client_methods::SESSION_UPDATE, Some(params))
+                            .notify_json(client_methods::SESSION_UPDATE, Some(params))
                             .await
                         {
                             tracing::warn!(%error, "ACP session/update failed");
@@ -106,7 +109,7 @@ impl NotificationQueue {
         }
     }
 
-    fn enqueue(&self, params: Map<String, Value>) {
+    fn enqueue(&self, params: JsonValue) {
         if let Some(sender) = self.sender.lock().as_ref() {
             let _ = sender.send(NotificationCommand::Send(params));
         }
@@ -217,13 +220,13 @@ impl AcpBridge {
         });
         bridge.register_events()?;
         let weak = Arc::downgrade(&bridge);
-        transport.on_request(Arc::new(move |method, params| {
+        transport.on_request_json(Arc::new(move |method, params| {
             let weak = weak.clone();
             Box::pin(async move {
                 let Some(bridge) = weak.upgrade() else {
                     return Err(internal_error("the ACP bridge has been disposed"));
                 };
-                bridge.handle_request(&method, params).await
+                bridge.handle_request_json(&method, params).await
             })
         }));
         let weak = Arc::downgrade(&bridge);
@@ -281,9 +284,28 @@ impl AcpBridge {
             })),
             agent_methods::AUTHENTICATE => Ok(json!({})),
             agent_methods::SESSION_NEW => self.new_session(params).await,
-            agent_methods::SESSION_PROMPT => self.prompt(params).await,
+            agent_methods::SESSION_PROMPT => self.prompt_json(Value::Object(params).into()).await,
             _ => Err(anyhow::anyhow!("method not found: {method}")),
         }
+    }
+
+    /// Dispatches exact JSON prompt content while retaining the scalar metadata API.
+    ///
+    /// # Errors
+    ///
+    /// Returns protocol validation, session, creation, prompt, or lifecycle failures.
+    pub async fn handle_request_json(
+        self: &Arc<Self>,
+        method: &str,
+        params: JsonValue,
+    ) -> anyhow::Result<JsonValue> {
+        if method == agent_methods::SESSION_PROMPT {
+            return self.prompt_json(params).await.map(Into::into);
+        }
+        let Value::Object(params) = params.try_into_serde_json()? else {
+            return Err(invalid_params("params must be an object"));
+        };
+        self.handle_request(method, params).await.map(Into::into)
     }
 
     async fn new_session(&self, params: Map<String, Value>) -> anyhow::Result<Value> {
@@ -365,22 +387,37 @@ impl AcpBridge {
         Ok(json!({"sessionId":id.as_str()}))
     }
 
-    async fn prompt(self: &Arc<Self>, params: Map<String, Value>) -> anyhow::Result<Value> {
+    async fn prompt_json(self: &Arc<Self>, params: JsonValue) -> anyhow::Result<Value> {
         self.assert_open()?;
-        let id = AcpSessionId::new(required_string(&params, "sessionId")?);
-        let prompt = params
+        let id: JsonString = params
+            .get("sessionId")
+            .and_then(|value| value.deserialize().ok())
+            .ok_or_else(|| invalid_params("sessionId must be a string"))?;
+        let prompt: Vec<JsonValue> = params
             .get("prompt")
-            .and_then(Value::as_array)
+            .and_then(|prompt| prompt.deserialize().ok())
             .ok_or_else(|| invalid_params("prompt must be an array"))?;
-        if prompt_has_unsupported_content(prompt) {
+        if prompt_has_unsupported_content_json(&prompt) {
             return Err(invalid_params(
                 "only text and resource_link prompt content is supported",
             ));
         }
-        let text = acp_prompt_to_text(prompt);
+        let text = acp_prompt_to_text_json(&prompt);
         if text.trim().is_empty() {
             return Err(invalid_params("empty prompt"));
         }
+        let id = match id.as_str() {
+            Some(id) => AcpSessionId::new(id),
+            None => {
+                let mut message = JsonString::from("Invalid params: unknown session: ");
+                message.push_utf16(id.utf16_units());
+                return Err(anyhow::Error::new(JsonRpcRawResponseError {
+                    code: Some(-32602),
+                    message,
+                    data: None,
+                }));
+            }
+        };
         let (receiver, agent, message_id, message) = {
             let mut sessions = self.sessions.lock();
             let record = sessions
@@ -401,7 +438,7 @@ impl AcpBridge {
                 ));
             }
             let message = UserMessage::new(
-                vec![seekdeep_llm::ContentBlock::Text { text }],
+                vec![seekdeep_llm::ContentBlock::text(text)],
                 MessageSource {
                     kind: "user".to_owned(),
                     fields: Map::new(),
@@ -681,66 +718,84 @@ impl AcpBridge {
                 && let Some(content) = event
                     .data
                     .pointer("/message/content")
-                    .and_then(Value::as_array)
+                    .and_then(|content| content.array_items())
             {
                 for block in content {
-                    match block.get("type").and_then(Value::as_str) {
-                        Some("text") => {
-                            if let Some(text) = block.get("text").and_then(Value::as_str)
-                                && !text.is_empty()
-                            {
-                                updates.push(json!({
-                                    "sessionId":id.as_str(),
-                                    "update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":text}}
-                                }));
-                            }
-                        }
-                        Some("image") => {
-                            if let Some(attachment) = block
-                                .pointer("/attachment/attachmentId")
-                                .and_then(Value::as_str)
-                            {
-                                updates.push(json!({
-                                    "sessionId":id.as_str(),
-                                    "update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":format!("[image attachment {attachment}]")}}
-                                }));
-                            }
-                        }
-                        Some(_) | None => {}
+                    let text = match block
+                        .get("type")
+                        .and_then(|value| value.deserialize::<String>().ok())
+                        .as_deref()
+                    {
+                        Some("text") => block
+                            .get("text")
+                            .and_then(|value| value.deserialize::<JsonString>().ok()),
+                        Some("image") => block
+                            .get("attachment")
+                            .and_then(|attachment| attachment.get("attachmentId"))
+                            .and_then(|value| value.deserialize::<JsonString>().ok())
+                            .map(|attachment| {
+                                let mut text = JsonString::from("[image attachment ");
+                                text.push_utf16(attachment.utf16_units());
+                                text.push_str("]");
+                                text
+                            }),
+                        Some(_) | None => None,
+                    };
+                    let Some(text) = text else { continue };
+                    if !text.is_empty() {
+                        updates.push(JsonValue::object([
+                            ("sessionId", json!(id.as_str()).into()),
+                            (
+                                "update",
+                                JsonValue::object([
+                                    ("sessionUpdate", json!("agent_message_chunk").into()),
+                                    (
+                                        "content",
+                                        JsonValue::from_serialize(&ContentBlock::text(text))?,
+                                    ),
+                                ]),
+                            ),
+                        ]));
                     }
                 }
             }
             let mut error_sender = None;
             if event.event_type == "turn/end"
                 && let Some(inflight) = record.inflight.as_mut()
-                && inflight.turn == event.data.get("turn").and_then(Value::as_u64)
+                && inflight.turn == event.data.get("turn").and_then(|value| value.as_u64())
             {
                 let kind = event
                     .data
                     .pointer("/reason/kind")
-                    .and_then(Value::as_str)
-                    .unwrap_or("completed");
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    .unwrap_or_else(|| "completed".to_owned());
                 if kind == "error" {
-                    let message = event
+                    let message: JsonString = event
                         .data
                         .pointer("/reason/error/message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("unknown error");
+                        .and_then(|value| value.deserialize().ok())
+                        .unwrap_or_else(|| "unknown error".into());
                     let mut taken = record.inflight.take().expect("inflight present");
-                    error_sender = taken
-                        .sender
-                        .take()
-                        .map(|sender| (sender, internal_error(format!("turn failed: {message}"))));
+                    error_sender = taken.sender.take().map(|sender| {
+                        let mut detail = JsonString::from("Internal error: turn failed: ");
+                        detail.push_utf16(message.utf16_units());
+                        (
+                            sender,
+                            anyhow::Error::new(JsonRpcRawResponseError {
+                                code: Some(-32603),
+                                message: detail,
+                                data: None,
+                            }),
+                        )
+                    });
                 } else {
-                    inflight.end_kind = Some(kind.to_owned());
+                    inflight.end_kind = Some(kind);
                 }
             }
             (updates, error_sender)
         };
         for update in updates {
-            if let Value::Object(params) = update {
-                self.notifications.enqueue(params);
-            }
+            self.notifications.enqueue(update);
         }
         if let Some((sender, error)) = error_sender {
             let _ = sender.send(Err(error));

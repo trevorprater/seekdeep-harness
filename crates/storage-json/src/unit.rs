@@ -6,7 +6,9 @@ use std::{
 };
 
 use futures::{FutureExt as _, future::BoxFuture};
+use indexmap::IndexMap;
 use parking_lot::Mutex;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{KvSnapshot, KvUnit, KvUnitDescriptor, StorageError, StorageErrorCode};
 use serde_json::Value;
 use tokio::sync::{Notify, oneshot};
@@ -40,11 +42,11 @@ pub(crate) async fn open_json_unit(
         Ok(text) => parse(&text, &descriptor)?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => UnitState {
             version: descriptor.version,
-            global: Value::Null,
+            global: Value::Null.into(),
             tables: descriptor
                 .tables
                 .iter()
-                .map(|table| (table.clone(), serde_json::Map::new()))
+                .map(|table| (table.clone(), IndexMap::new()))
                 .collect(),
         },
         Err(error) => return Err(error.into()),
@@ -169,7 +171,7 @@ impl KvUnit for JsonKvUnit {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
         let unit = self.descriptor.name.clone();
         let rollback_table = table.clone();
@@ -190,7 +192,7 @@ impl KvUnit for JsonKvUnit {
                 if let Some(previous) = previous {
                     records.insert(rollback_key, previous);
                 } else {
-                    records.remove(&rollback_key);
+                    records.shift_remove(&rollback_key);
                 }
             },
         )
@@ -211,7 +213,7 @@ impl KvUnit for JsonKvUnit {
                 }
                 .boxed();
             };
-            let Some(previous) = records.remove(&key) else {
+            let Some(previous) = records.shift_remove(&key) else {
                 return async { Ok(()) }.boxed();
             };
             (previous, serialize(&self.descriptor.name, &state))
@@ -227,7 +229,7 @@ impl KvUnit for JsonKvUnit {
         })
     }
 
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>> {
         let has_global = self.descriptor.has_global;
         let unit = self.descriptor.name.clone();
         self.begin_write(

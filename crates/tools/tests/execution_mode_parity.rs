@@ -37,7 +37,9 @@ fn raw_definition(name: &str, classifier: Option<ToolConcurrencyClassifier>) -> 
         ),
         Arc::new(|_, _| Box::pin(async { Ok(Value::Null) })),
     );
-    definition.is_concurrency_safe = classifier;
+    if let Some(classifier) = classifier {
+        definition = definition.concurrency_safe(classifier);
+    }
     definition
 }
 

@@ -461,8 +461,8 @@ pub fn format_fetch_output(result: &WebFetchResult, max_chars: usize) -> String 
 
 fn generic_call(title: String, kind: ToolCallKind) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        raw_input: Some(Value::String(title.clone())),
-        title,
+        raw_input: Some(Value::String(title.clone()).into()),
+        title: title.into(),
         kind: Some(kind),
         content: None,
         locations: None,
@@ -492,7 +492,7 @@ fn search_definition(
         }),
         Arc::new(|_args: &SearchArgs, value: &WebSearchResult| {
             Ok(vec![ContentBlock::Text {
-                text: format_search_output(value),
+                text: format_search_output(value).into(),
             }])
         }),
     )
@@ -529,13 +529,21 @@ fn search_definition(
             if result.is_error {
                 return None;
             }
-            let meta: SearchMeta = serde_json::from_value(result.meta.clone()?).ok()?;
+            let meta = result.meta.as_ref()?;
+            let sources = meta.get("sources")?.deserialize().ok()?;
+            let answer = meta
+                .get("answer")
+                .map(|value| value.deserialize::<Option<String>>())
+                .transpose()
+                .ok()?
+                .flatten();
+            let truncated = meta.get("truncated")?.as_bool()?;
             Some(ToolResultView::Web(WebResultView::Search(
                 WebSearchResultView {
                     title: Some(args.query.clone()),
-                    sources: meta.sources,
-                    answer: meta.answer,
-                    truncated: meta.truncated,
+                    sources,
+                    answer,
+                    truncated,
                 },
             )))
         })),
@@ -572,7 +580,7 @@ fn fetch_definition(
             let rendered = render_fetch(value, resolved.fetch_max_output_chars);
             *render_cache.lock() = Some((value.clone(), rendered.clone()));
             Ok(vec![ContentBlock::Text {
-                text: rendered.text,
+                text: rendered.text.into(),
             }])
         }),
     )
@@ -616,12 +624,12 @@ fn fetch_definition(
             if result.is_error {
                 return None;
             }
-            let meta: FetchMeta = serde_json::from_value(result.meta.clone()?).ok()?;
+            let meta = result.meta.as_ref()?;
             Some(ToolResultView::Web(WebResultView::Fetch(WebFetchResultView {
                 title: Some(args.url.clone()),
-                url: meta.url,
-                status_code: meta.status_code,
-                truncated: meta.truncated,
+                url: meta.get("url")?.deserialize().ok()?,
+                status_code: meta.get("statusCode")?.deserialize().ok()?,
+                truncated: meta.get("truncated")?.as_bool()?,
             })))
         })),
     )

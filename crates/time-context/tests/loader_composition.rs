@@ -39,7 +39,7 @@ fn event(event_type: &str, seq: u64, data: Value, surface: bool) -> SessionEvent
 fn session() -> Arc<Session> {
     let user = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "hello".to_owned(),
+            text: "hello".into(),
         }],
         MessageSource::user(),
     );
@@ -103,7 +103,7 @@ async fn declarative_plugin_boots_injects_and_disposes_through_loader() {
     let session = session();
     let proposed = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "proposal".to_owned(),
+            text: "proposal".into(),
         }],
         MessageSource::plugin("loader-test"),
     );

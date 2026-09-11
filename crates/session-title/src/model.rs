@@ -107,7 +107,7 @@ pub fn fold_session_title(events: &[SessionEvent]) -> Option<SessionTitleSnapsho
         .iter()
         .rev()
         .find(|event| event.event_type == "session/title")?;
-    let event_data: SessionTitleEventData = serde_json::from_value(event.data.clone()).ok()?;
+    let event_data: SessionTitleEventData = event.data.deserialize().ok()?;
     Some(SessionTitleSnapshot {
         event: event_data,
         event_seq: event.seq,

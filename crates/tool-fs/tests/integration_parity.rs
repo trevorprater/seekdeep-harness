@@ -112,7 +112,7 @@ fn text(result: &ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -250,7 +250,7 @@ async fn completed_write_and_edit_present_replay_safe_diff_cards() {
     };
     assert!(matches!(
         definition.present_result.as_ref().unwrap()(
-            &json!({"file_path":"diff.txt", "content":"new\n"}),
+            &json!({"file_path":"diff.txt", "content":"new\n"}).into(),
             &result
         ),
         Some(ToolResultView::Diff(DiffResultView { .. }))

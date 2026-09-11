@@ -3,9 +3,13 @@
 #![cfg(target_arch = "wasm32")]
 
 use js_sys::{JSON, Object, Reflect};
-use seekdeep_client_runtime::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing};
+use seekdeep_client_runtime::{
+    ConversationValue, js_to_lossless_value, js_to_lossless_value_reusing, js_to_value,
+    js_to_value_reusing, lossless_value_to_js, lossless_value_to_js_reusing, value_to_js,
+    value_to_js_reusing,
+};
 use serde_json::{Value, json};
-use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
+use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen(inline_js = r#"
@@ -126,5 +130,54 @@ fn reusing_parse_clones_identical_values_and_extends_retained_text() {
     assert_eq!(
         js_to_value_reusing(&next, &next_js, &replaced).unwrap(),
         json!({"a": {"x": 1}, "text": "different", "list": []})
+    );
+}
+
+#[wasm_bindgen_test]
+fn lossless_snapshots_reuse_subtrees_and_preserve_every_string_code_unit() {
+    let previous = ConversationValue::parse(
+        r#"{"text":"\ud800","keep":{"\udfff":"\ud800"},"list":["\udfff"]}"#.to_owned(),
+    )
+    .unwrap();
+    let previous_js = lossless_value_to_js(&previous).unwrap();
+    assert_eq!(js_to_lossless_value(&previous_js).unwrap(), previous);
+    let next = ConversationValue::parse(
+        r#"{"text":"\ud800\udc00","keep":{"\udfff":"\ud800"},"list":["\udfff","\ud800"],"added":"\udfff"}"#.to_owned(),
+    )
+    .unwrap();
+    let next_js = lossless_value_to_js_reusing(&previous, &previous_js, &next).unwrap();
+    assert!(Object::is(
+        &property(&previous_js, "keep"),
+        &property(&next_js, "keep")
+    ));
+    assert_eq!(js_to_lossless_value(&next_js).unwrap(), next);
+    assert_eq!(
+        js_to_lossless_value_reusing(&previous, &previous_js, &next_js).unwrap(),
+        next
+    );
+    assert!(Object::is(
+        &next_js,
+        &lossless_value_to_js_reusing(&next, &next_js, &next).unwrap()
+    ));
+}
+
+#[wasm_bindgen_test]
+fn lossless_json_keys_are_own_properties_in_both_conversion_directions() {
+    let previous = ConversationValue::from(json!({"kept": true}));
+    let previous_js = lossless_value_to_js(&previous).unwrap();
+    let next = ConversationValue::parse(
+        r#"{"kept":true,"__proto__":{"polluted":"\ud800"},"\udfff":"\ud800"}"#.to_owned(),
+    )
+    .unwrap();
+    let next_js = lossless_value_to_js_reusing(&previous, &previous_js, &next).unwrap();
+    assert!(Object::has_own(
+        next_js.unchecked_ref::<Object>(),
+        &JsValue::from_str("__proto__")
+    ));
+    assert!(property(&next_js, "polluted").is_undefined());
+    assert_eq!(js_to_lossless_value(&next_js).unwrap(), next);
+    assert_eq!(
+        js_to_lossless_value_reusing(&previous, &previous_js, &next_js).unwrap(),
+        next
     );
 }

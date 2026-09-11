@@ -22,6 +22,7 @@ seekdeep-client-ui-slots = { path = "../client-ui-slots", default-features = fal
 seekdeep-client-settings-contract = { path = "../client-settings-contract" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-identity = { path = "../identity" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-failure-display = { path = "../failure-display" }
 serde_json.workspace = true
 serde.workspace = true

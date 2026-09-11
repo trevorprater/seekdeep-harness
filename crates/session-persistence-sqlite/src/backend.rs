@@ -1511,13 +1511,11 @@ fn needs_legacy_prefix(event: &SessionEvent) -> bool {
     if event.event_type == "steering/message" {
         return true;
     }
-    let Some(data) = event.data.as_object() else {
-        return false;
-    };
+    let data = event.data.as_ref();
     match event.event_type.as_str() {
-        "user/message" => !data.contains_key("id") && data.contains_key("content"),
-        "assistant/message" => !data.contains_key("message") && data.contains_key("content"),
-        "tool/result" => !data.contains_key("message") && data.contains_key("callId"),
+        "user/message" => data.get("id").is_none() && data.get("content").is_some(),
+        "assistant/message" => data.get("message").is_none() && data.get("content").is_some(),
+        "tool/result" => data.get("message").is_none() && data.get("callId").is_some(),
         _ => false,
     }
 }

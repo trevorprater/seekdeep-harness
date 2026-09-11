@@ -102,7 +102,7 @@ async fn run(arguments: Arguments) -> anyhow::Result<String> {
         .await;
     let close = harness.close().await;
     match (result, close) {
-        (Ok(result), Ok(())) => Ok(result.final_response),
+        (Ok(result), Ok(())) => Ok(String::from_utf16_lossy(result.final_response.utf16_units())),
         (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
         (Err(error), Err(close)) => Err(anyhow::anyhow!(
             "{error:#}; runtime cleanup failed: {close:#}"

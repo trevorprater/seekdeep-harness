@@ -76,7 +76,7 @@ impl ContractError {
 
 /// Message initiated by the Host and carried on one downstream stream.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ServerRequest {
+pub struct ServerRequest<T = Value> {
     /// Must be `server-request` on the wire.
     #[serde(rename = "type")]
     pub kind: String,
@@ -86,13 +86,13 @@ pub struct ServerRequest {
     /// Method tag whose second-level schema validates `payload`.
     pub method: String,
     /// Method-specific payload.
-    pub payload: Value,
+    pub payload: T,
 }
 
-impl ServerRequest {
+impl<T> ServerRequest<T> {
     /// Creates an exact full-form Host request.
     #[must_use]
-    pub fn new(rpc_id: RpcId, method: impl Into<String>, payload: Value) -> Self {
+    pub fn new(rpc_id: RpcId, method: impl Into<String>, payload: T) -> Self {
         Self {
             kind: "server-request".to_owned(),
             rpc_id,

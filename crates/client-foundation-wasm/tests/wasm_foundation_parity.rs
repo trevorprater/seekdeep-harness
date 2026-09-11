@@ -7,16 +7,16 @@ use seekdeep_client_foundation_wasm::{
     client_api_gateway_plugin, client_connection_plugin, client_typert_registry_plugin,
     configure_client_api_gateway,
 };
-use seekdeep_cordis::{configure_context_wrapper, create_context};
+use seekdeep_cordis::{configure_context_wrapper, context_special_property, create_context};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen(inline_js = r#"
-export function foundationContextWrapper() {
-  const tracker = Symbol.for('cordis.service.tracker')
+export function foundationContextWrapper(isSpecialProperty) {
+  const tracker = Symbol.for('cordis.tracker')
   const trace = (ctx, value) => {
-    if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[tracker] !== true) return value
+    if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[tracker]?.property !== 'ctx') return value
     let proxy
     proxy = new Proxy(value, {
       get(target, key, receiver) {
@@ -36,13 +36,14 @@ export function foundationContextWrapper() {
       if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
       if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
       if (key === 'waterfall') return (...args) => target.eventArgs('waterfall', args)
-      if (key === 'get') return name => trace(ctx, target.get(name))
+      if (key === 'get') return (name, strict) => trace(ctx, target.serviceGet(name, strict))
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver)
         return typeof value === 'function' ? value.bind(target) : value
       }
       const metadata = target.metaGet(key)
       if (metadata !== undefined) return metadata
+      if (isSpecialProperty(key)) return undefined
       return typeof key === 'string' ? trace(ctx, target.get(key)) : undefined
     },
     })
@@ -51,7 +52,7 @@ export function foundationContextWrapper() {
 }
 
 export function foundationGatewayFactories() {
-  const tracker = Symbol.for('cordis.service.tracker')
+  const tracker = Symbol.for('cordis.tracker')
   const remoteFactory = (ctx, core) => {
     const service = {
       ctx,
@@ -59,7 +60,7 @@ export function foundationGatewayFactories() {
       $on(event, listener) { return core.on(this.ctx, event, listener) },
       $dispatch(event, args) { return core.dispatch(event, args) },
     }
-    Object.defineProperty(service, tracker, { value: true })
+    Object.defineProperty(service, tracker, { value: { property: 'ctx' } })
     ctx.provide('remote', service)
     return service
   }
@@ -78,7 +79,7 @@ export function foundationGatewayFactories() {
       },
       remove(method) { delete this[method] },
     }
-    Object.defineProperty(service, tracker, { value: true })
+    Object.defineProperty(service, tracker, { value: { property: 'ctx' } })
     Object.defineProperty(service, 'invokeRemote', { value: invoke })
     return { service, dispose: ctx.provide('remote.' + namespace, service) }
   }
@@ -381,7 +382,7 @@ export async function foundationProviderContract(root) {
 }
 "#)]
 extern "C" {
-    fn foundationContextWrapper() -> JsValue;
+    fn foundationContextWrapper(is_special_property: &JsValue) -> JsValue;
     fn foundationGatewayFactories() -> js_sys::Array;
     fn foundationRemoteContribution() -> JsValue;
     fn foundationInstallFetch() -> JsValue;
@@ -409,9 +410,16 @@ extern "C" {
     fn foundationProviderContract(root: &JsValue) -> Promise;
 }
 
+fn configure_test_context() {
+    let special_property = Closure::wrap(Box::new(|key: JsValue| context_special_property(&key))
+        as Box<dyn Fn(JsValue) -> Result<bool, JsValue>>)
+    .into_js_value();
+    configure_context_wrapper(foundationContextWrapper(&special_property)).unwrap();
+}
+
 #[wasm_bindgen_test(async)]
 async fn providers_preserve_resolver_ownership_and_wire_history() {
-    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    configure_test_context();
     let root = create_context().unwrap();
     JsFuture::from(foundationPlugin(
         &root,
@@ -435,7 +443,7 @@ async fn reflection_matches_source_with_live_zod_and_cordis() {
         .lines()
         .find_map(|line| line.strip_prefix("commit="))
         .unwrap();
-    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    configure_test_context();
     let root = create_context().unwrap();
     JsFuture::from(foundationPlugin(
         &root,
@@ -454,7 +462,7 @@ async fn reflection_matches_source_with_live_zod_and_cordis() {
 
 #[wasm_bindgen_test(async)]
 async fn reflection_registration_is_atomic_and_owned_by_the_calling_fiber() {
-    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    configure_test_context();
     let root = create_context().unwrap();
     JsFuture::from(foundationPlugin(
         &root,
@@ -473,7 +481,7 @@ async fn reflection_registration_is_atomic_and_owned_by_the_calling_fiber() {
 
 #[wasm_bindgen_test(async)]
 async fn fixture_page_query_selects_the_in_page_fixture_transport() {
-    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    configure_test_context();
     let location = foundationInstallFixtureLocation("?fixture");
     let fetch = foundationInstallFetch();
     let root = create_context().unwrap();
@@ -549,7 +557,7 @@ async fn fixture_page_query_selects_the_in_page_fixture_transport() {
 #[wasm_bindgen_test(async)]
 #[allow(clippy::too_many_lines)]
 async fn foundations_publish_services_and_route_unary_calls() {
-    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    configure_test_context();
     let factories = foundationGatewayFactories();
     configure_client_api_gateway(factories.get(0), factories.get(1)).unwrap();
     let fetch = foundationInstallFetch();

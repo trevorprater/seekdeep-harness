@@ -77,7 +77,7 @@ async fn tool_provider_uses_the_requesting_agents_scoped_tool_view() {
                 Arc::new(|_: serde_json::Value, _| {
                     Box::pin(async {
                         Ok(vec![ContentBlock::Text {
-                            text: "ok".to_owned(),
+                            text: "ok".into(),
                         }])
                     })
                 }),

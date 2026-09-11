@@ -265,16 +265,16 @@ async fn subscriptions_filter_isolate_failures_and_session_tree_follows_descenda
         .collect::<Vec<_>>();
     assert!(tree_items.iter().any(|notification| {
         notification.method == "session.event"
-            && notification.params.get("sessionId") == Some(&json!("child-1"))
+            && notification.params["sessionId"] == json!("child-1")
     }));
     assert!(tree_items.iter().any(|notification| {
         notification.method == "subagent.finished"
-            && notification.params.get("childSessionId") == Some(&json!("grandchild-1"))
+            && notification.params["childSessionId"] == json!("grandchild-1")
     }));
     assert!(
-        !tree_items.iter().any(|notification| {
-            notification.params.get("sessionId") == Some(&json!("stranger"))
-        })
+        !tree_items
+            .iter()
+            .any(|notification| { notification.params["sessionId"] == json!("stranger") })
     );
     tree.close();
     client.close().await.unwrap();

@@ -3,6 +3,9 @@
 /// Catalog and lifecycle adapter for packages with intentionally empty
 /// invariant companions.
 pub mod noop;
+/// Native ownership and startup barrier for automatically mounted test invariants.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod test_host;
 
 use std::{collections::HashSet, future::Future, sync::Arc};
 

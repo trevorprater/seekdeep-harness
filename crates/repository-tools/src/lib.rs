@@ -8,6 +8,7 @@ pub mod archived_agent_notes;
 pub mod browser_gif;
 pub mod built_package_invariants;
 pub mod clean;
+pub mod client_bundle;
 /// Model-facing client slot catalog projection.
 pub mod client_catalog;
 pub mod client_domain_graph;
@@ -23,7 +24,14 @@ pub mod cordis_core_api;
 /// Cordis module-merge scans shared by the catalog generators.
 pub mod cordis_walk;
 pub mod coverage_exempt;
+pub mod coverage_uncovered_locations;
+/// Canonical documentation publication metadata and source-preserving site projection.
+pub mod doc_site;
 pub mod doc_site_fragments;
+pub mod doc_graphs;
+pub mod doc_typecheck;
+/// Stable links to the pinned declarations used by generated documentation.
+pub mod doc_source_links;
 /// Workspace source-alias to built-declaration path mapping.
 pub mod doc_typecheck_paths;
 /// Standing-document word-budget policy.
@@ -38,12 +46,14 @@ pub mod md_wrap;
 pub mod mermaid;
 pub mod module_graph;
 pub mod node_next_types;
+pub mod npm_baseline;
 pub mod package_graph;
 pub mod package_invariants;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;
 pub mod package_paths;
 pub mod package_readme_limitations;
+pub mod package_readme_model_experience;
 /// Byte-identical bilingual Markdown derivative partitioning.
 pub mod paired_markdown_derivatives;
 pub mod project_reference_faces;
@@ -64,6 +74,10 @@ pub mod release_verify_packed_install;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
 pub mod rescope_exact_edit;
+pub mod rescope_vendor;
+pub mod third_party_notices;
+pub mod ts_project;
+pub mod type_equiv;
 pub mod run_gates;
 pub mod run_oxlint;
 pub mod runtime_closure;

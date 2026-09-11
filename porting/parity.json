@@ -23859,24 +23859,26 @@
     {
       "source": "README.md",
       "kind": "documentation",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "README.md"
       ],
       "evidence": [
-        "SeekDeep Harness Rust-port repository file"
-      ]
+        "2026-09-10 documentation audit: the target omits the source Run and Run from source sections, leaving published guide links to #run and #run-from-source unresolved"
+      ],
+      "note": "Restore the source run, contribution, support, and license entry points with verified Rust build and launch instructions. The current port-introduction paragraph is not complete documentation parity."
     },
     {
       "source": "README.zh.md",
       "kind": "documentation",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "README.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "2026-09-10 documentation audit: the root Chinese README omits the source run, contribution, support, and license sections"
+      ],
+      "note": "Restore the complete bilingual root README contract alongside the English Rust build and launch instructions."
     },
     {
       "source": "THIRD_PARTY_NOTICES.md",
@@ -37819,62 +37821,192 @@
     {
       "source": "native/landlock-run/scripts/assemble-prebuilds.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/assemble.rs",
+        "crates/landlock-tools/src/bin/landlock-assemble-prebuilds.rs"
+      ],
+      "evidence": [
+        "Replaces only each declared platform bin directory, assembles artifact payloads, restores executable modes, and applies ELF/tool metadata verification.",
+        "Source comparisons cover missing artifacts, wrong CPU, stale payload replacement, copied bytes, and per-platform ordering.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/build.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/landlock-tools/src/build.rs",
+        "crates/landlock-tools/src/bin/landlock-build.rs"
+      ],
+      "evidence": [
+        "Native Linux-only host selection, explicit tool/kind validation, matching musl target, musl-gcc linker, crt-static, symbol stripping, executable output, and metadata verification are implemented in Rust.",
+        "Source fixtures cover Linux x64/arm64 build plans and error ordering. Actual macOS source and Rust CLI executions return the same exit 1 and byte-identical refusal diagnostics before any compiler runs.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable fixtures complete. Matching Linux arm64/x64 static-musl build and mandatory kernel confinement rehearsal remain unverified; CI commands are wired."
     },
     {
       "source": "native/landlock-run/scripts/bump-release.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/version.rs",
+        "crates/landlock-tools/src/bin/landlock-bump-release.rs"
+      ],
+      "evidence": [
+        "Preserves explicit/prerelease and incremental version grammar, JavaScript numeric behavior, family/published manifest synchronization, lockfile-refresh command, and post-bump verification.",
+        "Source comparisons check manifest bytes, child arguments/environment/order, divergent versions, and failed child status.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/commit-release.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/version.rs",
+        "crates/landlock-tools/src/bin/landlock-commit-release.rs"
+      ],
+      "evidence": [
+        "Stages exactly the release-owned manifests and workspace lockfile, commits the expected release message, and does not create tags.",
+        "Verified against source command traces and an actual temporary Git index/commit; shared checkout HEAD remained unchanged.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/github-matrix.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/matrix.rs",
+        "crates/landlock-tools/src/bin/landlock-github-matrix.rs"
+      ],
+      "evidence": [
+        "Derives CI deduplication, release package order, runners, artifact names, and CPU/platform rejection from checked-in metadata.",
+        "Actual compiled CLI output for ci and release-prebuild matches source byte-for-byte after the authorized package-scope rename.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/pack-release.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/pack.rs",
+        "crates/landlock-tools/src/bin/landlock-pack-release.rs"
+      ],
+      "evidence": [
+        "Preserves clean destination replacement, platform-before-entry order, current-platform selection, npm platform packing, pnpm entry packing, output presence checks, and publish-order.txt bytes.",
+        "Real fixture tarballs retain executable mode bits and rewrite workspace dependencies; actual production entry tarball packed through the newly wired family package command.",
+        "Current production Rust/WASM entry rebuilt and packed; packed-install and independent real offline npm install/relocated import passed with all audit snapshots byte-equal to current checkout.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/publish-release.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/publish.rs",
+        "crates/landlock-tools/src/bin/landlock-publish-release.rs",
+        "crates/landlock-tools/src/process.rs",
+        "crates/landlock-tools/src/process/capture.rs"
+      ],
+      "evidence": [
+        "Preserves packed identity, SHA512 integrity, exact-content skip, collision refusal, prerelease next-tag behavior, manifest-owned access, transient code set, four attempts, registry recheck after ambiguous failure, and publication/backoff spacing.",
+        "Captured npm/tar processes enforce the source default combined raw 1 MiB limit; overflow sends SIGTERM and drains/reaps. Spawn errors and status remain distinct, including a signal handler exiting 0; publisher retains source handling of unavailable child streams.",
+        "Source differential fixtures cover every transient code and ordering. Actual CLI with a persistent fake npm registry proves first publication, byte-identical rerun skip, next-tag arguments, and collision refusal without a second publication.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/repo.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/repo.rs"
+      ],
+      "evidence": [
+        "Preserves metadata discovery/classification, UTF16 sorting, entry/platform/publish ordering, CPU checks, ELF architecture checks, executable access, short-header diagnostics, and undeclared payload rejection.",
+        "Both platform package prepack commands now invoke the compiled validator with the correct workspace manifest path and fail on their missing native binaries.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/verify-entry-lib.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/repo.rs",
+        "crates/landlock-tools/src/entry.rs",
+        "crates/landlock-tools/src/bin/landlock-verify-entry-lib.rs"
+      ],
+      "evidence": [
+        "Preserves required index.js/index.d.ts error ordering and success messages.",
+        "The Rust/WASM distribution additionally requires the generated CJS loader, valid WASM header, canonical Rust launcher source snapshots, Cargo metadata/lock/toolchain, and the existing MIT license before packing.",
+        "Current production Rust/WASM entry rebuilt and packed; packed-install and independent real offline npm install/relocated import passed with all audit snapshots byte-equal to current checkout.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/verify-launcher-binary.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/repo.rs",
+        "crates/landlock-tools/src/bin/landlock-verify-launcher-binary.rs"
+      ],
+      "evidence": [
+        "Preserves explicit-directory/current-directory CLI behavior, stdout/stderr, exit status, declared binary validation, and architecture checks.",
+        "Actual family platform prepack scripts reach this Rust validator and refuse missing Linux payloads, rather than referencing deleted JavaScript.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/scripts/verify-packed-install.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/landlock-tools/src/release/installed.rs",
+        "crates/landlock-tools/src/release/pack.rs",
+        "crates/landlock-tools/src/bin/landlock-verify-packed-install.rs",
+        "crates/landlock-tools/src/process.rs",
+        "crates/landlock-tools/src/process/capture.rs"
+      ],
+      "evidence": [
+        "Preserves full-family/current-host tarball coverage, lifecycle-script and workspace-protocol refusal, optional-dependency matrix checks, isolated extraction, installed binary SHA256 byte pinning, executable mode checks, entry resolution/probe, Linux requirement failure, and denied/granted-write operation ordering.",
+        "Outer tar/Node captures retain the source 64 MiB cap; inner confined command captures retain the default 1 MiB cap. A capture error remains an error even if the child handles SIGTERM with exit 0.",
+        "Portable source comparisons exercise Linux full/partial/unusable and failure branches. The actual newly packed Rust/WASM entry passes the package-command installation rehearsal and a separate real offline npm install/import after consumer relocation on macOS.",
+        "Current production Rust/WASM entry rebuilt and packed; packed-install and independent real offline npm install/relocated import passed with all audit snapshots byte-equal to current checkout.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable fixtures complete. Matching Linux arm64/x64 static-musl build and mandatory kernel confinement rehearsal remain unverified; CI commands are wired."
     },
     {
       "source": "native/landlock-run/scripts/verify-release.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/version.rs",
+        "crates/landlock-tools/src/bin/landlock-verify-release.rs"
+      ],
+      "evidence": [
+        "Preserves family version equality, publish-from-tag requirement, tag/version matching, and optional prebuild metadata validation.",
+        "Source and actual CLI fixtures cover version/tag/usage failures; the newly wired package command verifies the actual family version 0.1.1 in non-publishing mode.",
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "native/landlock-run/test/entry.test.js",
@@ -42281,7 +42413,46 @@
     {
       "source": "packages/client/tsdown.client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/repository-tools/src/client_bundle.rs",
+        "crates/repository-tools/src/client_bundle/sourcemaps.rs",
+        "crates/repository-tools/src/bin/client-bundle.rs",
+        "crates/repository-tools/tests/client_bundle_parity.rs",
+        "crates/repository-tools/tests/client_bundle_wasm_maps.rs",
+        "xtask/src/client_build.rs",
+        "xtask/src/main.rs",
+        "xtask/src/remote_contracts.rs",
+        "xtask/src/remote_contracts/declarations/public.rs",
+        "xtask/src/remote_contracts/declarations.rs",
+        "xtask/tests/client_build_dev_parity.rs",
+        "crates/client-modules/src/host.rs",
+        "crates/client-modules/tests/client_module_host_parity.rs",
+        "crates/client-web/src/lib.rs",
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/src/wasm_value_bridge.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/src/conversation_assembler.rs",
+        "crates/client-runtime/src/conversation_location.rs",
+        "crates/client-runtime/tests/conversation_assembler_parity.rs",
+        "crates/client-runtime/tests/conversation_location_parity.rs",
+        "crates/client-runtime/tests/conversation_prematch_parity.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_native_definition_parity.rs",
+        "crates/client-runtime/tests/wasm_public_api_parity.rs",
+        "crates/client-runtime/tests/wasm_value_bridge_parity.rs",
+        "crates/client-runtime/tests/support/conversation_json.rs"
+      ],
+      "evidence": [
+        "Source Client policy/CSS/purity comparisons and actual Chromium WASM-to-Rust source-map proof passed.",
+        "Native/poll dependency watching, failure retention/recovery and SIGTERM cleanup passed; nine emitted packages verified maps, inline Immer and source platform entries.",
+        "Current Session/Conversation/bridge native 152 and Node/WASM 15 plus scoped strict checks passed before latest classifier/trajectory edits."
+      ],
+      "note": "Rust build/watch implementation and focused artifact proofs are complete. Final combined package/Host/browser verification remains pending active lossless presentation/trajectory integration and latest classifier retest."
     },
     {
       "source": "packages/client/ui-agent-preset/README.i18n.yaml",
@@ -55175,23 +55346,34 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/index.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/code-runtime-worker-thread/src/runtime.rs",
         "crates/code-runtime-worker-thread/src/lib.rs",
+        "crates/code-runtime-worker-thread/src/runtime.rs",
+        "crates/code-runtime-worker-thread/src/node.rs",
+        "crates/code-runtime-worker-thread/src/node_assets.rs",
+        "crates/code-runtime-worker-thread/src/bin/package-code-runtime-node.rs",
+        "crates/code-runtime-worker-thread/node/loader.mjs",
+        "crates/code-runtime-worker-thread/node/wasm-runtime.cjs",
+        "crates/code-runtime-worker-thread/node/src/bridge.rs",
+        "crates/code-runtime-worker-thread/node/src/host.rs",
+        "crates/code-runtime-worker-thread/node/src/lib.rs",
+        "crates/code-runtime-worker-thread/node/src/worker.rs",
+        "crates/code-runtime-worker-thread/node/src/snapshot.rs",
         "crates/code-runtime-worker-thread/tests/heap_limits.rs",
-        "crates/code-runtime-worker-thread/src/typescript.rs",
-        "crates/code-runtime-worker-thread/src/modules.rs",
-        "crates/code-runtime-worker-thread/tests/typescript_node_parity.rs"
+        "crates/code-runtime-worker-thread/tests/binding_metadata.rs",
+        "crates/code-runtime-worker-thread/tests/node_api_parity.rs",
+        "crates/code-runtime-worker-thread/tests/node_lifecycle.rs",
+        "crates/code-runtime-worker-thread/tests/typescript_node_parity.rs",
+        "crates/code-runtime-worker-thread/tests/lossless_json.rs",
+        "crates/code-runtime-worker-thread/tests/packaged_node_runtime.rs"
       ],
       "evidence": [
-        "Rust public backend validates config, mounts and isolates executions, maps abort/compute/wall controls, caps combined output, and disposes deterministically",
-        "Rust V8 isolate applies maxOldGenerationSizeMb; 16/512 MiB bounded-allocation differential pins worker-exit, retained logs, and host survival",
-        "Live Node differential: 63 programs have byte-exact erasure and first diagnostics; syntax errors settle before host dispatch and worker creation",
-        "V8 module hooks preserve computed/spaced imports, module namespace identity, literal source text, and import-attribute errors",
-        "cargo clippy -p seekdeep-code-runtime-worker-thread --all-targets --all-features -- -D warnings"
+        "2026-09-11: 70 current-source worker tests passed, including two parent-executed child probes, real Node APIs, lossless JSON, 14000-level structures, lifecycle limits and packaged relocation.",
+        "31 source/native binding scenarios and 16 TypeScript cases passed; five numeric reply rejection cases matched the pinned host.",
+        "Native/WASM strict Clippy, formatting, release WASM build and current package load/bootstrap verification passed."
       ],
-      "note": "native host ownership, old-generation heap enforcement, source-matched type stripping and message-port imports are verified; general Node module APIs and the remaining worker_threads exports remain to be matched"
+      "note": "Rust owns native supervision, Node/WASM worker control, snapshots, limits, binding validation and teardown; real Node provides module APIs. Standalone and relocated runtime paths pass; whole-Host integration remains tracked separately."
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/invariant.ts",
@@ -85737,13 +85919,15 @@
     {
       "source": "pnpm-lock.yaml",
       "kind": "configuration",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "pnpm-lock.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "2026-09-10 frozen-install audit: corrected the node-pty patch hash to the existing SEEKDEEP_NODE_PTY_SPAWN_HELPER patch bytes; the root install still rejects stale Client connection dependency specifiers",
+        "The website importer supports an isolated frozen installation of its pinned third-party dependencies"
+      ],
+      "note": "Reconcile the root workspace lockfile with the active Rust compatibility package manifests before claiming the source installation command works."
     },
     {
       "source": "pnpm-workspace.yaml",
@@ -86559,7 +86743,24 @@
     {
       "source": "scripts/coverage-uncovered-locations.cjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/coverage_uncovered_locations.rs",
+        "crates/repository-tools/src/bin/coverage-uncovered-locations.rs",
+        "scripts/coverage-uncovered-locations.cjs",
+        "crates/repository-tools/tests/coverage_uncovered_locations_parity.rs",
+        "crates/repository-tools/src/coverage_uncovered_locations/launcher.rs",
+        "crates/repository-tools/src/bin/run-coverage.rs",
+        "crates/repository-tools/tests/coverage_launcher_parity.rs"
+      ],
+      "evidence": [
+        "Exact source and native console lines for missed statements, functions, branches, empty implicit arms, Infinity ends, ordering, Unicode paths, and outside-root paths.",
+        "Green and restarted reports are silent; malformed state and unknown operations fail.",
+        "Actual installed Istanbul report factory and report-tree execution delegate to the compiled native binary.",
+        "All five native differential/executable tests passed, including the 1525844-byte report and loader/public-instance-surface checks.",
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/demo-code-mode.mjs",
@@ -86605,7 +86806,46 @@
     {
       "source": "scripts/dev-web.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/repository-tools/src/client_bundle.rs",
+        "crates/repository-tools/src/client_bundle/sourcemaps.rs",
+        "crates/repository-tools/src/bin/client-bundle.rs",
+        "crates/repository-tools/tests/client_bundle_parity.rs",
+        "crates/repository-tools/tests/client_bundle_wasm_maps.rs",
+        "xtask/src/client_build.rs",
+        "xtask/src/main.rs",
+        "xtask/src/remote_contracts.rs",
+        "xtask/src/remote_contracts/declarations/public.rs",
+        "xtask/src/remote_contracts/declarations.rs",
+        "xtask/tests/client_build_dev_parity.rs",
+        "crates/client-modules/src/host.rs",
+        "crates/client-modules/tests/client_module_host_parity.rs",
+        "crates/client-web/src/lib.rs",
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/src/wasm_value_bridge.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/src/conversation_assembler.rs",
+        "crates/client-runtime/src/conversation_location.rs",
+        "crates/client-runtime/tests/conversation_assembler_parity.rs",
+        "crates/client-runtime/tests/conversation_location_parity.rs",
+        "crates/client-runtime/tests/conversation_prematch_parity.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_native_definition_parity.rs",
+        "crates/client-runtime/tests/wasm_public_api_parity.rs",
+        "crates/client-runtime/tests/wasm_value_bridge_parity.rs",
+        "crates/client-runtime/tests/support/conversation_json.rs"
+      ],
+      "evidence": [
+        "Source Client policy/CSS/purity comparisons and actual Chromium WASM-to-Rust source-map proof passed.",
+        "Native/poll dependency watching, failure retention/recovery and SIGTERM cleanup passed; nine emitted packages verified maps, inline Immer and source platform entries.",
+        "Current Session/Conversation/bridge native 152 and Node/WASM 15 plus scoped strict checks passed before latest classifier/trajectory edits."
+      ],
+      "note": "Rust build/watch implementation and focused artifact proofs are complete. Final combined package/Host/browser verification remains pending active lossless presentation/trajectory integration and latest classifier retest."
     },
     {
       "source": "scripts/doc-budgets.manifest.json",
@@ -86648,7 +86888,17 @@
     {
       "source": "scripts/doc-typecheck.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/doc_typecheck.rs",
+        "crates/repository-tools/src/bin/doc-typecheck.rs",
+        "crates/typert-generator/src/analyzer/native/repository/diagnostics.rs",
+        "crates/repository-tools/tests/typescript_repository_commands_parity.rs"
+      ],
+      "evidence": [
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/fixtures/translation-prompt/response.txt",
@@ -86791,7 +87041,20 @@
     {
       "source": "scripts/gen-doc-graphs.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/repository-tools/src/doc_graphs.rs",
+        "crates/repository-tools/src/doc_graphs_policy.json",
+        "crates/repository-tools/src/package_graph.rs",
+        "crates/typert-generator/src/analyzer/native/repository_graphs.rs",
+        "crates/typert-generator/tests/repository_graphs_parity.rs",
+        "crates/repository-tools/tests/doc_graphs_source_parity.rs",
+        "xtask/src/doc_graphs.rs"
+      ],
+      "evidence": [
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation/source proof passed. Expanded xtask graph command and/or final emitted Cordis hook package verification remains pending shared Host compilation."
     },
     {
       "source": "scripts/gen-module-graph.ts",
@@ -86858,7 +87121,27 @@
     {
       "source": "scripts/gen-third-party-notices.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/third_party_notices.rs",
+        "crates/repository-tools/src/third_party_notices/collect.rs",
+        "crates/repository-tools/src/third_party_notices/python.rs",
+        "crates/repository-tools/src/third_party_notices/render.rs",
+        "crates/repository-tools/src/third_party_notices/spdx.rs",
+        "crates/repository-tools/src/third_party_notices/policy.json",
+        "crates/repository-tools/src/third_party_notices/document.txt",
+        "crates/repository-tools/src/bin/gen-third-party-notices.rs",
+        "crates/repository-tools/tests/notices_vendor_parity.rs"
+      ],
+      "evidence": [
+        "Full pinned source notices rendering matches after required product identity normalization.",
+        "2979 SPDX expressions compare with the installed pinned parser catalog and grammar.",
+        "Python requirements, numeric-key object ordering, YAML coercions, workspace manifest tiering, pnpm virtual stores, repository normalization, vendored tables, Claude SDK payload matching, and missing metadata/licensing failures compare with the source.",
+        "Compiled CLI writes a complete installed fixture, --check succeeds on current output, and stale/missing checks fail without writing.",
+        "Native executable pipeline disclosure omits the removed npm packager only when the Rust pipeline is present.",
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/gen-tool-catalog.ts",
@@ -87110,12 +87393,37 @@
     {
       "source": "scripts/project-doc-site.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/repository-tools/tests/doc_site_projection_parity.rs",
+        "crates/repository-tools/tests/doc_site_configuration_parity.rs",
+        "crates/repository-tools/tests/doc_source_links.rs"
+      ],
+      "evidence": [
+        "Source-differential Markdown, frontmatter, locale, image, route, navigation, and closed-manifest-schema checks passed",
+        "Canonical publication data matches all 166 source locale routes and per-locale section metadata"
+      ],
+      "note": "Native ports and direct pinned-source comparisons are implemented and passing; retain pending until the integrated website milestone acceptance is complete."
     },
     {
       "source": "scripts/project-doc-site.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/doc_site.rs",
+        "crates/repository-tools/src/doc_site/projection.rs",
+        "crates/repository-tools/src/doc_site/rewrite.rs",
+        "crates/repository-tools/src/bin/project-doc-site.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_source_links --test doc_site_fragments_parity: 14 tests passed",
+        "Pinned source project-doc-site.spec.ts: 38 tests passed",
+        "pnpm docs:build passed: 166 locale pages, four copied image assets, and 2314 resolving internal fragment references",
+        "Real Chromium verified both provider-guide image variants, locale navigation, search, and Mermaid rendering",
+        "Rust/WASM callbacks: 26 source comparisons and seven real Chromium cases passed; actual Vite development application hydrated and loaded both local images",
+        "Live development watcher reprojected canonical Markdown and an isolated image change while preserving source and output bytes; config, persistence and Cordis catalog freshness checks passed"
+      ],
+      "note": "Rust owns source-preserving destination edits, localized aliases, source-equivalent numeric suffixes, image ownership and collision rejection, canonical frontmatter, and repository-chrome stripping. Source-differential tests and real production/development website execution verify this projector implementation; other documentation and aggregate command rows are tracked separately."
     },
     {
       "source": "scripts/project-reference-faces.spec.ts",
@@ -87205,7 +87513,21 @@
     {
       "source": "scripts/publish-npm-baseline.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/npm_baseline.rs",
+        "crates/repository-tools/src/npm_baseline/bundle.rs",
+        "crates/repository-tools/src/npm_baseline/capture.rs",
+        "crates/repository-tools/src/npm_baseline/command.rs",
+        "crates/repository-tools/src/npm_baseline/pack.rs",
+        "crates/repository-tools/src/npm_baseline/registry.rs",
+        "crates/repository-tools/src/npm_baseline/smoke.rs",
+        "crates/repository-tools/src/bin/publish-npm-baseline.rs"
+      ],
+      "evidence": [
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+      ],
+      "note": "Rust implementation and portable source/executable verification complete; no live publication performed."
     },
     {
       "source": "scripts/release/bump.ts",
@@ -87401,7 +87723,25 @@
     {
       "source": "scripts/rescope-vendor.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/rescope_vendor.rs",
+        "crates/repository-tools/src/rescope_vendor/policy.json",
+        "crates/repository-tools/src/rescope_exact_edit.rs",
+        "crates/repository-tools/src/bin/rescope-vendor.rs",
+        "crates/repository-tools/tests/notices_vendor_parity.rs",
+        "crates/repository-tools/tests/rescope_exact_edit_parity.rs"
+      ],
+      "evidence": [
+        "Full pinned rename/exact-edit/postcondition policy matches source after product scope normalization.",
+        "90 token/Markdown/YAML/Unicode/skip fixtures compare with source output and changed-line counts.",
+        "Tracked fixture trees match byte-for-byte through nine forward/reverse dry/apply/check/idempotence transitions, including stdout, stderr, and success status.",
+        "Invalid exact-edit sites prevent all writes; postconditions and pre-rescope residue reject incomplete trees.",
+        "Compiled CLI verifies reverse mode and apply precedence; exact-edit insertion, deletion, and replacement fixtures preserve duplicate/moved-site failures.",
+        "New tracked policy-file preservation regression covers forward/reverse migration without rewriting the compiled source policy.",
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/run-gates.spec.ts",
@@ -87640,7 +87980,22 @@
     {
       "source": "scripts/test-invariants.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/cordis/src/test_invariant_paths.rs",
+        "crates/cordis/src/wasm/test_invariants.rs",
+        "crates/invariants/src/test_host.rs",
+        "crates/invariants/tests/test_host_parity.rs",
+        "crates/cordis/tests/test_invariant_paths_parity.rs",
+        "crates/cordis/tests/fixtures/test-invariants.vitest.config.mjs",
+        "crates/cordis/tests/fixtures/test-invariants-attachment.mjs",
+        "crates/cordis/tests/fixtures/test-invariants-types.mts",
+        "crates/cordis/tests/fixtures/wasm-file-fetch.mjs"
+      ],
+      "evidence": [
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation/source proof passed. Expanded xtask graph command and/or final emitted Cordis hook package verification remains pending shared Host compilation."
     },
     {
       "source": "scripts/translation-brief.spec.ts",
@@ -87817,7 +88172,17 @@
     {
       "source": "scripts/ts-project.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/ts_project.rs",
+        "crates/typert-generator/src/analyzer/native/repository.rs",
+        "crates/typert-generator/src/analyzer/native/repository/config.rs",
+        "crates/repository-tools/tests/typescript_repository_commands_parity.rs"
+      ],
+      "evidence": [
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/type-equiv.manifest.json",
@@ -88257,7 +88622,21 @@
     {
       "source": "scripts/verify-package-readme-model-experience.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_readme_model_experience.rs",
+        "crates/repository-tools/src/package_readme_model_experience_policy.json",
+        "crates/repository-tools/src/bin/verify-package-readme-model-experience.rs",
+        "crates/repository-tools/tests/package_readme_model_experience_parity.rs"
+      ],
+      "evidence": [
+        "Four source-differential groups cover structured, short-form, omission-policy, nested Markdown/fence, heading/literal/link, duplicate-fragment, and failure diagnostics.",
+        "Complete pinned source corpus and real native CLI match: 219 READMEs, 4 audited omissions, 94 structured sections, 184 model-context entries, 305 KV-cache fields, 16 fenced system-prompt entries, 27 catalog-linked tool-schema entries, 66 explained-none entries, 55 indirect entries, and 47 verbatim Markdown blocks.",
+        "Real pnpm run verify-package-readme-model-experience --root SOURCE delegates to cargo run and the compiled native checker, succeeding on all 219 source READMEs.",
+        "No README content was edited.",
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/verify-public-repository-links.spec.ts",
@@ -88378,7 +88757,17 @@
     {
       "source": "scripts/verify-type-equiv.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/type_equiv.rs",
+        "crates/repository-tools/src/bin/verify-type-equiv.rs",
+        "crates/typert-generator/src/analyzer/native/repository/declarations.rs",
+        "crates/repository-tools/tests/typescript_repository_commands_parity.rs"
+      ],
+      "evidence": [
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+      ],
+      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
     {
       "source": "scripts/verify-vendored-links.ts",
@@ -88570,25 +88959,21 @@
     {
       "source": "vendor/cordis/src/context.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/context.rs",
         "crates/cordis/src/wasm.rs",
         "crates/cordis/src/wasm/browser_context.rs",
         "crates/cordis/src/wasm/context_proxy.rs",
-        "crates/cordis/src/wasm/tracing.rs",
-        "xtask/src/remote_contracts/registry_driver.rs",
-        "xtask/src/remote_contracts/browser_driver.rs",
+        "crates/cordis/tests/context_service_boundary_audit.rs",
+        "crates/cordis/tests/fixtures/browser_context_reflect_service.mjs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx semantic oracle: exact context extension, isolation, shallow intercept, and root lifecycle outcomes",
-        "fresh cargo xtask remote-milestone: source generator corpus 157 passed/28 skipped, registry 21 passed, gateway 134 passed, selected source regressions 108 passed/26 skipped, 2606 codec comparisons, 82 declarations, typed Chromium consumers, and rebuilt Rust Host shutdown code 130",
-        "cargo test -p seekdeep-cordis --all-features (23 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
-        "cargo check --workspace --all-targets --all-features"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Native Context semantics remain covered. Source/built-WASM cases and real Host/Chromium verify root and plugin Context fields, subclass identity, method prototypes, plain metadata inheritance, shadow extension, shared reflection handlers, structural method receivers, overridden extension methods, symbol isolation, lazy intercept config, and the default LoggerService. Complete declaration and remaining public-boundary behavior still require verification."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/events.ts",
@@ -88619,47 +89004,28 @@
     {
       "source": "vendor/cordis/src/fiber.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/fiber.rs",
         "crates/cordis/src/plugin.rs",
         "crates/cordis/src/wasm.rs",
-        "crates/cordis/src/wasm/browser_config.rs",
         "crates/cordis/src/wasm/browser_fiber.rs",
         "crates/cordis/src/wasm/browser_fiber_api.rs",
         "crates/cordis/src/wasm/browser_runner.rs",
-        "crates/cordis/src/wasm/browser_registry.rs",
-        "crates/cordis/src/wasm/browser_plugins.rs",
         "crates/cordis/src/wasm/browser_effects.rs",
+        "crates/cordis/src/wasm/browser_config.rs",
         "crates/cordis/src/wasm/browser_errors.rs",
-        "crates/cordis/src/wasm/browser_stack.rs",
-        "crates/cordis/src/wasm/browser_services.rs",
-        "crates/cordis/src/service.rs",
-        "xtask/src/remote_contracts/registry_driver.rs",
+        "crates/cordis/tests/fiber_ownership_boundary_audit.rs",
+        "crates/cordis/tests/native_failure_identity.rs",
         "crates/cordis/tests/plugin_lifecycle_events.rs",
-        "crates/cordis/tests/source_semantic_oracle.rs"
+        "xtask/src/remote_contracts/fiber_registry_cases.js",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx semantic oracle: pending, active, withdrawn, and disposed dependency epochs matched exactly",
-        "cargo test -p seekdeep-cordis --all-features (37 passed)",
-        "WASM unit and browser-face integration tests (4 passed); native and WASM all-targets strict Clippy pass",
-        "Rust additive guarantees: joined deterministic disposal errors and transactional update rollback remain covered",
-        "cargo xtask remote-gateway-oracle --source-regressions",
-        "cargo xtask remote-gateway-oracle",
-        "cargo xtask remote-loader",
-        "source-extracted Fiber receiver scenarios: 13 state/inertia/visibility/status observations match the pinned source; effects admitted through the underlying Context survive a handle's captured teardown snapshot",
-        "built WASM: 105 source-derived reflection, Context, Fiber runner/lifecycle, logger, symbol, stack, Service, decorator, utility, config, constructor, registry, list, isolation, effect, and event-service cases pass within the 148-case gateway corpus; all 122 selected source regressions pass",
-        "source/built-WASM and Chromium cross-copy tests retain the registry copy's Fiber prototype and verify dependency withdrawal, republishing, restart, and cleanup; parent effect overrides run after context construction and before runtime membership or publication; missing runner stack callbacks preserve source Error wrapping",
-        "structural Fiber activation, restart, teardown, and pre-iteration cleanup failures match source without a native controller; real Host/Chromium verifies structural lifecycle, registry iterator closure, and readonly dependency normalization",
-        "eight source/built-WASM Fiber cases pin runner collectors and epochs, state notifications, effect dispatch, shared runner identity, own fields and async prototypes, exact lifecycle method order, parent Context extension ownership, and structural dependency refresh",
-        "real Host/Chromium verifies source-shaped Fiber fields, mutable runner callbacks, exact lifecycle method dispatch, async prototypes, disposal, and parent Context extension alongside typed Remote calls; Host exits with code 130 without a forced kill",
-        "fresh raw WASM package tests: 4 passed, including custom Context-wrapper child ownership and cleanup; native and WASM strict Clippy pass; wrapper boot-contract test passes",
-        "source/built-WASM stack cases preserve malformed setup wrapping, caller-supplied direct-Fiber frames, callback-created errors, iterator failures, invalid initialization TypeErrors, and owner teardown composition",
-        "real Rust Host/Chromium 149: public Fiber class identity, class initialization hooks, startup effects, direct root construction, and runtime removal pass alongside typed Remote calls",
-        "real Rust Host/Chromium 149: awaitable iterable effects, nested cleanup order, owner joining, root constructor cleanup, inactive error codes, typed Remote calls, and zero remaining descriptors pass",
-        "source/built-WASM probes: 13 restart observations, 17 failure/recovery observations, and 9 overlapping-update observations match; the overlapping update hang is eliminated"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Receiver-owned lifecycle transitions, implementation records, startup admission, exception identity, overlapping updates, iterable effects, reentrant rollback, single-shot disposal, parent cleanup joining, public constructors, class initialization, shared runtimes, and CordisError codes have source/built-WASM evidence. The facade exposes source fields and prototypes over private native bindings; the mutable runner is authoritative for epochs and startup. Current lifecycle methods, parent Context extension, and parent effect overrides retain source order and ownership. Structural and cross-copy lifecycle cases pass. Stack composition preserves caller frames and default capture. Fiber remains pending for the final full API audit."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/index.ts",
@@ -88680,114 +89046,114 @@
     {
       "source": "vendor/cordis/src/logger.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/logger.rs",
-        "crates/cordis/src/context.rs",
+        "crates/cordis/src/logger/format.rs",
         "crates/cordis/src/wasm/browser_logger.rs",
         "crates/cordis/src/wasm/browser_logger/format.rs",
-        "xtask/src/remote_contracts/registry_driver.rs",
-        "xtask/src/remote_contracts/browser_driver.rs",
-        "crates/cordis/tests/logger_oracle.rs"
+        "crates/cordis/tests/logger_oracle.rs",
+        "crates/cordis/tests/logger_utils_priority_oracle.rs",
+        "crates/cordis/tests/fixtures/logger_utils_priority.spec.ts",
+        "crates/logger-console/src/lib.rs",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx logger oracle: injected timestamp, sequence numbers, names, intercept levels, exporter thresholds, buffering, formatting, colors, and disposal matched",
-        "cargo test -p seekdeep-cordis --all-features (29 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "The default browser Context now installs the Rust/WASM callable LoggerService and exports Logger, palettes, and formatters. Source cases cover naming, shadow contexts, levels, message identity, metadata overrides, causes/aggregates, buffering, exporter-counter cleanup, formatting, UTF-16 colors, and Fiber failure logging. Chromium verifies the real logger with Remote calls. Native naming now uses the shared source-faithful param_case utility. Complete constructor, formatter, and native/browser boundary coverage remains pending."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/reflect.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/context.rs",
         "crates/cordis/src/service.rs",
         "crates/cordis/src/wasm/browser_reflect.rs",
         "crates/cordis/src/wasm/browser_reflect/provider.rs",
+        "crates/cordis/src/wasm/browser_reflect/mixin.rs",
         "crates/cordis/src/wasm/context_proxy.rs",
         "crates/cordis/src/wasm/browser_services.rs",
-        "xtask/src/remote_contracts/registry_driver.rs",
-        "xtask/src/remote_contracts/browser_driver.rs",
-        "crates/cordis/tests/reflect_oracle.rs",
-        "crates/cordis/tests/source_semantic_oracle.rs"
+        "crates/cordis/tests/context_service_boundary_audit.rs",
+        "crates/cordis/tests/fixtures/browser_context_reflect_service.mjs",
+        "crates/cordis/tests/reflect_oracle.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx reflection oracle: provide/get/set, computed accessors, read-only refusal, declaration conflicts, bound mixins, and disposal matched",
-        "cargo test -p seekdeep-cordis --all-features (27 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
-        "seventeen source/built-WASM reflection and Context cases cover caller-error identity and enhancement, accessors and mixins, get/set waterfalls, mutable definitions, special properties, metadata and prototypes, shared handlers, notification filters, mutable Fiber methods, provider hooks, independent stores, structural receivers, extension overrides, lazy config, and withdrawal Promise/error identity",
-        "fresh cargo xtask remote-milestone passed the generated-contract, registry, gateway, public-consumer, and real Host/Chromium path with the current reflection implementation",
-        "built-WASM gateway: 134 passed; selected pinned-source regressions: 108 passed, 26 skipped; Cordis package tests: 37 native passed and 4 WASM passed; wrapper boot-contract test passed",
-        "real Rust Host/Chromium 149: accessor and mixin receivers, mapped writes, internal/get, exact setter error identity and stack, custom notification filters, provider effect/notification overrides, asynchronous withdrawal rejection identity, owner cleanup, typed Remote calls, and clean SIGINT exit 130",
-        "cargo clippy -p seekdeep-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Native reflection evidence is retained. Browser accessors, mixins, get/set interception, caller-error enhancement, custom notification filters, mutable Fiber notification methods, provider hooks, asynchronous withdrawal rejection, shared constructors/prototypes/handlers, independent stores, and structural receivers have source and integrated-browser evidence. This row remains pending for the remaining declaration and public-boundary audit."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/registry.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/plugin.rs",
         "crates/cordis/src/context.rs",
         "crates/cordis/src/wasm/browser_registry.rs",
-        "crates/cordis/src/wasm/browser_plugins.rs",
         "crates/cordis/src/wasm/browser_inject.rs",
+        "crates/cordis/src/wasm/browser_plugins.rs",
+        "crates/cordis/src/wasm/browser_config.rs",
         "crates/cordis/tests/registry_oracle.rs",
-        "crates/cordis/tests/source_semantic_oracle.rs"
+        "crates/cordis/tests/plugin_lifecycle_events.rs",
+        "crates/cordis/tests/fiber_ownership_boundary_audit.rs",
+        "xtask/src/remote_contracts/fiber_registry_cases.js",
+        "xtask/src/remote_contracts/registry_driver.rs",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx registry oracle: runtime size, shared sibling fibers, monotonic uids, map iteration, single-fiber disposal, delete, and missing delete matched",
-        "cargo test -p seekdeep-cordis --all-features (24 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Rust/WASM implements shared callback runtime records, map inspection, disposal, counters, Inject.resolve, class construction, and class/method Inject decorators. Source comparisons cover inherited metadata, repeated decorators, shared symbols, traced receivers, dependency changes, cleanup, caller stacks, exact prototypes, iterator closure, and refused dependency writes. Registries retain their own Fiber constructor across independent Cordis copies. Parent effect refusal preserves source construction order and failure identity. Chromium verifies the integrated paths. The final full API audit remains pending."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/service.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/service.rs",
         "crates/cordis/src/context.rs",
-        "crates/cordis/src/plugin.rs",
         "crates/cordis/src/wasm/browser_service.rs",
         "crates/cordis/src/wasm/tracing.rs",
+        "crates/cordis/tests/context_service_boundary_audit.rs",
+        "crates/cordis/tests/fixtures/browser_context_reflect_service.mjs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx semantic oracle: duplicate ownership, provider-owned set, isolation filtering, shallow config resolution, and inject intercepts",
-        "cargo test -p seekdeep-cordis --all-features (23 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Native service behavior remains covered. Rust/WASM implements static-provide fallback, callable construction, original check receivers, availability predicates, extension, isolation filtering, config merge order, and constructor-chain hasInstance behavior. Source cases preserve the separate mutable symbols and Service/Context static-field reads; real Host/Chromium exercises Service and decorated-method lifecycles. Complete constructor and remaining public-boundary cases still require verification."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/utils.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
         "crates/cordis/src/utils.rs",
-        "crates/cordis/src/context.rs",
-        "crates/cordis/src/fiber.rs",
-        "crates/cordis/src/wasm/update_hooks.rs",
-        "crates/cordis/src/wasm/browser_plugins.rs",
         "crates/cordis/src/wasm/browser_values.rs",
+        "crates/cordis/src/wasm/browser_plugins.rs",
         "crates/cordis/src/wasm/browser_service.rs",
         "crates/cordis/src/wasm/tracing.rs",
-        "crates/cordis/src/wasm/browser_symbols.rs",
+        "crates/cordis/src/wasm/update_hooks.rs",
         "crates/cordis/src/wasm/browser_stack.rs",
-        "crates/cordis/tests/utils_oracle.rs"
+        "crates/cordis/src/wasm/browser_symbols.rs",
+        "crates/cordis/tests/utils_oracle.rs",
+        "crates/cordis/tests/logger_utils_priority_oracle.rs",
+        "crates/cordis/tests/fixtures/logger_utils_priority.spec.ts",
+        "crates/client-foundation-wasm/src/wasm_typert.rs",
+        "crates/client-foundation-wasm/tests/wasm_foundation_parity.rs",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "pinned-source direct Node/tsx utility oracle: duplicate identity registrations, latest delete, exact disposer handles, reverse clear, and object classification matched",
-        "cargo test -p seekdeep-cordis --all-features (31 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
-        "Rust error chains preserve outer operation context without JavaScript stack-splicing"
+        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
+        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
       ],
-      "note": "Browser DisposableList, constructor classification, callable creation, prototype joining, property overlays, descriptor lookup, object classification, and tracing helpers have source comparisons. The mutable symbol table and buildOuterStack/composeError APIs are source/Chromium checked. Fiber startup, setup, iterator execution, and owner teardown use composition. Reflection caller-error identity and enhancement have source/Chromium evidence; remaining tracing boundary behavior is pending."
+      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/tsconfig.json",
@@ -89016,25 +89382,107 @@
     {
       "source": "vendor/hmr/src/error.ts",
       "kind": "production-code",
-      "status": "pending",
-      "note": "generic JavaScript import/apply failures are preserved, but esbuild-style source-location code-frame rendering is not ported"
+      "status": "verified",
+      "note": "Error rendering and runtime routing verified. Final programmatic reload changes belong to the separate HMR lifecycle row.",
+      "targets": [
+        "crates/code-runtime-worker-thread/node/plugin-loader.cjs",
+        "crates/code-runtime-worker-thread/node/src/loader.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_context.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_tools.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_watch.rs",
+        "crates/hmr/Cargo.toml",
+        "crates/hmr/licenses/babel-code-frame.txt",
+        "crates/hmr/licenses/js-tokens.txt",
+        "crates/hmr/licenses/picocolors.txt",
+        "crates/hmr/licenses/picomatch.txt",
+        "crates/hmr/src/error.rs",
+        "crates/hmr/src/ignore.rs",
+        "crates/hmr/src/lib.rs",
+        "crates/hmr/src/watcher.rs",
+        "crates/hmr/tests/config_registration.rs",
+        "crates/hmr/tests/error_oracle.rs",
+        "crates/hmr/tests/host_hmr_parity.rs",
+        "crates/hmr/tests/ignore_oracle.rs",
+        "crates/hmr/tests/structured_error.rs",
+        "crates/hmr/tests/watcher_options.rs",
+        "crates/loader/Cargo.toml",
+        "crates/loader/src/bin/cordis.rs",
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/host_hmr.rs",
+        "crates/loader/src/javascript_plugin.rs",
+        "crates/loader/src/javascript_plugin/json.rs",
+        "crates/loader/src/launcher.rs",
+        "crates/loader/src/lib.rs",
+        "crates/loader/src/node_plugin.rs",
+        "crates/loader/src/node_tools.rs",
+        "crates/loader/src/node_watch.rs",
+        "crates/loader/src/profile_patch.rs",
+        "crates/loader/src/sandbox_service.rs",
+        "crates/loader/tests/cordis_launcher.rs",
+        "crates/loader/tests/fixtures/cjs_hmr_oracle.mjs",
+        "crates/loader/tests/include_patch_oracle.rs",
+        "crates/loader/tests/node_module_hmr.rs",
+        "crates/loader/tests/node_tools_lossless.rs",
+        "crates/loader/tests/profile_patch_parity.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "Plain/ANSI frames and structured diagnostics matched pinned source.",
+        "Fresh structured runtime diagnostic suite passed four cases; Node compiler errors route through Rust reporting."
+      ]
     },
     {
       "source": "vendor/hmr/src/index.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "ported",
       "targets": [
+        "crates/code-runtime-worker-thread/node/plugin-loader.cjs",
+        "crates/code-runtime-worker-thread/node/src/loader.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_context.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_tools.rs",
+        "crates/code-runtime-worker-thread/node/src/loader_watch.rs",
+        "crates/hmr/Cargo.toml",
+        "crates/hmr/licenses/babel-code-frame.txt",
+        "crates/hmr/licenses/js-tokens.txt",
+        "crates/hmr/licenses/picocolors.txt",
+        "crates/hmr/licenses/picomatch.txt",
+        "crates/hmr/src/error.rs",
+        "crates/hmr/src/ignore.rs",
         "crates/hmr/src/lib.rs",
+        "crates/hmr/src/watcher.rs",
+        "crates/hmr/tests/config_registration.rs",
+        "crates/hmr/tests/error_oracle.rs",
         "crates/hmr/tests/host_hmr_parity.rs",
+        "crates/hmr/tests/ignore_oracle.rs",
+        "crates/hmr/tests/structured_error.rs",
+        "crates/hmr/tests/watcher_options.rs",
+        "crates/loader/Cargo.toml",
+        "crates/loader/src/bin/cordis.rs",
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/host_hmr.rs",
         "crates/loader/src/javascript_plugin.rs",
+        "crates/loader/src/javascript_plugin/json.rs",
+        "crates/loader/src/launcher.rs",
         "crates/loader/src/lib.rs",
+        "crates/loader/src/node_plugin.rs",
+        "crates/loader/src/node_tools.rs",
+        "crates/loader/src/node_watch.rs",
+        "crates/loader/src/profile_patch.rs",
+        "crates/loader/src/sandbox_service.rs",
+        "crates/loader/tests/cordis_launcher.rs",
+        "crates/loader/tests/fixtures/cjs_hmr_oracle.mjs",
+        "crates/loader/tests/include_patch_oracle.rs",
+        "crates/loader/tests/node_module_hmr.rs",
+        "crates/loader/tests/node_tools_lossless.rs",
+        "crates/loader/tests/profile_patch_parity.rs",
         "crates/loader/tests/runtime_parity.rs"
       ],
       "evidence": [
-        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-loader -p seekdeep-hmr --all-features",
-        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-loader -p seekdeep-hmr --all-targets --all-features -- -D warnings"
+        "Source matcher/watcher comparisons, config add/change/unlink, dirty refresh, batching and disposal passed.",
+        "Fresh real Node HMR four, Loader runtime 26 and structured diagnostic four tests passed before the last programmatic-entry update.",
+        "Final programmatic-entry/Include-namespace ownership changes and fifth Node HMR case compile; runtime and strict reruns remain pending."
       ],
-      "note": "recursive watching, config precedence, serialized debounce, ESM/CJS dependency invalidation, declaration-order graph replacement, import/apply rollback, contained disposer failures, events, full-restart classification, and joined teardown are ported; exact picomatch semantics, general CommonJS require, and build-error code frames remain"
+      "note": "Real Node ESM/CJS resolution and shared-cache HMR are implemented. Final programmatic ownership, duplicate-ID and native lifecycle comparisons are required; source-only probes are not native proof."
     },
     {
       "source": "vendor/hmr/tsconfig.json",
@@ -89594,7 +90042,25 @@
     {
       "source": "website/.vitepress/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/repository-tools/src/doc_site/config.rs",
+        "crates/repository-tools/src/doc_site/prepare.rs",
+        "crates/docs-site-runtime/src/lib.rs",
+        "crates/docs-site-runtime/src/wasm.rs",
+        "website/.vitepress/config.mjs",
+        "website/.vitepress/theme/index.mjs",
+        "website/site.css",
+        "crates/docs-site-runtime/tests/built_parity.rs",
+        "crates/docs-site-runtime/tests/built-parity.mjs"
+      ],
+      "evidence": [
+        "Rust/WASM release build and strict WASM Clippy passed",
+        "Built runtime matched 26 Node source cases and seven real Chromium 149.0.7827.55 scenarios, including serializable edit callbacks and listener/timer disposal",
+        "pnpm docs:build completed server rendering and 2314 internal fragment checks",
+        "Live Chinese search ranked the persistence page first; locale switching, canonical edit links, light/dark wordmark, screenshots, and Mermaid rendering were verified"
+      ],
+      "note": "Rust owns configuration, dependency preparation, edit-link validation, interpolation escaping, watcher selection, and sidebar behavior. Thin VitePress adapters initialize the shared WASM runtime before hydration and preserve serialized callback access. The website milestone remains pending its remaining acceptance checks."
     },
     {
       "source": "website/AGENTS.md",
@@ -89610,7 +90076,18 @@
     {
       "source": "website/docs.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "website/docs.json",
+        "crates/repository-tools/src/doc_site.rs",
+        "crates/repository-tools/src/doc_site/config.rs"
+      ],
+      "evidence": [
+        "Canonical publication manifest matches the pinned source pages and sections after the product rename",
+        "Native materialized VitePress configuration matches source locale, navigation, sidebar, collapse, search, and chrome settings",
+        "Built website contains all 166 locale pages and preserves Chinese and English home redirects"
+      ],
+      "note": "The maintained publication allowlist is JSON data validated by Rust closed enums and required fields. Remaining integrated website acceptance is still in progress."
     },
     {
       "source": "website/package.json",

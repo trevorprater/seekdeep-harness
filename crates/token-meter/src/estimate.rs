@@ -1,7 +1,7 @@
 //! Fixed-density heuristic shared by the service and projection folds.
 
-use seekdeep_core::request_header::EpochHeader;
-use seekdeep_llm::{ContentBlock, Message};
+use seekdeep_core::{request_header::EpochHeader, session::JsonValue};
+use seekdeep_llm::{ContentBlock, JsonString, Message};
 
 const CHARS_PER_TOKEN: usize = 4;
 const BLOCK_OVERHEAD: u64 = 4;
@@ -26,9 +26,12 @@ fn serialized_tokens<T: serde::Serialize>(value: &T) -> u64 {
 pub fn estimate_content(blocks: &[ContentBlock]) -> u64 {
     blocks.iter().fold(0_u64, |total, block| {
         let tokens = match block {
-            ContentBlock::Text { text } | ContentBlock::Reasoning { text } => {
-                dense_tokens(text).saturating_add(BLOCK_OVERHEAD)
+            ContentBlock::Text { text } => {
+                u64::try_from(text.len_utf16().div_ceil(CHARS_PER_TOKEN))
+                    .unwrap_or(u64::MAX)
+                    .saturating_add(BLOCK_OVERHEAD)
             }
+            ContentBlock::Reasoning { text } => dense_tokens(text).saturating_add(BLOCK_OVERHEAD),
             ContentBlock::ToolCall {
                 name, arguments, ..
             } => dense_tokens(name)
@@ -79,20 +82,27 @@ pub fn estimate_tools_tokens(header: Option<&EpochHeader>) -> u64 {
 /// figures here: a non-empty `system` string prices as prose and a non-empty `tools` value that
 /// is not a schema list prices by its serialized JSON length.
 #[must_use]
-pub fn estimate_recorded_header(header: &serde_json::Value) -> (u64, u64) {
+pub fn estimate_recorded_header(header: &JsonValue) -> (u64, u64) {
     let system = header
         .get("system")
-        .and_then(serde_json::Value::as_str)
+        .and_then(|system| system.to_utf16())
         .filter(|system| !system.is_empty())
         .map_or(0, |system| {
-            dense_tokens(system).saturating_add(ROLE_OVERHEAD)
+            u64::try_from(system.len().div_ceil(CHARS_PER_TOKEN))
+                .unwrap_or(u64::MAX)
+                .saturating_add(ROLE_OVERHEAD)
         });
     let tools = match header.get("tools") {
-        Some(serde_json::Value::String(tools)) if !tools.is_empty() => {
-            serialized_tokens(tools).saturating_add(BLOCK_OVERHEAD)
+        Some(tools) if tools.is_string() => {
+            let units = tools.to_utf16().unwrap_or_default();
+            if units.is_empty() {
+                0
+            } else {
+                serialized_tokens(&JsonString::from_utf16(&units)).saturating_add(BLOCK_OVERHEAD)
+            }
         }
-        Some(serde_json::Value::Array(tools)) if !tools.is_empty() => {
-            serialized_tokens(tools).saturating_add(BLOCK_OVERHEAD)
+        Some(tools) if tools.array_items().is_some_and(|items| !items.is_empty()) => {
+            serialized_tokens(&tools.to_owned()).saturating_add(BLOCK_OVERHEAD)
         }
         _ => 0,
     };
@@ -116,7 +126,7 @@ mod tests {
     fn uses_javascript_utf16_density_and_every_content_shape() {
         let blocks = vec![
             ContentBlock::Text {
-                text: "hello".to_owned(),
+                text: "hello".into(),
             },
             ContentBlock::Reasoning {
                 text: "1234".to_owned(),
@@ -129,7 +139,7 @@ mod tests {
             ContentBlock::ToolResult {
                 tool_call_id: CallId::new("ignored"),
                 content: vec![ContentBlock::Text {
-                    text: "nested".to_owned(),
+                    text: "nested".into(),
                 }],
                 is_error: Some(false),
             },

@@ -6,7 +6,7 @@ use seekdeep_llm::ContentBlock;
 #[test]
 fn frames_summary_with_preamble_and_tags() {
     let summary = vec![ContentBlock::Text {
-        text: "## Primary Request\nbuild it".to_owned(),
+        text: "## Primary Request\nbuild it".into(),
     }];
     let framed = frame_summary(&summary);
     assert_eq!(framed.len(), 3);
@@ -15,9 +15,9 @@ fn frames_summary_with_preamble_and_tags() {
     };
     assert!(
         preamble.starts_with("This is an automatically generated checkpoint"),
-        "{preamble}"
+        "{preamble:?}"
     );
-    assert!(preamble.ends_with("<compacted-summary>"), "{preamble}");
+    assert!(preamble.ends_with("<compacted-summary>"), "{preamble:?}");
     let ContentBlock::Text { text: close } = &framed[2] else {
         panic!("expected close text block");
     };

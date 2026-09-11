@@ -67,7 +67,7 @@ fn projects_only_native_metadata_with_exact_wire_shape() {
             redacted: Some(true),
         },
         PiAssistantBlock::Text {
-            text: "calling".to_owned(),
+            text: "calling".into(),
             text_signature: Some("text-sig".to_owned()),
         },
         PiAssistantBlock::ToolCall {
@@ -109,7 +109,7 @@ fn foreign_history_preserves_source_skips_extensions_and_tolerates_bad_arguments
                 text: "hmm".to_owned(),
             },
             ContentBlock::Text {
-                text: "calling".to_owned(),
+                text: "calling".into(),
             },
             ContentBlock::ToolCall {
                 id: CallId::new("c1"),
@@ -163,7 +163,7 @@ fn recombines_durable_content_with_validated_native_metadata() {
             redacted: Some(true),
         },
         PiAssistantBlock::Text {
-            text: "ignored".to_owned(),
+            text: "ignored".into(),
             text_signature: Some("text-sig".to_owned()),
         },
         PiAssistantBlock::ToolCall {
@@ -180,7 +180,7 @@ fn recombines_durable_content_with_validated_native_metadata() {
                 text: "private".to_owned(),
             },
             ContentBlock::Text {
-                text: "calling".to_owned(),
+                text: "calling".into(),
             },
             ContentBlock::ToolCall {
                 id: CallId::new("c1"),
@@ -225,7 +225,7 @@ fn rejects_source_and_durable_content_mismatches() {
     ] {
         let message = assistant(
             vec![ContentBlock::Text {
-                text: "done".to_owned(),
+                text: "done".into(),
             }],
             replay_source("p", "m", replay),
         );
@@ -302,7 +302,7 @@ fn rejects_every_malformed_replay_shape_with_stable_diagnostics() {
     for (replay, expected) in cases {
         let message = assistant(
             vec![ContentBlock::Text {
-                text: "done".to_owned(),
+                text: "done".into(),
             }],
             replay_source("deepseek", "deepseek-v4-flash", replay),
         );

@@ -55,9 +55,7 @@ impl Bench {
             .append(
                 "user/message",
                 serde_json::to_value(UserMessage::new(
-                    vec![ContentBlock::Text {
-                        text: "hi".to_owned(),
-                    }],
+                    vec![ContentBlock::Text { text: "hi".into() }],
                     MessageSource::user(),
                 ))
                 .expect("serialize user message"),
@@ -79,7 +77,7 @@ async fn projection_is_null_before_first_write_and_absent_without_the_plugin() {
     let with_todo = Bench::new(true).await;
     with_todo.seed_message();
     let snapshot = with_todo.snapshot();
-    assert_eq!(snapshot.values.get("todos"), Some(&Value::Null));
+    assert!(snapshot.values["todos"].is_null());
     assert_eq!(
         snapshot.as_of_seq,
         i64::try_from(with_todo.session.seq()).unwrap() - 1
@@ -151,7 +149,7 @@ async fn projection_is_last_write_wins_and_clears_only_on_turn_start() {
 async fn disposing_the_plugin_fiber_removes_the_projection_key() {
     let bench = Bench::new(true).await;
     bench.seed_message();
-    assert_eq!(bench.snapshot().values.get("todos"), Some(&Value::Null));
+    assert!(bench.snapshot().values["todos"].is_null());
     bench
         .todo
         .as_ref()

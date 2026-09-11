@@ -372,7 +372,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: i64::try_from(seq + 1).expect("test seq fits i64"),
-            data: json!({}),
+            data: json!({}).into(),
             source_event_seqs: sources,
             surface_op,
             ignorable: None,

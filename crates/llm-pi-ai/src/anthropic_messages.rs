@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use futures::StreamExt as _;
 use parking_lot::Mutex;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use seekdeep_llm_deepseek::sse::{ByteStream, parse_sse};
 use serde_json::{Map, Value, json};
 
@@ -14,6 +14,7 @@ use crate::{
     catalog::{PiModel, PiThinkingLevel},
     config::PiCacheRetention,
     context::{PiContext, PiMessage, PiToolResultMessage, PiUserContent, PiUserContentBlock},
+    json::{sanitize_surrogates, scalar_text_is_blank, text_is_blank},
     replay::{
         PiAssistantBlock, PiAssistantMessage, PiAssistantRole, PiResponseId, PiStopReason, PiUsage,
     },
@@ -355,23 +356,34 @@ fn convert_messages(pi_context: &PiContext) -> Vec<Value> {
         match message {
             PiMessage::User(message) => {
                 let wire_content = match &message.content {
-                    PiUserContent::Text(text) => Value::String(text.clone()),
+                    PiUserContent::Text(text) if text_is_blank(text) => continue,
+                    PiUserContent::Text(text) => Value::String(sanitize_surrogates(text)),
                     PiUserContent::Blocks(blocks) => {
-                        Value::Array(blocks.iter().map(anthropic_input).collect())
+                        let blocks = blocks
+                            .iter()
+                            .map(anthropic_input)
+                            .filter(|block| {
+                                block.get("type").and_then(Value::as_str) != Some("text")
+                                    || !block
+                                        .get("text")
+                                        .and_then(Value::as_str)
+                                        .is_some_and(scalar_text_is_blank)
+                            })
+                            .collect::<Vec<_>>();
+                        if blocks.is_empty() {
+                            continue;
+                        }
+                        Value::Array(blocks)
                     }
                 };
-                if !wire_content
-                    .as_str()
-                    .is_some_and(|text| text.trim().is_empty())
-                {
-                    messages.push(json!({"role":"user","content":wire_content}));
-                }
+                messages.push(json!({"role":"user","content":wire_content}));
             }
             PiMessage::Assistant(message) => {
                 let mut wire_content = Vec::new();
                 for block in &message.content {
                     match block {
-                        PiAssistantBlock::Text { text, .. } => wire_content.push(json!({"type":"text","text":text})),
+                        PiAssistantBlock::Text { text, .. } if !text_is_blank(text) => wire_content.push(json!({"type":"text","text":sanitize_surrogates(text)})),
+                        PiAssistantBlock::Text { .. } => {},
                         PiAssistantBlock::Thinking { thinking, thinking_signature, redacted } => {
                             if *redacted == Some(true) {
                                 wire_content.push(json!({"type":"redacted_thinking","data":thinking_signature}));
@@ -398,7 +410,9 @@ fn convert_messages(pi_context: &PiContext) -> Vec<Value> {
 
 fn anthropic_input(block: &PiUserContentBlock) -> Value {
     match block {
-        PiUserContentBlock::Text { text } => json!({"type":"text","text":text}),
+        PiUserContentBlock::Text { text } => {
+            json!({"type":"text","text":sanitize_surrogates(text)})
+        }
         PiUserContentBlock::Image { data, mime_type } => json!({
             "type":"image","source":{"type":"base64","media_type":mime_type,"data":data}
         }),
@@ -425,17 +439,15 @@ fn tool_result(message: &PiToolResultMessage) -> Value {
         }
         Value::Array(blocks)
     } else {
-        Value::String(
-            message
-                .content
-                .iter()
-                .filter_map(|block| match block {
-                    PiUserContentBlock::Text { text } => Some(text.as_str()),
-                    PiUserContentBlock::Image { .. } => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        let text = message
+            .content
+            .iter()
+            .filter_map(|block| match block {
+                PiUserContentBlock::Text { text } => Some(text.clone()),
+                PiUserContentBlock::Image { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        Value::String(sanitize_surrogates(&JsonString::join(&text, "\n")))
     };
     json!({"type":"tool_result","tool_use_id":normalize_id(message.tool_call_id.as_str()),"content":content,"is_error":message.is_error})
 }
@@ -503,7 +515,7 @@ fn start_block(
     let (native, partial) = match block.get("type").and_then(Value::as_str)? {
         "text" => (
             PiAssistantBlock::Text {
-                text: String::new(),
+                text: JsonString::default(),
                 text_signature: None,
             },
             String::new(),

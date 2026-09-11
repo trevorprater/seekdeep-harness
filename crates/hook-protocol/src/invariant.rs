@@ -11,7 +11,6 @@ use seekdeep_core::{
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use serde_json::Value;
 
 const PACKAGE_NAME: &str = "seekdeep-hook-protocol";
 
@@ -57,7 +56,7 @@ fn validate_hook_event(
             ))
             .into());
     };
-    let turn = event.data.get("turn").and_then(Value::as_u64);
+    let turn = event.data["turn"].as_u64();
     if turn != Some(open_turn) {
         let rendered = turn.map_or_else(|| "undefined".to_owned(), |turn| turn.to_string());
         return Err(failure
@@ -68,14 +67,14 @@ fn validate_hook_event(
             .into());
     }
     if event.event_type == "hook/invoked" {
-        let point = event.data.get("point").and_then(Value::as_str);
-        let handler_id = event.data.get("handlerId").and_then(Value::as_str);
+        let point = event.data["point"].as_str();
+        let handler_id = event.data["handlerId"].as_str();
         if point.is_none_or(str::is_empty) || handler_id.is_none_or(str::is_empty) {
             return Err(failure
                 .fail("hook/invoked point and handlerId must be non-empty")
                 .into());
         }
-        let dialect = event.data.get("dialect").and_then(Value::as_str);
+        let dialect = event.data["dialect"].as_str();
         if dialect != Some("claude-code") && dialect != Some("codex") {
             let rendered = dialect.map_or_else(
                 || "undefined".to_owned(),
@@ -94,16 +93,8 @@ fn validate_hook_event(
             delta: 1,
         }));
     }
-    let point = event
-        .data
-        .get("point")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let handler_id = event
-        .data
-        .get("handlerId")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
+    let point = event.data["point"].as_str().unwrap_or_default();
+    let handler_id = event.data["handlerId"].as_str().unwrap_or_default();
     let key = hook_key(open_turn, point, handler_id);
     if trace.pending.get(&key).copied().unwrap_or(0) == 0 {
         let rendered = serde_json::to_string(handler_id).unwrap_or_else(|_| "null".to_owned());
@@ -113,10 +104,8 @@ fn validate_hook_event(
             ))
             .into());
     }
-    let duration_ok = event
-        .data
-        .get("durationMs")
-        .and_then(Value::as_f64)
+    let duration_ok = event.data["durationMs"]
+        .as_f64()
         .is_some_and(|value| value.is_finite() && value >= 0.0);
     if !duration_ok {
         return Err(failure
@@ -141,7 +130,7 @@ fn seed_trace(session: &Session, failure: &InvariantFailure) -> anyhow::Result<H
     let mut trace = HookTrace::default();
     for event in &session.events() {
         match event.event_type.as_str() {
-            "turn/start" => trace.open_turn = event.data.get("turn").and_then(Value::as_u64),
+            "turn/start" => trace.open_turn = event.data["turn"].as_u64(),
             "turn/end" => trace.open_turn = None,
             _ => {}
         }
@@ -282,7 +271,7 @@ fn install(context: &Context, failure: &InvariantFailure) -> anyhow::Result<()> 
                 let mut guard = published_state.lock();
                 let trace = ensure_trace(&mut guard, key, &session, &published_failure)?;
                 trace.open_turn = if event.event_type == "turn/start" {
-                    event.data.get("turn").and_then(Value::as_u64)
+                    event.data["turn"].as_u64()
                 } else {
                     None
                 };

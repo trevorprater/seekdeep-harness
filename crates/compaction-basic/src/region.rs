@@ -11,7 +11,7 @@ use seekdeep_compaction::{
     tool_pairing::{tool_pairing_balanced_after, tool_pairing_balanced_before},
 };
 use seekdeep_core::session::{
-    AppendOptions, Session, SessionEvent, SurfaceOp, derive_event_message,
+    AppendOptions, JsonValue, Session, SessionEvent, SurfaceOp, derive_event_message,
 };
 use seekdeep_llm::{AbortSignal, UserMessage, error_chain};
 use seekdeep_token_meter::{TokenMeasurement, TokenMeter};
@@ -36,7 +36,7 @@ pub type CompactionAppend = Arc<
     dyn Fn(
             &Arc<Session>,
             &str,
-            Value,
+            JsonValue,
             AppendOptions,
         ) -> Result<SessionEvent, seekdeep_core::session::SessionError>
         + Send
@@ -252,7 +252,7 @@ pub async fn compact_surface_region(
         append.as_ref(),
         session,
         "compaction/start",
-        lifecycle_value(&compaction_id, source_command_id.as_ref(), owner),
+        lifecycle_value(&compaction_id, source_command_id.as_ref(), owner).into(),
         AppendOptions::default(),
     )?;
 
@@ -296,7 +296,7 @@ pub async fn compact_surface_region(
             append.as_ref(),
             session,
             "compaction/end",
-            lifecycle_value(&compaction_id, source_command_id.as_ref(), owner),
+            lifecycle_value(&compaction_id, source_command_id.as_ref(), owner).into(),
             AppendOptions::default(),
         )?;
         closed = true;
@@ -318,7 +318,7 @@ pub async fn compact_surface_region(
                 append.as_ref(),
                 session,
                 "compaction/end",
-                close_lifecycle,
+                close_lifecycle.into(),
                 AppendOptions::default(),
             ) {
                 Ok(_) => closed = true,
@@ -574,30 +574,37 @@ fn commit_compaction_body(
 ) -> anyhow::Result<CompactionResult> {
     let prepared = &summarized.prepared;
     let result = &summarized.result;
-    let mut summary_data = json!({
-        "compactionId": start_event.data["compactionId"],
-    });
+    let mut summary_data =
+        JsonValue::object([("compactionId", start_event.data["compactionId"].clone())]);
     if let Some(source_command_id) = start_event.data.get("sourceCommandId") {
-        summary_data["sourceCommandId"] = source_command_id.clone();
+        summary_data.insert("sourceCommandId", source_command_id.to_owned())?;
     }
-    summary_data["summary"] = serde_json::to_value(&result.summary)?;
+    summary_data.insert("summary", JsonValue::from_serialize(&result.summary)?)?;
     if result.llm_stream_call {
-        summary_data["rawOutput"] = serde_json::to_value(&result.raw_output)?;
-        summary_data["llmStreamCall"] = json!(true);
+        summary_data.insert("rawOutput", JsonValue::from_serialize(&result.raw_output)?)?;
+        summary_data.insert("llmStreamCall", json!(true).into())?;
     } else if !result.raw_output.is_empty() {
-        summary_data["rawOutput"] = serde_json::to_value(&result.raw_output)?;
+        summary_data.insert("rawOutput", JsonValue::from_serialize(&result.raw_output)?)?;
     }
-    summary_data["shadowedRange"] =
-        json!({"start": prepared.selection.start, "end": prepared.selection.end});
-    summary_data["shadowedSeqs"] = serde_json::to_value(&prepared.selection.shadowed_seqs)?;
-    summary_data["shadowedTokenCount"] = json!(prepared.shadowed_token_count);
-    summary_data["provider"] = serde_json::to_value(&result.provider)?;
-    summary_data["model"] = serde_json::to_value(&result.model)?;
+    summary_data.insert(
+        "shadowedRange",
+        json!({"start": prepared.selection.start, "end": prepared.selection.end}).into(),
+    )?;
+    summary_data.insert(
+        "shadowedSeqs",
+        JsonValue::from_serialize(&prepared.selection.shadowed_seqs)?,
+    )?;
+    summary_data.insert(
+        "shadowedTokenCount",
+        json!(prepared.shadowed_token_count).into(),
+    )?;
+    summary_data.insert("provider", JsonValue::from_serialize(&result.provider)?)?;
+    summary_data.insert("model", JsonValue::from_serialize(&result.model)?)?;
     if let Some(max_tokens) = result.max_tokens {
-        summary_data["maxTokens"] = json!(max_tokens);
+        summary_data.insert("maxTokens", json!(max_tokens).into())?;
     }
     if let Some(usage) = &result.usage {
-        summary_data["usage"] = serde_json::to_value(usage)?;
+        summary_data.insert("usage", JsonValue::from_serialize(usage)?)?;
     }
     let summary_event = append_event(
         append,
@@ -607,7 +614,7 @@ fn commit_compaction_body(
         AppendOptions::default(),
     )?;
 
-    let checkpoint_data = serde_json::to_value(&summarized.checkpoint_message)?;
+    let checkpoint_data = JsonValue::from_serialize(&summarized.checkpoint_message)?;
     append_event(
         append,
         session,
@@ -636,8 +643,8 @@ fn commit_compaction_body(
         ),
         source_command_id: start_event
             .data
-            .get("sourceCommandId")
-            .and_then(Value::as_str)
+            .get_value("sourceCommandId")
+            .and_then(JsonValue::as_str)
             .map(CommandId::new),
         start_seq: start_event.seq,
         summary_seq: summary_event.seq,
@@ -657,12 +664,12 @@ fn append_event(
     append: Option<&CompactionAppend>,
     session: &Arc<Session>,
     event_type: &str,
-    data: Value,
+    data: JsonValue,
     options: AppendOptions,
 ) -> Result<SessionEvent, seekdeep_core::session::SessionError> {
     match append {
         Some(append) => append(session, event_type, data, options),
-        None => session.append(event_type, data, options),
+        None => session.append_json(event_type, data, options),
     }
 }
 
@@ -707,7 +714,7 @@ fn inspect_compaction_entry_state(events: &[SessionEvent]) -> CompactionEntrySta
         }
         if !open_turn_known {
             if event.event_type == "turn/start" {
-                state.open_turn = event.data.get("turn").and_then(Value::as_u64);
+                state.open_turn = event.data.get_value("turn").and_then(JsonValue::as_u64);
                 open_turn_known = true;
             } else if event.event_type == "turn/end" {
                 open_turn_known = true;

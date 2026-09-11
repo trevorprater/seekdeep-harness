@@ -209,9 +209,7 @@ fn request() -> GenerateOptions {
         seekdeep_llm::ModelId::new("deepseek-v4-flash"),
         vec![Message::new(
             MessageRole::User,
-            vec![ContentBlock::Text {
-                text: "hi".to_owned(),
-            }],
+            vec![ContentBlock::Text { text: "hi".into() }],
             MessageSource::plugin("test"),
         )],
     )

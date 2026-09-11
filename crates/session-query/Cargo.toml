@@ -14,6 +14,7 @@ regex.workspace = true
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-title = { path = "../session-title" }
 seekdeep-util = { path = "../util" }

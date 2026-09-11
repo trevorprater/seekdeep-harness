@@ -387,13 +387,11 @@ fn fold_event(
     let mut next_anchor = state.anchor.clone();
     match event.event_type.as_str() {
         "request/header" => {
-            let header: EpochHeader = serde_json::from_value(
-                event
-                    .data
-                    .get("header")
-                    .cloned()
-                    .ok_or_else(|| anyhow::anyhow!("request/header lacks header"))?,
-            )?;
+            let header: EpochHeader = event
+                .data
+                .get("header")
+                .ok_or_else(|| anyhow::anyhow!("request/header lacks header"))?
+                .deserialize()?;
             next_header = Some(canonical_header(header));
         }
         "step/start" => {
@@ -473,7 +471,7 @@ fn assistant_anchor(
     let usage = event
         .data
         .get("usage")
-        .map(|usage| serde_json::from_value::<TokenUsage>(usage.clone()))
+        .map(|usage| usage.deserialize::<TokenUsage>())
         .transpose()?;
     if let (Some(usage), Some(header)) = (usage, header) {
         let provider_assistant_tokens = estimate_provider_assistant(events, event, event_tokens)?;
@@ -563,13 +561,11 @@ fn estimate_provider_assistant(
             event.seq,
             seq
         );
-        let chunk: StreamChunk = serde_json::from_value(
-            source
-                .data
-                .get("chunk")
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("assistant/chunk lacks chunk"))?,
-        )?;
+        let chunk: StreamChunk = source
+            .data
+            .get("chunk")
+            .ok_or_else(|| anyhow::anyhow!("assistant/chunk lacks chunk"))?
+            .deserialize()?;
         assembler.push(chunk);
     }
     let content = assembler.blocks()?;
@@ -595,7 +591,7 @@ fn coordinate(event: &SessionEvent, field: &str) -> anyhow::Result<u64> {
     event
         .data
         .get(field)
-        .and_then(Value::as_u64)
+        .and_then(|value| value.as_u64())
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "token meter: {} at seq {} has no valid {field}",
@@ -708,9 +704,7 @@ mod tests {
             2,
             "user/message",
             serde_json::to_value(seekdeep_llm::UserMessage::new(
-                vec![ContentBlock::Text {
-                    text: "x".to_owned(),
-                }],
+                vec![ContentBlock::Text { text: "x".into() }],
                 MessageSource::user(),
             ))
             .unwrap(),

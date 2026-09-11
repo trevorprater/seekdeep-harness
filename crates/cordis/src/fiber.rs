@@ -114,6 +114,10 @@ enum EffectOutcome {
     Error(String),
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) type SharedDisposal =
+    futures::future::Shared<futures::future::BoxFuture<'static, Result<(), String>>>;
+
 enum EffectState {
     Pending(Option<Disposer>),
     Running,
@@ -126,6 +130,8 @@ struct EffectInner {
     state: Mutex<EffectState>,
     notify: Notify,
     label: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    disposal: Mutex<Option<SharedDisposal>>,
     #[cfg(target_arch = "wasm32")]
     browser_disposer: Mutex<Option<js_sys::WeakRef<js_sys::Function>>>,
     #[cfg(target_arch = "wasm32")]
@@ -138,6 +144,18 @@ pub struct EffectHandle {
     inner: Arc<EffectInner>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct WeakEffectHandle {
+    inner: Weak<EffectInner>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl WeakEffectHandle {
+    pub(crate) fn upgrade(&self) -> Option<EffectHandle> {
+        self.inner.upgrade().map(|inner| EffectHandle { inner })
+    }
+}
+
 impl std::fmt::Debug for EffectHandle {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -148,6 +166,13 @@ impl std::fmt::Debug for EffectHandle {
 }
 
 impl EffectHandle {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn downgrade(&self) -> WeakEffectHandle {
+        WeakEffectHandle {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
+
     /// Creates a handle for an asynchronous cleanup operation.
     pub fn new(
         label: impl Into<String>,
@@ -158,6 +183,8 @@ impl EffectHandle {
                 state: Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
                 notify: Notify::new(),
                 label: label.into(),
+                #[cfg(not(target_arch = "wasm32"))]
+                disposal: Mutex::new(None),
                 #[cfg(target_arch = "wasm32")]
                 browser_disposer: Mutex::new(None),
                 #[cfg(target_arch = "wasm32")]
@@ -210,6 +237,33 @@ impl EffectHandle {
     ///
     /// Returns the cleanup failure to every caller that joins the disposal.
     pub async fn dispose(&self) -> anyhow::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use futures::FutureExt as _;
+
+            let disposal = self
+                .inner
+                .disposal
+                .lock()
+                .get_or_insert_with(|| {
+                    let owned = self.clone();
+                    async move {
+                        owned
+                            .dispose_once()
+                            .await
+                            .map_err(|error| format!("{error:#}"))
+                    }
+                    .boxed()
+                    .shared()
+                })
+                .clone();
+            disposal.await.map_err(anyhow::Error::msg)
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.dispose_once().await
+    }
+
+    async fn dispose_once(&self) -> anyhow::Result<()> {
         loop {
             let notified = self.inner.notify.notified();
             let disposer = {
@@ -297,6 +351,8 @@ pub struct Fiber {
     inner: Mutex<FiberInner>,
     disposal_requested: AtomicBool,
     disposal_notify: Notify,
+    #[cfg(not(target_arch = "wasm32"))]
+    disposal: Mutex<Option<SharedDisposal>>,
     #[cfg(target_arch = "wasm32")]
     browser_observer: Mutex<Option<BrowserFiberObserver>>,
     #[cfg(target_arch = "wasm32")]
@@ -331,6 +387,8 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
             browser_observer: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
@@ -359,6 +417,8 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
             browser_observer: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
@@ -387,6 +447,8 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
             browser_observer: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
@@ -415,6 +477,8 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
             browser_observer: Mutex::new(None),
             #[cfg(target_arch = "wasm32")]
@@ -567,7 +631,6 @@ impl Fiber {
         self.browser_context.lock().clone()
     }
 
-    #[cfg(target_arch = "wasm32")]
     pub(crate) fn can_register_effect(&self) -> bool {
         self.can_register_in_state(self.state())
     }
@@ -636,7 +699,7 @@ impl Fiber {
     /// # Errors
     ///
     /// Returns an aggregate of cleanup failures after attempting every disposer.
-    pub async fn dispose(&self) -> anyhow::Result<()> {
+    pub async fn dispose(self: &Arc<Self>) -> anyhow::Result<()> {
         if self.root {
             return self.restart().await;
         }
@@ -648,7 +711,7 @@ impl Fiber {
     /// # Errors
     ///
     /// Returns an aggregate of cleanup failures after attempting every disposer.
-    pub async fn restart(&self) -> anyhow::Result<()> {
+    pub async fn restart(self: &Arc<Self>) -> anyhow::Result<()> {
         #[cfg(target_arch = "wasm32")]
         if self.root
             && let Some(disposal) = self.browser_disposal()
@@ -658,15 +721,77 @@ impl Fiber {
         self.clear_effects(FiberState::Active).await
     }
 
-    pub(crate) async fn deactivate(&self) -> anyhow::Result<()> {
+    pub(crate) async fn deactivate(self: &Arc<Self>) -> anyhow::Result<()> {
         self.clear_effects(FiberState::Pending).await
     }
 
-    pub(crate) async fn fail(&self) -> anyhow::Result<()> {
+    pub(crate) async fn fail(self: &Arc<Self>) -> anyhow::Result<()> {
         self.clear_effects(FiberState::Failed).await
     }
 
-    async fn clear_effects(&self, final_state: FiberState) -> anyhow::Result<()> {
+    async fn clear_effects(self: &Arc<Self>, final_state: FiberState) -> anyhow::Result<()> {
+        self.clear_effects_with_scheduling(final_state, self.disposal_scheduling)
+            .await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) async fn dispose_with_scheduling(
+        self: &Arc<Self>,
+        scheduling: DisposalScheduling,
+    ) -> anyhow::Result<()> {
+        self.clear_effects_with_scheduling(
+            if self.root {
+                FiberState::Active
+            } else {
+                FiberState::Disposed
+            },
+            scheduling,
+        )
+        .await
+    }
+
+    async fn clear_effects_with_scheduling(
+        self: &Arc<Self>,
+        final_state: FiberState,
+        scheduling: DisposalScheduling,
+    ) -> anyhow::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use futures::FutureExt as _;
+
+            let disposal = {
+                let mut current = self.disposal.lock();
+                if current
+                    .as_ref()
+                    .is_some_and(|current| current.peek().is_some())
+                {
+                    *current = None;
+                }
+                current
+                    .get_or_insert_with(|| {
+                        let owned = self.clone();
+                        async move {
+                            owned
+                                .clear_effects_once(final_state, scheduling)
+                                .await
+                                .map_err(|error| format!("{error:#}"))
+                        }
+                        .boxed()
+                        .shared()
+                    })
+                    .clone()
+            };
+            disposal.await.map_err(anyhow::Error::msg)
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.clear_effects_once(final_state, scheduling).await
+    }
+
+    async fn clear_effects_once(
+        &self,
+        final_state: FiberState,
+        scheduling: DisposalScheduling,
+    ) -> anyhow::Result<()> {
         enum Clear {
             Run {
                 effects: Vec<EffectHandle>,
@@ -709,7 +834,7 @@ impl Fiber {
         };
         #[cfg(target_arch = "wasm32")]
         self.notify_browser_state(FiberState::Unloading);
-        let errors = match self.disposal_scheduling {
+        let errors = match scheduling {
             DisposalScheduling::Serial => {
                 let mut errors = Vec::new();
                 for effect in effects.into_iter().rev() {

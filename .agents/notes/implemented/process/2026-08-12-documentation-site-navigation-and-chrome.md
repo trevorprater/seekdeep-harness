@@ -14,15 +14,15 @@ Separately, every canonical page carries lines written for its GitHub reader —
 
 ## Decision
 
-[website/docs.ts](../../../../website/docs.ts) owns section placement. `sections` declares the groups per locale, and `sectionSpec(locale, label)` returns a group's position and collapse behavior, throwing when a locale declares no placement for a label. A group absent from the declaration now fails the build instead of sorting silently to the top. Placement is per locale because the two sidebars name their groups independently, and a label both use — `SDK` — cannot hold one rank against `入门` and against `Guide` at once.
+[website/docs.json](../../../../website/docs.json) owns section placement. `sections` declares the groups per locale, and `section_spec(locale, label)` returns a group's position and collapse behavior, throwing when a locale declares no placement for a label. A group absent from the declaration now fails the build instead of sorting silently to the top. Placement is per locale because the two sidebars name their groups independently, and a label both use — `SDK` — cannot hold one rank against `入门` and against `Guide` at once.
 
-Subsystem pages are grouped by concern — overview, core and scopes, sessions and persistence, model and context, execution and tools, policy and interaction, platform and access — and the six topical groups render collapsed until one holds the page being read. The groups sort last within the reference sidebar: expanded, they outnumber every other group combined, so anything placed after them is reachable only by scrolling past the whole list. Page `order` derives from array position rather than a hand-written number.
+Subsystem pages are grouped by concern — overview, core and scopes, sessions and persistence, model and context, execution and tools, policy and interaction, platform and access — and the six topical groups render collapsed until one holds the page being read. The groups sort last within the reference sidebar: expanded, they outnumber every other group combined, so anything placed after them is reachable only by scrolling past the whole list. Each page declares its numeric `order` within the section; the publication test rejects duplicate positions.
 
-`landingLink(locale, collection)` derives each navigation item's target from `orderedPages`, the same ordering the sidebar renders, so an item always opens its collection's first published page.
+`landing_link(locale, collection)` derives each navigation item's target from `ordered_pages`, the same ordering the sidebar renders, so an item always opens its collection's first published page.
 
-`projectedPageContent` in [scripts/project-doc-site.ts](../../../../scripts/project-doc-site.ts) drops the language-switcher line and the repository badge. The switcher match is confined to the first eight lines so a tutorial that shows the convention still renders its example.
+`projected_page_content` in [the Rust projector](../../../../crates/repository-tools/src/doc_site.rs) drops the language-switcher line and the repository badge. The switcher match is confined to the first eight lines so a tutorial that shows the convention still renders its example.
 
-The navigation-bar title is the DeepSeek wordmark inlined into `siteTitle`, which VitePress renders as HTML. Inlining is what lets the mark's `currentColor` fills follow the active theme; `themeConfig.logo` renders an `<img>`, which freezes the mark at the colors its file declares and would need one asset per theme. The sidebar scrollbar rests invisible and appears while scrolling, marked by a `data-` attribute rather than a class because Vue rewrites `class` wholesale when it patches the element.
+The navigation-bar title is the SeekDeep wordmark inlined into `siteTitle`, which VitePress renders as HTML. Inlining is what lets the mark's `currentColor` fills follow the active theme; `themeConfig.logo` renders an `<img>`, which freezes the mark at the colors its file declares and would need one asset per theme. The sidebar scrollbar rests invisible and appears while scrolling, marked by a `data-` attribute rather than a class because Vue rewrites `class` wholesale when it patches the element.
 
 ## Alternatives considered
 
@@ -30,12 +30,12 @@ The navigation-bar title is the DeepSeek wordmark inlined into `siteTitle`, whic
 
 **Placing the subsystem groups directly after `概念`.** Rejected: it restores the architecture page to the top but leaves generated reference, the Cordis API, and the cookbook below 43 rows.
 
-**Rewriting filename link text during projection.** The subsystem index table writes `[core.md](core.md)`, which reads as a repository file index on the site. `scripts/project-doc-site.spec.ts` asserts that exact row format, so the filenames are a deliberate convention rather than an oversight; changing what the site displays means changing the convention and its gate together, not working around them in the projector.
+**Rewriting filename link text during projection.** The subsystem index table writes `[core.md](core.md)`, which reads as a repository file index on the site. `crates/repository-tools/tests/doc_site_projection_parity.rs` asserts that exact row format, so the filenames are a deliberate convention rather than an oversight; changing what the site displays means changing the convention and its gate together, not working around them in the projector.
 
 ## Consequences
 
-The reference sidebar measures 1452px with every subsystem group collapsed, against 2478px before, and the architecture page is its first entry. Section placement and collapse are declared in one manifest instead of split between the manifest and the config, and `scripts/project-doc-site.spec.ts` pins three invariants: every sidebar-owning page resolves a placement, an undeclared section is refused, and no two pages share an `order` within a section.
+The architecture page is the first reference-sidebar entry. Section placement and collapse are declared in one manifest instead of split between the manifest and the config, and `crates/repository-tools/tests/doc_site_projection_parity.rs` pins three invariants: every sidebar-owning page resolves a placement, an undeclared section is refused, and no two pages share an `order` within a section.
 
 Canonical Markdown is unchanged by the chrome stripping — the switcher and badge still serve GitHub readers. The cost is that the projector now knows two presentation conventions of the source corpus, which a page written with a different switcher wording would not match.
 
-The wordmark is a second copy of a mark that also lives in `apps/web/public/favicon.svg` and `packages/client/ui-primitives/src/FishLogo.tsx`, each carrying its own presentation. A change to the DeepSeek wordmark reaches the documentation site only by updating this copy.
+[The site wordmark](../../../../website/public/wordmark.svg) names SeekDeep and inherits the active text color. [The Rust/WASM scrollbar controller](../../../../crates/docs-site-runtime/src/wasm.rs) owns the capturing listener and shared 800 ms idle timeout; freeing it unregisters the listener and cancels the timeout.

@@ -277,15 +277,15 @@ fn notify(_root_ctx: &Context, on_durable_change: &Arc<dyn Fn() + Send + Sync>) 
 /// Deterministic model content for every canonical Schedule value.
 fn render_value<A, O: serde::Serialize>(_args: &A, value: &O) -> anyhow::Result<Vec<ContentBlock>> {
     Ok(vec![ContentBlock::Text {
-        text: serde_json::to_string(value)?,
+        text: serde_json::to_string(value)?.into(),
     }])
 }
 
 fn present(title: &str, kind: ToolCallKind, raw_input: Option<&str>) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        title: title.to_owned(),
+        title: title.into(),
         kind: Some(kind),
-        raw_input: raw_input.map(|value| json!(value)),
+        raw_input: raw_input.map(|value| json!(value).into()),
         content: None,
         locations: None,
     })

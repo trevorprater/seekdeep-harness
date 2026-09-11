@@ -73,9 +73,9 @@ fn apply_with_runtime_readiness(
     let marker = context.provide(SDK_JSONRPC_SERVER, server.clone())?;
     let exit_started = Arc::new(AtomicBool::new(false));
     let exit_server = Arc::clone(&server);
-    transport.on_request(Arc::new(move |method, params| {
+    transport.on_request_json(Arc::new(move |method, params| {
         let server = Arc::clone(&exit_server);
-        Box::pin(async move { server.handle_request(&method, params).await })
+        Box::pin(async move { server.handle_request_json(&method, params).await })
     }));
     let root = Arc::clone(context.root_fiber());
     let exit = runtime.exit;

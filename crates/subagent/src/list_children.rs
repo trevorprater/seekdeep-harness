@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use seekdeep_core::session::{SessionHeader, SessionId};
+use seekdeep_core::session::{JsonValue, SessionHeader, SessionId};
 use seekdeep_core::session_store::SESSIONS;
 use seekdeep_llm::AbortSignal;
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
@@ -129,8 +129,8 @@ fn child_row(
     }
 }
 
-fn identity_of(value: Option<&serde_json::Value>) -> Option<SubagentIdentityProjection> {
-    serde_json::from_value(value?.clone()).ok()
+fn identity_of(value: Option<&JsonValue>) -> Option<SubagentIdentityProjection> {
+    value?.deserialize().ok()
 }
 
 /// Enumerates one parent's origin-classified direct children.

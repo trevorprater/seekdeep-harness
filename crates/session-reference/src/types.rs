@@ -1,7 +1,7 @@
 //! Public session-reference request, candidate, and preparation records.
 
 use seekdeep_core::session::SessionId;
-use seekdeep_llm::{ContentBlock, UserMessage};
+use seekdeep_llm::{ContentBlock, JsonString, UserMessage};
 use serde::{Deserialize, Serialize};
 
 /// The stable source discriminator for referenced-session context.
@@ -24,7 +24,7 @@ pub struct ReferencedConversationItem {
     /// Original message role.
     pub role: ReferencedConversationRole,
     /// Visible text retained from that message.
-    pub text: String,
+    pub text: JsonString,
 }
 
 /// One source session selected by a host.

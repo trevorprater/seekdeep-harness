@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonRef, SessionEvent};
 
 /// How one agent log accounts for the work it consumed.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -24,10 +24,10 @@ pub fn fold_consumed_work(events: &[SessionEvent]) -> ConsumedWork {
     for event in events {
         match event.event_type.as_str() {
             "turn/start" => {
-                open = event.data.get("turn").and_then(serde_json::Value::as_u64);
+                open = event.data.get("turn").and_then(JsonRef::as_u64);
             }
             "step/start" => {
-                if let Some(turn) = event.data.get("turn").and_then(serde_json::Value::as_u64) {
+                if let Some(turn) = event.data.get("turn").and_then(JsonRef::as_u64) {
                     stepped.insert(turn);
                 }
             }
@@ -38,20 +38,21 @@ pub fn fold_consumed_work(events: &[SessionEvent]) -> ConsumedWork {
                 if event
                     .data
                     .get("outcome")
-                    .and_then(serde_json::Value::as_str)
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    .as_deref()
                     == Some("canceled")
                 {
                     dropped_unrun |= event
                         .data
                         .get("inserted")
-                        .and_then(serde_json::Value::as_array)
-                        .is_some_and(Vec::is_empty);
+                        .and_then(JsonRef::array_items)
+                        .is_some_and(|items| items.is_empty());
                 } else if let Some(turn) = open {
                     claimed.insert(turn);
                 }
             }
             "turn/end" => {
-                let Some(turn) = event.data.get("turn").and_then(serde_json::Value::as_u64) else {
+                let Some(turn) = event.data.get("turn").and_then(JsonRef::as_u64) else {
                     open = None;
                     continue;
                 };
@@ -60,8 +61,8 @@ pub fn fold_consumed_work(events: &[SessionEvent]) -> ConsumedWork {
                     .data
                     .get("reason")
                     .and_then(|reason| reason.get("kind"))
-                    .and_then(serde_json::Value::as_str);
-                let accounts_for_claim = reason != Some("completed");
+                    .and_then(|value| value.deserialize::<String>().ok());
+                let accounts_for_claim = reason.as_deref() != Some("completed");
                 if stepped.remove(&turn) || (claimed.remove(&turn) && accounts_for_claim) {
                     end = Some(event.clone());
                     dropped_unrun = false;

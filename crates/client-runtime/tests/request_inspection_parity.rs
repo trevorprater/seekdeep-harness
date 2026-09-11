@@ -7,18 +7,22 @@ use seekdeep_client_runtime::{
     RequestInspectionSnapshot, RequestPromptChange, RequestPromptChangeKind, RequestStatus,
     RequestView, RequestViewBase,
 };
-use serde_json::{Value, json};
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
+
+macro_rules! json {
+    ($($tokens:tt)*) => { Value::from(serde_json::json!($($tokens)*)) };
+}
 
 fn config() -> AssistantRequestConfig {
     AssistantRequestConfig {
-        provider: "deepseek-official".to_owned(),
-        model: "deepseek-v4-flash".to_owned(),
-        purpose: Some("agent".to_owned()),
-        thinking: Some("enabled".to_owned()),
-        reasoning_effort: Some("high".to_owned()),
+        provider: "deepseek-official".into(),
+        model: "deepseek-v4-flash".into(),
+        purpose: Some("agent".into()),
+        thinking: Some("enabled".into()),
+        reasoning_effort: Some("high".into()),
         temperature: Some(0.2),
         max_tokens: Some(4_096),
-        stop: Some(vec!["END".to_owned()]),
+        stop: Some(vec!["END".into()]),
     }
 }
 
@@ -30,8 +34,8 @@ fn base() -> RequestViewBase {
         status: RequestStatus::Running,
         error: None,
         provenance: Some(AssistantProvenanceView {
-            provider: "deepseek-official".to_owned(),
-            model: "deepseek-v4-flash".to_owned(),
+            provider: "deepseek-official".into(),
+            model: "deepseek-v4-flash".into(),
         }),
         request_config: Some(config()),
         usage: OptionalJson::Absent,
@@ -42,7 +46,7 @@ fn base() -> RequestViewBase {
 fn prompt() -> ConversationPromptSnapshot {
     ConversationPromptSnapshot {
         config: config(),
-        system: "You are SeekDeep.".to_owned(),
+        system: "You are SeekDeep.".into(),
         tools: vec![json!({"name":"bash","description":"Run a command"})],
     }
 }
@@ -64,18 +68,18 @@ fn assistant_request_uses_exact_discriminant_casing_nullability_and_prompt_chang
         max_retries: Some(3),
         retry_delay_ms: Some(500),
     };
-    let value = serde_json::to_value(&request).unwrap();
+    let value = Value::from_serialize(&request).unwrap();
     assert_eq!(value["purpose"], "assistant");
     assert_eq!(value["startSeq"], 11);
-    assert_eq!(value["completedAt"], Value::Null);
+    assert_eq!(value["completedAt"], Value::from(serde_json::Value::Null));
     assert_eq!(value["status"], "running");
     assert_eq!(value["requestConfig"]["reasoningEffort"], "high");
     assert_eq!(value["requestConfig"]["maxTokens"], 4_096);
     assert_eq!(value["promptChange"]["kind"], "system-and-tools");
     assert_eq!(value["retryDelayMs"], 500);
-    assert!(value.get("error").is_none());
+    assert!(value.get_value("error").is_none());
     assert_eq!(
-        serde_json::from_value::<RequestView>(value).unwrap(),
+        value.deserialize::<RequestView>().unwrap(),
         request
     );
 }
@@ -86,7 +90,7 @@ fn compaction_request_keeps_required_null_turn_zero_step_and_complete_outputs() 
         base: Box::new(RequestViewBase {
             completed_at: Some(2_000),
             status: RequestStatus::Complete,
-            usage: OptionalJson::Present(Value::Null),
+            usage: OptionalJson::Present(Value::from(serde_json::Value::Null)),
             result_seq: Some(20),
             ..base()
         }),
@@ -96,16 +100,16 @@ fn compaction_request_keeps_required_null_turn_zero_step_and_complete_outputs() 
         summary: Some(vec![json!({"type":"text","text":"safe"})]),
         raw_output: Some(vec![json!({"type":"reasoning","text":"raw"})]),
     };
-    let value = serde_json::to_value(&request).unwrap();
+    let value = Value::from_serialize(&request).unwrap();
     assert_eq!(value["purpose"], "compaction");
-    assert_eq!(value["turn"], Value::Null);
+    assert_eq!(value["turn"], Value::from(serde_json::Value::Null));
     assert_eq!(value["step"], 0);
     assert_eq!(value["replacementSeq"], 21);
     assert_eq!(value["summary"][0]["text"], "safe");
     assert_eq!(value["rawOutput"][0]["text"], "raw");
-    assert!(value.get("usage").is_some_and(Value::is_null));
+    assert!(value.get_value("usage").is_some_and(Value::is_null));
     assert_eq!(
-        serde_json::from_value::<RequestView>(value).unwrap(),
+        value.deserialize::<RequestView>().unwrap(),
         request
     );
 }
@@ -124,8 +128,8 @@ fn inspection_snapshot_preserves_request_and_call_schema_insertion_order() {
             retry_delay_ms: None,
         }],
         call_schemas: IndexMap::from([
-            ("call-b".to_owned(), json!({"name":"beta"})),
-            ("call-a".to_owned(), json!({"name":"alpha"})),
+            ("call-b".into(), json!({"name":"beta"})),
+            ("call-a".into(), json!({"name":"alpha"})),
         ]),
     };
     assert_eq!(
@@ -136,10 +140,10 @@ fn inspection_snapshot_preserves_request_and_call_schema_insertion_order() {
             .collect::<Vec<_>>(),
         ["call-b", "call-a"]
     );
-    let value = serde_json::to_value(&snapshot).unwrap();
-    assert!(value.get("callSchemas").is_some());
+    let value = Value::from_serialize(&snapshot).unwrap();
+    assert!(value.get_value("callSchemas").is_some());
     assert_eq!(
-        serde_json::from_value::<RequestInspectionSnapshot>(value).unwrap(),
+        value.deserialize::<RequestInspectionSnapshot>().unwrap(),
         snapshot
     );
 }
@@ -155,13 +159,34 @@ fn conversation_context_uses_zero_based_parented_generations_and_closed_origins(
         prompt: Some(Box::new(prompt())),
         nodes: vec![json!({"kind":"assistant","seq":31})],
     };
-    let value = serde_json::to_value(&context).unwrap();
+    let value = Value::from_serialize(&context).unwrap();
     assert_eq!(value["parentId"], 1);
     assert_eq!(value["origin"], "rewrite");
     assert_eq!(value["originSeq"], 30);
     assert_eq!(value["createdAt"], 3_000);
     assert_eq!(
-        serde_json::from_value::<ConversationContext>(value).unwrap(),
+        value.deserialize::<ConversationContext>().unwrap(),
         context
     );
+}
+
+#[test]
+fn request_and_context_snapshots_preserve_raw_text_values_and_keys() {
+    let raw = Value::parse(r#"{"requests":[{"purpose":"assistant","startSeq":1,"startedAt":2,"completedAt":null,"status":"running","usage":{"\udfff":"\ud800"},"turn":1,"step":1,"prompt":{"config":{"provider":"p","model":"m","stop":["\ud800"]},"system":"\udfff","tools":[{"name":"t","parameters":{"\ud800":"\udfff"}}]}}],"callSchemas":{"c":{"\ud800":"\udfff"}}}"#.to_owned()).unwrap();
+    let snapshot: RequestInspectionSnapshot = raw.deserialize().unwrap();
+    let encoded = Value::from_serialize(&snapshot).unwrap();
+    assert_eq!(encoded, raw);
+    let RequestView::Assistant { prompt: Some(prompt), base, .. } = &snapshot.requests[0] else {
+        panic!("assistant prompt missing");
+    };
+    assert_eq!(prompt.system.utf16_units(), &[0xdfff]);
+    assert_eq!(prompt.config.stop.as_ref().unwrap()[0].utf16_units(), &[0xd800]);
+    assert_eq!(
+        base.usage,
+        OptionalJson::Present(Value::parse(r#"{"\udfff":"\ud800"}"#.to_owned()).unwrap())
+    );
+    let context_raw = Value::parse(r#"{"id":0,"nodes":[{"kind":"assistant","text":"\ud800"}]}"#.to_owned()).unwrap();
+    let context: ConversationContext = context_raw.deserialize().unwrap();
+    assert_eq!(Value::from_serialize(&context).unwrap(), context_raw);
+    assert_eq!(JsonString::from_utf16(&[0xdfff]), prompt.system);
 }

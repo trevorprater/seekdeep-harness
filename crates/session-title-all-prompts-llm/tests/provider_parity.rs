@@ -149,7 +149,7 @@ async fn includes_seeded_history_and_the_latest_prompt_while_inheriting_the_rout
     assert_eq!(requests[0].provider, ProviderId::new("current-route"));
     assert_eq!(requests[0].model, ModelId::new("current-model"));
     let text = match &requests[0].messages[0].content()[0] {
-        ContentBlock::Text { text } => text.as_str(),
+        ContentBlock::Text { text } => text.as_str().expect("fixture uses scalar text"),
         other => panic!("expected a text block, got {other:?}"),
     };
     assert!(text.contains("inherited prompt"));

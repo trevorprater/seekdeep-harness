@@ -2,7 +2,8 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, JsonString};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_subprocess::{
     SubprocessEnvironment, SubprocessOutputMode, SubprocessSpawnSpec, SubprocessStdinMode,
     SubprocessStdio,
@@ -26,13 +27,27 @@ pub const CLAUDE_STREAM_ARGS: &[&str] = &[
 
 /// Produces the exact one-message streaming-input envelope.
 #[must_use]
-pub fn prompt_frame(prompt: &str) -> Value {
-    json!({
-        "type":"user",
-        "session_id":"",
-        "message":{"role":"user","content":[{"type":"text","text":prompt}]},
-        "parent_tool_use_id":null
-    })
+pub fn prompt_frame(prompt: impl Into<JsonString>) -> JsonValue {
+    let text: JsonString = prompt.into();
+    let text = JsonValue::from(text);
+    JsonValue::object([
+        ("type", json!("user").into()),
+        ("session_id", json!("").into()),
+        (
+            "message",
+            JsonValue::object([
+                ("role", json!("user").into()),
+                (
+                    "content",
+                    JsonValue::array(&[JsonValue::object([
+                        ("type", json!("text").into()),
+                        ("text", text),
+                    ])]),
+                ),
+            ]),
+        ),
+        ("parent_tool_use_id", Value::Null.into()),
+    ])
 }
 
 /// Builds the managed Claude CLI spawn request.

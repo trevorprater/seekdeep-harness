@@ -1051,7 +1051,7 @@ fn insert_documents(
         "INSERT INTO {table} (text,session_id,seq,type,time,surface,codepoint_length) VALUES (?,?,?,?,?,?,?)"
     ))?;
     for document in &entry.documents {
-        let text = sanitize_fts_text(&document.text);
+        let text = sanitize_fts_text(&String::from_utf16_lossy(document.text.utf16_units()));
         statement.execute(rusqlite::params![
             text,
             document.record.session_id.as_str(),

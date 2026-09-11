@@ -845,7 +845,7 @@ mod tests {
             .agent
             .followup(seekdeep_llm::UserMessage::new(
                 vec![seekdeep_llm::ContentBlock::Text {
-                    text: "a".to_owned(),
+                    text: "a".into(),
                 }],
                 seekdeep_llm::MessageSource::user(),
             ))
@@ -854,7 +854,7 @@ mod tests {
             .agent
             .followup(seekdeep_llm::UserMessage::new(
                 vec![seekdeep_llm::ContentBlock::Text {
-                    text: "b".to_owned(),
+                    text: "b".into(),
                 }],
                 seekdeep_llm::MessageSource::user(),
             ))
@@ -902,7 +902,7 @@ mod tests {
             .agent
             .followup(seekdeep_llm::UserMessage::new(
                 vec![seekdeep_llm::ContentBlock::Text {
-                    text: "before restart".to_owned(),
+                    text: "before restart".into(),
                 }],
                 seekdeep_llm::MessageSource::user(),
             ))
@@ -962,7 +962,7 @@ mod tests {
             .agent
             .followup(seekdeep_llm::UserMessage::new(
                 vec![seekdeep_llm::ContentBlock::Text {
-                    text: "after restart".to_owned(),
+                    text: "after restart".into(),
                 }],
                 seekdeep_llm::MessageSource::user(),
             ))

@@ -11,7 +11,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::{SinkExt as _, Stream, StreamExt as _};
 use parking_lot::Mutex;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use seekdeep_llm_deepseek::sse::{ByteStream, parse_sse};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -27,7 +27,7 @@ use crate::{
     catalog::{PiModality, PiModel, PiThinkingLevel},
     config::{PiCacheRetention, PiTransport},
     context::{PiContext, PiMessage, PiToolResultMessage, PiUserContent, PiUserContentBlock},
-    json::{stringify, stringify_object},
+    json::{sanitize_surrogates, stringify, stringify_object},
     provider::{PiProtocol, PiProviderDispatch},
     replay::{
         PiAssistantBlock, PiAssistantMessage, PiAssistantRole, PiCost, PiResponseId, PiStopReason,
@@ -1347,7 +1347,9 @@ fn convert_messages(
         match message {
             PiMessage::User(message) => {
                 let wire_content = match &message.content {
-                    PiUserContent::Text(text) => vec![json!({"type":"input_text","text":text})],
+                    PiUserContent::Text(text) => {
+                        vec![json!({"type":"input_text","text":sanitize_surrogates(text)})]
+                    }
                     PiUserContent::Blocks(blocks) => blocks.iter().map(input_block).collect(),
                 };
                 if !wire_content.is_empty() {
@@ -1381,7 +1383,7 @@ fn convert_messages(
                             text_index += 1;
                             messages.push(json!({
                                 "type":"message","role":"assistant","status":"completed","id":id,
-                                "content":[{"type":"output_text","text":text,"annotations":[]}]
+                                "content":[{"type":"output_text","text":sanitize_surrogates(text),"annotations":[]}]
                             }));
                         }
                         PiAssistantBlock::ToolCall {
@@ -1418,7 +1420,9 @@ fn convert_messages(
 
 fn input_block(block: &PiUserContentBlock) -> Value {
     match block {
-        PiUserContentBlock::Text { text } => json!({"type":"input_text","text":text}),
+        PiUserContentBlock::Text { text } => {
+            json!({"type":"input_text","text":sanitize_surrogates(text)})
+        }
         PiUserContentBlock::Image { data, mime_type } => json!({
             "type":"input_image","detail":"auto","image_url":format!("data:{mime_type};base64,{data}")
         }),
@@ -1435,11 +1439,11 @@ fn tool_result(model: &PiModel, message: &PiToolResultMessage) -> Value {
         .content
         .iter()
         .filter_map(|block| match block {
-            PiUserContentBlock::Text { text } => Some(text.as_str()),
+            PiUserContentBlock::Text { text } => Some(text.clone()),
             PiUserContentBlock::Image { .. } => None,
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+    let text = JsonString::join(&text, "\n");
     let images = message
         .content
         .iter()
@@ -1453,13 +1457,13 @@ fn tool_result(model: &PiModel, message: &PiToolResultMessage) -> Value {
                 "(see attached image)".to_owned()
             }
         } else {
-            text
+            sanitize_surrogates(&text)
         };
         Value::String(output_text)
     } else {
         let mut blocks = Vec::new();
         if !text.is_empty() {
-            blocks.push(json!({"type":"input_text","text":text}));
+            blocks.push(json!({"type":"input_text","text":sanitize_surrogates(&text)}));
         }
         blocks.extend(images.into_iter().map(input_block));
         Value::Array(blocks)
@@ -1621,7 +1625,7 @@ fn create_slot(
         }
         "message" => {
             output.content.push(PiAssistantBlock::Text {
-                text: String::new(),
+                text: JsonString::default(),
                 text_signature: None,
             });
             Slot::Text { content_index }
@@ -1699,7 +1703,7 @@ fn finalize_response(output: &mut PiAssistantMessage, response: &Value) -> anyho
     Ok(())
 }
 
-fn response_message_text(item: &Value) -> String {
+fn response_message_text(item: &Value) -> JsonString {
     item.get("content")
         .and_then(Value::as_array)
         .into_iter()
@@ -1709,7 +1713,8 @@ fn response_message_text(item: &Value) -> String {
                 .or_else(|| part.get("refusal"))
                 .and_then(Value::as_str)
         })
-        .collect()
+        .collect::<String>()
+        .into()
 }
 
 fn reasoning_text(item: &Value) -> Option<String> {

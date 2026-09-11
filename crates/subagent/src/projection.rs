@@ -163,6 +163,7 @@ pub fn subagent_identity_projection_definition() -> ProjectionDefinition {
 
 #[cfg(test)]
 mod tests {
+    use seekdeep_core::session::JsonValue;
     use seekdeep_session_projection::ProjectionTransition;
     use serde_json::json;
 
@@ -173,14 +174,14 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time,
-            data: json!({}),
+            data: json!({}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
         }
     }
 
-    fn fold(events: &[SessionEvent]) -> Value {
+    fn fold(events: &[SessionEvent]) -> JsonValue {
         let definition = subagent_timing_projection_definition();
         let mut state = definition.initial_state().unwrap();
         for event in events {

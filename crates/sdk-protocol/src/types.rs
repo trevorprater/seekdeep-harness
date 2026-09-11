@@ -2,8 +2,12 @@
 
 use seekdeep_core::session::{SessionEvent, SessionId};
 use seekdeep_llm::{ContentBlock, MessageId, ModelId, ProviderId};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_subagent::SubagentStopReason;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{DeserializeOwned, Error as _},
+};
 
 /// Parameters for the process-wide SDK handshake.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,7 +132,7 @@ pub struct SubagentFinishedNotification {
 }
 
 /// Closed server-to-client notification map.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "method", content = "params")]
 pub enum HarnessSdkNotification {
     /// `session.event`.
@@ -146,7 +150,7 @@ pub enum HarnessSdkNotification {
 }
 
 /// Closed client-to-server request map.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "method", content = "params")]
 pub enum HarnessSdkRequest {
     /// Process-wide handshake.
@@ -158,4 +162,64 @@ pub enum HarnessSdkRequest {
     /// Shut the runtime down; source wire params are absent.
     #[serde(rename = "shutdown")]
     Shutdown,
+}
+
+// Adjacent-tag buffering decodes strings before raw payload fields can retain their code units.
+impl<'de> Deserialize<'de> for HarnessSdkNotification {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let envelope = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let method = envelope_method::<D::Error>(&envelope)?;
+        match method.as_str() {
+            "session.event" => envelope_params(&envelope).map(Self::SessionEvent),
+            "session.status" => envelope_params(&envelope).map(Self::SessionStatus),
+            "subagent.started" => envelope_params(&envelope).map(Self::SubagentStarted),
+            "subagent.finished" => envelope_params(&envelope).map(Self::SubagentFinished),
+            _ => Err(D::Error::unknown_variant(
+                &method,
+                &[
+                    "session.event",
+                    "session.status",
+                    "subagent.started",
+                    "subagent.finished",
+                ],
+            )),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for HarnessSdkRequest {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let envelope = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let method = envelope_method::<D::Error>(&envelope)?;
+        match method.as_str() {
+            "initialize" => envelope_params(&envelope).map(Self::Initialize),
+            "session/prompt" => envelope_params(&envelope).map(Self::SessionPrompt),
+            "shutdown" => {
+                if let Some(params) = envelope.get("params") {
+                    params.deserialize::<()>().map_err(D::Error::custom)?;
+                }
+                Ok(Self::Shutdown)
+            }
+            _ => Err(D::Error::unknown_variant(
+                &method,
+                &["initialize", "session/prompt", "shutdown"],
+            )),
+        }
+    }
+}
+
+fn envelope_method<E: serde::de::Error>(envelope: &JsonValue) -> Result<String, E> {
+    envelope
+        .get("method")
+        .ok_or_else(|| E::missing_field("method"))?
+        .deserialize()
+        .map_err(E::custom)
+}
+
+fn envelope_params<T: DeserializeOwned, E: serde::de::Error>(envelope: &JsonValue) -> Result<T, E> {
+    envelope
+        .get("params")
+        .ok_or_else(|| E::missing_field("params"))?
+        .deserialize()
+        .map_err(E::custom)
 }

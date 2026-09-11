@@ -65,9 +65,9 @@ impl CodeRuntimeBackend for ExitCodeBackend {
             .bindings
             .iter()
             .find(|namespace| namespace.global == "tools")
-            .and_then(|namespace| namespace.functions.get(EXIT_PLAN_MODE))
+            .and_then(|namespace| namespace.functions.get(&seekdeep_code_runtime::CodeJsonString::from(EXIT_PLAN_MODE)))
             .ok_or_else(|| anyhow::anyhow!("missing exit_plan_mode binding"))?;
-        let value = function(json!({"plan": self.plan})).await?;
+        let value = function(json!({"plan": self.plan}).into()).await?;
         Ok(CodeRunResult {
             value: Some(value),
             logs: Vec::new(),
@@ -187,7 +187,7 @@ impl Harness {
     async fn boundary(&self) {
         let message = UserMessage::new(
             vec![ContentBlock::Text {
-                text: "boundary".to_owned(),
+                text: "boundary".into(),
             }],
             MessageSource::user(),
         );
@@ -249,7 +249,7 @@ fn answer(selected: &[&str], custom: Option<&str>) -> AskUserQuestionAnswer {
 
 fn text(result: &ToolExecutionResult) -> &str {
     match result.content().first() {
-        Some(ContentBlock::Text { text }) => text,
+        Some(ContentBlock::Text { text }) => text.as_str().expect("fixture uses scalar text"),
         other => panic!("expected text, got {other:?}"),
     }
 }
@@ -264,7 +264,7 @@ fn notices(events: &[SessionEvent]) -> Vec<String> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.clone()),
+                    ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text").to_owned()),
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -627,24 +627,24 @@ fn replay_safe_call_and_result_presenters_match_generic_review_cards() {
             .unwrap();
         assert_eq!(
             definition.present_call.as_ref().unwrap()(
-                &json!({"plan": "## Fix the flake\n\nsteps"})
+                &json!({"plan": "## Fix the flake\n\nsteps"}).into()
             ),
             Some(ToolCallView::Generic(GenericCallView {
-                title: "Fix the flake".to_owned(),
+                title: "Fix the flake".into(),
                 kind: Some(ToolCallKind::Other),
                 raw_input: None,
                 content: Some(vec![ContentBlock::Text {
-                    text: "## Fix the flake\n\nsteps".to_owned(),
+                    text: "## Fix the flake\n\nsteps".into(),
                 }]),
                 locations: None,
             }))
         );
         assert_eq!(
             definition.present_result.as_ref().unwrap()(
-                &json!({"plan": "# P"}),
+                &json!({"plan": "# P"}).into(),
                 &ToolResult {
                     content: vec![ContentBlock::Text {
-                        text: "ok".to_owned(),
+                        text: "ok".into(),
                     }],
                     is_error: false,
                     meta: None,
@@ -653,7 +653,7 @@ fn replay_safe_call_and_result_presenters_match_generic_review_cards() {
             Some(ToolResultView::Generic(GenericResultView {
                 title: Some("Plan review".to_owned()),
                 content: Some(vec![ContentBlock::Text {
-                    text: "ok".to_owned(),
+                    text: "ok".into(),
                 }]),
             }))
         );

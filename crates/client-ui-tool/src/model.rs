@@ -1,6 +1,6 @@
 //! Generic tool-row model derivation from frozen wire slices.
 
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue};
 
 /// Generic atomic row variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,7 +47,7 @@ pub struct ToolErrorInfo {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToolCallHead {
     /// Raw JSON arguments.
-    pub args_raw: String,
+    pub args_raw: JsonString,
 }
 
 /// Running or settled tool lifecycle.
@@ -58,9 +58,9 @@ pub enum ToolCallBlock {
         /// Stable call id.
         call_id: String,
         /// Raw JSON arguments.
-        args_raw: String,
+        args_raw: JsonString,
         /// Optional call-time render intent.
-        call_view: Option<Value>,
+        call_view: Option<JsonValue>,
     },
     /// Result has settled.
     Settled {
@@ -69,11 +69,11 @@ pub enum ToolCallBlock {
         /// Retained call head, absent after window truncation.
         call: Option<ToolCallHead>,
         /// Retained call-time render intent.
-        call_view: Option<Value>,
+        call_view: Option<JsonValue>,
         /// Result-time render intent.
-        result_view: Option<Value>,
+        result_view: Option<JsonValue>,
         /// Result content blocks.
-        content: Vec<Value>,
+        content: Vec<JsonValue>,
         /// Execution error marker.
         is_error: bool,
         /// Structured error identity.
@@ -92,7 +92,7 @@ impl ToolCallBlock {
 
     /// Optional call render intent.
     #[must_use]
-    pub fn call_view(&self) -> Option<&Value> {
+    pub fn call_view(&self) -> Option<&JsonValue> {
         match self {
             Self::Running { call_view, .. } | Self::Settled { call_view, .. } => call_view.as_ref(),
         }
@@ -100,7 +100,7 @@ impl ToolCallBlock {
 
     /// Optional result render intent.
     #[must_use]
-    pub fn result_view(&self) -> Option<&Value> {
+    pub fn result_view(&self) -> Option<&JsonValue> {
         match self {
             Self::Running { .. } => None,
             Self::Settled { result_view, .. } => result_view.as_ref(),
@@ -122,15 +122,15 @@ pub struct ToolRowModel {
     /// Static or tool-refined title.
     pub title: String,
     /// One-line summary.
-    pub summary: String,
+    pub summary: JsonString,
     /// File path from arguments, when openable.
-    pub file_path: Option<String>,
+    pub file_path: Option<JsonString>,
     /// Expanded input body.
-    pub body: Option<String>,
+    pub body: Option<JsonString>,
     /// Flattened settled output.
-    pub output: Option<String>,
+    pub output: Option<JsonString>,
     /// First output line on execution errors.
-    pub error_summary: Option<String>,
+    pub error_summary: Option<JsonString>,
     /// Lifecycle state.
     pub state: ToolRowState,
 }
@@ -176,46 +176,73 @@ fn tool_title(tool_name: &str) -> Option<&'static str> {
 
 /// Flattens settled content blocks to display text.
 #[must_use]
-pub fn result_text(block: &ToolCallBlock) -> String {
+pub fn result_text(block: &ToolCallBlock) -> JsonString {
     let ToolCallBlock::Settled { content, error, .. } = block else {
-        return String::new();
+        return JsonString::default();
     };
     let mut parts = content
         .iter()
         .map(|block| {
-            if block.get("type").and_then(Value::as_str) == Some("text") {
+            if block.get_value("type").and_then(JsonValue::as_str) == Some("text") {
                 block
-                    .get("text")
-                    .and_then(Value::as_str)
+                    .get_value("text")
+                    .and_then(json_string)
                     .unwrap_or_default()
-                    .to_owned()
             } else {
-                serde_json::to_string_pretty(block).unwrap_or_else(|_| "null".to_owned())
+                block.stringify_pretty().into()
             }
         })
         .collect::<Vec<_>>();
     if parts.is_empty()
         && let Some(error) = error
     {
-        parts.push(format!("{}: {}", error.name, error.code));
+        parts.push(format!("{}: {}", error.name, error.code).into());
     }
-    parts.join("\n")
+    JsonString::join(&parts, "\n")
 }
 
-fn first_line(text: &str) -> &str {
-    text.split_once('\n').map_or(text, |(first, _)| first)
+fn first_line(text: &JsonString) -> JsonString {
+    let units = text.utf16_units();
+    let end = units
+        .iter()
+        .position(|unit| *unit == u16::from(b'\n'))
+        .unwrap_or(units.len());
+    JsonString::from_utf16(&units[..end])
 }
 
-fn argument_string<'a>(
-    arguments: &'a serde_json::Map<String, Value>,
-    keys: &[&str],
-) -> Option<&'a str> {
+pub(crate) fn json_string(value: &JsonValue) -> Option<JsonString> {
+    value.to_utf16().map(|units| JsonString::from_utf16(&units))
+}
+
+pub(crate) fn parse_arguments(raw: &JsonString) -> Option<JsonValue> {
+    JsonValue::parse_text(raw).ok()
+}
+
+fn argument_string(arguments: &JsonValue, keys: &[&str]) -> Option<JsonString> {
     keys.iter().find_map(|key| {
         arguments
-            .get(*key)
-            .and_then(Value::as_str)
+            .get_value(key)
+            .and_then(json_string)
             .filter(|value| !value.is_empty())
     })
+}
+
+fn relativize_json_to_cwd(text: &JsonString, cwd: Option<&str>) -> JsonString {
+    let Some(cwd) = cwd.filter(|cwd| !cwd.is_empty()) else {
+        return text.clone();
+    };
+    let root = cwd.trim_end_matches(['/', '\\']);
+    let units = text.utf16_units();
+    let root = root.encode_utf16().collect::<Vec<_>>();
+    if units.starts_with(&root)
+        && units
+            .get(root.len())
+            .is_some_and(|unit| matches!(*unit, 0x2f | 0x5c))
+    {
+        JsonString::from_utf16(&units[root.len() + 1..])
+    } else {
+        text.clone()
+    }
 }
 
 /// Removes a workspace root prefix for display only.
@@ -242,61 +269,73 @@ fn summary_keys(variant: ToolRowVariant) -> &'static [&'static str] {
     }
 }
 
-fn raw_arguments(block: &ToolCallBlock) -> &str {
+fn raw_arguments(block: &ToolCallBlock) -> JsonString {
     match block {
-        ToolCallBlock::Running { args_raw, .. } => args_raw,
-        ToolCallBlock::Settled { call, .. } => call.as_ref().map_or("", |call| &call.args_raw),
+        ToolCallBlock::Running { args_raw, .. } => args_raw.clone(),
+        ToolCallBlock::Settled { call, .. } => call
+            .as_ref()
+            .map(|call| call.args_raw.clone())
+            .unwrap_or_default(),
     }
 }
 
-fn summary(variant: ToolRowVariant, raw: &str) -> String {
-    let Ok(parsed) = serde_json::from_str::<Value>(raw) else {
-        return first_line(raw).to_owned();
+fn summary(variant: ToolRowVariant, raw: &JsonString) -> JsonString {
+    let Some(parsed) = parse_arguments(raw) else {
+        return first_line(raw);
     };
-    let preferred = parsed
-        .as_object()
-        .and_then(|arguments| argument_string(arguments, summary_keys(variant)));
-    let fallback = match &parsed {
-        Value::Object(arguments) => arguments.values().find_map(Value::as_str),
-        Value::Array(arguments) => arguments.iter().find_map(Value::as_str),
-        _ => None,
-    }
-    .filter(|value| !value.is_empty());
-    preferred.or(fallback).map_or_else(
-        || first_line(raw).to_owned(),
-        |value| first_line(value).to_owned(),
-    )
+    let parsed = JsonValue::parse(parsed.stringify()).expect("stringified JSON is valid");
+    let preferred = argument_string(&parsed, summary_keys(variant));
+    let fallback = parsed
+        .object_entries()
+        .map(|entries| {
+            entries
+                .into_iter()
+                .map(|(_, value)| value)
+                .collect::<Vec<_>>()
+        })
+        .or_else(|| parsed.array_items())
+        .and_then(|values| {
+            values
+                .into_iter()
+                .filter_map(seekdeep_lossless_json::JsonRef::to_utf16)
+                .find(|units| !units.is_empty())
+        })
+        .map(|units| JsonString::from_utf16(&units));
+    preferred
+        .or(fallback)
+        .as_ref()
+        .map_or_else(|| first_line(raw), first_line)
 }
 
-fn file_path(variant: ToolRowVariant, raw: &str) -> Option<String> {
+fn file_path(variant: ToolRowVariant, raw: &JsonString) -> Option<JsonString> {
     if !matches!(
         variant,
         ToolRowVariant::Read | ToolRowVariant::Write | ToolRowVariant::Edit
     ) {
         return None;
     }
-    let Value::Object(arguments) = serde_json::from_str(raw).ok()? else {
-        return None;
-    };
-    argument_string(&arguments, &["path", "file_path"]).map(|value| first_line(value).to_owned())
+    let arguments = parse_arguments(raw)?;
+    argument_string(&arguments, &["path", "file_path"])
+        .as_ref()
+        .map(first_line)
 }
 
-fn body(variant: ToolRowVariant, raw: &str) -> Option<String> {
+fn body(variant: ToolRowVariant, raw: &JsonString) -> Option<JsonString> {
     if raw.is_empty() {
         return None;
     }
-    let Ok(parsed) = serde_json::from_str::<Value>(raw) else {
-        return Some(raw.to_owned());
+    let Some(parsed) = parse_arguments(raw) else {
+        return Some(raw.clone());
     };
     if variant == ToolRowVariant::Code
         && let Some(code) = parsed
-            .get("code")
-            .and_then(Value::as_str)
+            .get_value("code")
+            .and_then(json_string)
             .filter(|code| !code.is_empty())
     {
-        return Some(code.to_owned());
+        return Some(code);
     }
-    serde_json::to_string_pretty(&parsed).ok()
+    Some(parsed.stringify_pretty().into())
 }
 
 /// Derives one complete generic row from a frozen call slice.
@@ -313,14 +352,16 @@ pub fn tool_row_model(tool_name: &str, block: &ToolCallBlock, cwd: Option<&str>)
         ToolCallBlock::Settled { .. } => ToolRowState::Ok,
     };
     let base = if raw.is_empty() {
-        block.call_id().to_owned()
+        block.call_id().into()
     } else {
-        relativize_to_cwd(&summary(variant, raw), cwd)
+        relativize_json_to_cwd(&summary(variant, &raw), cwd)
     };
     let owned_title = tool_title(tool_name);
     let summary =
         if variant == ToolRowVariant::Others && !tool_name.is_empty() && owned_title.is_none() {
-            format!("{tool_name} · {base}")
+            let mut summary = JsonString::from(format!("{tool_name} · "));
+            summary.push_utf16(base.utf16_units());
+            summary
         } else {
             base
         };
@@ -329,7 +370,7 @@ pub fn tool_row_model(tool_name: &str, block: &ToolCallBlock, cwd: Option<&str>)
         .then(|| result_text(block))
         .filter(|text| !text.is_empty());
     let error_summary = (state == ToolRowState::Error)
-        .then(|| text.as_deref().map(first_line).map(ToOwned::to_owned))
+        .then(|| text.as_ref().map(first_line))
         .flatten();
     ToolRowModel {
         variant,
@@ -337,8 +378,8 @@ pub fn tool_row_model(tool_name: &str, block: &ToolCallBlock, cwd: Option<&str>)
             .unwrap_or_else(|| variant_title(variant))
             .to_owned(),
         summary,
-        file_path: file_path(variant, raw),
-        body: body(variant, raw),
+        file_path: file_path(variant, &raw),
+        body: body(variant, &raw),
         output: text,
         error_summary,
         state,

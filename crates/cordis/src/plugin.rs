@@ -22,6 +22,12 @@ use crate::{
     fiber::{DisposeFuture, EffectHandle},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "lifecycle_queue.rs"]
+mod lifecycle_queue;
+#[cfg(not(target_arch = "wasm32"))]
+pub use lifecycle_queue::{LifecycleDeferral, LifecycleScheduler, LifecycleTask};
+
 /// Boxed plugin startup computation.
 #[cfg(not(target_arch = "wasm32"))]
 pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
@@ -178,6 +184,8 @@ impl Plugin {
 struct RegistryInner {
     fibers: Mutex<Vec<Weak<PluginFiber>>>,
     next_uid: AtomicU64,
+    #[cfg(not(target_arch = "wasm32"))]
+    lifecycle: Arc<lifecycle_queue::LifecycleQueue>,
 }
 
 /// Source-compatible runtime record for one plugin identity.
@@ -204,6 +212,19 @@ impl PluginRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Defers newly admitted native lifecycle work until the source turn ends.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn defer_lifecycle(&self) -> LifecycleDeferral {
+        self.inner.lifecycle.defer()
+    }
+
+    /// Selects the executor for subsequently scheduled native lifecycle work.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_lifecycle_scheduler(&self, scheduler: Arc<dyn LifecycleScheduler>) {
+        self.inner.lifecycle.set_scheduler(scheduler);
     }
 
     /// Mounts a plugin and schedules dependency resolution.
@@ -247,12 +268,21 @@ impl PluginRegistry {
             browser_disposer: Mutex::new(None),
             lifecycle_generation: AtomicU64::new(0),
             disposed: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
+            #[cfg(not(target_arch = "wasm32"))]
+            structural_disposer: Mutex::new(None),
             settled: Notify::new(),
             registry: Arc::downgrade(&self.inner),
         });
         let owned = mounted.clone();
         let structural = EffectHandle::new("ctx.plugin()", move || -> DisposeFuture {
-            Box::pin(async move { owned.dispose().await })
+            Box::pin(async move {
+                #[cfg(not(target_arch = "wasm32"))]
+                return owned.dispose_owned(None).await;
+                #[cfg(target_arch = "wasm32")]
+                owned.dispose().await
+            })
         });
         #[cfg(target_arch = "wasm32")]
         {
@@ -270,7 +300,10 @@ impl PluginRegistry {
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
-        let _ = parent.own(structural)?;
+        {
+            let structural = parent.own(structural)?;
+            *mounted.structural_disposer.lock() = Some(structural.downgrade());
+        }
         self.inner.fibers.lock().push(Arc::downgrade(&mounted));
         if let Err(error) = parent.events().emit(
             parent,
@@ -287,7 +320,7 @@ impl PluginRegistry {
                 }
             }
             #[cfg(not(target_arch = "wasm32"))]
-            spawn_background(cleanup);
+            self.inner.lifecycle.dispatch(Box::pin(cleanup));
             return Err(publication_error(&error));
         }
         #[cfg(target_arch = "wasm32")]
@@ -446,6 +479,25 @@ impl PluginRegistry {
 
     /// Removes one runtime and starts disposal of all mounts without waiting.
     pub fn delete(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        self.delete_scheduled(plugin, None)
+    }
+
+    /// Removes a runtime with an explicit per-operation effect-disposal policy.
+    /// The first disposal owner selects the policy; concurrent callers join it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn delete_with_disposal(
+        &self,
+        plugin: &Plugin,
+        scheduling: crate::DisposalScheduling,
+    ) -> Option<PluginRuntimeSnapshot> {
+        self.delete_scheduled(plugin, Some(scheduling))
+    }
+
+    fn delete_scheduled(
+        &self,
+        plugin: &Plugin,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> Option<PluginRuntimeSnapshot> {
         let runtime = self.get(plugin)?;
         self.inner.fibers.lock().retain(|fiber| {
             fiber
@@ -456,9 +508,19 @@ impl PluginRegistry {
             fiber.uid.store(0, Ordering::Release);
             fiber.fiber.request_disposal();
             let fiber = fiber.clone();
-            spawn_background(async move {
-                let _ = fiber.dispose().await;
-            });
+            let task = async move {
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = fiber.dispose_native(scheduling).await;
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = scheduling;
+                    let _ = fiber.dispose().await;
+                }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            self.inner.lifecycle.dispatch(Box::pin(task));
+            #[cfg(target_arch = "wasm32")]
+            spawn_background(task);
         }
         Some(runtime)
     }
@@ -471,9 +533,7 @@ impl PluginRegistry {
                 .upgrade()
                 .is_some_and(|fiber| fiber.plugin.id() != plugin.id())
         });
-        for fiber in &runtime.fibers {
-            let _ = fiber.dispose().await;
-        }
+        futures::future::join_all(runtime.fibers.iter().map(PluginFiber::dispose)).await;
         Some(runtime)
     }
 
@@ -518,6 +578,12 @@ impl PluginRegistry {
     }
 }
 
+#[derive(Clone)]
+struct PluginFailure {
+    message: String,
+    cause: Arc<anyhow::Error>,
+}
+
 /// One mounted plugin and its current dependency epoch.
 pub struct PluginFiber {
     fiber: Arc<Fiber>,
@@ -527,7 +593,7 @@ pub struct PluginFiber {
     additional_inject: Mutex<Vec<String>>,
     config: Mutex<Value>,
     epoch: Mutex<Option<Vec<Uuid>>>,
-    error: Mutex<Option<String>>,
+    error: Mutex<Option<PluginFailure>>,
     transition: tokio::sync::Mutex<()>,
     updates: tokio::sync::Mutex<()>,
     scheduled: AtomicBool,
@@ -540,6 +606,10 @@ pub struct PluginFiber {
     browser_disposer: Mutex<Option<js_sys::WeakRef<js_sys::Function>>>,
     lifecycle_generation: AtomicU64,
     disposed: AtomicBool,
+    #[cfg(not(target_arch = "wasm32"))]
+    disposal: Mutex<Option<crate::fiber::SharedDisposal>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    structural_disposer: Mutex<Option<crate::fiber::WeakEffectHandle>>,
     settled: Notify,
     registry: Weak<RegistryInner>,
 }
@@ -551,7 +621,7 @@ impl std::fmt::Debug for PluginFiber {
             .field("plugin", &self.plugin)
             .field("state", &self.fiber.state())
             .field("epoch", &self.epoch.lock())
-            .field("error", &self.error.lock())
+            .field("error", &self.error())
             .finish_non_exhaustive()
     }
 }
@@ -734,7 +804,17 @@ impl PluginFiber {
     /// Last startup error after rendering its causal chain.
     #[must_use]
     pub fn error(&self) -> Option<String> {
-        self.error.lock().clone()
+        self.error
+            .lock()
+            .as_ref()
+            .map(|error| error.message.clone())
+    }
+
+    /// Original failure from the last settled configuration or startup attempt.
+    /// Disposal retains it; successful startup or unavailable dependencies clear it.
+    #[must_use]
+    pub fn failure(&self) -> Option<Arc<anyhow::Error>> {
+        self.error.lock().as_ref().map(|error| error.cause.clone())
     }
 
     /// Waits until currently scheduled lifecycle work reaches a stable state.
@@ -749,6 +829,13 @@ impl PluginFiber {
         }
         loop {
             let notified = self.settled.notified();
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let disposal = self.disposal.lock().clone();
+                if let Some(disposal) = disposal {
+                    let _ = disposal.await;
+                }
+            }
             if !self.scheduled.load(Ordering::Acquire)
                 && !matches!(
                     self.fiber.state(),
@@ -760,7 +847,7 @@ impl PluginFiber {
                     .error
                     .lock()
                     .clone()
-                    .map_or(Ok(()), |message| Err(anyhow::anyhow!(message)));
+                    .map_or(Ok(()), |error| Err(anyhow::Error::msg(error.message)));
             }
             notified.await;
         }
@@ -834,9 +921,71 @@ impl PluginFiber {
     ///
     /// Returns aggregated plugin cleanup failures.
     pub async fn dispose(self: &Arc<Self>) -> anyhow::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.dispose_native(None).await;
+        #[cfg(target_arch = "wasm32")]
+        self.dispose_once(None).await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn dispose_native(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
+        let disposal = self.disposal_future(scheduling);
+        let structural = self
+            .structural_disposer
+            .lock()
+            .as_ref()
+            .and_then(crate::fiber::WeakEffectHandle::upgrade);
+        self.settled.notify_waiters();
+        if let Some(structural) = structural {
+            structural.dispose().await
+        } else {
+            disposal.await.map_err(anyhow::Error::msg)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn dispose_owned(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
+        let disposal = self.disposal_future(scheduling);
+        self.settled.notify_waiters();
+        disposal.await.map_err(anyhow::Error::msg)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn disposal_future(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> crate::fiber::SharedDisposal {
+        self.disposal
+            .lock()
+            .get_or_insert_with(|| {
+                let owned = self.clone();
+                async move {
+                    owned
+                        .dispose_once(scheduling)
+                        .await
+                        .map_err(|error| format!("{error:#}"))
+                }
+                .boxed()
+                .shared()
+            })
+            .clone()
+    }
+
+    async fn dispose_once(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
         if self.disposed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.uid.store(0, Ordering::Release);
         #[cfg(target_arch = "wasm32")]
         crate::wasm::mark_browser_disposed(&self.browser_face())?;
         #[cfg(target_arch = "wasm32")]
@@ -858,6 +1007,13 @@ impl PluginFiber {
             }
         }
         self.fiber.request_disposal();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.fiber.set_state(FiberState::Unloading);
+            if let Some(registry) = self.registry.upgrade() {
+                registry.lifecycle.after_turn().await;
+            }
+        }
         #[cfg(target_arch = "wasm32")]
         if let Some(disposal) = self.fiber.browser_disposal() {
             let result = disposal.await;
@@ -866,7 +1022,17 @@ impl PluginFiber {
             return result;
         }
         let _transition = self.transition.lock().await;
-        let result = self.fiber.dispose().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = if let Some(scheduling) = scheduling {
+            self.fiber.dispose_with_scheduling(scheduling).await
+        } else {
+            self.fiber.dispose().await
+        };
+        #[cfg(target_arch = "wasm32")]
+        let result = {
+            let _ = scheduling;
+            self.fiber.dispose().await
+        };
         self.uid.store(0, Ordering::Release);
         self.notify_registry();
         self.settled.notify_waiters();
@@ -891,7 +1057,7 @@ impl PluginFiber {
             return;
         }
         let fiber = self.clone();
-        spawn_background(async move {
+        let task = async move {
             loop {
                 fiber.dirty.store(false, Ordering::Release);
                 fiber.reconcile().await;
@@ -905,7 +1071,15 @@ impl PluginFiber {
                 fiber.schedule();
             }
             fiber.settled.notify_waiters();
-        });
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(registry) = self.registry.upgrade() {
+            registry.lifecycle.dispatch(Box::pin(task));
+        } else {
+            spawn_background(task);
+        }
+        #[cfg(target_arch = "wasm32")]
+        spawn_background(task);
     }
 
     fn is_quiescent(&self) -> bool {
@@ -971,7 +1145,9 @@ impl PluginFiber {
 
     async fn reconcile(&self) {
         let _transition = self.transition.lock().await;
-        if self.disposed.load(Ordering::Acquire) {
+        if self.disposed.load(Ordering::Acquire)
+            || cfg!(not(target_arch = "wasm32")) && self.fiber.is_disposal_requested()
+        {
             return;
         }
         let required = self.required_services();
@@ -1007,6 +1183,15 @@ impl PluginFiber {
             self.notify_registry();
         }
         self.fiber.set_state(FiberState::Loading);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(registry) = self.registry.upgrade() {
+                registry.lifecycle.after_turn().await;
+            }
+            if self.fiber.is_disposal_requested() {
+                return;
+            }
+        }
         let raw_config = self.config.lock().clone();
         let result = match self.resolve_config(&raw_config) {
             Ok(config) => self.run_startup(config).await,
@@ -1032,7 +1217,10 @@ impl PluginFiber {
                 // plugin forever; a config update explicitly clears the epoch,
                 // while a provider replacement naturally produces a new one.
                 *self.epoch.lock() = Some(next_epoch);
-                *self.error.lock() = Some(message.clone());
+                *self.error.lock() = Some(PluginFailure {
+                    message: message.clone(),
+                    cause: Arc::new(error),
+                });
                 tracing::error!(plugin = %self.plugin.name, error = %message, "plugin startup failed");
             }
         }

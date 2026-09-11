@@ -169,7 +169,7 @@ pub fn render_catalog_message(entries: &[CatalogEntry]) -> UserMessage {
     ]
     .join("\n");
     UserMessage::new(
-        vec![ContentBlock::Text { text }],
+        vec![ContentBlock::text(text)],
         SkillCatalogSource {
             kind: SkillCatalogSourceKind::SkillCatalog,
             form: SkillCatalogForm::Catalog,
@@ -209,7 +209,7 @@ pub fn render_catalog_update(entries: &[CatalogEntry]) -> UserMessage {
     ]
     .join("\n");
     UserMessage::new(
-        vec![ContentBlock::Text { text }],
+        vec![ContentBlock::text(text)],
         SkillCatalogSource {
             kind: SkillCatalogSourceKind::SkillCatalog,
             form: SkillCatalogForm::Catalog,
@@ -270,14 +270,15 @@ pub fn invoked_skill_names(messages: &[UserMessage]) -> Vec<String> {
             let ContentBlock::Text { text } = block else {
                 continue;
             };
-            for captures in SKILL_GESTURE.captures_iter(text) {
+            let scan = String::from_utf16_lossy(text.utf16_units());
+            for captures in SKILL_GESTURE.captures_iter(&scan) {
                 let Some(full) = captures.get(0) else {
                     continue;
                 };
                 let Some(name) = captures.get(1) else {
                     continue;
                 };
-                let trailing = &text[full.end()..];
+                let trailing = &scan[full.end()..];
                 if !trailing.is_empty() && !trailing.chars().next().is_some_and(char::is_whitespace)
                 {
                     continue;
@@ -405,7 +406,7 @@ pub fn definition(context: &Context) -> anyhow::Result<ToolDefinition> {
                 metadata: None,
             };
             Ok(vec![ContentBlock::Text {
-                text: render_skill_content(&definition),
+                text: render_skill_content(&definition).into(),
             }])
         }),
     );
@@ -421,9 +422,9 @@ pub fn definition(context: &Context) -> anyhow::Result<ToolDefinition> {
     );
     options.present_call = Some(Arc::new(|args: &SkillToolArgs| {
         Some(ToolCallView::Generic(GenericCallView {
-            title: format!("Load skill {}", args.name),
+            title: format!("Load skill {}", args.name).into(),
             kind: Some(ToolCallKind::Read),
-            raw_input: Some(json!(args.name)),
+            raw_input: Some(json!(args.name).into()),
             content: None,
             locations: None,
         }))
@@ -508,13 +509,25 @@ fn catalog_history(agent: &Agent) -> CatalogHistory {
         if event.event_type != "user/message" {
             continue;
         }
-        let Some(source) = event.data.get("source") else {
-            continue;
-        };
-        if source.get("kind").and_then(Value::as_str) != Some("skill-catalog") {
+        let source = &event.data["source"];
+        if source["kind"] != "skill-catalog" {
             continue;
         }
-        let Some(entries) = source.get("entries").and_then(parse_entries) else {
+        let Some(entries) = source["entries"].as_array().and_then(|entries| {
+            entries
+                .iter()
+                .map(|entry| {
+                    let name = entry["name"].as_str()?;
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(CatalogEntry {
+                        name: name.to_owned(),
+                        description: entry["description"].as_str()?.to_owned(),
+                    })
+                })
+                .collect::<Option<Vec<_>>>()
+        }) else {
             continue;
         };
         let digest = digest_catalog_entries(&entries);
@@ -668,7 +681,7 @@ async fn gesture_step(
         fields.insert("form".to_owned(), json!("instructions"));
         injections.push(UserMessage::new(
             vec![ContentBlock::Text {
-                text: render_skill_content(&skill),
+                text: render_skill_content(&skill).into(),
             }],
             MessageSource {
                 kind: "skill-invocation".to_owned(),
@@ -873,13 +886,13 @@ mod tests {
     fn gesture_scans_only_user_text_and_respects_boundaries() {
         let user = UserMessage::new(
             vec![ContentBlock::Text {
-                text: "use /dsh-badge and /skill-filesystem /usr/bin 5/8 /x/y".to_owned(),
+                text: "use /dsh-badge and /skill-filesystem /usr/bin 5/8 /x/y".into(),
             }],
             MessageSource::user(),
         );
         let plugin = UserMessage::new(
             vec![ContentBlock::Text {
-                text: "/forged".to_owned(),
+                text: "/forged".into(),
             }],
             MessageSource::plugin("stub"),
         );

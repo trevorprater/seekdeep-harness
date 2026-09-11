@@ -59,6 +59,7 @@ pub use runtime::{
     DirectoryRegistrationHandle, LLM, LlmAdapter, LlmDispatchRoute, LlmDispatchTrace, LlmRuntime,
     LlmStream, LlmStreamMiddleware, LlmStreamNext, ModelDiscoveryHandle, PreparedLlmCall,
 };
+pub use seekdeep_lossless_json::JsonString;
 pub use types::{
     AbortSignal, ContentBlock, FinishReason, GenerateOptions, LlmCallConfig,
     LlmCallConfigAdapterDefaults, LlmConfigurableProvider, LlmDiscoveredModel, LlmModelContext,

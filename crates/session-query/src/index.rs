@@ -471,7 +471,7 @@ mod tests {
     fn append_user(session: &Session, text: &str) {
         let message = Message::user(
             vec![ContentBlock::Text {
-                text: text.to_owned(),
+                text: text.into(),
             }],
             MessageSource::user(),
         );

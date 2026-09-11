@@ -9,7 +9,8 @@ use seekdeep_client_runtime::{
     ConversationViewPlacement, RequestPromptChange, RequestPromptChangeKind,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 /// Stable Definition kind.
 pub const TRAJECTORY_REQUEST_HEADER_KIND: &str = "trajectory-request-header";
@@ -184,18 +185,18 @@ fn request_prompt(
     }
     let header = event
         .data
-        .get("header")
+        .get_value("header")
         .and_then(Value::as_object)
         .ok_or_else(|| ConversationAssemblerError::new("request/header omitted header"))?;
-    let config = serde_json::from_value(
+    let config = crate::json_value::decode(
         header
-            .get("config")
+            .get_value("config")
             .cloned()
             .ok_or_else(|| ConversationAssemblerError::new("request/header omitted config"))?,
     )
     .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
-    let system = match header.get("system") {
-        None | Some(Value::Null) => String::new(),
+    let system = match header.get_value("system") {
+        None | Some(null().clone()) => String::new(),
         Some(Value::String(system)) => system.clone(),
         Some(_) => {
             return Err(ConversationAssemblerError::new(
@@ -204,7 +205,7 @@ fn request_prompt(
         }
     };
     let tools = header
-        .get("tools")
+        .get_value("tools")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
@@ -223,7 +224,7 @@ fn prompt_change(
     if event.event_type != "request/header" {
         return None;
     }
-    if previous.is_none() && event.data.get("reason").and_then(Value::as_str) != Some("initial") {
+    if previous.is_none() && event.data.get_value("reason").and_then(Value::as_str) != Some("initial") {
         return None;
     }
     let system_changed = previous.is_some_and(|previous| previous.system != prompt.system);
@@ -249,13 +250,13 @@ fn prompt_change(
 fn encode_state(
     state: &TrajectoryRequestHeaderState,
 ) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(state)
+    Value::from_serialize(state)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode_state(value: &Value) -> Result<TrajectoryRequestHeaderState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value.deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

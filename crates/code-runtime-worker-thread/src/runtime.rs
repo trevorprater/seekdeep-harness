@@ -12,18 +12,19 @@ use async_trait::async_trait;
 use futures::{StreamExt as _, future::BoxFuture, stream::FuturesUnordered};
 use regex::Regex;
 use seekdeep_code_runtime::{
-    CodeBindingFunction, CodeBindingNamespace, CodeRunFailure, CodeRunFailureKind, CodeRunRequest,
-    CodeRunResult, CodeRuntime, CodeRuntimeBackend, PORTABLE_RESERVED_WORDS,
-    RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS, is_dunder_member,
+    CodeBindingFunction, CodeBindingNamespace, CodeJsonValue, CodeRunFailure, CodeRunFailureKind,
+    CodeRunRequest, CodeRunResult, CodeRuntime, CodeRuntimeBackend, PORTABLE_RESERVED_WORDS,
+    RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS, is_dunder_member_string,
 };
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    engine::{EngineCompletion, EngineLimits, EngineOutcome, evaluate_stripped_program},
+    node::{NodeExecutor, NodeStartup, NodeSupervisor},
+    outcome::{EngineCompletion, EngineLimits, EngineOutcome},
     output_ledger::OutputLedger,
-    typescript::strip_typescript,
+    typescript::strip_typescript_program,
 };
 
 const MAX_TIMER_DELAY_MS: f64 = 2_147_483_647.0;
@@ -138,12 +139,15 @@ struct RuntimeState {
     next_run: AtomicU64,
     live: parking_lot::Mutex<HashMap<u64, seekdeep_llm::AbortSignal>>,
     changed: tokio::sync::Notify,
+    node: tokio::sync::Mutex<Option<Arc<NodeSupervisor>>>,
+    assets: std::path::PathBuf,
+    executor: NodeExecutor,
 }
 
 struct HostBindingCall {
     function: CodeBindingFunction,
-    argument: Value,
-    reply: tokio::sync::oneshot::Sender<anyhow::Result<Value>>,
+    argument: CodeJsonValue,
+    reply: tokio::sync::oneshot::Sender<anyhow::Result<CodeJsonValue>>,
 }
 
 fn bridge_host_bindings(
@@ -216,13 +220,18 @@ impl WorkerThreadCodeRuntime {
     /// Rejects non-positive caps, an unsafe output byte count, or a wall
     /// delay above the source backend's timer boundary.
     pub fn new(config: &WorkerThreadCodeRuntimeConfig) -> anyhow::Result<Self> {
+        let config = config.resolve()?;
+        let assets = crate::node::assets()?;
         Ok(Self {
-            config: config.resolve()?,
+            config,
             state: Arc::new(RuntimeState {
                 disposed: AtomicBool::new(false),
                 next_run: AtomicU64::new(1),
                 live: parking_lot::Mutex::new(HashMap::new()),
                 changed: tokio::sync::Notify::new(),
+                node: tokio::sync::Mutex::new(None),
+                assets,
+                executor: NodeExecutor::new()?,
             }),
         })
     }
@@ -234,20 +243,20 @@ impl WorkerThreadCodeRuntime {
                 || PORTABLE_RESERVED_WORDS.contains(namespace.global.as_str())
             {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: binding global {:?} is not a usable identifier",
-                    namespace.global
+                    "seekdeep-code-runtime-worker-thread: binding global {} is not a usable identifier",
+                    serde_json::to_string(&namespace.global)?
                 );
             }
             if RESERVED_BINDING_GLOBALS.contains(namespace.global.as_str()) {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: reserved binding global {:?}",
-                    namespace.global
+                    "seekdeep-code-runtime-worker-thread: reserved binding global {}",
+                    serde_json::to_string(&namespace.global)?
                 );
             }
             if !globals.insert(namespace.global.as_str()) {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: duplicate binding global {:?}",
-                    namespace.global
+                    "seekdeep-code-runtime-worker-thread: duplicate binding global {}",
+                    serde_json::to_string(&namespace.global)?
                 );
             }
         }
@@ -261,32 +270,34 @@ impl WorkerThreadCodeRuntime {
                 || PORTABLE_RESERVED_WORDS.contains(descriptor.name.as_str())
             {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: binding error class {:?} is not a usable identifier",
-                    descriptor.name
+                    "seekdeep-code-runtime-worker-thread: binding error class {} is not a usable identifier",
+                    serde_json::to_string(&descriptor.name)?
                 );
             }
             if RESERVED_BINDING_GLOBALS.contains(descriptor.name.as_str()) {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: reserved binding global {:?}",
-                    descriptor.name
+                    "seekdeep-code-runtime-worker-thread: reserved binding global {}",
+                    serde_json::to_string(&descriptor.name)?
                 );
             }
             if globals.contains(descriptor.name.as_str())
                 || !error_names.insert(descriptor.name.as_str())
             {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: duplicate injected global {:?}",
-                    descriptor.name
+                    "seekdeep-code-runtime-worker-thread: duplicate injected global {}",
+                    serde_json::to_string(&descriptor.name)?
                 );
             }
-            let member = descriptor.member_name_property.as_str();
+            let member = &descriptor.member_name_property;
             if member.is_empty()
-                || RESERVED_ERROR_MEMBERS.contains(member)
-                || is_dunder_member(member)
+                || member
+                    .as_str()
+                    .is_some_and(|member| RESERVED_ERROR_MEMBERS.contains(member))
+                || is_dunder_member_string(member)
             {
                 anyhow::bail!(
-                    "seekdeep-code-runtime-worker-thread: binding error member property {:?} is not usable",
-                    descriptor.member_name_property
+                    "seekdeep-code-runtime-worker-thread: binding error member property {} is not usable",
+                    serde_json::to_string(&descriptor.member_name_property)?
                 );
             }
         }
@@ -294,8 +305,13 @@ impl WorkerThreadCodeRuntime {
     }
 
     fn failure_before_worker(&self, kind: CodeRunFailureKind, message: String) -> CodeRunResult {
-        OutputLedger::new(self.config.max_output_bytes)
-            .failure(Vec::new(), CodeRunFailure { kind, message })
+        OutputLedger::new(self.config.max_output_bytes).failure(
+            Vec::new(),
+            CodeRunFailure {
+                kind,
+                message: message.into(),
+            },
+        )
     }
 
     fn finalize_outcome(&self, outcome: EngineOutcome) -> CodeRunResult {
@@ -319,7 +335,7 @@ impl WorkerThreadCodeRuntime {
                 logs,
                 CodeRunFailure {
                     kind: CodeRunFailureKind::InvalidOutput,
-                    message: "program completion must be lossless JSON".to_owned(),
+                    message: "program completion must be lossless JSON".into(),
                 },
             ),
             EngineCompletion::OutputLimit => ledger.limit(&logs),
@@ -327,14 +343,15 @@ impl WorkerThreadCodeRuntime {
                 logs,
                 CodeRunFailure {
                     kind: CodeRunFailureKind::WorkerExit,
-                    message: format!("worker exited with code {code} before completing"),
+                    message: format!("worker exited with code {code} before completing").into(),
                 },
             ),
+            #[cfg(test)]
             EngineCompletion::HeapLimit => ledger.failure(
                 logs,
                 CodeRunFailure {
                     kind: CodeRunFailureKind::WorkerExit,
-                    message: "worker error: Worker terminated due to reaching memory limit: JS heap out of memory".to_owned(),
+                    message: "worker error: Worker terminated due to reaching memory limit: JS heap out of memory".into(),
                 },
             ),
             EngineCompletion::ComputeTimeout => ledger.failure(
@@ -344,7 +361,7 @@ impl WorkerThreadCodeRuntime {
                     message: format!(
                         "compute budget exhausted ({}ms busy)",
                         number_message(self.config.compute_ms)
-                    ),
+                    ).into(),
                 },
             ),
             EngineCompletion::WallTimeout => ledger.failure(
@@ -354,14 +371,14 @@ impl WorkerThreadCodeRuntime {
                     message: format!(
                         "wall-clock ceiling reached ({}ms)",
                         number_message(self.config.max_wall_ms)
-                    ),
+                    ).into(),
                 },
             ),
             EngineCompletion::Abort(reason) => ledger.failure(
                 logs,
                 CodeRunFailure {
                     kind: CodeRunFailureKind::Abort,
-                    message: js_string(&reason),
+                    message: js_string(&reason).into(),
                 },
             ),
             EngineCompletion::ForgedFailure(kind, message) => {
@@ -382,9 +399,12 @@ impl WorkerThreadCodeRuntime {
         loop {
             let changed = self.state.changed.notified();
             if self.state.live.lock().is_empty() {
-                return;
+                break;
             }
             changed.await;
+        }
+        if let Some(node) = self.state.node.lock().await.take() {
+            node.shutdown().await;
         }
     }
 }
@@ -430,7 +450,7 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
             return Ok(self.failure_before_worker(CodeRunFailureKind::Abort, message));
         }
 
-        let program = match strip_typescript(&request.program) {
+        let program = match strip_typescript_program(&request.program) {
             Ok(program) => program,
             Err(error) => {
                 return Ok(
@@ -462,24 +482,32 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
         };
         let (send, receive) = tokio::sync::oneshot::channel();
         let state = self.state.clone();
-        let spawn = std::thread::Builder::new()
-            .name("seekdeep-code-runtime-worker".to_owned())
-            .spawn(move || {
-                let _live = LiveRunGuard { id: run_id, state };
-                let outcome = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map_err(anyhow::Error::from)
-                    .and_then(|runtime| {
-                        runtime.block_on(evaluate_stripped_program(&program, limits, bindings))
-                    });
-                let _sent = send.send(outcome);
-            });
-        if let Err(error) = spawn {
-            self.state.live.lock().remove(&run_id);
-            self.state.changed.notify_waiters();
-            return Err(error.into());
-        }
+        self.state.executor.handle.spawn(async move {
+            let _live = LiveRunGuard {
+                id: run_id,
+                state: state.clone(),
+            };
+            let outcome = async {
+                let node = {
+                    let mut node = state.node.lock().await;
+                    if node.is_none() {
+                        match NodeSupervisor::start(&state.assets, &limits).await? {
+                            NodeStartup::Ready(started) => *node = Some(started),
+                            NodeStartup::Stopped(completion) => {
+                                return Ok(EngineOutcome {
+                                    logs: Vec::new(),
+                                    completion,
+                                });
+                            }
+                        }
+                    }
+                    node.as_ref().expect("started Node supervisor").clone()
+                };
+                node.run(run_id, &program, limits, bindings).await
+            }
+            .await;
+            let _sent = send.send(outcome);
+        });
         let outcome = receive.await.map_err(|_| {
             anyhow::anyhow!("seekdeep-code-runtime-worker-thread: worker exited before completing")
         })?;
@@ -547,7 +575,7 @@ mod tests {
     fn namespace(global: &str) -> CodeBindingNamespace {
         CodeBindingNamespace {
             global: global.to_owned(),
-            functions: IndexMap::<String, CodeBindingFunction>::new(),
+            functions: IndexMap::new(),
             error_class: None,
         }
     }
@@ -556,7 +584,7 @@ mod tests {
         WorkerThreadCodeRuntime::new(&config)
             .unwrap()
             .run(CodeRunRequest {
-                program: program.to_owned(),
+                program: program.into(),
                 bindings: Vec::new(),
                 signal: None,
             })
@@ -572,7 +600,7 @@ mod tests {
         WorkerThreadCodeRuntime::new(&config)
             .unwrap()
             .run(CodeRunRequest {
-                program: program.to_owned(),
+                program: program.into(),
                 bindings,
                 signal: None,
             })
@@ -583,10 +611,13 @@ mod tests {
     fn tools(functions: IndexMap<String, CodeBindingFunction>) -> Vec<CodeBindingNamespace> {
         vec![CodeBindingNamespace {
             global: "tools".to_owned(),
-            functions,
+            functions: functions
+                .into_iter()
+                .map(|(name, function)| (name.into(), function))
+                .collect(),
             error_class: Some(CodeBindingErrorClass {
                 name: "ToolCallError".to_owned(),
-                member_name_property: "toolName".to_owned(),
+                member_name_property: "toolName".into(),
             }),
         }]
     }
@@ -612,7 +643,7 @@ mod tests {
                         release.notified().await;
                         "host work settled"
                     }));
-                    Ok(json!("accepted"))
+                    Ok(json!("accepted").into())
                 })
             }
         });
@@ -622,7 +653,7 @@ mod tests {
             tools(IndexMap::from([("start".to_owned(), binding)])),
         )
         .await;
-        assert_eq!(result.value, Some(json!("accepted")));
+        assert_eq!(result.value, Some(json!("accepted").into()));
         assert!(result.error.is_none());
         let task = spawned.lock().take().expect("host task was started");
         release.notify_one();
@@ -643,7 +674,7 @@ mod tests {
         let binding: CodeBindingFunction = Arc::new({
             let order = order.clone();
             move |argument| {
-                let ordinal = argument["ordinal"].as_u64().unwrap();
+                let ordinal = argument.get("ordinal").unwrap().as_u64().unwrap();
                 order.lock().push(format!("invoke-{ordinal}"));
                 let order = order.clone();
                 let release = release.clone();
@@ -654,7 +685,7 @@ mod tests {
                     } else {
                         release.notify_one();
                     }
-                    Ok(json!(ordinal))
+                    Ok(json!(ordinal).into())
                 })
             }
         });
@@ -668,7 +699,7 @@ mod tests {
         )
         .await
         .expect("suspended host calls must allow later submissions");
-        assert_eq!(result.value, Some(json!([0, 1])));
+        assert_eq!(result.value, Some(json!([0, 1]).into()));
         assert_eq!(
             &*order.lock(),
             &["invoke-0", "poll-0", "invoke-1", "poll-1"]
@@ -692,13 +723,13 @@ mod tests {
                     started.notify_one();
                     release.notified().await;
                     finished.notify_one();
-                    Ok(json!("host finished"))
+                    Ok(json!("host finished").into())
                 })
             }
         });
         let signal = seekdeep_llm::AbortSignal::default();
         let request = CodeRunRequest {
-            program: "return await tools.wait({});".to_owned(),
+            program: "return await tools.wait({});".into(),
             bindings: tools(IndexMap::from([("wait".to_owned(), binding)])),
             signal: Some(signal.clone()),
         };
@@ -726,12 +757,12 @@ mod tests {
         let backend =
             WorkerThreadCodeRuntime::new(&WorkerThreadCodeRuntimeConfig::default()).unwrap();
         let result = futures::executor::block_on(backend.run(CodeRunRequest {
-            program: "return 42".to_owned(),
+            program: "return 42".into(),
             bindings: Vec::new(),
             signal: None,
         }))
         .unwrap();
-        assert_eq!(result.value, Some(json!(42)));
+        assert_eq!(result.value, Some(json!(42).into()));
         assert!(result.error.is_none());
     }
 
@@ -775,6 +806,12 @@ mod tests {
 
     #[test]
     fn validates_namespace_and_typed_error_contracts() {
+        assert_eq!(
+            WorkerThreadCodeRuntime::validate_bindings(&[namespace("\u{7}\u{8}")])
+                .unwrap_err()
+                .to_string(),
+            "seekdeep-code-runtime-worker-thread: binding global \"\\u0007\\b\" is not a usable identifier"
+        );
         for global in ["not valid!", "await", "$tools", "a$b", "lambda", "console"] {
             assert!(WorkerThreadCodeRuntime::validate_bindings(&[namespace(global)]).is_err());
         }
@@ -784,8 +821,18 @@ mod tests {
         );
         let mut typed = namespace("tools");
         typed.error_class = Some(CodeBindingErrorClass {
+            name: "\u{7}\u{c}".to_owned(),
+            member_name_property: "member".into(),
+        });
+        assert_eq!(
+            WorkerThreadCodeRuntime::validate_bindings(&[typed.clone()])
+                .unwrap_err()
+                .to_string(),
+            "seekdeep-code-runtime-worker-thread: binding error class \"\\u0007\\f\" is not a usable identifier"
+        );
+        typed.error_class = Some(CodeBindingErrorClass {
             name: "ToolCallError".to_owned(),
-            member_name_property: "toolName".to_owned(),
+            member_name_property: "toolName".into(),
         });
         assert!(WorkerThreadCodeRuntime::validate_bindings(&[typed.clone()]).is_ok());
         for (name, member) in [
@@ -801,7 +848,7 @@ mod tests {
             let mut invalid = namespace("tools");
             invalid.error_class = Some(CodeBindingErrorClass {
                 name: name.to_owned(),
-                member_name_property: member.to_owned(),
+                member_name_property: member.into(),
             });
             assert!(WorkerThreadCodeRuntime::validate_bindings(&[invalid]).is_err());
         }
@@ -817,33 +864,33 @@ mod tests {
         assert_eq!(
             runtime
                 .run(CodeRunRequest {
-                    program: "globalThis.leak = 'x'; return 1".to_owned(),
+                    program: "globalThis.leak = 'x'; return 1".into(),
                     bindings: Vec::new(),
                     signal: None,
                 })
                 .await
                 .unwrap()
                 .value,
-            Some(json!(1))
+            Some(json!(1).into())
         );
         assert_eq!(
             runtime
                 .run(CodeRunRequest {
-                    program: "return typeof globalThis.leak".to_owned(),
+                    program: "return typeof globalThis.leak".into(),
                     bindings: Vec::new(),
                     signal: None,
                 })
                 .await
                 .unwrap()
                 .value,
-            Some(json!("undefined"))
+            Some(json!("undefined").into())
         );
 
         let signal = seekdeep_llm::AbortSignal::default();
         signal.abort_with_reason(json!({ "kind": "caller" }));
         let aborted = runtime
             .run(CodeRunRequest {
-                program: "return 1".to_owned(),
+                program: "return 1".into(),
                 bindings: Vec::new(),
                 signal: Some(signal),
             })
@@ -855,7 +902,7 @@ mod tests {
         let inflight = tokio::spawn(async move {
             running
                 .run(CodeRunRequest {
-                    program: "for (;;) {}".to_owned(),
+                    program: "for (;;) {}".into(),
                     bindings: Vec::new(),
                     signal: None,
                 })
@@ -869,14 +916,14 @@ mod tests {
             disposed.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Abort,
-                message: "runtime disposed".to_owned(),
+                message: "runtime disposed".into(),
             })
         );
         assert!(backend.state.live.lock().is_empty());
         assert!(
             backend
                 .run(CodeRunRequest {
-                    program: "return 1".to_owned(),
+                    program: "return 1".into(),
                     bindings: Vec::new(),
                     signal: None,
                 })
@@ -898,7 +945,7 @@ mod tests {
         assert_eq!(
             exact_value,
             CodeRunResult {
-                value: Some(json!("€")),
+                value: Some(json!("€").into()),
                 logs: Vec::new(),
                 error: None,
             }
@@ -927,7 +974,7 @@ mod tests {
         )
         .await;
         assert_eq!(combined.logs, ["abc"]);
-        assert_eq!(combined.value, Some(json!("xy")));
+        assert_eq!(combined.value, Some(json!("xy").into()));
         assert!(combined.error.is_none());
         assert_eq!(
             run_program(
@@ -1000,7 +1047,7 @@ mod tests {
             diagnostic.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Exception,
-                message: "xy".to_owned(),
+                message: "xy".into(),
             })
         );
     }
@@ -1015,7 +1062,7 @@ mod tests {
         .unwrap();
         let exhausted = compute
             .run(CodeRunRequest {
-                program: "for (;;) {}".to_owned(),
+                program: "for (;;) {}".into(),
                 bindings: Vec::new(),
                 signal: None,
             })
@@ -1025,7 +1072,7 @@ mod tests {
             exhausted.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Timeout,
-                message: "compute budget exhausted (25ms busy)".to_owned(),
+                message: "compute budget exhausted (25ms busy)".into(),
             })
         );
 
@@ -1037,7 +1084,7 @@ mod tests {
         .unwrap();
         let idled = wall
             .run(CodeRunRequest {
-                program: "return await new Promise(() => {})".to_owned(),
+                program: "return await new Promise(() => {})".into(),
                 bindings: Vec::new(),
                 signal: None,
             })
@@ -1047,7 +1094,7 @@ mod tests {
             idled.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Timeout,
-                message: "wall-clock ceiling reached (25ms)".to_owned(),
+                message: "wall-clock ceiling reached (25ms)".into(),
             })
         );
 
@@ -1065,7 +1112,7 @@ mod tests {
         .unwrap();
         let aborted = aborting
             .run(CodeRunRequest {
-                program: "for (;;) {}".to_owned(),
+                program: "for (;;) {}".into(),
                 bindings: Vec::new(),
                 signal: Some(signal),
             })
@@ -1075,7 +1122,7 @@ mod tests {
             aborted.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Abort,
-                message: "user-cancel".to_owned(),
+                message: "user-cancel".into(),
             })
         );
     }
@@ -1086,7 +1133,7 @@ mod tests {
         functions.insert(
             "real".to_owned(),
             Arc::new(|_| {
-                Box::pin(async { Ok(json!("still-works")) })
+                Box::pin(async { Ok(json!("still-works").into()) })
                     as seekdeep_code_runtime::CodeBindingFuture
             }) as CodeBindingFunction,
         );
@@ -1112,7 +1159,7 @@ mod tests {
             tools(functions),
         )
         .await;
-        assert_eq!(survived.value, Some(json!("still-works")));
+        assert_eq!(survived.value, Some(json!("still-works").into()));
         assert!(survived.error.is_none());
         assert!(survived.logs.is_empty());
 
@@ -1128,7 +1175,7 @@ mod tests {
         assert_eq!(
             forged_success,
             CodeRunResult {
-                value: Some(json!("done")),
+                value: Some(json!("done").into()),
                 logs: Vec::new(),
                 error: None,
             }
@@ -1151,7 +1198,7 @@ mod tests {
             forged_failure.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Exception,
-                message: "fake failure".to_owned(),
+                message: "fake failure".into(),
             })
         );
     }
@@ -1178,7 +1225,7 @@ mod tests {
             flooded.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::OutputLimit,
-                message: "outer output exceeded 200 bytes".to_owned(),
+                message: "outer output exceeded 200 bytes".into(),
             })
         );
         assert!(crate::output_json::json_value_bytes_up_to(&json!(flooded.logs), 199).is_some());
@@ -1199,7 +1246,7 @@ mod tests {
             oversized_done.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::OutputLimit,
-                message: "outer output exceeded 64 bytes".to_owned(),
+                message: "outer output exceeded 64 bytes".into(),
             })
         );
 
@@ -1233,7 +1280,7 @@ mod tests {
             signalled.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::OutputLimit,
-                message: "outer output exceeded 67108864 bytes".to_owned(),
+                message: "outer output exceeded 67108864 bytes".into(),
             })
         );
     }
@@ -1247,7 +1294,8 @@ mod tests {
             "never".to_owned(),
             Arc::new(move |_| {
                 called.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                Box::pin(async { Ok(Value::Null) }) as seekdeep_code_runtime::CodeBindingFuture
+                Box::pin(async { Ok(Value::Null.into()) })
+                    as seekdeep_code_runtime::CodeBindingFuture
             }) as CodeBindingFunction,
         );
         let result = run_program_with_bindings(
@@ -1283,7 +1331,7 @@ mod tests {
                 { "type": "reply", "id": 8002, "ok": false, "message": "binding arguments must be lossless JSON" },
                 { "type": "reply", "id": 8003, "ok": false, "message": "binding arguments must be lossless JSON" },
                 { "type": "reply", "id": 8004, "ok": false, "message": "binding arguments must be lossless JSON" },
-            ]))
+            ]).into())
         );
         assert!(result.error.is_none());
     }
@@ -1303,7 +1351,7 @@ mod tests {
             lossy.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::InvalidOutput,
-                message: "program completion must be lossless JSON".to_owned(),
+                message: "program completion must be lossless JSON".into(),
             })
         );
 
@@ -1325,15 +1373,13 @@ mod tests {
         )
         .await;
         assert!(deep.error.is_none());
-        let mut cursor = deep.value.as_ref();
-        let mut depth = 0;
-        while let Some(Value::Array(values)) = cursor {
+        let value = deep.value.as_ref().unwrap();
+        let mut cursor = value.as_ref();
+        for _ in 0..3_000 {
+            let values = cursor.array_items().unwrap();
             assert_eq!(values.len(), 1);
-            cursor = values.first();
-            depth += 1;
+            cursor = values[0];
         }
-        assert_eq!(depth, 3_000);
-        assert_eq!(cursor, Some(&Value::Null));
-        std::mem::forget(deep);
+        assert_eq!(cursor.as_raw(), "null");
     }
 }

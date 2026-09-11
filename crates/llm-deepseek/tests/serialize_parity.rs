@@ -34,17 +34,17 @@ fn serializes_roles_text_reasoning_and_parallel_tool_calls() {
         message(
             MessageRole::System,
             vec![ContentBlock::Text {
-                text: "be brief".to_owned(),
+                text: "be brief".into(),
             }],
         ),
         message(
             MessageRole::User,
             vec![
                 ContentBlock::Text {
-                    text: "hello ".to_owned(),
+                    text: "hello ".into(),
                 },
                 ContentBlock::Text {
-                    text: "world".to_owned(),
+                    text: "world".into(),
                 },
             ],
         ),
@@ -95,7 +95,7 @@ fn plain_and_reasoning_only_assistant_turns_always_replay_string_content() {
                     text: "ignored".to_owned(),
                 },
                 ContentBlock::Text {
-                    text: "answer".to_owned(),
+                    text: "answer".into(),
                 },
             ],
         ),
@@ -123,13 +123,11 @@ fn expands_mixed_tool_results_and_supplies_empty_output_sentinel() {
         MessageRole::User,
         vec![
             ContentBlock::Text {
-                text: "context note".to_owned(),
+                text: "context note".into(),
             },
             ContentBlock::ToolResult {
                 tool_call_id: CallId::new("call-1"),
-                content: vec![ContentBlock::Text {
-                    text: "ok".to_owned(),
-                }],
+                content: vec![ContentBlock::Text { text: "ok".into() }],
                 is_error: None,
             },
             ContentBlock::ToolResult {
@@ -163,7 +161,7 @@ fn skips_unknown_blocks_keeps_empty_user_and_rejects_nested_images() {
                     vec![
                         unknown,
                         ContentBlock::Text {
-                            text: "see chart".to_owned(),
+                            text: "see chart".into(),
                         },
                     ],
                 ),
@@ -205,9 +203,7 @@ fn request_maps_basics_system_tools_sampling_and_stop() {
     request.system = Some("be helpful".to_owned());
     request.messages = vec![message(
         MessageRole::User,
-        vec![ContentBlock::Text {
-            text: "hi".to_owned(),
-        }],
+        vec![ContentBlock::Text { text: "hi".into() }],
     )];
     request.temperature = Some(0.2);
     request.max_tokens = Some(100);

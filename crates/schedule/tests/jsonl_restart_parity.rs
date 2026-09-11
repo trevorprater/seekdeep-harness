@@ -40,7 +40,7 @@ impl LlmAdapter for RecordingAdapter {
             Ok(StreamChunk::BlockEnd {
                 index: 0,
                 block: ContentBlock::Text {
-                    text: "Reminder acknowledged.".to_owned(),
+                    text: "Reminder acknowledged.".into(),
                 },
             }),
             Ok(StreamChunk::Finish {

@@ -3,7 +3,7 @@
 use js_sys::{Array, Function, Object, Reflect, RegExp};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use super::super::{browser_values as values, update_hooks};
+use super::super::browser_values as values;
 
 thread_local! {
     static C16: Array = [6, 2, 3, 4, 5, 1].into_iter().map(JsValue::from).collect();
@@ -157,19 +157,20 @@ pub fn code(name: &JsValue, level: &JsValue) -> Result<JsValue, JsValue> {
     let mut hash = 0_i32;
     let mut index = 0_u32;
     let before = Function::new_with_args("index,name", "return index < name.length;");
+    let accumulate = Function::new_with_args(
+        "hash,unit",
+        "return (((hash << 3) - hash) + unit + 13) | 0;",
+    );
     while before
         .call2(&JsValue::UNDEFINED, &index.into(), name)?
         .is_truthy()
     {
         let value = method(name, "charCodeAt", &Array::of1(&index.into()))?;
-        let value = value.as_f64().unwrap_or(f64::NAN);
+        let value = accumulate.call2(&JsValue::UNDEFINED, &hash.into(), &value)?;
         #[allow(clippy::cast_possible_truncation)]
-        let code = value as i32;
-        hash = hash
-            .wrapping_shl(3)
-            .wrapping_sub(hash)
-            .wrapping_add(code)
-            .wrapping_add(13);
+        {
+            hash = value.as_f64().unwrap_or_default() as i32;
+        }
         index += 1;
     }
     if !level.is_truthy() {
@@ -254,7 +255,7 @@ pub fn format(exporter: &JsValue, message: &JsValue) -> Result<JsValue, JsValue>
         &Array::of2(&RegExp::new("%([a-zA-Z%])", "g"), &replace),
     )?;
     let object_formatter = formatter(exporter, &"o".into())?;
-    for mut value in update_hooks::spread(&args)?.iter() {
+    values::for_each(&args, |mut value| {
         if !value.is_null() && value.is_object() && !value.is_function() {
             value = Reflect::apply(
                 &object_formatter
@@ -270,7 +271,8 @@ pub fn format(exporter: &JsValue, message: &JsValue) -> Result<JsValue, JsValue>
             &text,
             &value,
         )?;
-    }
+        Ok(())
+    })?;
     let limit = values::get(exporter, &"maxLength".into())?;
     let limit = if limit.is_undefined() {
         10240.into()
@@ -278,21 +280,20 @@ pub fn format(exporter: &JsValue, message: &JsValue) -> Result<JsValue, JsValue>
         limit
     };
     let lines = method(&text, "split", &Array::of1(&RegExp::new("\\r?\\n", "g")))?;
-    let output = Array::new();
-    for line in update_hooks::spread(&lines)?.iter() {
+    let trim = Closure::wrap(Box::new(move |line: JsValue| {
         let trimmed = method(&line, "slice", &Array::of2(&0.into(), &limit))?;
         let longer = Function::new_with_args("line,limit", "return line.length > limit;")
             .call2(&JsValue::UNDEFINED, &line, &limit)?
             .is_truthy();
         let suffix: JsValue = if longer { "..." } else { "" }.into();
-        output.push(
-            &Function::new_with_args("line,suffix", "return line + suffix;").call2(
-                &JsValue::UNDEFINED,
-                &trimmed,
-                &suffix,
-            )?,
-        );
-    }
+        Function::new_with_args("line,suffix", "return line + suffix;").call2(
+            &JsValue::UNDEFINED,
+            &trimmed,
+            &suffix,
+        )
+    }) as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let output = method(&lines, "map", &Array::of1(&trim))?;
     method(&output, "join", &Array::of1(&"\n".into()))
 }
 

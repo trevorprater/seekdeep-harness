@@ -2,9 +2,9 @@
 
 [English](settings.md) | 中文
 
-[seekdeep-settings](../../packages/settings/settings) 的用户设置 seam 持有一份按 namespace 分节的用户文档，并把每个已注册 namespace 解析为：schema 默认值，然后注册方的组合 `base`，最后用户分节。[seekdeep-settings-file](../../packages/settings/settings-file) 这类提供方存储原始文档并推送外部编辑；消费方插件注册 schema 后读取或观察解析值。组合配置仍留在 `cordis.yml`——namespace 只承载用户可编辑子集。
+[seekdeep-settings](../../packages/settings/settings) 的用户设置 seam 持有一份按 namespace 分节的用户文档，并把每个已注册 namespace 解析为：schema 默认值，然后注册方的组合 `base`，最后用户分节。[seekdeep-settings-file](../../crates/settings-file) 这类提供方存储原始文档并推送外部编辑；消费方插件注册 schema 后读取或观察解析值。组合配置仍留在 `cordis.yml`——namespace 只承载用户可编辑子集。
 
-来源：[`packages/settings/settings/src/index.ts`](../../packages/settings/settings/src/index.ts)
+来源：[`packages/settings/settings/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/index.ts)
 
 ## 标识
 
@@ -252,7 +252,7 @@ async replace(ns: SettingsNamespace, section: object, expectedRevision?: number)
 async mutate(ns: SettingsNamespace, ops: readonly SettingsPathOp[], expectedRevision?: number): Promise<void>
 ```
 
-Source: [`packages/settings/settings/src/index.ts:350`](../../packages/settings/settings/src/index.ts)
+Source: [`packages/settings/settings/src/index.ts:350`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/index.ts)
 
 <a id="settings-events"></a>
 
@@ -279,7 +279,7 @@ One registered namespace's RAW user section changed, whether or not the resolved
 'settings/document-updated'(ns: SettingsNamespace, revision: number): void
 ```
 
-Source: [`packages/settings/settings/src/types.ts:48`](../../packages/settings/settings/src/types.ts)
+Source: [`packages/settings/settings/src/types.ts:48`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/types.ts)
 
 <a id="settingsupdated--emit"></a>
 
@@ -306,5 +306,5 @@ Committed change to one registered namespace's resolved value. Emitted after the
 'settings/updated'(ns: SettingsNamespace, next: unknown, prev: unknown, source: SettingsUpdateSource): void
 ```
 
-Source: [`packages/settings/settings/src/types.ts:35`](../../packages/settings/settings/src/types.ts)
+Source: [`packages/settings/settings/src/types.ts:35`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/types.ts)
 <!-- END GENERATED cordis-surface -->

@@ -1028,7 +1028,7 @@ async fn reports_the_childs_own_terminal_reason_not_teardown_success() {
         StreamChunk::BlockEnd {
             index: 0,
             block: seekdeep_llm::ContentBlock::Text {
-                text: "partial".to_owned(),
+                text: "partial".into(),
             },
         },
         StreamChunk::Finish {
@@ -1195,7 +1195,7 @@ async fn keeps_the_epochs_earlier_text_past_a_final_empty_usage_only_message() {
         end.last_assistant_message,
         Some(vec![
             seekdeep_llm::ContentBlock::Text {
-                text: "partial one".to_owned(),
+                text: "partial one".into(),
             },
             seekdeep_llm::ContentBlock::ToolCall {
                 id: seekdeep_llm::CallId::new("t1"),

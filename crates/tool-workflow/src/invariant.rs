@@ -5,12 +5,13 @@ use std::{collections::HashMap, sync::Arc};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent},
+    session::{JsonRef, JsonValue, Session, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
+use seekdeep_llm::JsonString;
 
 const PACKAGE_NAME: &str = "seekdeep-tool-workflow";
 
@@ -24,8 +25,8 @@ struct RunTrace {
 /// Shared fold: committed per-session traces plus staged pre-publication candidates.
 #[derive(Debug, Default)]
 struct InvariantState {
-    traces: HashMap<String, HashMap<String, RunTrace>>,
-    staged: HashMap<usize, (String, HashMap<String, RunTrace>)>,
+    traces: HashMap<String, HashMap<JsonString, RunTrace>>,
+    staged: HashMap<usize, (String, HashMap<JsonString, RunTrace>)>,
 }
 
 /// Registers the workflow-record invariant companion.
@@ -166,7 +167,7 @@ fn clone_for(
     state: &Arc<Mutex<InvariantState>>,
     session: &Arc<Session>,
     fail: &InvariantFailure,
-) -> anyhow::Result<HashMap<String, RunTrace>> {
+) -> anyhow::Result<HashMap<JsonString, RunTrace>> {
     let key = session.id().as_str().to_owned();
     if let Some(trace) = state.lock().traces.get(&key) {
         return Ok(trace.clone());
@@ -178,22 +179,25 @@ fn clone_for(
 fn record_of<'a>(
     event: &'a SessionEvent,
     fail: &InvariantFailure,
-) -> anyhow::Result<&'a serde_json::Map<String, serde_json::Value>> {
-    let Some(object) = event.data.as_object() else {
+) -> anyhow::Result<&'a JsonValue> {
+    if !event.data.is_object() {
         return Err(fail
             .fail(format!("{} data must be a JSON object", event.event_type))
             .into());
-    };
-    Ok(object)
+    }
+    Ok(&event.data)
 }
 
-fn string_id<'a>(
-    object: &'a serde_json::Map<String, serde_json::Value>,
+fn string_id(
+    object: &JsonValue,
     key: &str,
     label: &str,
     fail: &InvariantFailure,
-) -> anyhow::Result<&'a str> {
-    let Some(value) = object.get(key).and_then(|value| value.as_str()) else {
+) -> anyhow::Result<JsonString> {
+    let Some(value) = object
+        .get(key)
+        .and_then(|value| value.deserialize::<JsonString>().ok())
+    else {
         return Err(fail
             .fail(format!("{label} must be a non-empty string"))
             .into());
@@ -208,7 +212,7 @@ fn string_id<'a>(
 
 #[allow(clippy::too_many_lines)]
 fn validate_into(
-    map: &mut HashMap<String, RunTrace>,
+    map: &mut HashMap<JsonString, RunTrace>,
     event: &SessionEvent,
     fail: &InvariantFailure,
 ) -> anyhow::Result<()> {
@@ -218,15 +222,15 @@ fn validate_into(
         "runId",
         &format!("{} runId", event.event_type),
         fail,
-    )?
-    .to_owned();
+    )?;
+    let run_label = display_string(&run_id);
     match event.event_type.as_str() {
         "tool-workflow/run-start" => {
             let name = string_id(object, "name", "tool-workflow/run-start name", fail)?;
             let _ = name;
             if map.contains_key(&run_id) {
                 return Err(fail
-                    .fail(format!("tool-workflow/run-start repeats run {run_id}"))
+                    .fail(format!("tool-workflow/run-start repeats run {run_label}"))
                     .into());
             }
             map.insert(run_id, RunTrace::default());
@@ -234,17 +238,13 @@ fn validate_into(
         "tool-workflow/agent-start" => {
             let run = open_run(map, &run_id, &event.event_type, fail)?;
             let seq = member_seq(object, fail)?;
-            if object
-                .get("label")
-                .and_then(|value| value.as_str())
-                .is_none()
-            {
+            if object.get("label").is_none_or(|value| !value.is_string()) {
                 return Err(fail
                     .fail("tool-workflow/agent-start label must be a string")
                     .into());
             }
             if let Some(phase) = object.get("phase")
-                && phase.as_str().is_none()
+                && !phase.is_string()
             {
                 return Err(fail
                     .fail("tool-workflow/agent-start phase must be a string when present")
@@ -254,7 +254,7 @@ fn validate_into(
             if run.members.contains_key(&seq) {
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/agent-start repeats member seq {seq} in run {run_id}"
+                        "tool-workflow/agent-start repeats member seq {seq} in run {run_label}"
                     ))
                     .into());
             }
@@ -265,7 +265,7 @@ fn validate_into(
             let seq = member_seq(object, fail)?;
             let outcome = object.get("outcome");
             if !matches!(
-                outcome.and_then(serde_json::Value::as_str),
+                object["outcome"].as_str(),
                 Some("completed" | "failed" | "cancelled")
             ) {
                 return Err(fail
@@ -279,14 +279,14 @@ fn validate_into(
             if ended.is_none() {
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/agent-end has no matching member seq {seq} in run {run_id}"
+                        "tool-workflow/agent-end has no matching member seq {seq} in run {run_label}"
                     ))
                     .into());
             }
             if ended == Some(true) {
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/agent-end repeats member seq {seq} in run {run_id}"
+                        "tool-workflow/agent-end repeats member seq {seq} in run {run_label}"
                     ))
                     .into());
             }
@@ -296,7 +296,7 @@ fn validate_into(
             let run = open_run(map, &run_id, &event.event_type, fail)?;
             let reason = object.get("stopReason");
             if !matches!(
-                reason.and_then(serde_json::Value::as_str),
+                object["stopReason"].as_str(),
                 Some("completed" | "cancelled" | "error")
             ) {
                 return Err(fail
@@ -320,7 +320,7 @@ fn validate_into(
                     .join(", ");
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/run-end leaves member seq {list} open in run {run_id}"
+                        "tool-workflow/run-end leaves member seq {list} open in run {run_label}"
                     ))
                     .into());
             }
@@ -337,22 +337,23 @@ fn validate_into(
 }
 
 fn open_run<'a>(
-    map: &'a mut HashMap<String, RunTrace>,
-    run_id: &str,
+    map: &'a mut HashMap<JsonString, RunTrace>,
+    run_id: &JsonString,
     event_type: &str,
     fail: &InvariantFailure,
 ) -> anyhow::Result<&'a mut RunTrace> {
+    let run_label = display_string(run_id);
     let Some(run) = map.get_mut(run_id) else {
         return Err(fail
             .fail(format!(
-                "{event_type} has no matching tool-workflow/run-start for run {run_id}"
+                "{event_type} has no matching tool-workflow/run-start for run {run_label}"
             ))
             .into());
     };
     if run.ended {
         return Err(fail
             .fail(format!(
-                "{event_type} appears after tool-workflow/run-end for run {run_id}"
+                "{event_type} appears after tool-workflow/run-end for run {run_label}"
             ))
             .into());
     }
@@ -361,27 +362,30 @@ fn open_run<'a>(
 
 /// Renders a field the way the source's `String(value)` coercion does for scalars: a bare
 /// string stays bare, while other JSON scalars use their JSON text.
-fn display_value(value: &serde_json::Value) -> String {
-    value
-        .as_str()
-        .map_or_else(|| value.to_string(), str::to_owned)
+fn display_value(value: JsonRef<'_>) -> String {
+    value.deserialize::<JsonString>().map_or_else(
+        |_| value.as_raw().to_owned(),
+        |value| display_string(&value),
+    )
 }
 
-fn member_seq(
-    object: &serde_json::Map<String, serde_json::Value>,
-    fail: &InvariantFailure,
-) -> anyhow::Result<u64> {
-    let Some(seq) = object.get("seq").and_then(serde_json::Value::as_u64) else {
+fn display_string(value: &JsonString) -> String {
+    value.as_str().unwrap_or_else(|| value.as_raw()).to_owned()
+}
+
+fn member_seq(object: &JsonValue, fail: &InvariantFailure) -> anyhow::Result<u64> {
+    let Some(seq) = object.get("seq").and_then(JsonRef::as_f64) else {
         return Err(fail
             .fail("tool-workflow member seq must be a positive safe integer")
             .into());
     };
-    if seq < 1 {
+    if !seq.is_finite() || seq.fract() != 0.0 || !(1.0..=9_007_199_254_740_991.0).contains(&seq) {
         return Err(fail
             .fail("tool-workflow member seq must be a positive safe integer")
             .into());
     }
-    Ok(seq)
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(seq as u64)
 }
 
 fn global_events() -> EventOptions {

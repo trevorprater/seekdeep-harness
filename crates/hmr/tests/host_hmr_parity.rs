@@ -72,6 +72,7 @@ async fn recursive_watcher_reloads_modules_requests_full_restart_and_joins_dispo
             root: vec![temporary.path().to_path_buf()],
             debounce: 20,
             ignored: Vec::new(),
+            ..Config::default()
         },
         restart,
     )?;
@@ -161,6 +162,7 @@ async fn config_files_refresh_before_module_classification_and_failures_are_cont
             root: vec![temporary.path().to_path_buf()],
             debounce: 20,
             ignored: Vec::new(),
+            ..Config::default()
         },
         Arc::new(|| Box::pin(async { Ok(()) })),
     )?;

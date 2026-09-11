@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use seekdeep_attachment::{AttachmentId, ImageAttachmentRef, ImageMediaType};
-use seekdeep_core::session::SessionId;
+use seekdeep_core::session::{JsonValue, SessionId};
 use seekdeep_llm::MessageId;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -35,13 +35,13 @@ pub struct SessionEvent {
     /// Event timestamp.
     pub time: f64,
     /// Event-specific data retained without interpretation.
-    pub data: Value,
+    pub data: JsonValue,
     /// Optional source-event provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_event_seqs: Option<Vec<f64>>,
     /// Optional surface operation retained without interpretation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub surface_op: Option<Value>,
+    pub surface_op: Option<JsonValue>,
     /// Present only as literal `true` when an unknown consumer may ignore it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ignorable: Option<bool>,

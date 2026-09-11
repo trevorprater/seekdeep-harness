@@ -1,5 +1,7 @@
 //! Tool schemas, registration, policy, scheduling, execution, and presentation.
 
+mod code_output;
+
 /// Package-owned execution-pipeline and nested-dispatch invariants.
 pub mod invariant;
 /// The enforced lossless JSON Schema subset.
@@ -21,7 +23,8 @@ pub use invariant::register_invariant;
 pub use json_schema::{
     JsonSchemaError, JsonSchemaNode, ObjectJsonSchema, UNSUPPORTED_SCHEMA,
     assert_object_json_schema, assert_supported_json_schema, check_object_json_schema,
-    check_supported_json_schema, validate_json_schema_value, validate_json_schema_value_at,
+    check_supported_json_schema, validate_code_json_schema_value_at, validate_json_schema_value,
+    validate_json_schema_value_at,
 };
 pub use presentation::{
     DiffCallView, DiffResultView, FileDiff, FileLocation, GenericCallView, GenericResultView,
@@ -38,15 +41,18 @@ pub use runtime::{
     TOOLS, ToolCallPresenter, ToolConcurrencyClassifier, ToolContentFinalizer, ToolDefinition,
     ToolDispatchExecution, ToolErrorInfo, ToolExecute, ToolExecuteFuture, ToolExecution,
     ToolExecutionFailure, ToolExecutionInput, ToolExecutionMode, ToolExecutionResult,
-    ToolExecutionSuccess, ToolExecutionToken, ToolFailure, ToolGuard, ToolOutputDefinition,
-    ToolPresentationMode, ToolRestriction, ToolResultPresenter, ToolRunContext, ToolRuntime,
-    ToolRuntimeConfig, ToolRuntimeError, install,
+    ToolExecutionSuccess, ToolExecutionToken, ToolFailure, ToolGuard,
+    ToolJsonConcurrencyClassifier, ToolJsonExecute, ToolJsonExecuteFuture,
+    ToolJsonPresentationMeta, ToolJsonRender, ToolOutputDefinition, ToolPresentationMode,
+    ToolRestriction, ToolResultPresenter, ToolRunContext, ToolRuntime, ToolRuntimeConfig,
+    ToolRuntimeError, install,
 };
 pub use schema::{
     DefineToolCallPresenter, DefineToolConcurrencyClassifier, DefineToolExecute, DefineToolFuture,
-    DefineToolOptions, DefineToolOutput, DefineToolPresentationMeta, DefineToolRender,
-    DefineToolResultPresenter, INVALID_ARGS, ToolArgsError, define_tool,
-    parameter_schema_spec_to_json_schema, validate_args, value_schema_spec_to_json_schema,
+    DefineToolJsonPresentationMeta, DefineToolOptions, DefineToolOutput,
+    DefineToolPresentationMeta, DefineToolRender, DefineToolResultPresenter, INVALID_ARGS,
+    ToolArgsError, define_tool, parameter_schema_spec_to_json_schema, validate_args,
+    value_schema_spec_to_json_schema,
 };
 pub use testing::{ContentToolFixtureOptions, define_content_tool_fixture};
 pub use ts_types::{ToolSdkSchema, json_schema_to_ts, render_tools_sdk};

@@ -10,7 +10,7 @@ use seekdeep_cordis::{
     Context, CordisError, EventOptions, EventReply, Plugin, PluginFiber, ServiceKey,
     fiber::EffectHandle,
 };
-use seekdeep_core::session::{Session, SessionEvent};
+use seekdeep_core::session::{JsonValue, Session, SessionEvent};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -36,7 +36,7 @@ pub enum ProjectionTransition {
     /// The exact prior state remains authoritative.
     Unchanged,
     /// A distinct next plain-JSON state replaces it.
-    Changed(Value),
+    Changed(JsonValue),
 }
 
 impl ProjectionTransition {
@@ -46,14 +46,14 @@ impl ProjectionTransition {
     ///
     /// Returns when the state cannot be represented as lossless JSON.
     pub fn changed<T: Serialize>(state: T) -> anyhow::Result<Self> {
-        Ok(Self::Changed(serde_json::to_value(state)?))
+        Ok(Self::Changed(JsonValue::from_serialize(&state)?))
     }
 }
 
-type Init = Arc<dyn Fn() -> anyhow::Result<Value> + Send + Sync>;
+type Init = Arc<dyn Fn() -> anyhow::Result<JsonValue> + Send + Sync>;
 type Apply =
-    Arc<dyn Fn(&Value, &SessionEvent) -> anyhow::Result<ProjectionTransition> + Send + Sync>;
-type View = Arc<dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync>;
+    Arc<dyn Fn(&JsonValue, &SessionEvent) -> anyhow::Result<ProjectionTransition> + Send + Sync>;
+type View = Arc<dyn Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync>;
 
 /// One domain's synchronous pure projection fold.
 #[derive(Clone)]
@@ -95,6 +95,46 @@ impl ProjectionDefinition {
             + 'static,
         V: Fn(&Value) -> anyhow::Result<Value> + Send + Sync + 'static,
     {
+        Self::new_json(
+            key,
+            state_version,
+            move || init().map(JsonValue::from),
+            move |state, event| {
+                apply(
+                    state.as_serde_json().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "projection scalar state contains an unpaired UTF-16 surrogate"
+                        )
+                    })?,
+                    event,
+                )
+            },
+            move |state| {
+                view(state.as_serde_json().ok_or_else(|| {
+                    anyhow::anyhow!("projection scalar state contains an unpaired UTF-16 surrogate")
+                })?)
+                .map(JsonValue::from)
+            },
+        )
+    }
+
+    /// Defines a fold whose state and wire view retain every JSON string code unit.
+    #[must_use]
+    pub fn new_json<I, A, V>(
+        key: impl Into<String>,
+        state_version: u64,
+        init: I,
+        apply: A,
+        view: V,
+    ) -> Self
+    where
+        I: Fn() -> anyhow::Result<JsonValue> + Send + Sync + 'static,
+        A: Fn(&JsonValue, &SessionEvent) -> anyhow::Result<ProjectionTransition>
+            + Send
+            + Sync
+            + 'static,
+        V: Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync + 'static,
+    {
         Self {
             key: key.into(),
             state_version,
@@ -109,7 +149,7 @@ impl ProjectionDefinition {
     /// # Errors
     ///
     /// Returns the definition's initialization failure.
-    pub fn initial_state(&self) -> anyhow::Result<Value> {
+    pub fn initial_state(&self) -> anyhow::Result<JsonValue> {
         (self.init)()
     }
 
@@ -120,7 +160,7 @@ impl ProjectionDefinition {
     /// Returns the definition's transition failure.
     pub fn apply_event(
         &self,
-        state: &Value,
+        state: &JsonValue,
         event: &SessionEvent,
     ) -> anyhow::Result<ProjectionTransition> {
         (self.apply)(state, event)
@@ -131,7 +171,7 @@ impl ProjectionDefinition {
     /// # Errors
     ///
     /// Returns the definition's view or schema failure.
-    pub fn project(&self, state: &Value) -> anyhow::Result<Value> {
+    pub fn project(&self, state: &JsonValue) -> anyhow::Result<JsonValue> {
         (self.view)(state)
     }
 }
@@ -143,7 +183,7 @@ pub struct ProjectionSnapshot {
     /// Last event sequence reflected by every value, or `-1` for an empty log.
     pub as_of_seq: i64,
     /// Whole schema-validated wire value by registered key.
-    pub values: IndexMap<String, Value>,
+    pub values: IndexMap<String, JsonValue>,
 }
 
 /// One persisted projection-state shortcut.
@@ -155,7 +195,7 @@ pub struct ProjectionCheckpointRow {
     /// Last event sequence folded into the state, or `-1` for an empty log.
     pub seq: i64,
     /// Detached plain-JSON internal state.
-    pub val: Value,
+    pub val: JsonValue,
 }
 
 /// Projection checkpoint rows keyed by projection key.
@@ -172,11 +212,11 @@ pub struct ProjectionRestore {
 
 /// Change-feed callback for one changed unit.
 pub type ProjectionChangeListener =
-    Arc<dyn Fn(Arc<Session>, &str, &Value, u64) -> anyhow::Result<()> + Send + Sync + 'static>;
+    Arc<dyn Fn(Arc<Session>, &str, &JsonValue, u64) -> anyhow::Result<()> + Send + Sync + 'static>;
 
 #[derive(Clone, Debug)]
 struct UnitCell {
-    state: Value,
+    state: JsonValue,
     observed_seq: i64,
 }
 
@@ -408,7 +448,7 @@ impl SessionProjectionRegistry {
     pub fn view_checkpoint(
         &self,
         checkpoint: &ProjectionCheckpoint,
-    ) -> anyhow::Result<IndexMap<String, Value>> {
+    ) -> anyhow::Result<IndexMap<String, JsonValue>> {
         let state = self.state.lock();
         let mut values = IndexMap::new();
         for registration in state.registrations.values() {
@@ -693,10 +733,10 @@ mod tests {
     use super::*;
 
     fn marks_definition() -> ProjectionDefinition {
-        ProjectionDefinition::new(
+        ProjectionDefinition::new_json(
             "test/marks",
             1,
-            || Ok(Value::Null),
+            || Ok(Value::Null.into()),
             |state, event| {
                 if event.event_type == "test/mark" {
                     ProjectionTransition::changed(event.data.clone())
@@ -707,15 +747,15 @@ mod tests {
             },
             |state| {
                 let value = if state.is_null() {
-                    json!({ "marks": [] })
+                    json!({ "marks": [] }).into()
                 } else {
                     state.clone()
                 };
                 anyhow::ensure!(
                     value
-                        .get("marks")
-                        .and_then(Value::as_array)
-                        .is_some_and(|marks| marks.iter().all(Value::is_string)),
+                        .get_value("marks")
+                        .and_then(JsonValue::as_array)
+                        .is_some_and(|marks| marks.iter().all(JsonValue::is_string)),
                     "test/marks view violates its schema"
                 );
                 Ok(value)
@@ -793,7 +833,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: i64::try_from(seq).unwrap_or(i64::MAX),
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: Some(true),
@@ -871,7 +911,7 @@ mod tests {
             [(
                 session.id().clone(),
                 "test/marks".to_owned(),
-                json!({ "marks": ["a"] }),
+                json!({ "marks": ["a"] }).into(),
                 marked.seq,
             )]
         );
@@ -879,6 +919,46 @@ mod tests {
             projections.snapshot(&session).expect("snapshot").as_of_seq,
             1
         );
+    }
+
+    #[test]
+    fn raw_event_projection_survives_feed_checkpoint_and_cold_restore() {
+        let (context, _sessions, projections, session) = setup();
+        projections.register(&context, marks_definition()).unwrap();
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let feed = observed.clone();
+        projections
+            .on_changed(
+                &context,
+                Arc::new(move |_, _, value, _| {
+                    feed.lock().push(value.clone());
+                    Ok(())
+                }),
+            )
+            .unwrap();
+        let raw = r#"{"marks":["\ud800","\udfff"],"\ud800":{"10":1.2500,"2":9007199254740993}}"#;
+        session
+            .append_json(
+                "test/mark",
+                JsonValue::parse(raw.to_owned()).unwrap(),
+                AppendOptions {
+                    ignorable: true,
+                    ..AppendOptions::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(observed.lock()[0].as_raw(), raw);
+        assert_eq!(
+            projections.snapshot(&session).unwrap().values["test/marks"].as_raw(),
+            raw
+        );
+        let checkpoint = projections.checkpoint(&session).unwrap();
+        let wire = serde_json::to_string(&checkpoint).unwrap();
+        let decoded: ProjectionCheckpoint = serde_json::from_str(&wire).unwrap();
+        assert_eq!(decoded["test/marks"].val.as_raw(), raw);
+        let restored = projections.restore(&decoded, &[], session.seq()).unwrap();
+        assert_eq!(restored.snapshot.values["test/marks"].as_raw(), raw);
+        assert_eq!(restored.checkpoint["test/marks"].val.as_raw(), raw);
     }
 
     #[tokio::test]
@@ -969,15 +1049,13 @@ mod tests {
             ProjectionCheckpointRow {
                 ver: 1,
                 seq: i64::try_from(marked.seq).expect("seq"),
-                val: json!({ "marks": ["a"] }),
+                val: json!({ "marks": ["a"] }).into(),
             }
         );
-        checkpoint
-            .get_mut("test/marks")
-            .and_then(|row| row.val.get_mut("marks"))
-            .and_then(Value::as_array_mut)
-            .expect("marks array")
-            .push(json!("INJECTED"));
+        let row = checkpoint.get_mut("test/marks").expect("marks checkpoint");
+        let mut marks = row.val["marks"].clone();
+        marks.push(json!("INJECTED").into()).expect("marks array");
+        row.val.insert("marks", marks).expect("checkpoint object");
         assert_eq!(
             projections.snapshot(&session).expect("uncorrupted").values["test/marks"],
             json!({ "marks": ["a"] })
@@ -989,7 +1067,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 4,
-                    val: json!({ "marks": ["stored"] }),
+                    val: json!({ "marks": ["stored"] }).into(),
                 },
             ),
             (
@@ -997,7 +1075,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 99,
                     seq: 4,
-                    val: json!(5),
+                    val: json!(5).into(),
                 },
             ),
         ]);
@@ -1023,7 +1101,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 10,
-                    val: json!({ "marks": [] }),
+                    val: json!({ "marks": [] }).into(),
                 },
             ),
             (
@@ -1031,7 +1109,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 5,
-                    val: json!(6),
+                    val: json!(6).into(),
                 },
             ),
         ]);
@@ -1043,7 +1121,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 4,
-                    val: json!({ "marks": ["done"] }),
+                    val: json!({ "marks": ["done"] }).into(),
                 },
             ),
             (
@@ -1051,7 +1129,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 2,
-                    val: json!(3),
+                    val: json!(3).into(),
                 },
             ),
         ]);
@@ -1074,7 +1152,7 @@ mod tests {
             ProjectionCheckpointRow {
                 ver: 1,
                 seq: 9,
-                val: json!(10),
+                val: json!(10).into(),
             },
         )]);
         let only_count_context = Context::new();
@@ -1119,7 +1197,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 1,
                     seq: 2,
-                    val: json!({ "marks": ["old"] }),
+                    val: json!({ "marks": ["old"] }).into(),
                 },
             ),
             (
@@ -1127,7 +1205,7 @@ mod tests {
                 ProjectionCheckpointRow {
                     ver: 99,
                     seq: 2,
-                    val: json!(3),
+                    val: json!(3).into(),
                 },
             ),
         ]);
@@ -1190,7 +1268,7 @@ mod tests {
     fn checkpoint_wire_names_are_exact() {
         let snapshot = ProjectionSnapshot {
             as_of_seq: -1,
-            values: IndexMap::from([("x".to_owned(), json!(1))]),
+            values: IndexMap::from([("x".to_owned(), json!(1).into())]),
         };
         assert_eq!(
             serde_json::to_value(snapshot).expect("snapshot JSON"),
@@ -1199,7 +1277,7 @@ mod tests {
         let row = ProjectionCheckpointRow {
             ver: 1,
             seq: -1,
-            val: Value::Object(Map::new()),
+            val: Value::Object(Map::new()).into(),
         };
         assert_eq!(
             serde_json::to_value(row).expect("row JSON"),

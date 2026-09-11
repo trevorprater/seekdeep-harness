@@ -12,9 +12,10 @@ use std::{
 
 use parking_lot::Mutex;
 use seekdeep_llm::{AbortSignal, ContentBlock};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_sdk_protocol::{
-    InitializeParams, InitializeResult, JsonRpcLineTransport, JsonRpcResponseError,
-    SessionPromptParams, SessionPromptResult,
+    InitializeParams, InitializeResult, JsonRpcLineTransport, JsonRpcRawResponseError,
+    JsonRpcResponseError, SessionPromptParams, SessionPromptResult,
 };
 use seekdeep_subprocess::{
     SubprocessCollect, SubprocessEnvironment, SubprocessHandleRef, SubprocessOutputMode,
@@ -295,7 +296,7 @@ impl HarnessClient {
         })?;
         let transport = prepare_transport_or_cleanup(&child).await?;
         let weak = Arc::downgrade(self);
-        transport.on_notification(Arc::new(move |method, params| {
+        transport.on_notification_json(Arc::new(move |method, params| {
             if let Some(client) = weak.upgrade() {
                 client.dispatch(&HarnessNotification { method, params });
             }
@@ -352,13 +353,15 @@ impl HarnessClient {
             content_blocks,
         };
         let value = self
-            .request("session/prompt", value_object(&params)?, None)
-            .await?;
-        serde_json::from_value::<SessionPromptResult>(value.clone())
+            .request_json("session/prompt", JsonValue::from_serialize(&params)?, None)
+            .await
+            .map_err(compatible_response_error)?;
+        value
+            .deserialize::<SessionPromptResult>()
             .map(|result| result.message_id)
             .map_err(|_| {
                 anyhow::Error::new(SdkProtocolError {
-                    message: format!("session/prompt returned no message id: {value}"),
+                    message: format!("session/prompt returned no message id: {}", value.as_raw()),
                 })
             })
     }
@@ -374,6 +377,24 @@ impl HarnessClient {
         params: Map<String, Value>,
         timeout_ms: Option<f64>,
     ) -> anyhow::Result<Value> {
+        self.request_json(method, Value::Object(params).into(), timeout_ms)
+            .await
+            .map_err(ordinary_response_error)?
+            .try_into_serde_json()
+            .map_err(Into::into)
+    }
+
+    /// Sends a request while preserving every JSON string code unit.
+    ///
+    /// # Errors
+    ///
+    /// Returns response, timeout, or process-contextual transport failures.
+    pub async fn request_json(
+        self: &Arc<Self>,
+        method: &str,
+        params: JsonValue,
+        timeout_ms: Option<f64>,
+    ) -> anyhow::Result<JsonValue> {
         self.start().await?;
         let (exited, transport) = {
             let state = self.state.lock();
@@ -402,13 +423,18 @@ impl HarnessClient {
             });
             (Some(signal), Some(timer))
         });
-        let response = transport.request(method, params, signal.clone()).await;
+        let response = transport.request_json(method, params, signal.clone()).await;
         if let Some(timer) = timer {
             timer.abort();
         }
         match response {
             Ok(value) => Ok(value),
-            Err(error) if error.downcast_ref::<JsonRpcResponseError>().is_some() => Err(error),
+            Err(error)
+                if error.downcast_ref::<JsonRpcResponseError>().is_some()
+                    || error.downcast_ref::<JsonRpcRawResponseError>().is_some() =>
+            {
+                Err(error)
+            }
             Err(_error) if signal.as_ref().is_some_and(AbortSignal::is_aborted) => {
                 Err(anyhow::Error::new(RequestTimeoutError {
                     message: signal
@@ -473,16 +499,11 @@ impl HarnessClient {
                 notification.method.as_str(),
                 "subagent.started" | "subagent.finished"
             ) {
-                return params
-                    .get("parentSessionId")
-                    .and_then(Value::as_str)
-                    .is_some_and(|id| client.is_descendant(id, &root))
-                    || params.get("childSessionId").and_then(Value::as_str) == Some(&root);
+                return param_string(params, "parentSessionId")
+                    .is_some_and(|id| client.is_descendant(&id, &root))
+                    || param_string(params, "childSessionId").as_deref() == Some(&root);
             }
-            params
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .is_some_and(|id| client.is_descendant(id, &root))
+            param_string(params, "sessionId").is_some_and(|id| client.is_descendant(&id, &root))
         })))
     }
 
@@ -528,23 +549,14 @@ impl HarnessClient {
     fn dispatch(&self, notification: &HarnessNotification) {
         if notification.method == "subagent.started"
             && let (Some(parent), Some(child)) = (
-                notification
-                    .params
-                    .get("parentSessionId")
-                    .and_then(Value::as_str),
-                notification
-                    .params
-                    .get("childSessionId")
-                    .and_then(Value::as_str),
+                param_string(&notification.params, "parentSessionId"),
+                param_string(&notification.params, "childSessionId"),
             )
             && !parent.is_empty()
             && !child.is_empty()
             && parent != child
         {
-            self.state
-                .lock()
-                .parents
-                .insert(child.to_owned(), parent.to_owned());
+            self.state.lock().parents.insert(child, parent);
         }
         let subscriptions = self
             .state
@@ -715,6 +727,29 @@ impl HarnessClient {
         TransportClosedError {
             message: lines.join("\n"),
         }
+    }
+}
+
+pub(crate) fn param_string(params: &JsonValue, field: &str) -> Option<String> {
+    params.get(field)?.deserialize().ok()
+}
+
+fn ordinary_response_error(error: anyhow::Error) -> anyhow::Error {
+    match error.downcast::<JsonRpcRawResponseError>() {
+        Ok(error) => error
+            .try_into_legacy()
+            .map_or_else(std::convert::identity, anyhow::Error::new),
+        Err(error) => error,
+    }
+}
+
+fn compatible_response_error(error: anyhow::Error) -> anyhow::Error {
+    match error.downcast::<JsonRpcRawResponseError>() {
+        Ok(error) => match error.clone().try_into_legacy() {
+            Ok(legacy) => anyhow::Error::new(legacy),
+            Err(_) => anyhow::Error::new(error),
+        },
+        Err(error) => error,
     }
 }
 

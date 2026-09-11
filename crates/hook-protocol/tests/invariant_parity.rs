@@ -61,7 +61,7 @@ fn raw_event(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEvent
         event_type: event_type.to_owned(),
         seq,
         time,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,

@@ -83,7 +83,7 @@ pub fn apply_edit_tool(ctx: &Context, sandbox: &Arc<FsSandboxController>) -> any
         }),
         Arc::new(|args: &EditArgsRaw, value: &EditOutcome| {
             Ok(vec![ContentBlock::Text {
-                text: format_edit_output(&value.path, args.replace_all.unwrap_or(false)),
+                text: format_edit_output(&value.path, args.replace_all.unwrap_or(false)).into(),
             }])
         }),
     )

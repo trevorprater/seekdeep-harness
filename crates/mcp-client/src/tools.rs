@@ -246,7 +246,7 @@ fn create_output(
                 .cloned()
                 .unwrap_or_default();
             Ok(vec![ContentBlock::Text {
-                text: extract_text(&content, &name),
+                text: extract_text(&content, &name).into(),
             }])
         }),
     ))

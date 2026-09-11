@@ -38,6 +38,7 @@ seekdeep-credentials = { path = "../credentials" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-settings = { path = "../settings" }
 seekdeep-util = { path = "../util" }

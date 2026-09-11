@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
-use seekdeep_core::session::{AppendOptions, Session};
+use seekdeep_core::session::{AppendOptions, JsonValue, Session};
 use seekdeep_llm::{MessageId, UserMessage};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -161,7 +161,7 @@ impl Inbox {
             if event.event_type != "agent/inbox/spliced" {
                 continue;
             }
-            let splice = serde_json::from_value::<InboxSplice>(event.data).map_err(|error| {
+            let splice = event.data.deserialize::<InboxSplice>().map_err(|error| {
                 InboxError::InvalidPersisted {
                     seq: event.seq,
                     message: error.to_string(),
@@ -374,13 +374,15 @@ impl Inbox {
             outcome: (discard_removed && removed_count > 0).then_some(InboxOutcome::Canceled),
         };
         validate_splice(&self.state.read(), &splice)?;
-        let event = self.session.append(
+        let event = self.session.append_json(
             "agent/inbox/spliced",
-            serde_json::to_value(&splice)
+            JsonValue::from_serialize(&splice)
                 .map_err(|error| InboxError::Committed(error.to_string()))?,
             AppendOptions::default(),
         )?;
-        let committed = serde_json::from_value::<InboxSplice>(event.data)
+        let committed = event
+            .data
+            .deserialize::<InboxSplice>()
             .map_err(|error| InboxError::Committed(error.to_string()))?;
         let removed = apply_splice(&mut self.state.write(), &committed)?;
         Ok(MutationOutcome {
@@ -494,9 +496,7 @@ mod tests {
 
     fn message(text: &str) -> UserMessage {
         UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         )
     }

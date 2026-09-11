@@ -49,8 +49,11 @@ pub fn special_property(key: &JsValue) -> Result<bool, JsValue> {
 /// Propagates property-table and prototype failures.
 #[wasm_bindgen(js_name = contextHas)]
 pub fn has(target: &JsValue, key: &JsValue) -> Result<bool, JsValue> {
-    if special_property(key)? || Reflect::has(target, key)? {
+    if special_property(key)? {
         return Reflect::has(target, key);
+    }
+    if Reflect::has(target, key)? {
+        return Ok(true);
     }
     let reflect = values::get(target, &"reflect".into())?;
     values::get(&values::get(&reflect, &"props".into())?, key).map(|value| value.is_truthy())
@@ -165,14 +168,14 @@ pub fn set(
     value: &JsValue,
     context: &JsValue,
     error: &JsValue,
-) -> Result<bool, JsValue> {
+) -> Result<JsValue, JsValue> {
     message(error, "set", key, "without provide")?;
     let reflect = values::get(target, &"reflect".into())?;
     let definition = values::get(&values::get(&reflect, &"props".into())?, key)?;
     if !definition.is_truthy() {
         let fiber = values::get(context, &"fiber".into())?;
         if !values::get(&fiber, &"runtime".into())?.is_truthy() {
-            return Reflect::set_with_receiver(target, key, value, context);
+            return Reflect::set_with_receiver(target, key, value, context).map(JsValue::from_bool);
         }
         return Err(enhance(error)?);
     }
@@ -218,7 +221,7 @@ pub fn set(
             &args,
         )
     })();
-    enhance_result(result, error).map(|result| result.is_truthy())
+    enhance_result(result, error)
 }
 
 fn message(error: &JsValue, operation: &str, key: &JsValue, suffix: &str) -> Result<(), JsValue> {

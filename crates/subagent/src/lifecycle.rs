@@ -109,20 +109,20 @@ pub fn epoch_stop_reason(events: &[SessionEvent]) -> SubagentStopReason {
             .data
             .get("reason")
             .and_then(|reason| reason.get("kind"))
-            .and_then(|kind| kind.as_str())
+            .filter(|kind| kind.is_string())
     });
     match kind {
-        Some("max-tokens") => SubagentStopReason::MaxTokens,
-        Some("aborted" | "interrupted") => SubagentStopReason::Aborted,
-        Some("blocked") => SubagentStopReason::Refusal,
-        None | Some("completed") => {
+        Some(kind) if kind == "max-tokens" => SubagentStopReason::MaxTokens,
+        Some(kind) if kind == "aborted" || kind == "interrupted" => SubagentStopReason::Aborted,
+        Some(kind) if kind == "blocked" => SubagentStopReason::Refusal,
+        kind if kind.is_none_or(|kind| kind == "completed") => {
             if consumed.dropped_unrun {
                 SubagentStopReason::Aborted
             } else {
                 SubagentStopReason::Completed
             }
         }
-        Some(_) => SubagentStopReason::Error,
+        _ => SubagentStopReason::Error,
     }
 }
 

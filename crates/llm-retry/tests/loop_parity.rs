@@ -124,7 +124,7 @@ fn failed_with_partial() -> Vec<StreamChunk> {
         StreamChunk::BlockEnd {
             index: 0,
             block: ContentBlock::Text {
-                text: "failed partial".to_owned(),
+                text: "failed partial".into(),
             },
         },
         StreamChunk::BlockStart {
@@ -190,9 +190,7 @@ fn success(text: &str) -> Vec<StreamChunk> {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -211,7 +209,7 @@ fn register_danger_tool(context: &Context, tools: &Arc<ToolRuntime>) -> Arc<Atom
                     Arc::new(assert_supported_json_schema(json!({"type":"string"})).unwrap()),
                     Arc::new(|_, value| {
                         Ok(vec![ContentBlock::Text {
-                            text: value.as_str().unwrap_or_default().to_owned(),
+                            text: value.as_str().unwrap_or_default().into(),
                         }])
                     }),
                 ),

@@ -1,6 +1,6 @@
 //! Content-block structural helpers.
 
-use crate::ContentBlock;
+use crate::{ContentBlock, JsonString};
 
 /// Whether content contains an image at any nested tool-result depth.
 #[must_use]
@@ -21,18 +21,19 @@ pub fn content_has_image(content: &[ContentBlock]) -> bool {
 
 /// Concatenates only visible text blocks from one Assistant lifecycle.
 #[must_use]
-pub fn assistant_text(content: &[ContentBlock]) -> String {
-    content
+pub fn assistant_text(content: &[ContentBlock]) -> JsonString {
+    let text = content
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text),
             ContentBlock::Reasoning { .. }
             | ContentBlock::Image { .. }
             | ContentBlock::ToolCall { .. }
             | ContentBlock::ToolResult { .. }
             | ContentBlock::Unknown { .. } => None,
         })
-        .collect()
+        .collect::<Vec<_>>();
+    JsonString::concat(&text)
 }
 
 #[cfg(test)]
@@ -65,7 +66,7 @@ mod tests {
     fn assistant_text_concatenates_only_visible_prose() {
         let blocks = vec![
             ContentBlock::Text {
-                text: "first ".to_owned(),
+                text: "first ".into(),
             },
             ContentBlock::Reasoning {
                 text: "hidden".to_owned(),
@@ -76,7 +77,7 @@ mod tests {
                 arguments: "{}".to_owned(),
             },
             ContentBlock::Text {
-                text: "second".to_owned(),
+                text: "second".into(),
             },
         ];
         assert_eq!(assistant_text(&blocks), "first second");

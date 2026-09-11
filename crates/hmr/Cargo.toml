@@ -12,6 +12,7 @@ anyhow.workspace = true
 futures.workspace = true
 notify = "8.2.0"
 parking_lot.workspace = true
+regress = { workspace = true, features = ["utf16"] }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-loader = { path = "../loader" }
 serde.workspace = true

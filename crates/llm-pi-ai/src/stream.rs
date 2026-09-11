@@ -1,12 +1,14 @@
 //! pi-ai assistant-event translation into the Harness streaming protocol.
 
+mod deserialize;
+
 use std::{collections::HashMap, sync::LazyLock};
 
 use futures::{Stream, StreamExt};
 use regex::Regex;
 use seekdeep_llm::{
     BoxLlmChunkStream, CONTEXT_WINDOW_EXCEEDED_CODE, CallId, ContentBlock, EMPTY_RESPONSE_CODE,
-    FinishReason, LlmError, LlmFailure, QUOTA_EXCEEDED_CODE, StreamChunk, TokenUsage,
+    FinishReason, JsonString, LlmError, LlmFailure, QUOTA_EXCEEDED_CODE, StreamChunk, TokenUsage,
     is_context_window_exceeded_error, is_quota_exceeded_error,
 };
 use serde::{Deserialize, Serialize};
@@ -33,7 +35,7 @@ pub struct PiToolCall {
 }
 
 /// Closed pi-ai assistant event union.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum PiAssistantEvent {
     /// Stream opened.
@@ -69,7 +71,7 @@ pub enum PiAssistantEvent {
         #[serde(rename = "contentIndex")]
         content_index: u64,
         /// Authoritative text.
-        content: String,
+        content: JsonString,
         /// Current native message.
         partial: PiAssistantMessage,
     },

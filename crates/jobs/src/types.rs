@@ -5,6 +5,7 @@ use std::sync::Arc;
 use futures::future::BoxFuture;
 use seekdeep_agent::Agent;
 use seekdeep_core::session::SessionId;
+use seekdeep_llm::JsonString;
 use serde::{Deserialize, Serialize};
 
 use crate::brand::JobId;
@@ -57,7 +58,7 @@ pub struct JobOutcome {
     pub detail: Option<String>,
     /// Final output for jobs without readOutput.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output: Option<String>,
+    pub output: Option<JsonString>,
 }
 
 /// Producer declaration passed to the registry start method.
@@ -124,7 +125,7 @@ pub struct JobSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct JobRead {
     /// The consuming delta, or the idempotent final output after settlement.
-    pub text: String,
+    pub text: JsonString,
     /// The job's state at read time.
     pub snapshot: JobSnapshot,
 }

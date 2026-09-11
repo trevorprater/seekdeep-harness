@@ -30,7 +30,7 @@ pub struct ReadImageArgs {
 fn image_read_content(value: &ImageReadValue) -> Vec<ContentBlock> {
     vec![
         ContentBlock::Text {
-            text: format_image_read_output(&value.path, &value.image),
+            text: format_image_read_output(&value.path, &value.image).into(),
         },
         ContentBlock::Image {
             attachment: image_ref_from_value(&value.image),
@@ -238,7 +238,7 @@ pub fn apply_read_image_tool(ctx: &Context) -> anyhow::Result<()> {
         .concurrency_safe(Arc::new(|_args: &ReadImageArgs| true))
         .present_call(Arc::new(|args: &ReadImageArgs| {
             Some(ToolCallView::Generic(GenericCallView {
-                title: format!("Read image {}", args.file_path),
+                title: format!("Read image {}", args.file_path).into(),
                 kind: Some(ToolCallKind::Read),
                 raw_input: None,
                 content: None,

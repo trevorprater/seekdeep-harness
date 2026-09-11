@@ -2,14 +2,49 @@
 
 use std::io::{BufRead as _, Write as _};
 
-use serde_json::{Value, json};
+use seekdeep_lossless_json::JsonValue;
+use serde_json::json;
 
-fn send(value: &Value) -> anyhow::Result<()> {
+fn send(value: &impl serde::Serialize) -> anyhow::Result<()> {
     let mut stdout = std::io::stdout().lock();
     serde_json::to_writer(&mut stdout, value)?;
     stdout.write_all(b"\n")?;
     stdout.flush()?;
     Ok(())
+}
+
+fn raw_text_frame(frame: &JsonValue) -> anyhow::Result<()> {
+    let id = frame["id"].as_raw();
+    match frame["method"].as_str() {
+        Some("initialize") => send(&JsonValue::parse(format!(
+            r#"{{"id":{id},"result":{{"userAgent":"fixture","\ud800":{{"value":"\udfff","huge":9007199254740993,"tiny":1e-400}}}}}}"#
+        ))?),
+        Some("thread/start") => send(&JsonValue::parse(format!(
+            r#"{{"id":{id},"result":{{"thread":{{"id":"fixture-thread","ephemeral":true,"ignored":"\ud800"}},"ignored":"\udfff"}}}}"#
+        ))?),
+        Some("turn/start") => {
+            anyhow::ensure!(
+                frame["params"]["input"][0]["text"].to_utf16()
+                    == Some(vec![0x41, 0xd800, 0x42, 0xdc00])
+            );
+            send(&JsonValue::parse(
+                r#"{"method":"item/completed","params":{"threadId":"fixture-thread","turnId":"fixture-turn","item":{"type":"agentMessage","phase":"final_answer","text":"A\ud800B\udc00","ignored":{"\ud800":"\udfff"}}}}"#.to_owned()
+            )?)?;
+            send(&JsonValue::parse(format!(
+                r#"{{"id":{id},"result":{{"turn":{{"id":"fixture-turn","ignored":"\ud800"}},"ignored":"\udfff"}}}}"#
+            ))?)?;
+            send(&JsonValue::parse(
+                r#"{"id":"raw-approval","method":"item/commandExecution/requestApproval","params":{"threadId":"fixture-thread","turnId":"fixture-turn","availableDecisions":["\ud800","decline","cancel"],"ignored":{"\udfff":"\ud800"}}}"#.to_owned()
+            )?)
+        }
+        None if frame["id"] == "raw-approval" => {
+            anyhow::ensure!(frame["result"]["decision"] == "cancel");
+            send(&JsonValue::parse(
+                r#"{"method":"turn/completed","params":{"threadId":"fixture-thread","turn":{"id":"fixture-turn","status":"completed","error":null,"ignored":{"\ud800":"\udfff"}}}}"#.to_owned()
+            )?)
+        }
+        _ => Ok(()),
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -22,8 +57,12 @@ fn main() -> anyhow::Result<()> {
         if line.trim().is_empty() {
             continue;
         }
-        let frame: Value = serde_json::from_str(&line)?;
-        let method = frame.get("method").and_then(Value::as_str);
+        let frame = JsonValue::parse(line)?;
+        if mode == "raw-text" {
+            raw_text_frame(&frame)?;
+            continue;
+        }
+        let method = frame.get_value("method").and_then(JsonValue::as_str);
         match method {
             Some("initialize") => {
                 if mode == "bad-initialize" {
@@ -83,7 +122,7 @@ fn main() -> anyhow::Result<()> {
                     turn_open = false;
                 }
             }
-            None if frame.get("id") == Some(&json!("approval")) => {
+            None if frame["id"] == "approval" => {
                 anyhow::ensure!(frame["result"]["decision"] == "cancel");
                 send(&json!({
                     "method":"item/completed",

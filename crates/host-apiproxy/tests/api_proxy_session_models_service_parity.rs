@@ -658,7 +658,7 @@ async fn text_only_selection_is_blocked_until_visible_images_are_replaced() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "image summarized".to_owned(),
+                    text: "image summarized".into(),
                 }],
                 seekdeep_llm::MessageSource::plugin("compact"),
             ))
@@ -813,7 +813,7 @@ async fn prompt_canonicalizes_browser_zones_and_queue_controls_preserve_message_
     assert_eq!(
         edited[0].content()[0],
         ContentBlock::Text {
-            text: "edited".to_owned()
+            text: "edited".into()
         }
     );
     harness.agent.set_status(AgentStatus::Running);

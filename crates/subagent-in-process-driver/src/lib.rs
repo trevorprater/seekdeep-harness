@@ -142,7 +142,7 @@ fn structured_definition(
         }))?),
         Arc::new(|_arguments, _value| {
             Ok(vec![ContentBlock::Text {
-                text: "Structured output recorded.".to_owned(),
+                text: "Structured output recorded.".into(),
             }])
         }),
     );
@@ -478,9 +478,9 @@ fn read_result(
     let recorded = match consumed.end.as_ref().and_then(|event| {
         event
             .data
-            .get("reason")
-            .and_then(|reason| reason.get("kind"))
-            .and_then(Value::as_str)
+            .get_value("reason")
+            .and_then(|reason| reason.get_value("kind"))
+            .and_then(seekdeep_core::session::JsonValue::as_str)
     }) {
         Some("completed") => SubagentStopReason::Completed,
         Some("max-tokens") => SubagentStopReason::MaxTokens,

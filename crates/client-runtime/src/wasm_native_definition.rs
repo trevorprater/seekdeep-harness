@@ -24,7 +24,10 @@ use crate::{
         recover_value, view_node_to_js,
     },
     wasm_session::{json_to_js, parse_event},
-    wasm_value_bridge::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing},
+    wasm_value_bridge::{
+        js_to_lossless_value as js_to_value, js_to_lossless_value_reusing as js_to_value_reusing,
+        lossless_value_to_js as value_to_js, lossless_value_to_js_reusing as value_to_js_reusing,
+    },
 };
 
 /// Parsed engine values keyed by the identity of the face they were parsed from.
@@ -98,14 +101,14 @@ thread_local! {
     /// accepted match onto one array, so only the appended tail is converted per call.
     static PARSED_MATCH_ARRAYS: RefCell<ParsedFaces<RefCell<Vec<Rc<ConversationMatch>>>>> = RefCell::new(ParsedFaces::new());
     static PARSED_NODES: RefCell<ParsedFaces<ConversationViewNode>> = RefCell::new(ParsedFaces::new());
-    static PARSED_VALUES: RefCell<ParsedFaces<serde_json::Value>> = RefCell::new(ParsedFaces::with_capacity(ParsedFaces::<serde_json::Value>::WINDOW_CAPACITY));
+    static PARSED_VALUES: RefCell<ParsedFaces<crate::ConversationValue>> = RefCell::new(ParsedFaces::with_capacity(ParsedFaces::<crate::ConversationValue>::WINDOW_CAPACITY));
     // Window arrays are few and large: keep only the latest handful so an old window's events
     // do not stay alive through this cache.
     static PARSED_EVENT_ARRAYS: RefCell<ParsedFaces<Vec<Rc<crate::ConversationLocationEvent>>>> = RefCell::new(ParsedFaces::with_capacity(4));
 }
 
 /// The immutable JSON behind a face, or a fresh parse of a foreign object.
-fn json_value_from_js(value: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+fn json_value_from_js(value: &JsValue) -> Result<Rc<crate::ConversationValue>, JsValue> {
     if let Some(recovered) = recover_value(value) {
         return Ok(recovered);
     }
@@ -247,6 +250,78 @@ pub fn native_conversation_node_definition_to_js(
         as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
     set(&value, "update", &update.into_js_value())?;
 
+    // The batched fold: the Context face arrives with the run already appended to its Match
+    // collection; each Match is folded against the state and the collection as they stood
+    // before it, through the same mirror list the per-Match face uses, so a Definition that
+    // keys on the collection's identity sees exactly what separate calls would show it.
+    let batch_updater = definition.clone();
+    let update_many = Closure::wrap(Box::new(
+        move |context: JsValue, matches: JsValue| -> Result<JsValue, JsValue> {
+            let context = context_from_js(&context)?;
+            let array = matches.dyn_ref::<Array>().ok_or_else(|| {
+                js_sys::Error::new("Conversation Definition updateMany takes an array of matches")
+            })?;
+            let batch = array
+                .iter()
+                .map(|face| match_from_js(&face))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mirror = context.matches.clone();
+            let prefix = mirror
+                .borrow()
+                .len()
+                .checked_sub(batch.len())
+                .ok_or_else(|| {
+                    js_sys::Error::new(
+                        "Conversation Definition updateMany batch exceeds the Match collection",
+                    )
+                })?;
+            if mirror.borrow()[prefix..]
+                .iter()
+                .zip(&batch)
+                .any(|(tail, accepted)| tail.event.seq != accepted.event.seq)
+            {
+                return Err(js_sys::Error::new(
+                    "Conversation Definition updateMany batch must end the Match collection",
+                )
+                .into());
+            }
+            let tail = mirror.borrow_mut().split_off(prefix);
+            let mut state = context.state.clone();
+            let mut outcome = Ok(());
+            for accepted in tail {
+                mirror.borrow_mut().push(accepted.clone());
+                if outcome.is_err() {
+                    continue;
+                }
+                let step = ConversationNodeContext {
+                    key: context.key.clone(),
+                    kind: context.kind.clone(),
+                    id: context.id.clone(),
+                    matches: mirror.clone(),
+                    start: context.start.clone(),
+                    state: state.clone(),
+                    current: context.current.clone(),
+                };
+                outcome = match (batch_updater.update)(&step, &accepted) {
+                    Ok(Some(next)) => {
+                        state = Some(next);
+                        Ok(())
+                    }
+                    Ok(None) => Err(js_sys::Error::new(&format!(
+                        "conversation Definition \"{}\" returned undefined from update()",
+                        batch_updater.kind
+                    ))
+                    .into()),
+                    Err(error) => Err(assembler_error(error)),
+                };
+            }
+            outcome?;
+            state_handle_to_js(&context.key, state)
+        },
+    )
+        as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
+    set(&value, "updateMany", &update_many.into_js_value())?;
+
     if let Some(publication) = &definition.publication {
         let publication = publication.clone();
         let callback = Closure::wrap(
@@ -305,7 +380,7 @@ fn location_data_to_js(data: &ConversationLocationData) -> Result<JsValue, JsVal
             ("kind", JsValue::from_str("turn")),
             ("turn", JsValue::from_f64(u64_as_f64(*turn))),
             ("key", JsValue::from_str(key)),
-            ("value", json_to_js(value)?),
+            ("value", json_to_js(value.as_ref())?),
         ]),
         ConversationLocationData::Step {
             turn,
@@ -322,7 +397,7 @@ fn location_data_to_js(data: &ConversationLocationData) -> Result<JsValue, JsVal
                 }),
             ),
             ("key", JsValue::from_str(key)),
-            ("value", json_to_js(value)?),
+            ("value", json_to_js(value.as_ref())?),
         ]),
     }
     .map(Into::into)
@@ -402,8 +477,10 @@ fn browser_view_builder(
     let empty = builder.borrow().empty();
     // The last snapshot and its face: the next snapshot reuses unchanged subtrees and grows
     // streamed text by its suffix instead of re-marshalling the whole view through JSON.
-    let previous = Rc::new(RefCell::new(None::<(Rc<serde_json::Value>, JsValue)>));
-    let encode = move |snapshot: &Rc<serde_json::Value>| -> Result<JsValue, JsValue> {
+    let previous = Rc::new(RefCell::new(
+        None::<(Rc<crate::ConversationValue>, JsValue)>,
+    ));
+    let encode = move |snapshot: &Rc<crate::ConversationValue>| -> Result<JsValue, JsValue> {
         let encoded = match &*previous.borrow() {
             Some((previous, previous_js)) => value_to_js_reusing(previous, previous_js, snapshot)?,
             None => value_to_js(snapshot)?,
@@ -806,7 +883,7 @@ fn parse_view_node(value: &JsValue) -> Result<Rc<ConversationViewNode>, JsValue>
 /// Parsed Node data retained by Node key, so a streaming Node's next face parses as the
 /// previous data plus its appended text instead of a full copy.
 struct RetainedParses {
-    entries: HashMap<String, (Rc<serde_json::Value>, JsValue)>,
+    entries: HashMap<String, (Rc<crate::ConversationValue>, JsValue)>,
     prune_at: usize,
 }
 
@@ -820,7 +897,11 @@ impl RetainedParses {
         }
     }
 
-    fn parse(&mut self, key: &str, face: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+    fn parse(
+        &mut self,
+        key: &str,
+        face: &JsValue,
+    ) -> Result<Rc<crate::ConversationValue>, JsValue> {
         let value = match self.entries.get(key) {
             // The same face again is the same data: share the retained value instead of
             // walking and copying it.
@@ -846,7 +927,7 @@ thread_local! {
 }
 
 /// The engine value behind a data face, or a parse that extends the Node's previous data.
-fn node_data_from_js(key: &str, face: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+fn node_data_from_js(key: &str, face: &JsValue) -> Result<Rc<crate::ConversationValue>, JsValue> {
     if let Some(recovered) = recover_value(face) {
         return Ok(recovered);
     }
@@ -923,13 +1004,16 @@ thread_local! {
     /// handle: it stores and returns the handle unchanged (it never reads a state's
     /// contents), and the owning bundle recovers the `Rc` here, so a state is never
     /// serialized per update.
-    static NATIVE_STATES: RefCell<std::collections::HashMap<String, (u32, Rc<serde_json::Value>)>> =
+    static NATIVE_STATES: RefCell<std::collections::HashMap<String, (u32, Rc<crate::ConversationValue>)>> =
         RefCell::new(std::collections::HashMap::new());
     static NEXT_NATIVE_STATE: std::cell::Cell<u32> = const { std::cell::Cell::new(1) };
 }
 
 /// Registers a Definition's returned state under its Context key and returns its handle.
-fn state_handle_to_js(key: &str, state: Option<Rc<serde_json::Value>>) -> Result<JsValue, JsValue> {
+fn state_handle_to_js(
+    key: &str,
+    state: Option<Rc<crate::ConversationValue>>,
+) -> Result<JsValue, JsValue> {
     let Some(state) = state else {
         NATIVE_STATES.with(|states| states.borrow_mut().remove(key));
         return Ok(JsValue::UNDEFINED);
@@ -954,7 +1038,7 @@ fn state_handle_to_js(key: &str, state: Option<Rc<serde_json::Value>>) -> Result
 
 /// Recovers a Context's state: this bundle's handle resolves to the registered `Rc`; any other
 /// value (a JavaScript Definition's own state) is parsed as JSON.
-fn state_from_js(key: &str, value: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+fn state_from_js(key: &str, value: &JsValue) -> Result<Rc<crate::ConversationValue>, JsValue> {
     let Some(id) = state_handle_id(value)? else {
         return json_value_from_js(value);
     };
@@ -970,7 +1054,7 @@ fn state_from_js(key: &str, value: &JsValue) -> Result<Rc<serde_json::Value>, Js
 /// back exactly as the owning Definition returned it, so a handle resolves through the key it
 /// carries; a handle this bundle did not register belongs to a Definition compiled into
 /// another module, whose state never crosses modules in the source either.
-fn previous_state_from_js(value: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+fn previous_state_from_js(value: &JsValue) -> Result<Rc<crate::ConversationValue>, JsValue> {
     let Some(id) = state_handle_id(value)? else {
         return json_value_from_js(value);
     };
@@ -990,7 +1074,7 @@ fn state_handle_id(value: &JsValue) -> Result<Option<f64>, JsValue> {
     Ok(Reflect::get(value, &JsValue::from_str(NATIVE_STATE_MARKER))?.as_f64())
 }
 
-fn registered_state(key: &str, id: f64) -> Option<Rc<serde_json::Value>> {
+fn registered_state(key: &str, id: f64) -> Option<Rc<crate::ConversationValue>> {
     NATIVE_STATES.with(|states| {
         states
             .borrow()

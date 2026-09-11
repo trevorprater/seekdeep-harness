@@ -1,0 +1,763 @@
+{
+  "groupOrder": [
+    "util",
+    "attachment",
+    "llm",
+    "core",
+    "typert",
+    "goal",
+    "process",
+    "bash",
+    "pty",
+    "sandbox",
+    "e2b",
+    "fs",
+    "skill",
+    "compact",
+    "subagent",
+    "tasks",
+    "workflow",
+    "web",
+    "spill",
+    "todo",
+    "plan",
+    "cordis",
+    "hooks",
+    "session-persistence",
+    "session-query",
+    "session-title",
+    "telemetry",
+    "storage",
+    "workspace",
+    "support",
+    "acp",
+    "ui"
+  ],
+  "serviceRoles": [
+    {
+      "key": "attachments",
+      "pkg": "attachment",
+      "title": "Durable binary attachment storage",
+      "mode": "seam",
+      "implementations": [
+        "attachment-local"
+      ],
+      "consumers": [
+        "host-runtime",
+        "llm-pi-ai"
+      ],
+      "note": "The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content."
+    },
+    {
+      "key": "llm",
+      "pkg": "llm",
+      "title": "LLM adapter registry",
+      "mode": "seam",
+      "implementations": [
+        "llm-deepseek",
+        "llm-pi-ai",
+        "llm-replay"
+      ],
+      "consumers": [
+        "agent-loop",
+        "compaction-basic"
+      ],
+      "note": "Adapters register provider implementations; the loop and compaction call the provider-neutral stream service."
+    },
+    {
+      "key": "tokenMeter",
+      "pkg": "token-meter",
+      "title": "Replay token measurement",
+      "mode": "core",
+      "consumers": [
+        "compaction-basic"
+      ],
+      "note": "Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements."
+    },
+    {
+      "key": "toolResultPruner",
+      "pkg": "compaction-tool-result-pruner",
+      "title": "Model-free tool-result pruning",
+      "mode": "core",
+      "consumers": [
+        "compaction-basic"
+      ],
+      "note": "Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction."
+    },
+    {
+      "key": "sessions",
+      "pkg": "session",
+      "title": "In-memory session store",
+      "mode": "core",
+      "consumers": [
+        "agent-loop",
+        "agent",
+        "session-persistence",
+        "session-query",
+        "session-query-sqlite",
+        "subagent-inprocess",
+        "invariants",
+        "message-feedback"
+      ],
+      "note": "Owns append-only Session instances and emits the durable session event feed."
+    },
+    {
+      "key": "invariants",
+      "pkg": "invariants",
+      "title": "Package-owned invariant registry",
+      "mode": "core",
+      "consumers": [
+        "session",
+        "agent",
+        "scope",
+        "agent-loop"
+      ],
+      "note": "Companion subpaths register owner-local checks; the service owns selection, uniqueness, child fibers, and package-attributed failures."
+    },
+    {
+      "key": "typert",
+      "pkg": "typert-registry",
+      "title": "Runtime type registry",
+      "mode": "core",
+      "consumers": [
+        "typert-loader",
+        "api-gateway"
+      ],
+      "note": "Plugins register live zod contributions directly or through dsh-typert-loader; the API gateway consumes invocation descriptors and providers, while other runtime consumers query schemas and reflection metadata at their own edges."
+    },
+    {
+      "key": "typertGateway",
+      "pkg": "api-gateway",
+      "title": "Typert Host invocation gateway",
+      "mode": "core",
+      "note": "Associates generated Remote descriptors with live Cordis services, resolves registered identities, and exposes unary calls through the shared Connection RPC carrier."
+    },
+    {
+      "key": "sessionPersistence",
+      "pkg": "session-persistence",
+      "title": "Durable session persistence seam",
+      "mode": "seam",
+      "implementations": [
+        "session-persistence-jsonl",
+        "session-persistence-sqlite"
+      ],
+      "consumers": [
+        "agent-loop",
+        "tool-bash",
+        "hooks-claude-code",
+        "hooks-codex",
+        "session-query",
+        "session-query-sqlite",
+        "message-feedback"
+      ],
+      "note": "Backends persist the same SessionEvent vocabulary; apps choose a backend at composition time."
+    },
+    {
+      "key": "settings",
+      "pkg": "settings",
+      "title": "User-settings seam",
+      "mode": "seam",
+      "implementations": [
+        "settings-file"
+      ],
+      "consumers": [
+        "llm-deepseek",
+        "llm-pi-ai",
+        "apiproxy"
+      ],
+      "note": "Plugins register namespace schemas and resolve layered values; providers store the raw document. The LLM adapters register their entry config as the composition base under the user section; the web gateway serves redacted layered descriptors and writes the user layer."
+    },
+    {
+      "key": "credentials",
+      "pkg": "credentials",
+      "title": "Credential seam",
+      "mode": "seam",
+      "implementations": [
+        "credentials-local"
+      ],
+      "consumers": [
+        "llm-deepseek",
+        "llm-pi-ai",
+        "apiproxy"
+      ],
+      "note": "Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the web gateway exposes value-free views and write-only storage."
+    },
+    {
+      "key": "sessionTelemetry",
+      "pkg": "session-telemetry",
+      "title": "Session telemetry seam",
+      "mode": "seam",
+      "implementations": [
+        "session-telemetry-otel"
+      ],
+      "consumers": [],
+      "note": "The seam captures, redacts, and hands session records to one backend; nothing else consumes the service — its output leaves the process."
+    },
+    {
+      "key": "storage",
+      "pkg": "storage",
+      "title": "Non-session storage hub",
+      "mode": "seam",
+      "implementations": [
+        "storage-json",
+        "storage-sqlite"
+      ],
+      "consumers": [
+        "storage-domain"
+      ],
+      "note": "Backends register side by side under names; data forms (domain first) mount on the hub and translate typed operations into opaque KV-unit primitives."
+    },
+    {
+      "key": "storageDomain",
+      "pkg": "storage-domain",
+      "title": "Domain data facility",
+      "mode": "core",
+      "consumers": [
+        "workspace",
+        "message-feedback"
+      ],
+      "note": "Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state."
+    },
+    {
+      "key": "messageFeedback",
+      "pkg": "message-feedback",
+      "title": "Lifecycle-bound message feedback",
+      "mode": "core",
+      "note": "Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry."
+    },
+    {
+      "key": "workspaceRegistry",
+      "pkg": "workspace",
+      "title": "Workspace entity registry",
+      "mode": "core",
+      "consumers": [
+        "apiproxy"
+      ],
+      "note": "Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections."
+    },
+    {
+      "key": "sessionQuery",
+      "pkg": "session-query",
+      "title": "Session reads, traces, filters, and search",
+      "mode": "seam",
+      "implementations": [
+        "session-query-sqlite"
+      ],
+      "consumers": [
+        "session-reference",
+        "tool-session-query"
+      ],
+      "note": "The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering."
+    },
+    {
+      "key": "sessionReferenceResolver",
+      "pkg": "session-reference",
+      "title": "Cross-session snapshot preparation",
+      "mode": "core",
+      "note": "Projects bounded current-surface conversation snapshots into durable untrusted message context; host adapters own mention syntax."
+    },
+    {
+      "key": "sessionTitle",
+      "pkg": "session-title",
+      "title": "Log-backed session titles",
+      "mode": "seam",
+      "implementations": [
+        "session-title-first-prompt-llm",
+        "session-title-all-prompts-llm"
+      ],
+      "note": "Owns the deterministic fallback, latest-title fold, and sole optional asynchronous provider registration."
+    },
+    {
+      "key": "systemPrompt",
+      "pkg": "system-prompt",
+      "title": "System prompt assembly registry",
+      "mode": "core",
+      "consumers": [
+        "agent-loop",
+        "tools",
+        "tool-fs",
+        "tool-terminal",
+        "tool-web"
+      ],
+      "note": "Collects prompt sections and model-facing tool schemas for each step."
+    },
+    {
+      "key": "tools",
+      "pkg": "tools",
+      "title": "Tool registry and guarded execution pipeline",
+      "mode": "core",
+      "consumers": [
+        "agent-loop",
+        "tool-ask-user",
+        "tool-bash",
+        "tool-cordis",
+        "tool-fs",
+        "tool-terminal",
+        "tool-skill",
+        "tool-subagent",
+        "tool-todo",
+        "tool-web"
+      ],
+      "note": "Registers capabilities, owns Code Mode transport, and routes calls through pre-policy, monotonic guards, around dispatch, post-policy, and final-result observation."
+    },
+    {
+      "key": "userQuestions",
+      "pkg": "user-questions",
+      "title": "Human question/answer seam",
+      "mode": "seam",
+      "consumers": [
+        "tool-ask-user"
+      ],
+      "note": "UI front ends provide the active human-answer provider; tool-ask-user pauses a tool call on the provider-neutral ask() promise."
+    },
+    {
+      "key": "planMode",
+      "pkg": "plan-mode",
+      "title": "Plan collaboration state",
+      "mode": "core",
+      "note": "Folds logged plan/mode state, flushes user selections at turn boundaries, renders deployment-owned guidance, registers /plan, and keeps the plan-exit schema stable across transitions."
+    },
+    {
+      "key": "agentPresets",
+      "pkg": "agent-presets",
+      "title": "Per-session agent composition",
+      "mode": "core",
+      "note": "Discovers preset directories over trusted and user-authored roots and mounts one preset cordis.yml under an agent scope during creation, rejecting a row that never activates or that publishes into the root service realm."
+    },
+    {
+      "key": "commands",
+      "pkg": "commands",
+      "title": "Human command registry",
+      "mode": "core",
+      "note": "Plugins register direct human commands without sending invocations to the model."
+    },
+    {
+      "key": "sessionProjections",
+      "pkg": "session-projection",
+      "title": "Session projection units",
+      "mode": "core",
+      "consumers": [
+        "tool-todo",
+        "session-title",
+        "host-apiproxy"
+      ],
+      "note": "Domains register state-driven fold units; the eager drive keeps per-session watermark states and api-proxy serves baselines and pushes changed values."
+    },
+    {
+      "key": "sessionProjectionCache",
+      "pkg": "session-projection-cache",
+      "title": "Persisted projection cache",
+      "mode": "core",
+      "consumers": [
+        "host-apiproxy"
+      ],
+      "note": "Durably checkpoints projection unit states per session (throttled + turn/end/detach mandatory points) and serves the cold-read ladder: cache row + persistence tail replay, so listings never load full logs."
+    },
+    {
+      "key": "skills",
+      "pkg": "skill",
+      "title": "Skill provider registry",
+      "mode": "seam",
+      "implementations": [
+        "skill-badge",
+        "skill-filesystem"
+      ],
+      "consumers": [
+        "tool-skill"
+      ],
+      "note": "Merges provider skill catalogs; tool-skill renders the session-prefix catalog and loads complete skill bodies."
+    },
+    {
+      "key": "agents",
+      "pkg": "agent",
+      "title": "Agent service",
+      "mode": "core",
+      "consumers": [
+        "agent-loop",
+        "acp",
+        "subagent-inprocess"
+      ],
+      "note": "Owns live Agent handles, the create/resume factory seam, and process-local initiator propagation."
+    },
+    {
+      "key": "agentDefaultModel",
+      "pkg": "agent-default-model",
+      "title": "Default Agent model selection",
+      "mode": "core",
+      "consumers": [
+        "headless",
+        "host-apiproxy"
+      ],
+      "note": "Layers the default ModelSelection through settings so direct and Host-backed Agent entry points share one state owner."
+    },
+    {
+      "key": "agentLoop",
+      "pkg": "agent-loop",
+      "title": "Concrete loop driver",
+      "mode": "bundle",
+      "consumers": [
+        "agent-spine-demo"
+      ],
+      "note": "The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package."
+    },
+    {
+      "key": "goals",
+      "pkg": "goal",
+      "title": "Same-session goal domain",
+      "mode": "core",
+      "note": "Folds revisioned objective state from the session log and keeps live continuation activation process-local."
+    },
+    {
+      "key": "e2b",
+      "pkg": "e2b",
+      "title": "E2B sandbox lifecycle owner",
+      "mode": "core",
+      "consumers": [
+        "fs-e2b",
+        "subprocess-e2b"
+      ],
+      "note": "Owns one shared E2B SDK handle, remote working directory, and final sandbox disposition so both fundamental E2B providers inhabit the same Linux runtime."
+    },
+    {
+      "key": "subprocess",
+      "pkg": "subprocess",
+      "title": "Subprocess seam",
+      "mode": "seam",
+      "implementations": [
+        "subprocess-local",
+        "subprocess-e2b"
+      ],
+      "consumers": [
+        "bash-local",
+        "bash-sandbox",
+        "terminal-bash",
+        "lsp-stdio",
+        "subagent-acp",
+        "subagent-codex",
+        "subagent-claude-code"
+      ],
+      "note": "The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation."
+    },
+    {
+      "key": "shell",
+      "pkg": "shell",
+      "title": "Bash executor seam",
+      "mode": "seam",
+      "implementations": [
+        "bash-local",
+        "bash-sandbox",
+        "pwsh-local"
+      ],
+      "consumers": [
+        "tool-bash",
+        "tool-pwsh",
+        "hooks-claude-code",
+        "hooks-codex"
+      ],
+      "note": "The model-facing shell tools and hook bridges consume this seam; sandboxed, remote, or PowerShell executors replace bash-local without touching them."
+    },
+    {
+      "key": "shellEnv",
+      "pkg": "shell-env",
+      "title": "Managed bash environment registry",
+      "mode": "core",
+      "consumers": [
+        "tool-bash",
+        "tool-pwsh"
+      ],
+      "note": "Plugins declare effect-scoped DSH_* facts; each shell tool collects one trusted snapshot per execution and its executor rebuilds the namespace."
+    },
+    {
+      "key": "terminals",
+      "pkg": "terminal",
+      "title": "Persistent PTY session registry",
+      "mode": "seam",
+      "implementations": [
+        "terminal-bash"
+      ],
+      "consumers": [
+        "tool-terminal"
+      ],
+      "note": "The registry owns exact-Agent session identity and cleanup; backends own terminal mechanics, while tool-terminal exposes the owner-scoped model tools."
+    },
+    {
+      "key": "sandbox",
+      "pkg": "sandbox",
+      "title": "Process-sandbox seam",
+      "mode": "seam",
+      "implementations": [
+        "sandbox-local"
+      ],
+      "consumers": [
+        "bash-sandbox",
+        "terminal-bash"
+      ],
+      "note": "Consumers hand over the exact argv they are about to spawn; same-world backends wrap it under a per-call policy and report enforcement."
+    },
+    {
+      "key": "sandboxPolicy",
+      "pkg": "sandbox-policy",
+      "title": "Sandbox policy home",
+      "mode": "core",
+      "implementations": [],
+      "consumers": [
+        "bash-sandbox",
+        "fs-sandbox",
+        "terminal-bash"
+      ],
+      "note": "The one home for the deployment default mode + workspace root; only the sandboxed executor and provider read the service (the tool layers use the pure `sandbox/mode` fold it also exports). Both enforcing families read it so bash and fs cannot confine to different roots."
+    },
+    {
+      "key": "approval",
+      "pkg": "approval",
+      "title": "Approval seam",
+      "mode": "seam",
+      "implementations": [
+        "acp"
+      ],
+      "consumers": [
+        "tools",
+        "tool-bash"
+      ],
+      "note": "One-shot permission decisions dispatched over the `approval/request` waterfall; answerers are listeners (the ACP bridge for its own agents), absence fails closed to `unavailable`."
+    },
+    {
+      "key": "permissionPresets",
+      "pkg": "permission-presets",
+      "title": "Permission presets",
+      "mode": "core",
+      "implementations": [],
+      "note": "User-facing preset table (`workspace-write`/`danger-full-access`) bundling the sandbox-mode and approval-policy knobs; a switch writes one `permission/preset` event through to both knob events."
+    },
+    {
+      "key": "codeRuntime",
+      "pkg": "code-runtime",
+      "title": "Code-execution seam",
+      "mode": "seam",
+      "implementations": [
+        "code-runtime-worker"
+      ],
+      "consumers": [
+        "tools"
+      ],
+      "note": "Runs one model-written program against host-provided async bindings; backends differ by substrate and language (the tool registry consumes it for Code Mode)."
+    },
+    {
+      "key": "fs",
+      "pkg": "fs",
+      "title": "Filesystem provider seam",
+      "mode": "seam",
+      "implementations": [
+        "fs-local",
+        "fs-sandbox",
+        "fs-e2b"
+      ],
+      "consumers": [
+        "tool-fs"
+      ],
+      "companions": [
+        "fs-observation-policy"
+      ],
+      "note": "tool-fs executes read/write/edit through ctx.fs; fs-sandbox fences mutations by the shared sandbox mode; fs-observation-policy contributes observed-state checks through the fs/* event gate."
+    },
+    {
+      "key": "compaction",
+      "pkg": "compaction",
+      "title": "Compaction seam",
+      "mode": "seam",
+      "implementations": [
+        "compaction-basic"
+      ],
+      "consumers": [
+        "compaction-basic"
+      ],
+      "note": "The basic backend consumes post-step pressure and request-error recovery events; there is no model-facing compact tool."
+    },
+    {
+      "key": "subagents",
+      "pkg": "subagent",
+      "title": "Subagent provider and continuation service",
+      "mode": "seam",
+      "implementations": [
+        "subagent-spawn-in-process",
+        "subagent-fork-in-process",
+        "subagent-acp",
+        "subagent-codex",
+        "subagent-claude-code",
+        "subagent-dsh-sdk"
+      ],
+      "consumers": [
+        "tool-subagent",
+        "tool-subagent-control",
+        "tool-ralph"
+      ],
+      "note": "Providers implement transports; the service also owns optional Activation-based continuation orchestration, tool-subagent selects one-shot or continuable delegation, tool-subagent-control delivers follow-ups, and tool-ralph requires one fresh structured-output route."
+    },
+    {
+      "key": "jobs",
+      "pkg": "jobs",
+      "title": "Background job registry",
+      "mode": "seam",
+      "implementations": [
+        "jobs-local"
+      ],
+      "consumers": [
+        "tool-bash",
+        "tool-terminal",
+        "tool-subagent",
+        "tool-jobs"
+      ],
+      "note": "Producers (background bash, PTY sends, and subagent delegations) register running work; tool-jobs is the model-facing controller that reads, lists, and kills it; jobs-local is the process-local registry."
+    },
+    {
+      "key": "web",
+      "pkg": "web",
+      "title": "Web access provider registry",
+      "mode": "seam",
+      "implementations": [
+        "web-search-exa",
+        "web-search-perplexity",
+        "web-search-deepseek",
+        "web-fetch-http"
+      ],
+      "consumers": [
+        "tool-web"
+      ],
+      "note": "Search and fetch providers register into one ctx.web seam; tool-web owns the stable model-facing names."
+    },
+    {
+      "key": "spillStore",
+      "pkg": "spill",
+      "title": "Spill storage seam",
+      "mode": "seam",
+      "implementations": [
+        "spill-local"
+      ],
+      "consumers": [
+        "spill-policy"
+      ],
+      "note": "The backend saves oversized tool text and returns a model-facing locator plus retrieval hint; spill-policy is the tools/post-execute consumer that decides when to spill."
+    },
+    {
+      "key": "directoryPicker",
+      "pkg": "directory-picker",
+      "title": "Workspace-directory picking seam",
+      "mode": "seam",
+      "implementations": [
+        "directory-picker-native",
+        "directory-picker-browse"
+      ],
+      "consumers": [
+        "apiproxy"
+      ],
+      "note": "Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement)."
+    },
+    {
+      "key": "webServer",
+      "pkg": "webserver",
+      "title": "HTTP route registration",
+      "mode": "core",
+      "consumers": [
+        "connection",
+        "modules",
+        "hmr"
+      ],
+      "note": "Plain node:http carrier: named-route registry, index transform taps, and the static dist fallback; web-transport plugins register their own routes."
+    },
+    {
+      "key": "clientModules",
+      "pkg": "modules",
+      "title": "Client plugin graph host",
+      "mode": "core",
+      "consumers": [
+        "hmr"
+      ],
+      "note": "Composes the __DSH_BOOT__ entry graph from an incremental dsh.client scan, serves plugin bundles, and notifies rebuilt/graph-changed subscribers."
+    },
+    {
+      "key": "workflowEngine",
+      "pkg": "workflow",
+      "title": "Workflow script engine",
+      "mode": "seam",
+      "implementations": [
+        "workflow-worker-thread"
+      ],
+      "consumers": [
+        "tool-workflow",
+        "tool-ralph"
+      ],
+      "note": "One engine per context, as in bash, with no named-provider registry; the general workflow and fixed Ralph consumers start runs whose agent() calls fan out through ctx.subagents."
+    },
+    {
+      "key": "lsp",
+      "pkg": "lsp",
+      "title": "Language-server navigation seam",
+      "mode": "seam",
+      "implementations": [
+        "lsp-local"
+      ],
+      "consumers": [
+        "tool-lsp"
+      ],
+      "note": "Provider registration and selection plus normalized query execution over exactly four operations; the seam offers no protocol escape hatch, so a backend translates into the normalized request and result."
+    },
+    {
+      "key": "apiProxy",
+      "pkg": "apiproxy",
+      "title": "Host API dispatch",
+      "mode": "core",
+      "consumers": [
+        "connection"
+      ],
+      "note": "The transport-agnostic host gateway face: it dispatches browser API calls, and each open host stream subscribes to the events it forwards rather than being pushed to through a broadcast verb."
+    },
+    {
+      "key": "dynamicCordisRunner",
+      "pkg": "cordis-host-runner",
+      "title": "Dynamic Cordis package host runner",
+      "mode": "core",
+      "consumers": [
+        "tool-cordis"
+      ],
+      "note": "Owns the in-memory definition registry, the vm sandbox for host halves, and the request-run round trip; browser pages reach the same service over the wire through its remote namespace."
+    },
+    {
+      "key": "cordisInspect",
+      "pkg": "cordis-host-runner",
+      "title": "Dynamic Cordis inspect registry",
+      "mode": "core",
+      "consumers": [
+        "tool-cordis"
+      ],
+      "note": "Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport."
+    }
+  ],
+  "appExamples": [
+    {
+      "id": "dsh_base",
+      "rel": "apps/cli/composition.md",
+      "title": "DSH Base Composition",
+      "label": "packages/bundle/base/cordis.patch.yml",
+      "config": "packages/bundle/base/cordis.patch.yml",
+      "summary": "The dsh-base bundle patch every profile applies first; mode bundles (dsh-web-app, dsh-headless) and the user's profile layer patch over it."
+    },
+    {
+      "id": "headless",
+      "rel": "examples/headless-agent/composition.md",
+      "title": "Headless Agent Snapshot Composition",
+      "label": "examples/headless-agent",
+      "config": "examples/headless-agent/cordis.yml",
+      "summary": "The headless snapshot composition combines the real DeepSeek adapter and coding capabilities with one explicitly configured persisted top-level agent; its JSONL driver is test-only."
+    },
+    {
+      "id": "acp",
+      "rel": "examples/acp-agent/composition.md",
+      "title": "ACP Automation App Composition",
+      "label": "examples/acp-agent",
+      "config": "examples/acp-agent/cordis.yml",
+      "summary": "The ACP demo exposes fresh baseline-prompt agent sessions to programmatic clients over JSON-RPC stdio, with no stdout logger, human UI, or pre-created agent."
+    }
+  ],
+  "lifecycle": "<!-- Generated by scripts/gen-doc-graphs.ts - do not edit by hand.\n     Run `pnpm run gen-doc-graphs` to regenerate. -->\n\n# Agent Turn And Step Lifecycle\n\nThis sequence is the visual companion to [architecture.md](architecture.md#turn-flow). It keeps durable replay facts on `session/event` and live control/status on `agent/*`.\n\n```mermaid\nsequenceDiagram\n  participant User\n  participant Agent\n  participant Driver\n  participant Hooks as hook listeners\n  participant Prompt as ctx.systemPrompt\n  participant LLM as ctx.llm\n  participant Tools as ctx.tools\n  participant Session\n  participant SDK as UI or SDK listener\n  User->>Agent: followup(content)\n  Agent-->>SDK: <code>agent/inbox/spliced</code>\n  Agent-->>SDK: <code>agent/inbox/inserted</code> { message }\n  Agent->>Driver: queued work wakes driver\n  Driver-->>SDK: <code>agent/status</code> running\n  Driver->>Session: <code>turn/start</code>\n  Note over Agent,Driver: claim pending next-step input plus one queued prompt\n  Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion\n  Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message\n  Driver->>Hooks: <code>agent/pre-step</code> waterfall\n  Hooks-->>Driver: authoritative reject or enter(messages)\n  alt proposed step rejected or pre-step failed\n    Driver-->>Driver: claimed batch stays removed, the open turn spends no step\n  else enter proposed step\n  Driver->>Session: <code>step/start</code>\n  Driver->>Session: <code>user/message</code> per entered message\n  Driver->>Prompt: <code>system-prompt/assemble</code> waterfall\n  Driver->>LLM: <code>agent/request</code> waterfall, then <code>llm/stream</code> waterfall\n  LLM-->>Driver: StreamChunk*\n  Driver->>Session: <code>assistant/chunk</code>*\n  Session-->>SDK: <code>session/event</code> <code>assistant/chunk</code>*\n  alt final adapter or terminal in-band request failure\n    Driver->>Session: <code>step/end</code>\n    Driver->>Hooks: <code>agent/request-error</code> waterfall\n    Hooks-->>Driver: return retry action or preserve the original error\n  else model request succeeded\n  Driver->>Session: <code>assistant/message</code>\n  Driver->>Tools: classify pending call by executionMode\n  loop barriers and bounded rolling pool, reclassify before start\n    opt call starts\n      Driver->>Session: <code>tool/call</code>\n      Driver->>Tools: ordered pre, concurrent execute\n      Tools-->>Session: tool-owned events when applicable\n    end\n    opt next model-order result ready\n      Driver->>Tools: ordered post\n      Driver->>Session: <code>tool/result</code>\n    end\n  end\n  Driver->>Session: <code>step/end</code>\n  opt natural stop and next-step inbox empty\n    Driver->>Hooks: <code>agent/turn-stopping</code> serial terminal checkpoint\n  end\n  opt next-step input is pending\n    Driver-->>Driver: claim pending next-step input\n    Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message\n    Driver->>Hooks: <code>agent/pre-step</code> waterfall\n    Hooks-->>Driver: authoritative reject or enter(messages)\n  end\n  end\n  end\n  Driver->>Session: <code>turn/end</code>\n  Driver-->>SDK: <code>agent/status</code> idle\n```\n\nThe `assistant/message` event records every successful provider call, including content-less and `max-tokens` finishes. Empty content stays out of derived history, while the durable event keeps usage and `sourceEventSeqs` listing the exact `assistant/chunk` events, including an explicit empty list.\n\n`dsh-compaction-basic` uses `agent/pre-step` for pressure before request derivation and `agent/request-error` only for canonical context overflow. Once either trigger qualifies, optional tool-result pruning runs before summary selection. Recovery works between the closed failed step and failed turn close, and opens a fresh retry turn only when pruning or summarization advances the surface replacement generation; otherwise the original request error remains authoritative.\n\nThe returned `agent/pre-step` decision is authoritative; listeners wrapping `next()` preserve downstream messages unless replacement is intentional. Steering and injected context pass through the same waterfall after a later claim operation takes their next-step batch.\n\nSDK users that need replayable transcript data should consume `session/event`; `agent/*` is the live coordination API for queue/status, prompt interception, request construction, steering, continuation, and errors.\n\nMaintenance mode: curated Mermaid sequence; exact event signatures live in the generated Cordis catalog.\n",
+  "toolPipeline": "<!-- Generated by scripts/gen-doc-graphs.ts - do not edit by hand.\n     Run `pnpm run gen-doc-graphs` to regenerate. -->\n\n# Tool Execution Pipeline\n\nThis graph shows where policy, hooks, sandboxing, filesystem guards, result rewriting, final-outcome observation, and UI rendering run without changing the loop. The `tools/pre-execute` waterfall runs first, monotonic guards run next, and the `tools/execute` and `tools/post-execute` waterfalls follow; the three waterfalls may transform a call. Definition-owned `finalizeContent` and `tools/result` run afterward.\n\n```mermaid\nflowchart TD\n  model[\"Assistant message contains tool-call block\"]\n  toolCall[\"Session event: <code>tool/call</code><br/>logged before execution\"]\n  presentCall[\"UI pending card<br/>presentCall(args)\"]\n  pre[\"<code>tools/pre-execute</code> waterfall<br/>hooks, permission, sandbox\"]\n  guards[\"Registered monotonic guards<br/>deny or abstain; identity protected\"]\n  denied[\"denied or approval refused<br/>tool body skipped\"]\n  approval[\"<code>ctx.approval</code> one-shot prompt<br/>absent or unanswerable: deny\"]\n  around[\"<code>tools/execute</code> waterfall<br/>timeout, retry, metrics (around dispatch)\"]\n  toolBody[\"Registered tool execute() body\"]\n  fsGate[\"<code>fs/write-intent</code> or <code>fs/edit-intent</code><br/>tool-fs mutations only\"]\n  owned[\"Tool-owned session events<br/><code>todo/write</code>, <code>fs/observed</code>, <code>hook/invoked</code>, <code>hook/result</code>, <code>tool/code-dispatch</code>\"]\n  post[\"<code>tools/post-execute</code> waterfall<br/>accept, block, replace, add context\"]\n  normalized[\"Registry outer normalization<br/>pipeline/result snapshot throws become isError\"]\n  finalize[\"ToolDefinition.finalizeContent<br/>last content-only invariant\"]\n  final[\"<code>tools/result</code> synchronous notification<br/>frozen authoritative outcome\"]\n  context[\"Active-batch additionalContexts FIFO<br/>injected user/message after recorded tool results\"]\n  toolResult[\"Session event: <code>tool/result</code><br/>single model-facing outcome\"]\n  allResults[\"Tool batch settled<br/>recorded tool/result events complete\"]\n  presentResult[\"UI completed card<br/>presentResult(args, result)\"]\n  model --> toolCall\n  toolCall --> presentCall\n  toolCall --> pre\n  pre -->|allow| guards\n  guards -->|allow| around\n  guards -->|deny| denied\n  guards -.->|throw| normalized\n  around --> toolBody\n  pre -->|deny| denied\n  pre -->|ask| approval\n  approval -->|allowed-once| guards\n  approval -->|rejected, cancelled, unavailable| denied\n  approval -.->|throw| normalized\n  denied --> post\n  pre -.->|throw| normalized\n  toolBody --> fsGate\n  fsGate --> toolBody\n  toolBody --> owned\n  toolBody --> around\n  around --> post\n  around -.->|wrapper throws| normalized\n  post -.->|throw| normalized\n  post --> finalize\n  normalized --> finalize\n  finalize --> final\n  final --> toolResult\n  toolResult --> presentResult\n  toolResult --> allResults\n  allResults --> context\n```\n\nFilesystem read-before-edit checks stay below `tool-fs` on `fs/*` events. Generic pre/post waterfalls host hooks and approval policy; `ctx.approval` resolves asks before monotonic guards, and owner policy that must not be reordered remains a registered guard. Around-dispatch concerns such as timeouts wrap `tools/execute`. The registry losslessly snapshots the candidate result and normalizes a snapshot failure before the visible definition's snapshotted `finalizeContent` callback enforces its synchronous content-only invariant. `tools/result` then observes the immutable, lossless-JSON outcome. This lets hooks span tool families without coupling the tools to one policy service. Code Mode sends both the reserved `run_code` transport and its serialized sub-calls through the pipeline; sub-calls carry the parent token, log `tool/code-dispatch`, return denials as binding rejections, and omit `additionalContexts` to preserve call/result adjacency.\n\nMaintenance mode: curated Mermaid flow; exact tool schemas and event signatures live in generated catalogs.\n"
+}

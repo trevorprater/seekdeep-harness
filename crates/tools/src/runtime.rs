@@ -16,8 +16,9 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_agent::Agent;
 use seekdeep_code_runtime::{
-    CODE_RUNTIME, CodeBindingErrorClass, CodeBindingFunction, CodeBindingNamespace,
-    CodeRunFailureKind, CodeRunRequest, CodeRuntime,
+    CODE_RUNTIME, CodeBindingErrorClass, CodeBindingFailure, CodeBindingFunction,
+    CodeBindingNamespace, CodeJsonString, CodeJsonValue, CodeRunFailureKind, CodeRunRequest,
+    CodeRuntime, json::CodeJsonRef,
 };
 use seekdeep_cordis::{
     Context, CordisError, EventArgs, EventOptions, EventReply, Fiber, ServiceKey, events::Next,
@@ -45,7 +46,7 @@ use uuid::Uuid;
 use crate::{
     JsonSchemaNode, ToolArgsError, ToolCallView, ToolResult, ToolResultView, ToolSdkSchema,
     assert_supported_json_schema, render_tools_sdk, render_tools_sdk_py,
-    validate_json_schema_value_at,
+    validate_code_json_schema_value_at,
 };
 
 /// Canonical error code for cancellation after a body was invoked.
@@ -70,17 +71,42 @@ pub const TOOLS: ServiceKey<ToolRuntime> = ServiceKey::new("tools");
 
 const CODE_ONLY_INSTRUCTION: &str = "`run_code` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.";
 
+fn unicode_json<'a>(value: &'a CodeJsonValue, boundary: &str) -> anyhow::Result<&'a Value> {
+    value.as_serde_json().ok_or_else(|| {
+        anyhow::anyhow!(
+            "{boundary} cannot be represented by serde_json::Value; use a lossless JSON callback"
+        )
+    })
+}
+
 /// Boxed asynchronous tool body.
 pub type ToolExecuteFuture = Pin<Box<dyn Future<Output = anyhow::Result<Value>> + Send + 'static>>;
 /// Tool body callback.
 pub type ToolExecute =
     Arc<dyn Fn(Value, ToolRunContext) -> ToolExecuteFuture + Send + Sync + 'static>;
+/// Boxed asynchronous tool body retaining every JSON string code unit.
+pub type ToolJsonExecuteFuture =
+    Pin<Box<dyn Future<Output = anyhow::Result<CodeJsonValue>> + Send + 'static>>;
+/// Tool body callback accepting and returning complete JSON snapshots.
+pub type ToolJsonExecute =
+    Arc<dyn Fn(CodeJsonValue, ToolRunContext) -> ToolJsonExecuteFuture + Send + Sync + 'static>;
 /// Pure successful-value renderer.
 pub type ToolRender =
     Arc<dyn Fn(&Value, &Value) -> anyhow::Result<Vec<ContentBlock>> + Send + Sync + 'static>;
+/// Pure successful-value renderer over complete JSON snapshots.
+pub type ToolJsonRender = Arc<
+    dyn Fn(&CodeJsonValue, &CodeJsonValue) -> anyhow::Result<Vec<ContentBlock>>
+        + Send
+        + Sync
+        + 'static,
+>;
 /// Pure presentation-metadata projector.
 pub type ToolPresentationMeta =
     Arc<dyn Fn(&Value, &Value) -> anyhow::Result<Value> + Send + Sync + 'static>;
+/// Pure presentation-metadata projector over complete JSON snapshots.
+pub type ToolJsonPresentationMeta = Arc<
+    dyn Fn(&CodeJsonValue, &CodeJsonValue) -> anyhow::Result<CodeJsonValue> + Send + Sync + 'static,
+>;
 /// Final content transform snapshotted when an execution starts.
 pub type ToolContentFinalizer = Arc<
     dyn Fn(&ToolExecution, &ToolExecutionResult) -> anyhow::Result<Option<Vec<ContentBlock>>>
@@ -90,11 +116,15 @@ pub type ToolContentFinalizer = Arc<
 >;
 /// Fail-closed sibling-overlap classifier.
 pub type ToolConcurrencyClassifier = Arc<dyn Fn(&Value) -> bool + Send + Sync + 'static>;
+/// Fail-closed sibling-overlap classifier over complete JSON snapshots.
+pub type ToolJsonConcurrencyClassifier =
+    Arc<dyn Fn(&CodeJsonValue) -> bool + Send + Sync + 'static>;
 /// Pure replay-safe pending-call presenter.
-pub type ToolCallPresenter = Arc<dyn Fn(&Value) -> Option<ToolCallView> + Send + Sync + 'static>;
+pub type ToolCallPresenter =
+    Arc<dyn Fn(&CodeJsonValue) -> Option<ToolCallView> + Send + Sync + 'static>;
 /// Pure replay-safe completed-call presenter.
 pub type ToolResultPresenter =
-    Arc<dyn Fn(&Value, &ToolResult) -> Option<ToolResultView> + Send + Sync + 'static>;
+    Arc<dyn Fn(&CodeJsonValue, &ToolResult) -> Option<ToolResultView> + Send + Sync + 'static>;
 /// Monotonic execution guard. A returned reason denies the call.
 pub type ToolGuard = Arc<dyn Fn(&ToolExecution) -> Option<String> + Send + Sync + 'static>;
 
@@ -180,9 +210,9 @@ pub struct ToolOutputDefinition {
     /// Supported JSON Schema enforced against every successful value.
     pub schema: Arc<JsonSchemaNode>,
     /// Pure Native/model content projection.
-    pub render: ToolRender,
+    pub render: ToolJsonRender,
     /// Optional pure replayable UI metadata projection.
-    pub presentation_meta: Option<ToolPresentationMeta>,
+    pub presentation_meta: Option<ToolJsonPresentationMeta>,
 }
 
 impl std::fmt::Debug for ToolOutputDefinition {
@@ -199,6 +229,20 @@ impl ToolOutputDefinition {
     /// Builds a canonical output declaration.
     #[must_use]
     pub fn new(schema: Arc<JsonSchemaNode>, render: ToolRender) -> Self {
+        Self::new_lossless(
+            schema,
+            Arc::new(move |arguments, value| {
+                render(
+                    unicode_json(arguments, "arguments for output.render")?,
+                    unicode_json(value, "value for output.render")?,
+                )
+            }),
+        )
+    }
+
+    /// Builds an output declaration whose renderer accepts complete JSON snapshots.
+    #[must_use]
+    pub fn new_lossless(schema: Arc<JsonSchemaNode>, render: ToolJsonRender) -> Self {
         Self {
             schema,
             render,
@@ -209,6 +253,19 @@ impl ToolOutputDefinition {
     /// Adds the top-level presentation metadata projector.
     #[must_use]
     pub fn presentation_meta(mut self, projector: ToolPresentationMeta) -> Self {
+        self.presentation_meta = Some(Arc::new(move |arguments, value| {
+            projector(
+                unicode_json(arguments, "arguments for output.presentationMeta")?,
+                unicode_json(value, "value for output.presentationMeta")?,
+            )
+            .map(CodeJsonValue::from)
+        }));
+        self
+    }
+
+    /// Adds a presentation metadata projector over complete JSON snapshots.
+    #[must_use]
+    pub fn presentation_meta_lossless(mut self, projector: ToolJsonPresentationMeta) -> Self {
         self.presentation_meta = Some(projector);
         self
     }
@@ -226,13 +283,13 @@ pub struct ToolDefinition {
     /// Canonical successful output contract.
     pub output: ToolOutputDefinition,
     /// Accepted-call body.
-    pub execute: ToolExecute,
+    pub execute: ToolJsonExecute,
     /// Optional final content transform.
     pub finalize_content: Option<ToolContentFinalizer>,
     /// Cooperative timeout declaration in milliseconds.
     pub timeout_ms: Option<f64>,
     /// Optional overlap classifier.
-    pub is_concurrency_safe: Option<ToolConcurrencyClassifier>,
+    pub is_concurrency_safe: Option<ToolJsonConcurrencyClassifier>,
     /// Optional replay-safe pending-call presenter.
     pub present_call: Option<ToolCallPresenter>,
     /// Optional replay-safe completed-call presenter.
@@ -266,6 +323,34 @@ impl ToolDefinition {
         output: ToolOutputDefinition,
         execute: ToolExecute,
     ) -> Self {
+        Self::new_lossless(
+            name,
+            description,
+            parameters,
+            output,
+            Arc::new(move |arguments, execution| {
+                let arguments = arguments.try_into_serde_json().map_err(|_| {
+                    anyhow::anyhow!("arguments for execute cannot be represented by serde_json::Value; use a lossless JSON callback")
+                });
+                let execute = execute.clone();
+                Box::pin(async move {
+                    execute(arguments?, execution)
+                        .await
+                        .map(CodeJsonValue::from)
+                })
+            }),
+        )
+    }
+
+    /// Builds a tool whose body accepts and returns complete JSON snapshots.
+    #[must_use]
+    pub fn new_lossless(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        parameters: Map<String, Value>,
+        output: ToolOutputDefinition,
+        execute: ToolJsonExecute,
+    ) -> Self {
         Self {
             name: name.into(),
             description: description.into(),
@@ -297,6 +382,17 @@ impl ToolDefinition {
     /// Adds the fail-closed overlap classifier.
     #[must_use]
     pub fn concurrency_safe(mut self, classifier: ToolConcurrencyClassifier) -> Self {
+        self.is_concurrency_safe = Some(Arc::new(move |arguments| {
+            arguments
+                .as_serde_json()
+                .is_some_and(|arguments| classifier(arguments))
+        }));
+        self
+    }
+
+    /// Adds a fail-closed overlap classifier over complete JSON snapshots.
+    #[must_use]
+    pub fn concurrency_safe_lossless(mut self, classifier: ToolJsonConcurrencyClassifier) -> Self {
         self.is_concurrency_safe = Some(classifier);
         self
     }
@@ -433,7 +529,7 @@ pub struct ToolExecutionInput {
     /// Requested tool name.
     pub name: String,
     /// Parsed lossless JSON arguments.
-    pub arguments: Value,
+    pub arguments: CodeJsonValue,
     /// Exact live calling agent.
     pub agent: Option<Arc<Agent>>,
     /// Low-level scope fallback for synthetic or replay-only dispatches.
@@ -452,14 +548,14 @@ impl ToolExecutionInput {
     pub fn new(
         call_id: CallId,
         name: impl Into<String>,
-        arguments: Value,
+        arguments: impl Into<CodeJsonValue>,
         signal: AbortSignal,
     ) -> Self {
         Self {
             call_id,
             root_call_id: None,
             name: name.into(),
-            arguments,
+            arguments: arguments.into(),
             agent: None,
             agent_scope: None,
             agent_session: None,
@@ -559,7 +655,7 @@ pub struct ToolExecution {
     /// Requested name.
     pub name: String,
     /// Snapshotted parsed arguments.
-    pub arguments: Value,
+    pub arguments: CodeJsonValue,
     /// Exact live calling agent.
     pub agent: Option<Arc<Agent>>,
     /// Low-level scope fallback for synthetic or replay-only dispatches.
@@ -606,7 +702,7 @@ pub struct CodeDispatchStartEventData {
     /// Dispatched tool name.
     pub name: String,
     /// Lossless JSON argument snapshot dispatched to the nested tool.
-    pub arguments: Value,
+    pub arguments: CodeJsonValue,
 }
 
 /// Durable payload recorded when a started Code Mode dispatch settles.
@@ -622,7 +718,7 @@ pub struct CodeDispatchEventData {
     /// Dispatched tool name.
     pub name: String,
     /// Lossless JSON argument snapshot used by the nested dispatch.
-    pub arguments: Value,
+    pub arguments: CodeJsonValue,
     /// Whether the settled nested call failed.
     pub is_error: bool,
     /// Complete model-facing settled result content.
@@ -799,7 +895,7 @@ pub struct ToolErrorInfo {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ToolFailure {
     /// Human-readable message without the `Error: ` envelope.
-    pub message: String,
+    pub message: CodeJsonString,
     /// Optional stable routing information.
     pub info: Option<ToolErrorInfo>,
 }
@@ -808,11 +904,11 @@ pub struct ToolFailure {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToolExecutionSuccess {
     /// Execution-local canonical value.
-    pub value: Value,
+    pub value: CodeJsonValue,
     /// Native/model projection.
     pub content: Vec<ContentBlock>,
     /// Optional top-level presentation projection.
-    pub meta: Option<Value>,
+    pub meta: Option<CodeJsonValue>,
     /// Contexts queued for the next request.
     pub additional_contexts: Vec<UserMessage>,
     /// Whether the agent loop should stop after committing this batch.
@@ -828,7 +924,7 @@ pub struct ToolExecutionFailure {
     /// Model-facing error content.
     pub content: Vec<ContentBlock>,
     /// Optional presentation metadata authored by policy.
-    pub meta: Option<Value>,
+    pub meta: Option<CodeJsonValue>,
     /// Contexts queued for the next request.
     pub additional_contexts: Vec<UserMessage>,
 }
@@ -846,9 +942,9 @@ impl ToolExecutionResult {
     /// Authors a success for an around-dispatch wrapper. The registry will
     /// revalidate the value and recompute definition-owned projections.
     #[must_use]
-    pub fn success(value: Value, content: Vec<ContentBlock>) -> Self {
+    pub fn success(value: impl Into<CodeJsonValue>, content: Vec<ContentBlock>) -> Self {
         Self::Success(ToolExecutionSuccess {
-            value,
+            value: value.into(),
             content,
             meta: None,
             additional_contexts: Vec::new(),
@@ -859,7 +955,7 @@ impl ToolExecutionResult {
 
     /// Authors a normalized failure for an around-dispatch wrapper.
     #[must_use]
-    pub fn failure(message: impl Into<String>) -> Self {
+    pub fn failure(message: impl Into<CodeJsonString>) -> Self {
         let message = message.into();
         Self::Failure(ToolExecutionFailure {
             content: error_content(&message),
@@ -878,9 +974,19 @@ impl ToolExecutionResult {
         matches!(self, Self::Failure(_))
     }
 
-    /// Canonical successful value, absent for failures.
+    /// Unicode-scalar compatibility view of the successful value.
+    /// Use [`Self::json_value`] when strings may contain lone UTF-16 surrogates.
     #[must_use]
     pub fn value(&self) -> Option<&Value> {
+        match self {
+            Self::Success(result) => result.value.as_serde_json(),
+            Self::Failure(_) => None,
+        }
+    }
+
+    /// Complete canonical successful value, absent only for failures.
+    #[must_use]
+    pub fn json_value(&self) -> Option<&CodeJsonValue> {
         match self {
             Self::Success(result) => Some(&result.value),
             Self::Failure(_) => None,
@@ -913,7 +1019,7 @@ impl ToolExecutionResult {
 
     /// Optional replayable presentation metadata.
     #[must_use]
-    pub fn meta(&self) -> Option<&Value> {
+    pub fn meta(&self) -> Option<&CodeJsonValue> {
         match self {
             Self::Success(result) => result.meta.as_ref(),
             Self::Failure(result) => result.meta.as_ref(),
@@ -960,7 +1066,7 @@ pub enum PostToolDecision {
     /// Replace a successful canonical value and recompute projections.
     ReplaceValue {
         /// Replacement canonical value.
-        value: Value,
+        value: CodeJsonValue,
         /// Contexts appended after existing result contexts.
         additional_contexts: Vec<UserMessage>,
     },
@@ -1051,12 +1157,15 @@ pub enum ToolRuntimeError {
         message: String,
     },
     /// A body or post-policy value violated its output declaration.
-    #[error("tool {tool_name:?} returned invalid output: {violations}")]
+    #[error(
+        "tool {tool_name:?} returned invalid output: {}",
+        json_diagnostic(violations)
+    )]
     InvalidToolOutput {
         /// Owning registered name.
         tool_name: String,
         /// Semicolon-separated violations.
-        violations: String,
+        violations: CodeJsonString,
     },
     /// A presentation projector failed.
     #[error("tool {tool_name:?} returned invalid output: output.{projector} failed: {message}")]
@@ -1069,10 +1178,10 @@ pub enum ToolRuntimeError {
         message: String,
     },
     /// The hostile code runtime resolved a program-level failure.
-    #[error("{message}")]
+    #[error("{}", json_diagnostic(message))]
     CodeRunFailed {
         /// Failure kind, message, and captured output for model correction.
-        message: String,
+        message: CodeJsonString,
     },
 }
 
@@ -1407,21 +1516,25 @@ impl ToolRuntime {
 
     async fn execute_run_code(
         self: &Arc<Self>,
-        arguments: Value,
+        arguments: CodeJsonValue,
         execution: ToolRunContext,
         max_parallel: usize,
-    ) -> anyhow::Result<Value> {
+    ) -> anyhow::Result<CodeJsonValue> {
         let code = arguments
             .get("code")
-            .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("invalid code: expected a string"))?
-            .to_owned();
+            .and_then(CodeJsonRef::to_utf16)
+            .map(|units| CodeJsonString::from_utf16(&units))
+            .ok_or_else(|| anyhow::anyhow!("invalid code: expected a string"))?;
         let description = arguments
             .get("description")
-            .and_then(Value::as_str)
+            .and_then(CodeJsonRef::to_utf16)
             .ok_or_else(|| anyhow::anyhow!("invalid description: expected a string"))?;
         anyhow::ensure!(
-            !description.trim().is_empty(),
+            description.iter().any(|unit| !matches!(
+                *unit,
+                0x0009..=0x000d | 0x0020 | 0x00a0 | 0x1680 | 0x2000..=0x200a
+                    | 0x2028 | 0x2029 | 0x202f | 0x205f | 0x3000 | 0xfeff
+            )),
             "invalid description: expected a non-empty string"
         );
         let code_runtime = self.require_code_runtime(self.default_mode)?;
@@ -1441,7 +1554,7 @@ impl ToolRuntime {
             let name = schema.name;
             let binding_scheduler = scheduler.clone();
             functions.insert(
-                name.clone(),
+                name.clone().into(),
                 Arc::new(move |arguments| binding_scheduler.call(name.clone(), arguments))
                     as CodeBindingFunction,
             );
@@ -1453,7 +1566,7 @@ impl ToolRuntime {
                 functions,
                 error_class: Some(CodeBindingErrorClass {
                     name: "ToolCallError".to_owned(),
-                    member_name_property: "toolName".to_owned(),
+                    member_name_property: "toolName".into(),
                 }),
             }],
             signal: Some(run_signal),
@@ -1464,24 +1577,26 @@ impl ToolRuntime {
         let result = run_result?;
         drain_result?;
         if let Some(error) = result.error {
-            let captured = if result.logs.is_empty() {
-                String::new()
-            } else {
-                format!("\nCaptured output:\n{}", result.logs.join("\n"))
-            };
+            let mut message = CodeJsonString::from(format!(
+                "code run failed ({}): ",
+                code_failure_kind(error.kind)
+            ));
+            message.push_utf16(error.message.utf16_units());
+            if !result.logs.is_empty() {
+                message.push_str("\nCaptured output:\n");
+                message.push_utf16(CodeJsonString::join(&result.logs, "\n").utf16_units());
+            }
             return Err(anyhow::Error::new(ToolRuntimeError::CodeRunFailed {
-                message: format!(
-                    "code run failed ({}): {}{captured}",
-                    code_failure_kind(error.kind),
-                    error.message
-                ),
+                message,
             }));
         }
-        let mut output = Map::from_iter([("logs".to_owned(), json!(result.logs))]);
+        let mut output = format!("{{\"logs\":{}", serde_json::to_string(&result.logs)?);
         if let Some(value) = result.value {
-            output.insert("result".to_owned(), value);
+            output.push_str(",\"result\":");
+            output.push_str(value.as_raw());
         }
-        Ok(Value::Object(output))
+        output.push('}');
+        Ok(CodeJsonValue::parse(output)?)
     }
 
     /// Root Cordis context used by registry-wide notifications.
@@ -2094,6 +2209,7 @@ impl ToolRuntime {
             PreToolDecision::Ask { .. } => unreachable!("ask is resolved before guard policy"),
         };
         if let Some(reason) = denial {
+            let reason = CodeJsonString::from(reason);
             let denied = ToolExecutionResult::Failure(ToolExecutionFailure {
                 content: error_content(&reason),
                 error: ToolFailure {
@@ -2354,14 +2470,14 @@ impl ToolRuntime {
     fn create_success_result(
         execution: &ToolExecution,
         tool: &ToolDefinition,
-        value: Value,
+        value: CodeJsonValue,
     ) -> anyhow::Result<ToolExecutionResult> {
         let violations =
-            validate_json_schema_value_at(tool.output.schema.as_ref(), &value, "value");
+            validate_code_json_schema_value_at(tool.output.schema.as_ref(), &value, "value");
         if !violations.is_empty() {
             return Err(anyhow::Error::new(ToolRuntimeError::InvalidToolOutput {
                 tool_name: tool.name.clone(),
-                violations: violations.join("; "),
+                violations: CodeJsonString::join(&violations, "; "),
             }));
         }
         let rendered = catch_unwind(AssertUnwindSafe(|| {
@@ -2720,7 +2836,11 @@ impl RunCodeScheduler {
         }
     }
 
-    fn call(&self, name: String, arguments: Value) -> seekdeep_code_runtime::CodeBindingFuture {
+    fn call(
+        &self,
+        name: String,
+        arguments: CodeJsonValue,
+    ) -> seekdeep_code_runtime::CodeBindingFuture {
         let scheduler = self.clone();
         Box::pin(async move {
             if scheduler.signal.is_aborted() {
@@ -2777,8 +2897,8 @@ enum RunDriverMessage {
 struct RunDispatchRequest {
     sequence: usize,
     name: String,
-    arguments: Value,
-    respond: oneshot::Sender<anyhow::Result<Value>>,
+    arguments: CodeJsonValue,
+    respond: oneshot::Sender<anyhow::Result<CodeJsonValue>>,
 }
 
 enum ParkedDispatch {
@@ -2796,9 +2916,9 @@ struct RunDispatchEntry {
     id: usize,
     sub_call_id: CallId,
     name: String,
-    arguments: Value,
+    arguments: CodeJsonValue,
     input: ToolExecutionInput,
-    respond: Option<oneshot::Sender<anyhow::Result<Value>>>,
+    respond: Option<oneshot::Sender<anyhow::Result<CodeJsonValue>>>,
     mode: Option<ToolExecutionMode>,
     parked: Option<ParkedDispatch>,
 }
@@ -3005,15 +3125,15 @@ impl RunCodeDriver {
         if self.outer.scope_key().is_none() {
             return Ok(());
         }
-        session.append(
+        session.append_json(
             "tool/code-dispatch-start",
-            serde_json::to_value(CodeDispatchStartEventData {
+            CodeJsonValue::parse(serde_json::to_string(&CodeDispatchStartEventData {
                 root_call_id: self.outer.root_call_id.clone(),
                 parent_call_id: self.outer.call_id.clone(),
                 sub_call_id: entry.sub_call_id.clone(),
                 name: entry.name.clone(),
                 arguments: entry.arguments.clone(),
-            })?,
+            })?)?,
             AppendOptions::default(),
         )?;
         Ok(())
@@ -3131,12 +3251,12 @@ impl RunCodeDriver {
     }
 }
 
-fn binding_result(result: &ToolExecutionResult) -> anyhow::Result<Value> {
+fn binding_result(result: &ToolExecutionResult) -> anyhow::Result<CodeJsonValue> {
     match result {
         ToolExecutionResult::Success(success) => Ok(success.value.clone()),
-        ToolExecutionResult::Failure(failure) => {
-            Err(anyhow::anyhow!(failure.error.message.clone()))
-        }
+        ToolExecutionResult::Failure(failure) => Err(anyhow::Error::new(CodeBindingFailure {
+            message: failure.error.message.clone(),
+        })),
     }
 }
 
@@ -3146,7 +3266,7 @@ async fn append_code_dispatch_log(
     outer: &ToolExecution,
     sub_call_id: CallId,
     name: String,
-    arguments: Value,
+    arguments: CodeJsonValue,
     result: ToolExecutionResult,
 ) {
     let content = runtime
@@ -3159,7 +3279,7 @@ async fn append_code_dispatch_log(
             content: result.content().to_vec(),
         })
         .await;
-    let event_data = serde_json::to_value(CodeDispatchEventData {
+    let event_data = serde_json::to_string(&CodeDispatchEventData {
         root_call_id: outer.root_call_id.clone(),
         parent_call_id: outer.call_id.clone(),
         sub_call_id,
@@ -3167,10 +3287,11 @@ async fn append_code_dispatch_log(
         arguments,
         is_error: result.is_error(),
         content,
-    });
+    })
+    .and_then(CodeJsonValue::parse);
     let append_result = event_data.map_err(anyhow::Error::from).and_then(|data| {
         session
-            .append("tool/code-dispatch", data, AppendOptions::default())
+            .append_json("tool/code-dispatch", data, AppendOptions::default())
             .map_err(anyhow::Error::from)
     });
     if let Err(error) = append_result {
@@ -3251,6 +3372,10 @@ fn run_code_definition(
     .as_object()
     .expect("run_code parameters are an object")
     .clone();
+    let execute_parameters = Arc::new(
+        assert_supported_json_schema(Value::Object(parameters.clone()))
+            .expect("run_code parameter schema is supported"),
+    );
     let output_schema = assert_supported_json_schema(json!({
         "type": "object",
         "properties": {
@@ -3261,42 +3386,22 @@ fn run_code_definition(
         "additionalProperties": false,
     }))
     .expect("run_code output schema is supported");
-    ToolDefinition::new(
+    ToolDefinition::new_lossless(
         RUN_CODE_NAME,
         description,
         parameters,
-        ToolOutputDefinition::new(
+        ToolOutputDefinition::new_lossless(
             Arc::new(output_schema),
-            Arc::new(|_, value| {
-                let logs = value
-                    .get("logs")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let rendered = value.get("result").map_or_else(String::new, |result| {
-                    result.as_str().map_or_else(
-                        || serde_json::to_string_pretty(result).unwrap_or_default(),
-                        str::to_owned,
-                    )
-                });
-                let text = [logs, rendered]
-                    .into_iter()
-                    .filter(|part| !part.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                Ok(vec![ContentBlock::Text {
-                    text: if text.is_empty() {
-                        "(run_code completed with no output)".to_owned()
-                    } else {
-                        text
-                    },
-                }])
-            }),
+            Arc::new(|_, value| crate::code_output::render_output(value)),
         ),
         Arc::new(move |arguments, execution| {
+            let violations =
+                validate_code_json_schema_value_at(&execute_parameters, &arguments, "");
+            if !violations.is_empty() {
+                return Box::pin(async move {
+                    Err(anyhow::Error::new(ToolArgsError::new_lossless(violations)))
+                });
+            }
             let runtime = runtime.clone();
             Box::pin(async move {
                 let runtime = runtime.upgrade().ok_or_else(|| {
@@ -3374,10 +3479,41 @@ fn tool_error_result(error: anyhow::Error) -> ToolExecutionResult {
         },
         |error| Some(error.info()),
     );
-    let message = harness_error.map_or_else(
-        || fs_error.map_or_else(|| format!("{error:#}"), |error| error.message.clone()),
-        |error| error.message().to_owned(),
-    );
+    let message = error
+        .chain()
+        .find_map(|cause| {
+            if let Some(runtime_error) = cause.downcast_ref::<ToolRuntimeError>() {
+                match runtime_error {
+                    ToolRuntimeError::CodeRunFailed { message } => return Some(message.clone()),
+                    ToolRuntimeError::InvalidToolOutput {
+                        tool_name,
+                        violations,
+                    } => {
+                        let mut message = CodeJsonString::from(format!(
+                            "tool {tool_name:?} returned invalid output: "
+                        ));
+                        message.push_utf16(violations.utf16_units());
+                        return Some(message);
+                    }
+                    ToolRuntimeError::ToolNotFound { .. } | ToolRuntimeError::Projection { .. } => {
+                    }
+                }
+            }
+            if let Some(arguments) = cause.downcast_ref::<ToolArgsError>() {
+                return Some(arguments.message());
+            }
+            cause
+                .downcast_ref::<CodeBindingFailure>()
+                .map(|failure| failure.message.clone())
+        })
+        .unwrap_or_else(|| {
+            harness_error
+                .map_or_else(
+                    || fs_error.map_or_else(|| format!("{error:#}"), |error| error.message.clone()),
+                    |error| error.message().to_owned(),
+                )
+                .into()
+        });
     drop(error);
     ToolExecutionResult::Failure(ToolExecutionFailure {
         content: error_content(&message),
@@ -3387,10 +3523,14 @@ fn tool_error_result(error: anyhow::Error) -> ToolExecutionResult {
     })
 }
 
-fn error_content(message: &str) -> Vec<ContentBlock> {
-    vec![ContentBlock::Text {
-        text: format!("Error: {message}"),
-    }]
+fn error_content(message: &CodeJsonString) -> Vec<ContentBlock> {
+    let mut text = CodeJsonString::from("Error: ");
+    text.push_utf16(message.utf16_units());
+    vec![ContentBlock::Text { text }]
+}
+
+fn json_diagnostic(message: &CodeJsonString) -> &str {
+    message.as_str().unwrap_or_else(|| message.as_raw())
 }
 
 fn aborted_result(prior: Option<&ToolExecutionResult>) -> ToolExecutionResult {
@@ -3418,10 +3558,11 @@ fn cancellation_failure(
     code: &str,
     additional_contexts: Vec<UserMessage>,
 ) -> ToolExecutionResult {
+    let message = CodeJsonString::from(message);
     ToolExecutionResult::Failure(ToolExecutionFailure {
-        content: error_content(message),
+        content: error_content(&message),
         error: ToolFailure {
-            message: message.to_owned(),
+            message,
             info: Some(ToolErrorInfo {
                 name: "AbortError".to_owned(),
                 code: code.to_owned(),
@@ -3432,24 +3573,24 @@ fn cancellation_failure(
     })
 }
 
-fn failure_message_from_content(content: &[ContentBlock]) -> String {
-    let text = content
+fn failure_message_from_content(content: &[ContentBlock]) -> CodeJsonString {
+    let parts = content
         .iter()
         .map(|block| match block {
             ContentBlock::Text { text } => text.clone(),
-            other => format!("[{} content]", other.block_type()),
+            other => format!("[{} content]", other.block_type()).into(),
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+    let text = CodeJsonString::join(&parts, "\n");
     if text.is_empty() {
-        "tool result blocked by post-execute policy".to_owned()
+        "tool result blocked by post-execute policy".into()
     } else {
         text
     }
 }
 
 fn snapshot_content(content: &[ContentBlock]) -> anyhow::Result<Vec<ContentBlock>> {
-    Ok(serde_json::from_value(serde_json::to_value(content)?)?)
+    Ok(serde_json::from_str(&serde_json::to_string(content)?)?)
 }
 
 fn materialize_result(result: ToolExecutionResult) -> anyhow::Result<ToolExecutionResult> {
@@ -3457,21 +3598,13 @@ fn materialize_result(result: ToolExecutionResult) -> anyhow::Result<ToolExecuti
         ToolExecutionResult::Success(mut success) => {
             success.content = snapshot_content(&success.content)?;
             success.additional_contexts =
-                serde_json::from_value(serde_json::to_value(&success.additional_contexts)?)?;
-            success.meta = success
-                .meta
-                .map(|meta| serde_json::from_value(serde_json::to_value(meta)?))
-                .transpose()?;
+                serde_json::from_str(&serde_json::to_string(&success.additional_contexts)?)?;
             Ok(ToolExecutionResult::Success(success))
         }
         ToolExecutionResult::Failure(mut failure) => {
             failure.content = snapshot_content(&failure.content)?;
             failure.additional_contexts =
-                serde_json::from_value(serde_json::to_value(&failure.additional_contexts)?)?;
-            failure.meta = failure
-                .meta
-                .map(|meta| serde_json::from_value(serde_json::to_value(meta)?))
-                .transpose()?;
+                serde_json::from_str(&serde_json::to_string(&failure.additional_contexts)?)?;
             Ok(ToolExecutionResult::Failure(failure))
         }
     }
@@ -3525,7 +3658,7 @@ mod tests {
                 ),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap_or_default().to_owned(),
+                        text: value.as_str().unwrap_or_default().into(),
                     }])
                 }),
             ),
@@ -3541,7 +3674,7 @@ mod tests {
             call_id: CallId::new("call-1"),
             root_call_id: None,
             name: name.to_owned(),
-            arguments: json!({}),
+            arguments: json!({}).into(),
             agent: None,
             agent_scope: agent,
             agent_session: None,
@@ -3617,7 +3750,7 @@ mod tests {
             parent_call_id: CallId::new("parent"),
             sub_call_id: CallId::new("parent:code:1"),
             name: "read".to_owned(),
-            arguments: json!({"path": "README.md"}),
+            arguments: json!({"path": "README.md"}).into(),
         };
         assert_eq!(
             serde_json::to_value(&start).expect("start event"),
@@ -3638,7 +3771,7 @@ mod tests {
             arguments: start.arguments,
             is_error: false,
             content: vec![ContentBlock::Text {
-                text: "contents".to_owned(),
+                text: "contents".into(),
             }],
         };
         let encoded = serde_json::to_value(&settled).expect("settled event");
@@ -3711,11 +3844,23 @@ mod tests {
 
         async fn run(&self, request: CodeRunRequest) -> anyhow::Result<CodeRunResult> {
             let tools = request.bindings.first().expect("tools namespace");
-            let echo = tools.functions.get("echo").expect("echo binding");
-            let first = echo(json!({ "value": "one" })).await?;
-            let second = echo(json!({ "value": "two" })).await?;
+            let echo = tools
+                .functions
+                .get(&CodeJsonString::from("echo"))
+                .expect("echo binding");
+            let first = echo(json!({ "value": "one" }).into()).await?;
+            let second = echo(json!({ "value": "two" }).into()).await?;
             Ok(CodeRunResult {
-                logs: vec![format!("saw {}", first.as_str().expect("string result"))],
+                logs: vec![
+                    format!(
+                        "saw {}",
+                        first
+                            .as_serde_json()
+                            .and_then(Value::as_str)
+                            .expect("string result")
+                    )
+                    .into(),
+                ],
                 value: Some(second),
                 error: None,
             })
@@ -3737,11 +3882,11 @@ mod tests {
 
         async fn run(&self, _request: CodeRunRequest) -> anyhow::Result<CodeRunResult> {
             Ok(CodeRunResult {
-                logs: vec!["before failure".to_owned()],
+                logs: vec!["before failure".into()],
                 value: None,
                 error: Some(seekdeep_code_runtime::CodeRunFailure {
                     kind: CodeRunFailureKind::Exception,
-                    message: "boom".to_owned(),
+                    message: "boom".into(),
                 }),
             })
         }
@@ -3763,15 +3908,15 @@ mod tests {
         async fn run(&self, request: CodeRunRequest) -> anyhow::Result<CodeRunResult> {
             let probe = request.bindings[0]
                 .functions
-                .get("probe")
+                .get(&CodeJsonString::from("probe"))
                 .expect("probe binding");
             let (first, second) = tokio::join!(
-                probe(json!({ "id": "first" })),
-                probe(json!({ "id": "second" })),
+                probe(json!({ "id": "first" }).into()),
+                probe(json!({ "id": "second" }).into()),
             );
             Ok(CodeRunResult {
                 logs: Vec::new(),
-                value: Some(json!([first?, second?])),
+                value: Some(CodeJsonValue::array(&[first?, second?])),
                 error: None,
             })
         }
@@ -3821,7 +3966,7 @@ mod tests {
         else {
             panic!("success")
         };
-        assert_eq!(success.value, "scoped");
+        assert_eq!(success.value, json!("scoped"));
         scope.dispose().await.expect("dispose");
         assert!(runtime.get("hidden", Some(key)).is_some());
     }
@@ -3838,12 +3983,7 @@ mod tests {
         else {
             panic!("success")
         };
-        assert_eq!(
-            success.content,
-            [ContentBlock::Text {
-                text: "ok".to_owned()
-            }]
-        );
+        assert_eq!(success.content, [ContentBlock::Text { text: "ok".into() }]);
 
         let signal = AbortSignal::default();
         signal.abort();
@@ -4151,10 +4291,13 @@ mod tests {
                 Ok(Value::String(format!(
                     "echo:{}",
                     arguments
+                        .as_serde_json()
+                        .expect("ordinary echo arguments")
                         .get("value")
                         .and_then(Value::as_str)
                         .unwrap_or_default()
-                )))
+                ))
+                .into())
             })
         });
         runtime.register(&root, echo).expect("register echo");
@@ -4168,7 +4311,8 @@ mod tests {
                 arguments: json!({
                     "code": "const result = await tools.echo({ value: 'one' })",
                     "description": "Run the test program",
-                }),
+                })
+                .into(),
                 agent: None,
                 agent_scope: Some(scope),
                 agent_session: Some(session.clone()),
@@ -4186,7 +4330,7 @@ mod tests {
         assert_eq!(
             success.content,
             [ContentBlock::Text {
-                text: "saw echo:one\necho:two".to_owned(),
+                text: "saw echo:one\necho:two".into(),
             }]
         );
         let events = session.events();
@@ -4202,11 +4346,20 @@ mod tests {
                 "tool/code-dispatch",
             ]
         );
-        assert_eq!(events[1].data["subCallId"], json!("call-1:code:1"));
-        assert_eq!(events[1].data["arguments"], json!({ "value": "one" }));
-        assert_eq!(events[3].data["subCallId"], json!("call-1:code:2"));
         assert_eq!(
-            events[3].data["content"],
+            events[1].data.get("subCallId").unwrap().to_owned(),
+            json!("call-1:code:1")
+        );
+        assert_eq!(
+            events[1].data.get("arguments").unwrap().to_owned(),
+            json!({ "value": "one" })
+        );
+        assert_eq!(
+            events[3].data.get("subCallId").unwrap().to_owned(),
+            json!("call-1:code:2")
+        );
+        assert_eq!(
+            events[3].data.get("content").unwrap().to_owned(),
             json!([{ "type": "text", "text": "echo:two" }])
         );
     }
@@ -4231,7 +4384,7 @@ mod tests {
                 call_id: CallId::new("call-1"),
                 root_call_id: None,
                 name: RUN_CODE_NAME.to_owned(),
-                arguments: json!({ "code": "throw new Error()", "description": "Fail" }),
+                arguments: json!({ "code": "throw new Error()", "description": "Fail" }).into(),
                 agent: None,
                 agent_scope: None,
                 agent_session: None,
@@ -4279,13 +4432,16 @@ mod tests {
             let active = body_active.clone();
             let intervals = body_intervals.clone();
             Box::pin(async move {
-                let id = arguments["id"].as_str().unwrap_or_default().to_owned();
+                let id = arguments.as_serde_json().expect("ordinary probe arguments")["id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
                 assert_eq!(active.fetch_add(1, Ordering::AcqRel), 0);
                 intervals.lock().push(format!("enter:{id}"));
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 intervals.lock().push(format!("exit:{id}"));
                 active.fetch_sub(1, Ordering::AcqRel);
-                Ok(Value::String(id))
+                Ok(Value::String(id).into())
             })
         });
         runtime.register(&root, probe).expect("register probe");
@@ -4294,7 +4450,7 @@ mod tests {
                 call_id: CallId::new("call-1"),
                 root_call_id: None,
                 name: RUN_CODE_NAME.to_owned(),
-                arguments: json!({ "code": "Promise.all([])", "description": "Probe" }),
+                arguments: json!({ "code": "Promise.all([])", "description": "Probe" }).into(),
                 agent: None,
                 agent_scope: None,
                 agent_session: None,
@@ -4339,7 +4495,7 @@ mod tests {
                     maximum.fetch_max(count, Ordering::AcqRel);
                     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                     active.fetch_sub(1, Ordering::AcqRel);
-                    Ok(arguments["id"].clone())
+                    Ok(arguments.get("id").expect("probe id").to_owned())
                 })
             });
             runtime.register(&root, probe).expect("register probe");
@@ -4349,7 +4505,7 @@ mod tests {
                     call_id: CallId::new("call-1"),
                     root_call_id: None,
                     name: RUN_CODE_NAME.to_owned(),
-                    arguments: json!({ "code": "Promise.all([])", "description": "Probe" }),
+                    arguments: json!({ "code": "Promise.all([])", "description": "Probe" }).into(),
                     agent: None,
                     agent_scope: None,
                     agent_session: None,
@@ -4395,8 +4551,11 @@ mod tests {
             Box::pin(async move {
                 Ok(json!(format!(
                     "echo:{}",
-                    arguments["value"].as_str().unwrap_or_default()
-                )))
+                    arguments.as_serde_json().expect("ordinary echo arguments")["value"]
+                        .as_str()
+                        .unwrap_or_default()
+                ))
+                .into())
             })
         });
         runtime.register(&root, echo).expect("register echo");
@@ -4409,7 +4568,7 @@ mod tests {
                 arguments: json!({
                     "code": "const first = await tools.echo({ value: 'one' }); console.log('saw', first); return await tools.echo({ value: 'two' });",
                     "description": "Exercise the real worker",
-                }),
+                }).into(),
                 agent: None,
                 agent_scope: None,
                 agent_session: None,
@@ -4438,7 +4597,7 @@ mod tests {
             let body_events = body_events.clone();
             Box::pin(async move {
                 body_events.lock().push("body");
-                Ok(json!("body"))
+                Ok(json!("body").into())
             })
         });
         runtime.register(&root, tool).expect("register");

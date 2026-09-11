@@ -143,7 +143,7 @@ pub fn fold_request_header(
         let Some(header) = event.data.get("header") else {
             continue;
         };
-        if let Ok(header) = serde_json::from_value::<EpochHeader>(header.clone()) {
+        if let Ok(header) = header.deserialize::<EpochHeader>() {
             state = Some(canonical_header(header));
         }
     }
@@ -266,7 +266,7 @@ mod tests {
             event_type: "request/header".to_owned(),
             seq,
             time: i64::try_from(seq).expect("test seq"),
-            data: Value::Object(data),
+            data: Value::Object(data).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -285,7 +285,7 @@ mod tests {
             event_type: "turn/start".to_owned(),
             seq: 0,
             time: 1,
-            data: json!({"turn": 1}),
+            data: json!({"turn": 1}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

@@ -216,9 +216,7 @@ async fn run(harness: &Harness, task: &str) {
         .loop_agent
         .agent
         .followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: task.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: task.into() }],
             MessageSource::user(),
         ))
         .expect("followup");
@@ -247,15 +245,13 @@ fn last_event<'a>(events: &'a [SessionEvent], event_type: &str) -> &'a SessionEv
 }
 
 fn result_text(event: &SessionEvent) -> String {
-    event
-        .data
-        .pointer("/message/content/0/content")
-        .and_then(Value::as_array)
+    event.data["message"]["content"][0]["content"]
+        .as_array()
         .into_iter()
         .flatten()
         .filter_map(|block| {
-            (block.get("type").and_then(Value::as_str) == Some("text"))
-                .then(|| block.get("text").and_then(Value::as_str))
+            (block["type"] == "text")
+                .then(|| block["text"].as_str())
                 .flatten()
         })
         .collect()
@@ -283,8 +279,8 @@ async fn foreground_call_and_nonzero_exit_round_trip_through_the_agent_log_and_h
     assert_eq!(event(&events, "tool/call").data["name"], "bash");
     let result = event(&events, "tool/result");
     assert_eq!(
-        result.data.pointer("/message/content/0/isError"),
-        Some(&Value::Bool(false))
+        result.data["message"]["content"][0]["isError"].as_bool(),
+        Some(false)
     );
     assert_eq!(result_text(result), "integration-ok\n");
     {
@@ -317,8 +313,8 @@ async fn foreground_call_and_nonzero_exit_round_trip_through_the_agent_log_and_h
     let events = failed.session.events();
     let result = event(&events, "tool/result");
     assert_eq!(
-        result.data.pointer("/message/content/0/isError"),
-        Some(&Value::Bool(false))
+        result.data["message"]["content"][0]["isError"].as_bool(),
+        Some(false)
     );
     assert!(result_text(result).contains("[exit code: 9]"));
 }
@@ -408,8 +404,7 @@ async fn background_completion_wakes_idle_agent_and_job_output_collects_the_same
         "started background job bash-1"
     );
     assert!(!initial.iter().any(|event| {
-        event.event_type == "user/message"
-            && event.data.pointer("/source/kind") == Some(&json!("plugin"))
+        event.event_type == "user/message" && event.data["source"]["kind"] == "plugin"
     }));
 
     std::fs::write(&sentinel, "").expect("release job");
@@ -417,8 +412,7 @@ async fn background_completion_wakes_idle_agent_and_job_output_collects_the_same
         loop {
             let events = harness.session.events();
             let notice = events.iter().any(|event| {
-                event.event_type == "user/message"
-                    && event.data.pointer("/source/kind") == Some(&json!("plugin"))
+                event.event_type == "user/message" && event.data["source"]["kind"] == "plugin"
             });
             let output = events
                 .iter()
@@ -445,15 +439,11 @@ async fn background_completion_wakes_idle_agent_and_job_output_collects_the_same
     let notice = events
         .iter()
         .find(|event| {
-            event.event_type == "user/message"
-                && event.data.pointer("/source/kind") == Some(&json!("plugin"))
+            event.event_type == "user/message" && event.data["source"]["kind"] == "plugin"
         })
         .expect("completion notice");
-    assert_eq!(
-        notice.data.pointer("/source/plugin"),
-        Some(&json!("tool-jobs"))
-    );
-    assert_eq!(notice.data.pointer("/source/form"), Some(&json!("notice")));
+    assert_eq!(notice.data["source"]["plugin"], "tool-jobs");
+    assert_eq!(notice.data["source"]["form"], "notice");
     let final_result = last_event(&events, "tool/result");
     assert!(result_text(final_result).contains("bg-ok"));
     assert!(result_text(final_result).contains("[status: completed, exit code: 0]"));

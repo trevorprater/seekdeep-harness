@@ -20,7 +20,7 @@ use crate::{
 #[wasm_bindgen(js_name = ConversationNodeAssembler)]
 pub struct WasmConversationNodeAssembler {
     assembler: ConversationNodeAssembler,
-    chat_cache: RefCell<Option<(Rc<serde_json::Value>, JsValue)>>,
+    chat_cache: RefCell<Option<(Rc<crate::ConversationValue>, JsValue)>>,
 }
 
 #[wasm_bindgen(js_class = ConversationNodeAssembler)]
@@ -273,7 +273,7 @@ fn event_input(value: &JsValue) -> Result<ConversationEventInput, JsValue> {
         view: if view.is_undefined() {
             None
         } else {
-            Some(std::rc::Rc::new(crate::wasm_session::js_to_json(&view)?))
+            Some(std::rc::Rc::new(crate::wasm_value_bridge::js_to_lossless_value(&view)?))
         },
     })
 }

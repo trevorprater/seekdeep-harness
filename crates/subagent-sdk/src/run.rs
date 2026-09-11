@@ -6,7 +6,7 @@ use std::sync::{
 };
 
 use parking_lot::Mutex;
-use seekdeep_core::session::{SessionEvent, SessionId};
+use seekdeep_core::session::{JsonValue, SessionEvent, SessionId};
 use seekdeep_llm::{AbortSignal, ContentBlock};
 use seekdeep_sdk_client::{
     DeepSeekHarness, DeepSeekHarnessOptions, HarnessClientOptions, RunOptions,
@@ -56,10 +56,10 @@ pub struct SdkRunSpec {
 
 /// Maps a child's last durable turn reason to the shared subagent reason.
 #[must_use]
-pub fn sdk_stop_reason(reason: Option<&serde_json::Value>) -> SubagentStopReason {
+pub fn sdk_stop_reason(reason: Option<&JsonValue>) -> SubagentStopReason {
     match reason
-        .and_then(|reason| reason.get("kind"))
-        .and_then(serde_json::Value::as_str)
+        .and_then(|reason| reason.get_value("kind"))
+        .and_then(JsonValue::as_str)
     {
         Some("completed") => SubagentStopReason::Completed,
         Some("max-tokens") => SubagentStopReason::MaxTokens,
@@ -218,19 +218,17 @@ pub async fn start_sdk_run(
             if notification.method != "session.event"
                 || notification
                     .params
-                    .get("sessionId")
-                    .and_then(serde_json::Value::as_str)
+                    .get_value("sessionId")
+                    .and_then(JsonValue::as_str)
                     != Some(observed_session.as_str())
             {
                 return;
             }
-            if let Ok(event) = serde_json::from_value::<SessionEvent>(
-                notification
-                    .params
-                    .get("event")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null),
-            ) {
+            if let Some(event) = notification
+                .params
+                .get("event")
+                .and_then(|event| event.deserialize::<SessionEvent>().ok())
+            {
                 observed_fold.lock().push(&event);
             }
         },
@@ -260,7 +258,7 @@ pub async fn start_sdk_run(
                         .iter()
                         .rev()
                         .find(|event| event.event_type == "turn/end")
-                        .and_then(|event| event.data.get("reason"));
+                        .and_then(|event| event.data.get_value("reason"));
                     SubagentResult {
                         output,
                         structured: None,

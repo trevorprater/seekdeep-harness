@@ -160,8 +160,8 @@ fn fence_internal_dispatch(
     let proposed_mode = event
         .data
         .get("mode")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("undefined");
+        .and_then(|value| value.deserialize::<String>().ok())
+        .unwrap_or_else(|| "undefined".to_owned());
     if proposed_mode == current_mode.as_str() || !services.terminals.has_owner_activity(&owner) {
         return Ok(());
     }

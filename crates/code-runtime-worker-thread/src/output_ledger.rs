@@ -1,10 +1,12 @@
 //! Combined logs/completion/failure output admission.
 
-use seekdeep_code_runtime::{CodeRunFailure, CodeRunFailureKind, CodeRunResult};
-use serde_json::Value;
+use seekdeep_code_runtime::{
+    CodeJsonString, CodeJsonValue, CodeRunFailure, CodeRunFailureKind, CodeRunResult,
+};
 
 use crate::output_json::{
-    json_string_bytes_up_to, json_value_bytes_up_to, truncate_json_string_bytes,
+    code_string_bytes_up_to, json_string_bytes_up_to, truncate_code_string_bytes,
+    truncate_json_string_bytes,
 };
 
 /// Result of offering one worker-side log string.
@@ -108,26 +110,31 @@ impl OutputLedger {
     }
 
     /// Admits one exact log or returns false without mutating the ledger.
-    pub fn admit(&mut self, text: &str, sink: &mut Vec<String>) -> bool {
+    pub fn admit(&mut self, text: &CodeJsonString, sink: &mut Vec<CodeJsonString>) -> bool {
         let separator = usize::from(self.entries > 0);
         let available = self
             .max_bytes
             .saturating_sub(self.bytes.saturating_add(separator));
-        let Some(string_bytes) = json_string_bytes_up_to(text, available) else {
+        let Some(string_bytes) = code_string_bytes_up_to(text, available) else {
             return false;
         };
         self.bytes += string_bytes + separator;
         self.entries += 1;
-        sink.push(text.to_owned());
+        sink.push(text.clone());
         true
     }
 
     /// Finalizes a successful run against the remaining combined cap.
     #[must_use]
-    pub fn success(&self, logs: Vec<String>, value: Option<Value>) -> CodeRunResult {
-        if value.as_ref().is_some_and(|value| {
-            json_value_bytes_up_to(value, self.max_bytes.saturating_sub(self.bytes)).is_none()
-        }) {
+    pub fn success(
+        &self,
+        logs: Vec<CodeJsonString>,
+        value: Option<CodeJsonValue>,
+    ) -> CodeRunResult {
+        if value
+            .as_ref()
+            .is_some_and(|value| value.as_raw().len() > self.max_bytes.saturating_sub(self.bytes))
+        {
             return self.limit(&logs);
         }
         CodeRunResult {
@@ -140,8 +147,8 @@ impl OutputLedger {
     /// Finalizes a failure, giving output-limit precedence when its diagnostic
     /// does not fit the remaining combined cap.
     #[must_use]
-    pub fn failure(&self, logs: Vec<String>, error: CodeRunFailure) -> CodeRunResult {
-        if json_string_bytes_up_to(&error.message, self.max_bytes.saturating_sub(self.bytes))
+    pub fn failure(&self, logs: Vec<CodeJsonString>, error: CodeRunFailure) -> CodeRunResult {
+        if code_string_bytes_up_to(&error.message, self.max_bytes.saturating_sub(self.bytes))
             .is_none()
         {
             return self.limit(&logs);
@@ -156,7 +163,7 @@ impl OutputLedger {
     /// Builds the explicit overflow result, retaining the longest ordered log
     /// prefix while reserving space for the fixed diagnostic.
     #[must_use]
-    pub fn limit(&self, logs: &[String]) -> CodeRunResult {
+    pub fn limit(&self, logs: &[CodeJsonString]) -> CodeRunResult {
         let full_message = format!("outer output exceeded {} bytes", self.max_bytes);
         let message_bytes = full_message.len().saturating_add(2);
         let log_budget = self.max_bytes.saturating_sub(message_bytes);
@@ -165,14 +172,14 @@ impl OutputLedger {
         for text in logs {
             let separator = usize::from(!retained.is_empty());
             let available = log_budget.saturating_sub(retained_bytes.saturating_add(separator));
-            if let Some(string_bytes) = json_string_bytes_up_to(text, available) {
+            if let Some(string_bytes) = code_string_bytes_up_to(text, available) {
                 retained.push(text.clone());
                 retained_bytes += string_bytes + separator;
                 continue;
             }
-            let prefix = truncate_json_string_bytes(text, available);
+            let prefix = truncate_code_string_bytes(text, available);
             if !prefix.is_empty()
-                && let Some(prefix_bytes) = json_string_bytes_up_to(&prefix, available)
+                && let Some(prefix_bytes) = code_string_bytes_up_to(&prefix, available)
             {
                 retained.push(prefix);
                 retained_bytes += prefix_bytes + separator;
@@ -186,7 +193,7 @@ impl OutputLedger {
             logs: retained,
             error: Some(CodeRunFailure {
                 kind: CodeRunFailureKind::OutputLimit,
-                message,
+                message: message.into(),
             }),
         }
     }
@@ -195,6 +202,8 @@ impl OutputLedger {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+
+    use crate::output_json::json_value_bytes_up_to;
 
     use super::*;
 
@@ -225,19 +234,19 @@ mod tests {
     fn ledger_combines_logs_value_and_diagnostic_exactly() {
         let mut ledger = OutputLedger::new(20);
         let mut logs = Vec::new();
-        assert!(ledger.admit("abc", &mut logs));
+        assert!(ledger.admit(&"abc".into(), &mut logs));
         assert_eq!(
-            ledger.success(logs.clone(), Some(json!(1))).value,
-            Some(json!(1))
+            ledger.success(logs.clone(), Some(json!(1).into())).value,
+            Some(json!(1).into())
         );
-        let over = ledger.success(logs.clone(), Some(json!("x".repeat(100))));
+        let over = ledger.success(logs.clone(), Some(json!("x".repeat(100)).into()));
         assert_eq!(over.error.unwrap().kind, CodeRunFailureKind::OutputLimit);
 
         let failure = ledger.failure(
             logs,
             CodeRunFailure {
                 kind: CodeRunFailureKind::Exception,
-                message: "x".repeat(100),
+                message: "x".repeat(100).into(),
             },
         );
         assert_eq!(failure.error.unwrap().kind, CodeRunFailureKind::OutputLimit);
@@ -246,7 +255,7 @@ mod tests {
     #[test]
     fn limit_retains_only_a_prefix_that_leaves_room_for_message() {
         let ledger = OutputLedger::new(48);
-        let result = ledger.limit(&["a".repeat(100)]);
+        let result = ledger.limit(&["a".repeat(100).into()]);
         let error = result.error.unwrap();
         assert_eq!(error.kind, CodeRunFailureKind::OutputLimit);
         assert!(

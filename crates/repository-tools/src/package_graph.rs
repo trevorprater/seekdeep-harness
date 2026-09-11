@@ -33,6 +33,19 @@ pub fn collect_package_graph(
     group_order: &[String],
     gate: &str,
 ) -> anyhow::Result<Vec<PackageGraphNode>> {
+    collect_package_graph_with_scope(root, group_order, gate, PACKAGE_SCOPE)
+}
+
+/// Reads a graph from an explicitly selected package identity namespace.
+///
+/// # Errors
+/// Returns the same manifest and dependency diagnostics as [`collect_package_graph`].
+pub fn collect_package_graph_with_scope(
+    root: &Path,
+    group_order: &[String],
+    gate: &str,
+    package_scope: &str,
+) -> anyhow::Result<Vec<PackageGraphNode>> {
     let mut manifests = package_manifests(root)?;
     manifests.sort_by(|left, right| left.encode_utf16().cmp(right.encode_utf16()));
     let mut packages = Vec::new();
@@ -43,7 +56,7 @@ pub fn collect_package_graph(
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow::anyhow!("{manifest_path}: package name must be a string"))?;
-        let Some(short) = name.strip_prefix(PACKAGE_SCOPE) else {
+        let Some(short) = name.strip_prefix(package_scope) else {
             continue;
         };
         let parts = manifest_path.split('/').collect::<Vec<_>>();
@@ -55,7 +68,7 @@ pub fn collect_package_graph(
             .and_then(Value::as_object)
             .into_iter()
             .flatten()
-            .filter_map(|(dependency, _)| dependency.strip_prefix(PACKAGE_SCOPE).map(str::to_owned))
+            .filter_map(|(dependency, _)| dependency.strip_prefix(package_scope).map(str::to_owned))
             .collect::<Vec<_>>();
         dependencies.sort_by(|left, right| left.encode_utf16().cmp(right.encode_utf16()));
         packages.push(PackageGraphNode {

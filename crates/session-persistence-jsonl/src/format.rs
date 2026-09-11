@@ -3,8 +3,10 @@
 use std::path::{Path, PathBuf};
 
 use seekdeep_core::{
-    chunk_rows::{decode_storage_record, pack_chunk_runs},
-    session::{SESSION_FORMAT_VERSION, SessionEvent, SessionHeader, SessionId, SessionOrigin},
+    chunk_rows::{decode_storage_record_json, pack_chunk_runs},
+    session::{
+        JsonValue, SESSION_FORMAT_VERSION, SessionEvent, SessionHeader, SessionId, SessionOrigin,
+    },
 };
 use seekdeep_session_persistence::{SessionFormatUnsupportedError, session_format_version_refusal};
 use serde::{Deserialize, Serialize};
@@ -513,10 +515,10 @@ impl SessionLogScanner {
     fn consume_event_line(&mut self, line: &[u8], end_byte: usize) -> anyhow::Result<()> {
         self.event_line += 1;
         let decoded = (|| -> anyhow::Result<Vec<SessionEvent>> {
-            let value: Value = serde_json::from_slice(line)?;
-            decode_storage_record(value)?
+            let value: JsonValue = serde_json::from_slice(line)?;
+            decode_storage_record_json(value)?
                 .into_iter()
-                .map(|value| serde_json::from_value(value).map_err(Into::into))
+                .map(|value| value.deserialize().map_err(Into::into))
                 .collect()
         })();
         let Ok(decoded) = decoded else {
@@ -866,7 +868,10 @@ mod tests {
             [0, 1, 2, 3, 4]
         );
         assert_eq!(scanned.events[2].event_type, "assistant/chunk");
-        assert_eq!(scanned.events[2].data["chunk"]["text"], "b");
+        assert_eq!(
+            scanned.events[2].data.as_serde_json().unwrap()["chunk"]["text"],
+            "b"
+        );
 
         let malformed = serde_json::json!({
             "type": "text-chunks",

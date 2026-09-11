@@ -4,7 +4,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use seekdeep_agent::Agent;
-use seekdeep_core::session::{AppendOptions, Session, SurfaceOp};
+use seekdeep_core::session::{AppendOptions, JsonValue, Session, SurfaceOp};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, Message, UserMessage};
 use seekdeep_scope::ScopeKey;
 use seekdeep_tools::{
@@ -405,11 +405,11 @@ where
     Ok(())
 }
 
-fn parse_arguments(raw: &str) -> Value {
+fn parse_arguments(raw: &str) -> JsonValue {
     if raw.is_empty() {
-        return json!({});
+        return json!({}).into();
     }
-    serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_owned()))
+    JsonValue::parse(raw.to_owned()).unwrap_or_else(|_| Value::String(raw.to_owned()).into())
 }
 
 fn append_tool_call(
@@ -442,10 +442,10 @@ fn append_skipped_tool_call(
     let call_seq = append_tool_call(session, turn, step, block)?;
     let result = ToolExecutionResult::Failure(ToolExecutionFailure {
         content: vec![ContentBlock::Text {
-            text: "Error: tool call aborted before dispatch".to_owned(),
+            text: "Error: tool call aborted before dispatch".into(),
         }],
         error: ToolFailure {
-            message: "tool call aborted before dispatch".to_owned(),
+            message: "tool call aborted before dispatch".into(),
             info: Some(seekdeep_tools::ToolErrorInfo {
                 name: "AbortError".to_owned(),
                 code: TOOL_ABORTED_BEFORE_DISPATCH.to_owned(),
@@ -465,23 +465,37 @@ fn append_tool_result(
     result: &ToolExecutionResult,
     call_seq: u64,
 ) -> anyhow::Result<()> {
-    let message = Message::tool_result(&block.id, result.content().to_vec(), result.is_error());
-    let mut data = serde_json::Map::new();
-    data.insert("turn".to_owned(), Value::from(turn));
-    data.insert("step".to_owned(), Value::from(step));
-    data.insert("message".to_owned(), serde_json::to_value(message)?);
-    if let Some(info) = result.error().and_then(|error| error.info.as_ref()) {
-        data.insert(
-            "error".to_owned(),
-            json!({"name": info.name, "code": info.code}),
-        );
+    #[derive(serde::Serialize)]
+    struct ErrorData<'a> {
+        name: &'a str,
+        code: &'a str,
     }
-    if let Some(meta) = result.meta() {
-        data.insert("meta".to_owned(), meta.clone());
+    #[derive(serde::Serialize)]
+    struct ResultData<'a> {
+        turn: u64,
+        step: u64,
+        message: Message,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<ErrorData<'a>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meta: Option<&'a JsonValue>,
     }
-    session.append(
+    let data = ResultData {
+        turn,
+        step,
+        message: Message::tool_result(&block.id, result.content().to_vec(), result.is_error()),
+        error: result
+            .error()
+            .and_then(|error| error.info.as_ref())
+            .map(|info| ErrorData {
+                name: &info.name,
+                code: &info.code,
+            }),
+        meta: result.meta(),
+    };
+    session.append_json(
         "tool/result",
-        Value::Object(data),
+        JsonValue::from_serialize(&data)?,
         AppendOptions {
             surface_op: Some(SurfaceOp::append()),
             source_event_seqs: Some(vec![call_seq]),
@@ -529,7 +543,7 @@ mod tests {
                 ),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap_or_default().to_owned(),
+                        text: value.as_str().unwrap_or_default().into(),
                     }])
                 }),
             ),
@@ -569,10 +583,84 @@ mod tests {
                     .get("message")?
                     .get("source")?
                     .get("callId")?
-                    .as_str()
-                    .map(str::to_owned)
+                    .deserialize::<String>()
+                    .ok()
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn scheduled_tool_arguments_and_results_keep_javascript_string_code_units() {
+        let context = seekdeep_cordis::Context::new();
+        let runtime =
+            ToolRuntime::new(context.clone(), ToolRuntimeConfig::default()).expect("runtime");
+        let raw_arguments = r#"{"\ud800":"\udfff","payload":"\udfff x \ud800"}"#;
+        let expected_arguments = JsonValue::parse(raw_arguments.to_owned()).expect("JSON");
+        let seen = Arc::new(Mutex::new(None));
+        let observed = seen.clone();
+        runtime
+            .register(
+                &context,
+                ToolDefinition::new_lossless(
+                    "echo",
+                    "Return the exact payload string.",
+                    Map::from_iter([("type".to_owned(), Value::String("object".to_owned()))]),
+                    ToolOutputDefinition::new_lossless(
+                        Arc::new(assert_supported_json_schema(json!({"type":"string"})).unwrap()),
+                        Arc::new(|_, value| {
+                            Ok(vec![ContentBlock::Text {
+                                text: value.deserialize()?,
+                            }])
+                        }),
+                    ),
+                    Arc::new(move |arguments, _| {
+                        *observed.lock() = Some(arguments.clone());
+                        Box::pin(async move {
+                            Ok(arguments.get("payload").expect("payload").to_owned())
+                        })
+                    }),
+                ),
+            )
+            .expect("register");
+        let id = SessionId::new("surrogate-tool-result");
+        let session = Session::create(&id, None, None).expect("session");
+        execute_tool_calls(
+            ToolCallBatch {
+                runtime: &runtime,
+                session: &session,
+                agent: None,
+                agent_scope: None,
+                turn: 1,
+                step: 1,
+                tool_calls: &[ToolCall {
+                    id: CallId::new("call-echo"),
+                    name: "echo".to_owned(),
+                    arguments: raw_arguments.to_owned(),
+                }],
+                signal: &AbortSignal::default(),
+                max_parallel_tool_calls: 1,
+            },
+            |_| Ok(()),
+        )
+        .await
+        .expect("scheduled execution");
+        assert_eq!(seen.lock().as_ref(), Some(&expected_arguments));
+        let wire = serde_json::to_string(&session.events()).expect("durable events");
+        let restored = Session::create(
+            &id,
+            Some(serde_json::from_str(&wire).expect("raw durable events")),
+            Some(session.header().clone()),
+        )
+        .expect("restore");
+        let messages = restored.derive_messages();
+        assert_eq!(messages, session.derive_messages());
+        let ContentBlock::ToolResult { content, .. } = &messages[0].content()[0] else {
+            panic!("tool result wrapper is missing");
+        };
+        let ContentBlock::Text { text } = &content[0] else {
+            panic!("tool result did not retain its text block");
+        };
+        assert_eq!(text.to_utf16(), vec![0xdfff, 0x20, 0x78, 0x20, 0xd800]);
     }
 
     #[tokio::test]
@@ -1074,7 +1162,7 @@ mod tests {
                         content: None,
                         additional_contexts: vec![UserMessage::new(
                             vec![ContentBlock::Text {
-                                text: execution.call_id.as_str().to_owned(),
+                                text: execution.call_id.as_str().into(),
                             }],
                             seekdeep_llm::MessageSource::plugin("test"),
                         )],
@@ -1105,7 +1193,9 @@ mod tests {
                     let ContentBlock::Text { text } = &message.content()[0] else {
                         anyhow::bail!("unexpected context")
                     };
-                    task_accepted.lock().push(text.clone());
+                    task_accepted
+                        .lock()
+                        .push(text.as_str().expect("fixture context").to_owned());
                     Ok(())
                 },
             )

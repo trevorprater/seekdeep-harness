@@ -2,9 +2,9 @@
 
 [English](shell.md) | 中文
 
-bash 执行 seam 分为 Service Definition（[seekdeep-shell](../../packages/shell/shell)，`ctx.shell`）、Service Provider（[seekdeep-bash-local](../../packages/shell/bash-local) 与 [seekdeep-bash-sandbox](../../packages/shell/bash-sandbox)）和 Consumer（[seekdeep-tool-bash](../../packages/shell/tool-bash)，即 `bash` schema）。通用后台任务的 job id、所有权与控制位于 [jobs.md](jobs.md)；本 seam 返回一个不含任务概念的进程句柄。原始进程组机制封装在[子进程 seam](subprocess.md)之后。
+bash 执行 seam 分为 Service Definition（[seekdeep-shell](../../crates/shell)，`ctx.shell`）、Service Provider（[seekdeep-bash-local](../../packages/shell/bash-local) 与 [seekdeep-bash-sandbox](../../packages/shell/bash-sandbox)）和 Consumer（[seekdeep-tool-bash](../../packages/shell/tool-bash)，即 `bash` schema）。通用后台任务的 job id、所有权与控制位于 [jobs.md](jobs.md)；本 seam 返回一个不含任务概念的进程句柄。原始进程组机制封装在[子进程 seam](subprocess.md)之后。
 
-源码：[`packages/shell/shell/src/types.ts`](../../packages/shell/shell/src/types.ts)
+源码：[`packages/shell/shell/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/shell/src/types.ts)
 
 ## 受管 shell 环境命名空间
 
@@ -140,7 +140,7 @@ interface ShellRunResult {
 
 ## 文件沙箱：`ShellSandboxInfo`
 
-使用沙箱的执行器通过 `ShellExecutor.sandboxMode` 暴露其已配置的模式回退值。工具层请求 [`@seekdeep-ai/seekdeep-sandbox-policy`](../../packages/sandbox/sandbox-policy/README.md)，把每个调用会话的持久 `sandbox/mode` 覆盖值与不可变 cwd 解析为 `ShellExecRequest.sandboxPolicy`；经用户批准、严格更宽松的调用只替换模式。模式/root/enforcement 词汇归 [`@seekdeep-ai/seekdeep-sandbox` 沙箱 seam](sandbox.md) 所有；模式仅管辖文件效果。
+使用沙箱的执行器通过 `ShellExecutor.sandboxMode` 暴露其已配置的模式回退值。工具层请求 [`@seekdeep-ai/seekdeep-sandbox-policy`](../../crates/sandbox-policy/README.md)，把每个调用会话的持久 `sandbox/mode` 覆盖值与不可变 cwd 解析为 `ShellExecRequest.sandboxPolicy`；经用户批准、严格更宽松的调用只替换模式。模式/root/enforcement 词汇归 [`@seekdeep-ai/seekdeep-sandbox` 沙箱 seam](sandbox.md) 所有；模式仅管辖文件效果。
 
 沙箱化运行会报告其模式、保守的拒绝分类与强制执行完整度。`runnerFailed` 标记命令运行前沙箱 runner 已失败；前台执行会抛出 `SANDBOX_UNAVAILABLE`，而已结束的后台进程只能通过其事实通道报告。
 
@@ -266,7 +266,7 @@ abstract run(spec: ShellExecSpec): Promise<ShellRunResult>
 abstract start(spec: ShellExecSpec): ShellProcess
 ```
 
-Source: [`packages/shell/shell/src/index.ts:65`](../../packages/shell/shell/src/index.ts)
+Source: [`packages/shell/shell/src/index.ts:65`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/shell/src/index.ts)
 
 <a id="ctxshellenv--shellenvregistry"></a>
 
@@ -299,5 +299,5 @@ list(): BashEnvVariableInfo[]
 
 Types: [SeekdeepEnvironment](subprocess.md) · [ToolExecution](tools.md)
 
-Source: [`packages/shell/shell-env/src/index.ts:89`](../../packages/shell/shell-env/src/index.ts)
+Source: [`packages/shell/shell-env/src/index.ts:89`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/shell-env/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -23,6 +23,8 @@ use seekdeep_client_runtime::{
 use seekdeep_identity::{MessageId, RpcId, SessionId};
 use serde_json::{Map, Value, json};
 
+include!("support/conversation_json.rs");
+
 #[derive(Default)]
 struct ManualScheduler {
     microtasks: RefCell<VecDeque<Box<dyn FnOnce()>>>,
@@ -130,18 +132,20 @@ struct MessageBuilder {
 }
 
 impl MessageBuilder {
-    fn snapshot(&self) -> Rc<Value> {
+    fn snapshot(&self) -> Rc<seekdeep_client_runtime::ConversationValue> {
         let nodes = self
             .nodes
             .iter()
             .map(|(key, node)| (key.clone(), node.data.as_ref().clone()))
-            .collect::<Map<_, _>>();
-        Rc::new(json!({"order":self.order,"nodes":nodes}))
+            .collect::<Vec<_>>();
+        Rc::new(
+            conversation_json!({"order":self.order,"nodes":seekdeep_client_runtime::ConversationValue::object(nodes)}),
+        )
     }
 }
 
 impl AssemblerViewBuilder for MessageBuilder {
-    fn empty(&self) -> Rc<Value> {
+    fn empty(&self) -> Rc<seekdeep_client_runtime::ConversationValue> {
         self.snapshot()
     }
 
@@ -149,7 +153,7 @@ impl AssemblerViewBuilder for MessageBuilder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<seekdeep_client_runtime::ConversationValue>, ConversationAssemblerError> {
         self.nodes = nodes
             .iter()
             .map(|node| (node.key.clone(), node.clone()))
@@ -162,7 +166,7 @@ impl AssemblerViewBuilder for MessageBuilder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<seekdeep_client_runtime::ConversationValue>, ConversationAssemblerError> {
         for node in nodes {
             if !self.nodes.contains_key(&node.key) {
                 self.order.push(node.key.clone());
@@ -189,7 +193,7 @@ fn conversation() -> ConversationNodeAssembler {
             |_context: &ConversationNodeContext,
              accepted: &Rc<ConversationMatch>,
              _reader: &mut dyn ConversationContextReader| {
-                Ok(Some(Rc::new(json!({
+                Ok(Some(Rc::new(conversation_json!({
                     "seq":accepted.event.seq,
                     "view":accepted.view.as_deref().cloned()
                 }))))
@@ -204,7 +208,7 @@ fn conversation() -> ConversationNodeAssembler {
                 kind: context.kind.clone(),
                 id: context.id.clone(),
                 target: "chat".to_owned(),
-                data: Rc::new(json!({
+                data: Rc::new(conversation_json!({
                     "kind":"message",
                     "seq":context.state.as_ref().unwrap()["seq"],
                     "view":context.state.as_ref().unwrap()["view"]
@@ -926,7 +930,11 @@ fn cold_live_events_are_ignored_and_history_and_mux_views_reach_definitions() {
     let mut pool = LocalPool::new();
     let transport = Rc::new(ScriptedTransport::default());
     let mut history_entry = entry(1, "message", json!({}));
-    history_entry.view = Some(Rc::new(json!({"source":"history"})));
+    let history_view = seekdeep_client_runtime::ConversationValue::parse(
+        r#"{"source":"history","text":"\ud800","\udfff":{"nested":"\ud800"}}"#.to_owned(),
+    )
+    .unwrap();
+    history_entry.view = Some(Rc::new(history_view.clone()));
     transport
         .histories
         .borrow_mut()
@@ -953,13 +961,19 @@ fn cold_live_events_are_ignored_and_history_and_mux_views_reach_definitions() {
     let chat = first.chat.as_ref().unwrap();
     let key = chat["order"][0].as_str().unwrap();
     assert_eq!(chat["nodes"][key]["view"]["source"], "history");
+    assert_eq!(chat["nodes"][key]["view"], history_view);
     let mut live = entry(2, "message", json!({}));
-    live.view = Some(Rc::new(json!({"source":"mux"})));
+    let live_view = seekdeep_client_runtime::ConversationValue::parse(
+        r#"{"source":"mux","text":"\udfff","\ud800":{"nested":"\udfff"}}"#.to_owned(),
+    )
+    .unwrap();
+    live.view = Some(Rc::new(live_view.clone()));
     session.handle_mux_envelope(RpcId::new("live"), SessionMuxFrame::Event(live));
     let snapshot = session.snapshot();
     let chat = snapshot.chat.as_ref().unwrap();
     let key = chat["order"][1].as_str().unwrap();
     assert_eq!(chat["nodes"][key]["view"]["source"], "mux");
+    assert_eq!(chat["nodes"][key]["view"], live_view);
 }
 
 #[test]

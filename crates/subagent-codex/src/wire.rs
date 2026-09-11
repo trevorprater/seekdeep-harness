@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use futures::FutureExt as _;
 use parking_lot::Mutex;
-use seekdeep_llm::{AbortSignal, ContentBlock};
+use seekdeep_llm::{AbortSignal, ContentBlock, JsonString};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use seekdeep_subagent::{SubagentResult, SubagentStopReason};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use tokio::sync::{Notify, oneshot};
 
 #[derive(Default)]
@@ -41,10 +42,10 @@ struct WireState {
     thread_id: Option<String>,
     turn_id: Option<String>,
     pending_turn_id: Option<String>,
-    turn_completed: Option<oneshot::Sender<Map<String, Value>>>,
-    early_turn_notifications: Vec<(String, Map<String, Value>)>,
-    last_final_answer: Option<String>,
-    last_unphased_answer: Option<String>,
+    turn_completed: Option<oneshot::Sender<JsonValue>>,
+    early_turn_notifications: Vec<(String, JsonValue)>,
+    last_final_answer: Option<JsonString>,
+    last_unphased_answer: Option<JsonString>,
     closed: bool,
 }
 
@@ -90,7 +91,7 @@ impl CodexAppServerWire {
             state: Mutex::new(WireState::new()),
         });
         let weak = Arc::downgrade(&wire);
-        transport.on_request(Arc::new(move |method, params| {
+        transport.on_request_json(Arc::new(move |method, params| {
             let Some(wire) = weak.upgrade() else {
                 return async { anyhow::bail!("subagent-codex: wire was dropped") }.boxed();
             };
@@ -101,7 +102,7 @@ impl CodexAppServerWire {
             async move { result }.boxed()
         }));
         let weak = Arc::downgrade(&wire);
-        transport.on_notification(Arc::new(move |method, params| {
+        transport.on_notification_json(Arc::new(move |method, params| {
             let Some(wire) = weak.upgrade() else {
                 return;
             };
@@ -130,21 +131,24 @@ impl CodexAppServerWire {
     /// Returns cancellation, transport, fatal-protocol, or malformed-response failures.
     pub async fn initialize(&self, signal: AbortSignal) -> anyhow::Result<()> {
         let response = self
-            .guard_request(self.transport.request(
-                "initialize",
-                object(json!({
-                    "clientInfo": {
-                        "name": "seekdeep-harness",
-                        "title": "SeekDeep Harness",
-                        "version": "0.0.1",
-                    },
-                    "capabilities": {
-                        "experimentalApi": false,
-                        "requestAttestation": false,
-                    },
-                }))?,
-                Some(signal),
-            ))
+            .guard_request(
+                self.transport.request_json(
+                    "initialize",
+                    json!({
+                        "clientInfo": {
+                            "name": "seekdeep-harness",
+                            "title": "SeekDeep Harness",
+                            "version": "0.0.1",
+                        },
+                        "capabilities": {
+                            "experimentalApi": false,
+                            "requestAttestation": false,
+                        },
+                    })
+                    .into(),
+                    Some(signal),
+                ),
+            )
             .await?;
         object_labeled(response, "initialize response")?;
         self.transport.notify("initialized", None).await?;
@@ -158,20 +162,23 @@ impl CodexAppServerWire {
     /// Returns cancellation, transport, fatal-protocol, or malformed-response failures.
     pub async fn start_thread(&self, cwd: &str, signal: AbortSignal) -> anyhow::Result<()> {
         let response = self
-            .guard_request(self.transport.request(
+            .guard_request(self.transport.request_json(
                 "thread/start",
-                object(json!({"cwd":cwd, "ephemeral":true}))?,
+                json!({"cwd":cwd, "ephemeral":true}).into(),
                 Some(signal),
             ))
             .await?;
         let response = object_labeled(response, "thread/start response")?;
         let thread = object_labeled(
-            response.get("thread").cloned().unwrap_or(Value::Null),
+            response
+                .get_value("thread")
+                .cloned()
+                .unwrap_or_else(|| Value::Null.into()),
             "thread/start thread",
         )?;
-        let id = nonempty_string(thread.get("id"), "thread/start thread id")?;
+        let id = nonempty_string(thread.get_value("id"), "thread/start thread id")?;
         anyhow::ensure!(
-            thread.get("ephemeral") == Some(&Value::Bool(true)),
+            thread.get_value("ephemeral").and_then(JsonValue::as_bool) == Some(true),
             "subagent-codex: app-server did not create an ephemeral thread"
         );
         self.state.lock().thread_id = Some(id);
@@ -185,7 +192,7 @@ impl CodexAppServerWire {
     /// Returns cancellation, protocol, malformed-shape, terminal-status, or empty-output failures.
     pub async fn run_turn(
         &self,
-        texts: &[String],
+        texts: &[JsonString],
         signal: AbortSignal,
     ) -> anyhow::Result<SubagentResult> {
         let thread_id = self
@@ -205,29 +212,47 @@ impl CodexAppServerWire {
         }
         let input = texts
             .iter()
-            .map(|text| json!({"type":"text", "text":text, "text_elements":[]}))
+            .map(|text| {
+                JsonValue::object([
+                    ("type", json!("text").into()),
+                    ("text", text.clone().into()),
+                    ("text_elements", json!([]).into()),
+                ])
+            })
             .collect::<Vec<_>>();
         let response = self
-            .guard_request(self.transport.request(
+            .guard_request(self.transport.request_json(
                 "turn/start",
-                object(json!({"threadId":thread_id, "input":input}))?,
+                JsonValue::object([
+                    ("threadId", json!(thread_id).into()),
+                    ("input", JsonValue::array(&input)),
+                ]),
                 Some(signal.clone()),
             ))
             .await?;
         let response = object_labeled(response, "turn/start response")?;
         let turn = object_labeled(
-            response.get("turn").cloned().unwrap_or(Value::Null),
+            response
+                .get_value("turn")
+                .cloned()
+                .unwrap_or_else(|| Value::Null.into()),
             "turn/start turn",
         )?;
-        let id = nonempty_string(turn.get("id"), "turn/start turn id")?;
+        let id = nonempty_string(turn.get_value("id"), "turn/start turn id")?;
         self.commit_turn_id(id)?;
 
         let completed = self.guard_completion(receiver, signal).await?;
         let terminal = object_labeled(
-            completed.get("turn").cloned().unwrap_or(Value::Null),
+            completed
+                .get_value("turn")
+                .cloned()
+                .unwrap_or_else(|| Value::Null.into()),
             "turn/completed turn",
         )?;
-        let status = terminal.get("status").cloned().unwrap_or(Value::Null);
+        let status = terminal
+            .get_value("status")
+            .cloned()
+            .unwrap_or_else(|| Value::Null.into());
         if context_window_exceeded(&terminal) {
             return Ok(SubagentResult {
                 output: self.collect_output(),
@@ -236,13 +261,15 @@ impl CodexAppServerWire {
             });
         }
         anyhow::ensure!(
-            status == Value::String("completed".to_owned()),
+            status == "completed",
             "subagent-codex: Codex turn ended with status {}{}",
-            js_string(&status),
-            if status == Value::String("failed".to_owned()) {
+            js_string_json(&status),
+            if status == "failed" {
                 format!(
                     ": {}",
-                    serde_json::to_string(terminal.get("error").unwrap_or(&Value::Null))?
+                    terminal
+                        .get_value("error")
+                        .map_or_else(|| "undefined".to_owned(), JsonValue::stringify)
                 )
             } else {
                 String::new()
@@ -276,9 +303,9 @@ impl CodexAppServerWire {
         let transport = Arc::clone(&self.transport);
         tokio::spawn(async move {
             let _ = transport
-                .request(
+                .request_json(
                     "turn/interrupt",
-                    object(json!({"threadId":request.0, "turnId":request.1})).unwrap_or_default(),
+                    json!({"threadId":request.0, "turnId":request.1}).into(),
                     None,
                 )
                 .await;
@@ -320,9 +347,9 @@ impl CodexAppServerWire {
         self.transport.shutdown_output().await
     }
 
-    async fn guard_request<F>(&self, pending: F) -> anyhow::Result<Value>
+    async fn guard_request<F, T>(&self, pending: F) -> anyhow::Result<T>
     where
-        F: std::future::Future<Output = anyhow::Result<Value>>,
+        F: std::future::Future<Output = anyhow::Result<T>>,
     {
         tokio::pin!(pending);
         let fatal = self.fatal.wait();
@@ -336,9 +363,9 @@ impl CodexAppServerWire {
 
     async fn guard_completion(
         &self,
-        receiver: oneshot::Receiver<Map<String, Value>>,
+        receiver: oneshot::Receiver<JsonValue>,
         signal: AbortSignal,
-    ) -> anyhow::Result<Map<String, Value>> {
+    ) -> anyhow::Result<JsonValue> {
         let fatal = self.fatal.wait();
         tokio::pin!(fatal);
         tokio::select! {
@@ -353,27 +380,23 @@ impl CodexAppServerWire {
         self.fatal.fail(error);
     }
 
-    fn handle_server_request(
-        &self,
-        method: &str,
-        params: &Map<String, Value>,
-    ) -> anyhow::Result<Value> {
+    fn handle_server_request(&self, method: &str, params: &JsonValue) -> anyhow::Result<JsonValue> {
         match method {
             "item/commandExecution/requestApproval" | "item/fileChange/requestApproval" => {
                 self.validate_run_ids(params, false)?;
-                Ok(json!({"decision": unattended_decision(params)?}))
+                Ok(json!({"decision": unattended_decision(params)?}).into())
             }
             "item/permissions/requestApproval" => {
                 self.validate_run_ids(params, false)?;
-                Ok(json!({"permissions":{}, "scope":"turn"}))
+                Ok(json!({"permissions":{}, "scope":"turn"}).into())
             }
             "item/tool/requestUserInput" => {
                 self.validate_run_ids(params, false)?;
-                Ok(json!({"answers":{}}))
+                Ok(json!({"answers":{}}).into())
             }
             "mcpServer/elicitation/request" => {
                 self.validate_run_ids(params, true)?;
-                Ok(json!({"action":"decline", "content":null, "_meta":null}))
+                Ok(json!({"action":"decline", "content":null, "_meta":null}).into())
             }
             _ => anyhow::bail!(
                 "subagent-codex: unsupported app-server request {}",
@@ -382,21 +405,17 @@ impl CodexAppServerWire {
         }
     }
 
-    fn validate_run_ids(
-        &self,
-        params: &Map<String, Value>,
-        nullable_turn: bool,
-    ) -> anyhow::Result<()> {
+    fn validate_run_ids(&self, params: &JsonValue, nullable_turn: bool) -> anyhow::Result<()> {
         let mut state = self.state.lock();
         let thread_id = state.thread_id.as_deref().unwrap_or_default();
         anyhow::ensure!(
-            params.get("threadId").and_then(Value::as_str) == Some(thread_id),
+            params.get_value("threadId").and_then(JsonValue::as_str) == Some(thread_id),
             "subagent-codex: app-server request referenced another thread"
         );
-        if nullable_turn && params.get("turnId") == Some(&Value::Null) {
+        if nullable_turn && params.get_value("turnId").is_some_and(JsonValue::is_null) {
             return Ok(());
         }
-        let id = nonempty_string(params.get("turnId"), "server request turn id")?;
+        let id = nonempty_string(params.get_value("turnId"), "server request turn id")?;
         if state.turn_id.is_none() {
             observe_pending_turn_id(&mut state, id)?;
         } else {
@@ -408,7 +427,7 @@ impl CodexAppServerWire {
         Ok(())
     }
 
-    fn handle_notification(&self, method: &str, params: Map<String, Value>) -> anyhow::Result<()> {
+    fn handle_notification(&self, method: &str, params: JsonValue) -> anyhow::Result<()> {
         let mut state = self.state.lock();
         handle_notification_inner(&mut state, method, params)
     }
@@ -434,31 +453,34 @@ impl CodexAppServerWire {
 fn handle_notification_inner(
     state: &mut WireState,
     method: &str,
-    params: Map<String, Value>,
+    params: JsonValue,
 ) -> anyhow::Result<()> {
     if method == "turn/started" {
-        let thread_id = nonempty_string(params.get("threadId"), "turn/started thread id")?;
+        let thread_id = nonempty_string(params.get_value("threadId"), "turn/started thread id")?;
         if state.thread_id.as_deref() != Some(thread_id.as_str()) {
             return Ok(());
         }
         let turn = object_labeled(
-            params.get("turn").cloned().unwrap_or(Value::Null),
+            params
+                .get_value("turn")
+                .cloned()
+                .unwrap_or_else(|| Value::Null.into()),
             "turn/started turn",
         )?;
         if state.turn_completed.is_some() && state.turn_id.is_none() {
             observe_pending_turn_id(
                 state,
-                nonempty_string(turn.get("id"), "turn/started turn id")?,
+                nonempty_string(turn.get_value("id"), "turn/started turn id")?,
             )?;
         }
         return Ok(());
     }
     if method == "item/completed" {
-        let thread_id = nonempty_string(params.get("threadId"), "item/completed thread id")?;
+        let thread_id = nonempty_string(params.get_value("threadId"), "item/completed thread id")?;
         if state.thread_id.as_deref() != Some(thread_id.as_str()) {
             return Ok(());
         }
-        let id = nonempty_string(params.get("turnId"), "item/completed turn id")?;
+        let id = nonempty_string(params.get_value("turnId"), "item/completed turn id")?;
         if state.turn_id.is_none() {
             if state.turn_completed.is_some() {
                 observe_pending_turn_id(state, id)?;
@@ -472,28 +494,30 @@ fn handle_notification_inner(
             return Ok(());
         }
         let item = object_labeled(
-            params.get("item").cloned().unwrap_or(Value::Null),
+            params
+                .get_value("item")
+                .cloned()
+                .unwrap_or_else(|| Value::Null.into()),
             "item/completed item",
         )?;
-        if item.get("type") != Some(&Value::String("agentMessage".to_owned())) {
+        if item.get_value("type").and_then(JsonValue::as_str) != Some("agentMessage") {
             return Ok(());
         }
         let text = item
             .get("text")
-            .and_then(Value::as_str)
+            .and_then(|text| text.deserialize::<JsonString>().ok())
             .ok_or_else(|| {
                 anyhow::anyhow!("subagent-codex: app-server returned an invalid agent message")
-            })?
-            .to_owned();
-        match item.get("phase") {
-            Some(Value::String(phase)) if phase == "final_answer" => {
+            })?;
+        match item.get_value("phase") {
+            Some(phase) if phase == "final_answer" => {
                 state.last_final_answer = Some(text);
             }
-            Some(Value::Null) => state.last_unphased_answer = Some(text),
-            Some(Value::String(phase)) if phase == "commentary" => {}
+            Some(phase) if phase.is_null() => state.last_unphased_answer = Some(text),
+            Some(phase) if phase == "commentary" => {}
             phase => anyhow::bail!(
                 "subagent-codex: app-server returned an unknown agent message phase {}",
-                phase.map_or_else(|| "undefined".to_owned(), js_string)
+                phase.map_or_else(|| "undefined".to_owned(), JsonValue::stringify)
             ),
         }
         return Ok(());
@@ -501,15 +525,18 @@ fn handle_notification_inner(
     if method != "turn/completed" {
         return Ok(());
     }
-    let thread_id = nonempty_string(params.get("threadId"), "turn/completed thread id")?;
+    let thread_id = nonempty_string(params.get_value("threadId"), "turn/completed thread id")?;
     if state.thread_id.as_deref() != Some(thread_id.as_str()) {
         return Ok(());
     }
     let turn = object_labeled(
-        params.get("turn").cloned().unwrap_or(Value::Null),
+        params
+            .get_value("turn")
+            .cloned()
+            .unwrap_or_else(|| Value::Null.into()),
         "turn/completed turn",
     )?;
-    let id = nonempty_string(turn.get("id"), "turn/completed turn id")?;
+    let id = nonempty_string(turn.get_value("id"), "turn/completed turn id")?;
     if state.turn_completed.is_none() {
         return Ok(());
     }
@@ -524,8 +551,8 @@ fn handle_notification_inner(
         return Ok(());
     }
     let status = turn
-        .get("status")
-        .and_then(Value::as_str)
+        .get_value("status")
+        .and_then(JsonValue::as_str)
         .unwrap_or_default();
     anyhow::ensure!(
         matches!(status, "completed" | "interrupted" | "failed"),
@@ -553,10 +580,12 @@ fn observe_pending_turn_id(state: &mut WireState, id: String) -> anyhow::Result<
     Ok(())
 }
 
-fn unattended_decision(params: &Map<String, Value>) -> anyhow::Result<&'static str> {
-    match params.get("availableDecisions") {
-        None | Some(Value::Null) => Ok("decline"),
-        Some(Value::Array(decisions)) => {
+fn unattended_decision(params: &JsonValue) -> anyhow::Result<&'static str> {
+    match params.get_value("availableDecisions") {
+        None => Ok("decline"),
+        Some(value) if value.is_null() => Ok("decline"),
+        Some(value) if value.is_array() => {
+            let decisions = value.as_array().expect("array was checked");
             if decisions.iter().any(|value| value == "cancel") {
                 Ok("cancel")
             } else if decisions.iter().any(|value| value == "decline") {
@@ -571,35 +600,40 @@ fn unattended_decision(params: &Map<String, Value>) -> anyhow::Result<&'static s
     }
 }
 
-fn object(value: Value) -> anyhow::Result<Map<String, Value>> {
-    let Value::Object(value) = value else {
-        anyhow::bail!("subagent-codex: internal protocol params are not an object");
-    };
-    Ok(value)
-}
-
-fn object_labeled(value: Value, label: &str) -> anyhow::Result<Map<String, Value>> {
-    let Value::Object(value) = value else {
+fn object_labeled(value: JsonValue, label: &str) -> anyhow::Result<JsonValue> {
+    if !value.is_object() {
         anyhow::bail!("subagent-codex: app-server returned invalid {label}");
-    };
+    }
     Ok(value)
 }
 
-fn nonempty_string(value: Option<&Value>, label: &str) -> anyhow::Result<String> {
+fn nonempty_string(value: Option<&JsonValue>, label: &str) -> anyhow::Result<String> {
     value
-        .and_then(Value::as_str)
+        .and_then(JsonValue::as_str)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
         .ok_or_else(|| anyhow::anyhow!("subagent-codex: app-server returned invalid {label}"))
 }
 
-fn context_window_exceeded(turn: &Map<String, Value>) -> bool {
-    turn.get("status") == Some(&Value::String("failed".to_owned()))
+fn context_window_exceeded(turn: &JsonValue) -> bool {
+    turn.get_value("status").and_then(JsonValue::as_str) == Some("failed")
         && turn
-            .get("error")
-            .and_then(Value::as_object)
-            .and_then(|error| error.get("codexErrorInfo"))
-            == Some(&Value::String("contextWindowExceeded".to_owned()))
+            .get_value("error")
+            .and_then(|error| error.get_value("codexErrorInfo"))
+            .and_then(JsonValue::as_str)
+            == Some("contextWindowExceeded")
+}
+
+fn js_string_json(value: &JsonValue) -> String {
+    if let Some(value) = value.as_str() {
+        value.to_owned()
+    } else if value.is_array() {
+        String::new()
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.as_raw().to_owned()
+    }
 }
 
 fn abort_error(signal: &AbortSignal) -> anyhow::Error {

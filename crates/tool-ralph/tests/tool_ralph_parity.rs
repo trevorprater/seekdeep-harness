@@ -904,25 +904,26 @@ async fn registers_scoped_guidance_presentation_schema_and_hmr_cleanup() {
     );
     assert_eq!(
         definition.present_call.as_ref().expect("call presenter")(
-            &json!({"objective": "Finish it."})
+            &json!({"objective": "Finish it."}).into()
         ),
         Some(ToolCallView::Generic(GenericCallView {
-            title: "ralph".to_owned(),
+            title: "ralph".into(),
             kind: None,
-            raw_input: Some(json!("Finish it.")),
+            raw_input: Some(json!("Finish it.").into()),
             content: None,
             locations: None,
         }))
     );
     assert!(
-        definition.present_call.as_ref().expect("call presenter")(&json!({"nope": true})).is_none()
+        definition.present_call.as_ref().expect("call presenter")(&json!({"nope": true}).into())
+            .is_none()
     );
     assert_eq!(
         definition
             .present_result
             .as_ref()
             .expect("result presenter")(
-            &json!({"objective": "Finish it."}),
+            &json!({"objective": "Finish it."}).into(),
             &ToolResult {
                 content: Vec::new(),
                 is_error: false,

@@ -103,10 +103,10 @@ fn tool_timeout_result(timeout_ms: f64) -> ToolExecutionResult {
     let message = format!("tool call timed out after {timeout_ms}ms");
     ToolExecutionResult::Failure(ToolExecutionFailure {
         content: vec![ContentBlock::Text {
-            text: format!("Error: {message}"),
+            text: format!("Error: {message}").into(),
         }],
         error: ToolFailure {
-            message,
+            message: message.into(),
             info: Some(ToolErrorInfo {
                 name: "ToolTimeoutError".to_owned(),
                 code: TOOL_TIMEOUT.to_owned(),
@@ -157,7 +157,7 @@ mod tests {
                 Arc::new(assert_supported_json_schema(json!({ "type": "string" })).unwrap()),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap_or_default().to_owned(),
+                        text: value.as_str().unwrap_or_default().into(),
                     }])
                 }),
             ),

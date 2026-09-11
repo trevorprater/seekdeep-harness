@@ -3,6 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::Mutex;
+use seekdeep_code_runtime::{CodeJsonString, CodeJsonValue, json::CodeJsonRef};
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
     session::{Session, SessionEvent},
@@ -11,6 +12,7 @@ use seekdeep_core::{
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
+#[cfg(test)]
 use serde_json::Value;
 
 use crate::{ToolExecution, ToolExecutionResult, ToolExecutionToken};
@@ -27,7 +29,7 @@ enum ToolStage {
 #[derive(Debug, Default)]
 struct SessionState {
     open_turn: bool,
-    dispatch_roots: HashMap<String, String>,
+    dispatch_roots: HashMap<Vec<u16>, Vec<u16>>,
 }
 
 #[derive(Debug, Default)]
@@ -288,21 +290,30 @@ fn validate_dispatch(
             ))
             .into());
     }
-    if let Some(known) = state.dispatch_roots.get(&child)
-        && known != &root
+    if let Some(known) = state.dispatch_roots.get(child.utf16_units())
+        && known != root.utf16_units()
     {
         return Err(failure
             .fail(format!(
-                "{} changed rootCallId for subCallId {child}",
-                event.event_type
+                "{} changed rootCallId for subCallId {}",
+                event.event_type,
+                json_diagnostic(&child)
             ))
             .into());
     }
-    if parent != root && state.dispatch_roots.get(&parent) != Some(&root) {
+    if parent != root
+        && state
+            .dispatch_roots
+            .get(parent.utf16_units())
+            .map(Vec::as_slice)
+            != Some(root.utf16_units())
+    {
         return Err(failure
             .fail(format!(
-                "{} parentCallId {parent} does not belong to rootCallId {root}",
-                event.event_type
+                "{} parentCallId {} does not belong to rootCallId {}",
+                event.event_type,
+                json_diagnostic(&parent),
+                json_diagnostic(&root)
             ))
             .into());
     }
@@ -312,8 +323,8 @@ fn validate_dispatch(
 fn commit_dispatch(state: &mut SessionState, event: &SessionEvent) {
     if is_code_dispatch(event) {
         state.dispatch_roots.insert(
-            js_string_property(&event.data, "subCallId"),
-            js_string_property(&event.data, "rootCallId"),
+            js_string_property(&event.data, "subCallId").to_utf16(),
+            js_string_property(&event.data, "rootCallId").to_utf16(),
         );
     }
 }
@@ -325,28 +336,40 @@ fn is_code_dispatch(event: &SessionEvent) -> bool {
     )
 }
 
-fn js_string_property(object: &Value, property: &str) -> String {
+fn js_string_property(object: &CodeJsonValue, property: &str) -> CodeJsonString {
     object
         .get(property)
-        .map_or_else(|| "undefined".to_owned(), js_string)
+        .map_or_else(|| "undefined".into(), js_string)
 }
 
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => value.clone(),
-        Value::Array(values) => values
-            .iter()
-            .map(|value| match value {
-                Value::Null => String::new(),
-                other => js_string(other),
-            })
-            .collect::<Vec<_>>()
-            .join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+fn js_string(value: CodeJsonRef<'_>) -> CodeJsonString {
+    if let Some(units) = value.to_utf16() {
+        return CodeJsonString::from_utf16(&units);
     }
+    if let Some(values) = value.array_items() {
+        let parts = values
+            .into_iter()
+            .map(|value| {
+                if value.is_null() {
+                    CodeJsonString::default()
+                } else {
+                    js_string(value)
+                }
+            })
+            .collect::<Vec<_>>();
+        return CodeJsonString::join(&parts, ",");
+    }
+    if value.object_entries().is_some() {
+        return "[object Object]".into();
+    }
+    if let Some(number) = value.as_f64() {
+        return ryu_js::Buffer::new().format(number).into();
+    }
+    value.as_raw().into()
+}
+
+fn json_diagnostic(value: &CodeJsonString) -> &str {
+    value.as_str().unwrap_or_else(|| value.as_raw())
 }
 
 fn required_session(args: &EventArgs, event_name: &str) -> anyhow::Result<Arc<Session>> {
@@ -425,7 +448,7 @@ mod tests {
                 ),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap_or_default().to_owned(),
+                        text: value.as_str().unwrap_or_default().into(),
                     }])
                 }),
             ),
@@ -443,12 +466,7 @@ mod tests {
     }
 
     fn outcome() -> ToolExecutionResult {
-        ToolExecutionResult::success(
-            json!("ok"),
-            vec![ContentBlock::Text {
-                text: "ok".to_owned(),
-            }],
-        )
+        ToolExecutionResult::success(json!("ok"), vec![ContentBlock::Text { text: "ok".into() }])
     }
 
     async fn prepared_execution(
@@ -695,7 +713,10 @@ mod tests {
         );
         assert!(!session.events().iter().any(|event| {
             event.event_type == "tool/code-dispatch-start"
-                && event.data.get("subCallId") == Some(&json!("invalid-grandchild"))
+                && event
+                    .data
+                    .get("subCallId")
+                    .is_some_and(|value| value.to_owned() == json!("invalid-grandchild"))
         }));
     }
 
@@ -751,7 +772,7 @@ mod tests {
             event_type: "tool/code-dispatch-start".to_owned(),
             seq: 1,
             time: 1,
-            data: dispatch_data("root", "root", "child"),
+            data: dispatch_data("root", "root", "child").into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

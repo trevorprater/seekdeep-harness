@@ -158,6 +158,10 @@ pub fn initialize_with_platforms(
         &runtime.join(binding_name),
         &crate::runtime_binding_target(&platform.executable)?,
     )?;
+    crate::node_runtime::verify_directory(
+        &runtime.join(crate::node_runtime::DIRECTORY),
+        &crate::runtime_binding_target(&platform.executable)?,
+    )?;
     Ok(json!({"pure_python":false,"infer_tag":false,"tag":format!("py3-none-{tag}")}))
 }
 

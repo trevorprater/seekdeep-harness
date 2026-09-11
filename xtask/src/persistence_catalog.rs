@@ -83,7 +83,12 @@ pub fn run(repo_root: &Path, source_root: &Path, check: bool) -> anyhow::Result<
     let artifacts = [
         (
             DOC_OUTPUT,
-            render(&events, &collect_event_envelope_types(source_root)?),
+            seekdeep_repository_tools::doc_source_links::pin_oracle_source_links(
+                &render(&events, &collect_event_envelope_types(source_root)?),
+                Path::new(DOC_OUTPUT),
+                source_root,
+                &seekdeep_repository_tools::doc_source_links::oracle_revision(repo_root)?,
+            )?,
         ),
         (RUST_OUTPUT, render_known_event_types(&events)),
     ];

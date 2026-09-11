@@ -143,9 +143,7 @@ async fn run(harness: &Harness, task: &str) {
         .loop_agent
         .agent
         .followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: task.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: task.into() }],
             MessageSource::user(),
         ))
         .expect("followup");
@@ -185,8 +183,9 @@ async fn model_call_records_call_success_and_whole_todo_snapshot() {
     assert_eq!(
         event(&events, "tool/result")
             .data
-            .pointer("/message/content/0/isError"),
-        Some(&Value::Bool(false))
+            .pointer("/message/content/0/isError")
+            .and_then(|value| value.as_bool()),
+        Some(false)
     );
     assert_eq!(event(&events, "todo/write").data["todos"], todos);
 

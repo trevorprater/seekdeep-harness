@@ -105,7 +105,7 @@ pub async fn summarize_with_llm(
     messages.push(
         UserMessage::new(
             vec![ContentBlock::Text {
-                text: COMPACTION_INSTRUCTION.to_owned(),
+                text: COMPACTION_INSTRUCTION.into(),
             }],
             MessageSource::plugin("seekdeep-compaction-basic"),
         )
@@ -163,11 +163,11 @@ pub async fn summarize_with_llm(
 #[must_use]
 pub fn frame_summary(summary: &[ContentBlock]) -> Vec<ContentBlock> {
     let mut blocks = vec![ContentBlock::Text {
-        text: format!("{CHECKPOINT_PREAMBLE}\n\n{SUMMARY_OPEN_TAG}"),
+        text: format!("{CHECKPOINT_PREAMBLE}\n\n{SUMMARY_OPEN_TAG}").into(),
     }];
     blocks.extend(summary.iter().cloned());
     blocks.push(ContentBlock::Text {
-        text: SUMMARY_CLOSE_TAG.to_owned(),
+        text: SUMMARY_CLOSE_TAG.into(),
     });
     blocks
 }

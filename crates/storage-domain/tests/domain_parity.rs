@@ -13,6 +13,7 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, FiberState};
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{
     KvFacet, KvSnapshot, KvUnit, KvUnitDescriptor, Storage, StorageBackend, StorageError,
     StorageErrorCode, storage_backend_service_key,
@@ -21,13 +22,13 @@ use seekdeep_storage_domain::{
     DomainChanged, DomainConfig, DomainError, DomainErrorCode, DomainGlobalSpec, DomainSpec,
     DomainTableSpec, ValueSchema, define_domain, descriptor_of, domain_table, register_invariant,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 #[derive(Clone, Debug)]
 struct Medium {
     version: u64,
-    tables: IndexMap<String, Map<String, Value>>,
-    global: Value,
+    tables: IndexMap<String, IndexMap<String, JsonValue>>,
+    global: JsonValue,
 }
 
 #[derive(Debug, Default)]
@@ -137,9 +138,9 @@ impl KvFacet for MemoryFacet {
                         tables: descriptor
                             .tables
                             .iter()
-                            .map(|table| (table.clone(), Map::new()))
+                            .map(|table| (table.clone(), IndexMap::new()))
                             .collect(),
-                        global: Value::Null,
+                        global: Value::Null.into(),
                     },
                 );
             }
@@ -196,7 +197,7 @@ impl KvUnit for MemoryUnit {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
         let checked = self.check();
         let pool = self.pool.clone();
@@ -233,13 +234,13 @@ impl KvUnit for MemoryUnit {
                 .tables
                 .get_mut(&table)
                 .expect("declared table")
-                .remove(&key);
+                .shift_remove(&key);
             Ok(())
         }
         .boxed()
     }
 
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>> {
         let checked = self.check();
         let pool = self.pool.clone();
         let name = self.descriptor.name.clone();
@@ -296,7 +297,7 @@ fn spec() -> DomainSpec {
         version: 1,
         global: Some(DomainGlobalSpec {
             schema: settings_schema(),
-            initial: json!({ "theme": "plain" }),
+            initial: json!({ "theme": "plain" }).into(),
         }),
         tables: IndexMap::from([("items".to_owned(), domain_table(item_schema()))]),
     })
@@ -390,7 +391,7 @@ fn define_domain_rejects_invalid_names_and_nullable_global() {
         version: 1,
         global: Some(DomainGlobalSpec {
             schema: ValueSchema::new(|value| Ok(value.clone())),
-            initial: Value::Null,
+            initial: Value::Null.into(),
         }),
         tables: IndexMap::new(),
     })
@@ -412,7 +413,7 @@ async fn opens_routes_validates_and_releases_failed_or_closed_names() {
     assert_eq!(domain_error(&duplicate).code, DomainErrorCode::AlreadyOpen);
     assert_eq!(
         domain.table("items").unwrap().get("a").unwrap(),
-        Some(json!({ "label": "first", "count": 1 }))
+        Some(json!({ "label": "first", "count": 1 }).into())
     );
     domain.close().await.unwrap();
     assert!(healthy.facility.open(spec()).await.is_ok());
@@ -460,9 +461,12 @@ async fn durable_validation_names_record_and_global_slots_and_passes_version_mis
             version: 1,
             tables: IndexMap::from([(
                 "items".to_owned(),
-                Map::from_iter([("bad".to_owned(), json!({ "label": "x", "count": "NaN" }))]),
+                IndexMap::from_iter([(
+                    "bad".to_owned(),
+                    json!({ "label": "x", "count": "NaN" }).into(),
+                )]),
             )]),
-            global: Value::Null,
+            global: Value::Null.into(),
         },
     );
     let invalid = harness(None, Some(pool.clone()))
@@ -481,7 +485,7 @@ async fn durable_validation_names_record_and_global_slots_and_passes_version_mis
     );
 
     pool.state.lock().media.get_mut("demo").unwrap().tables = IndexMap::new();
-    pool.state.lock().media.get_mut("demo").unwrap().global = json!({ "theme": 42 });
+    pool.state.lock().media.get_mut("demo").unwrap().global = json!({ "theme": 42 }).into();
     let invalid_global = harness(None, Some(pool.clone()))
         .facility
         .open(spec())
@@ -521,7 +525,8 @@ async fn table_reads_are_snapshots_and_concurrent_updates_are_lossless() {
             Ok(json!({
                 "label": current["label"].clone(),
                 "count": current["count"].as_i64().unwrap() + 1,
-            }))
+            })
+            .into())
         })
     });
     futures::future::try_join_all(updates).await.unwrap();
@@ -559,7 +564,7 @@ async fn events_follow_durability_and_failures_leave_memory_untouched() {
         .unwrap();
     table
         .update("a".to_owned(), |current| {
-            Ok(json!({ "label": "x", "count": current["count"].as_i64().unwrap() + 1 }))
+            Ok(json!({ "label": "x", "count": current["count"].as_i64().unwrap() + 1 }).into())
         })
         .await
         .unwrap();
@@ -577,13 +582,13 @@ async fn events_follow_durability_and_failures_leave_memory_untouched() {
                 domain: "demo".to_owned(),
                 table: "items".to_owned(),
                 key: "a".to_owned(),
-                value: json!({ "label": "x", "count": 1 }),
+                value: json!({ "label": "x", "count": 1 }).into(),
             },
             DomainChanged::Put {
                 domain: "demo".to_owned(),
                 table: "items".to_owned(),
                 key: "a".to_owned(),
-                value: json!({ "label": "x", "count": 2 }),
+                value: json!({ "label": "x", "count": 2 }).into(),
             },
             DomainChanged::Deleted {
                 domain: "demo".to_owned(),
@@ -594,7 +599,7 @@ async fn events_follow_durability_and_failures_leave_memory_untouched() {
                 domain: "demo".to_owned(),
                 table: String::new(),
                 key: String::new(),
-                value: json!({ "theme": "dark" }),
+                value: json!({ "theme": "dark" }).into(),
             },
         ]
     );
@@ -621,7 +626,7 @@ async fn events_follow_durability_and_failures_leave_memory_untouched() {
     assert!(domain.global_set(json!({ "theme": "lost" })).await.is_err());
     assert_eq!(
         table.get("safe").unwrap(),
-        Some(json!({ "label": "x", "count": 1 }))
+        Some(json!({ "label": "x", "count": 1 }).into())
     );
     assert_eq!(domain.global_get().unwrap(), json!({ "theme": "dark" }));
     assert!(
@@ -647,7 +652,7 @@ async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
         .expect("real put");
     table
         .update("a".to_owned(), |current| {
-            Ok(json!({"label": "x", "count": current["count"].as_i64().unwrap() + 1}))
+            Ok(json!({"label": "x", "count": current["count"].as_i64().unwrap() + 1}).into())
         })
         .await
         .expect("real update");
@@ -662,7 +667,7 @@ async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
                 domain: "ghost".to_owned(),
                 table: "items".to_owned(),
                 key: "a".to_owned(),
-                value: json!({"label": "x", "count": 2}),
+                value: json!({"label": "x", "count": 2}).into(),
             },
             "not open",
         ),
@@ -671,7 +676,7 @@ async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
                 domain: "demo".to_owned(),
                 table: "items".to_owned(),
                 key: "a".to_owned(),
-                value: json!({"label": "x", "count": 999}),
+                value: json!({"label": "x", "count": 999}).into(),
             },
             "differs from the in-memory record",
         ),
@@ -688,7 +693,7 @@ async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
                 domain: "demo".to_owned(),
                 table: String::new(),
                 key: String::new(),
-                value: json!({"theme": "wrong"}),
+                value: json!({"theme": "wrong"}).into(),
             },
             "differs from the in-memory global",
         ),
@@ -802,7 +807,7 @@ async fn throwing_listener_is_contained_after_commit() {
         .unwrap();
     assert_eq!(
         table.get("a").unwrap(),
-        Some(json!({ "label": "x", "count": 1 }))
+        Some(json!({ "label": "x", "count": 1 }).into())
     );
 }
 
@@ -863,7 +868,7 @@ async fn table_handles_are_stable_and_keep_domain_machinery_owned() {
         .unwrap();
     assert_eq!(
         second.get("retained").unwrap(),
-        Some(json!({ "label": "x", "count": 1 }))
+        Some(json!({ "label": "x", "count": 1 }).into())
     );
     harness.facility.close_all().await.unwrap();
 }

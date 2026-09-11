@@ -7,8 +7,8 @@ use wasm_bindgen::{JsValue, closure::Closure, prelude::wasm_bindgen};
 use crate::{
     ToolCallBlock,
     browser::{
-        bool_or_undefined, class_props, create_element, extend_object, inject_style, object,
-        optional_property, required_function, required_property, tag, translated,
+        bool_or_undefined, class_props, create_element, extend_object, inject_style, json_text,
+        object, optional_property, required_function, required_property, tag, translated,
     },
     browser_apply::{BrowserModules, configured_modules},
     browser_model::{
@@ -146,7 +146,7 @@ fn render_tool_details(modules: &BrowserModules, props: &JsValue) -> Result<JsVa
                 &modules.react,
                 "div",
                 Some(&class_props(RECOVERY)?),
-                &[JsValue::from_str(&recovery)],
+                &[json_text(&recovery)],
             )?);
         }
         return create_element(&modules.react, &modules.fragment, None, &children);
@@ -170,7 +170,7 @@ fn render_tool_details(modules: &BrowserModules, props: &JsValue) -> Result<JsVa
                     &modules.react,
                     "pre",
                     Some(&class_props(CODE)?),
-                    &[JsValue::from_str(&body)],
+                    &[json_text(&body)],
                 )?);
             }
         }
@@ -191,6 +191,6 @@ fn render_tool_details(modules: &BrowserModules, props: &JsValue) -> Result<JsVa
             ("className", JsValue::from_str(CODE)),
             ("data-error", bool_or_undefined(*is_error)),
         ])?),
-        &[JsValue::from_str(&result_text(&block.model))],
+        &[json_text(&result_text(&block.model))],
     )
 }

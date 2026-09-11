@@ -306,7 +306,7 @@ pub(crate) fn append_message_fixture(session: Arc<Session>) -> MessageFixture {
         .unwrap();
     let user = Message::user(
         vec![ContentBlock::Text {
-            text: "Question".to_owned(),
+            text: "Question".into(),
         }],
         MessageSource::user(),
     );
@@ -322,7 +322,7 @@ pub(crate) fn append_message_fixture(session: Arc<Session>) -> MessageFixture {
         .unwrap();
     let first = Message::assistant(
         vec![ContentBlock::Text {
-            text: "First answer".to_owned(),
+            text: "First answer".into(),
         }],
         "test",
         "test",
@@ -339,7 +339,7 @@ pub(crate) fn append_message_fixture(session: Arc<Session>) -> MessageFixture {
         .unwrap();
     let second = Message::assistant(
         vec![ContentBlock::Text {
-            text: "Second answer".to_owned(),
+            text: "Second answer".into(),
         }],
         "test",
         "test",
@@ -381,7 +381,7 @@ pub(crate) fn append_message_fixture(session: Arc<Session>) -> MessageFixture {
         .unwrap();
     let replacement = Message::assistant(
         vec![ContentBlock::Text {
-            text: "Model-only replacement".to_owned(),
+            text: "Model-only replacement".into(),
         }],
         "test",
         "test",

@@ -1,6 +1,8 @@
 //! O(1) surface repricing through adjacent compaction shadow claims.
 
-use seekdeep_core::session::{SessionEvent, SurfaceOp, derive_event_message, is_surface_event};
+use seekdeep_core::session::{
+    JsonValue, SessionEvent, SurfaceOp, derive_event_message, is_surface_event,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{estimate::estimate_message, surface_fold::signed_difference};
@@ -90,9 +92,9 @@ pub fn fold_surface_projection(
     }
 }
 
-fn required_u64(value: &serde_json::Value, pointer: &str, field: &str) -> anyhow::Result<u64> {
+fn required_u64(value: &JsonValue, pointer: &str, field: &str) -> anyhow::Result<u64> {
     value
         .pointer(pointer)
-        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| value.as_u64())
         .ok_or_else(|| anyhow::anyhow!("token surface: {field} must be a non-negative integer"))
 }

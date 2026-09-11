@@ -360,7 +360,7 @@ pub(crate) fn install(service: &Object, context: &JsValue) -> Result<(), JsValue
         "service,core,ctx",
         r"
 service.ctx = ctx;
-Object.defineProperty(service, Symbol.for('cordis.service.tracker'), { value: true });
+Object.defineProperty(service, Symbol.for('cordis.tracker'), { value: { property: 'ctx' } });
 service.register = function (value) { return core.register(this.ctx, value); };
 service.get = key => core.get(key);
 service.resolve = key => core.resolve(key);

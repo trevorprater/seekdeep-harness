@@ -230,6 +230,7 @@ struct Harness {
     agents: Arc<AgentRegistry>,
     factory: Arc<TestFactory>,
     server: Arc<HarnessSdkJsonRpcServer>,
+    client: Arc<JsonRpcLineTransport>,
     notifications: NotificationLog,
 }
 
@@ -274,11 +275,11 @@ impl Harness {
         }));
         client.start();
         let server = HarnessSdkJsonRpcServer::new(&context, &server_transport, options).unwrap();
-        server_transport.on_request({
+        server_transport.on_request_json({
             let server = Arc::clone(&server);
             Arc::new(move |method, params| {
                 let server = Arc::clone(&server);
-                Box::pin(async move { server.handle_request(&method, params).await })
+                Box::pin(async move { server.handle_request_json(&method, params).await })
             })
         });
         server_transport.start();
@@ -288,6 +289,7 @@ impl Harness {
             agents,
             factory,
             server,
+            client,
             notifications,
         }
     }
@@ -329,10 +331,105 @@ fn runtime_context() -> Context {
 fn prompt(session: &str, text: &str) -> SessionPromptParams {
     SessionPromptParams {
         session_id: SessionId::new(session),
-        content_blocks: vec![seekdeep_llm::ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        content_blocks: vec![seekdeep_llm::ContentBlock::Text { text: text.into() }],
     }
+}
+
+#[tokio::test]
+async fn raw_prompt_and_committed_tool_result_cross_the_server_transport_without_reencoding() {
+    use seekdeep_llm::{CallId, ContentBlock, Message};
+    use seekdeep_lossless_json::JsonValue;
+
+    let harness = Harness::new(HarnessSdkJsonRpcServerOptions::default());
+    let cwd = tempfile::tempdir().unwrap();
+    harness
+        .client
+        .request_json(
+            "initialize",
+            JsonValue::from_serialize(&InitializeParams {
+                cwd: cwd.path().to_string_lossy().into_owned(),
+                provider: "mock".into(),
+                model: "model".into(),
+                max_tokens: None,
+            })
+            .unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    let params = SessionPromptParams {
+        session_id: SessionId::new("lossless"),
+        content_blocks: vec![ContentBlock::text_utf16(&[0xd800])],
+    };
+    harness
+        .client
+        .request_json(
+            "session/prompt",
+            JsonValue::from_serialize(&params).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        harness.factory.messages.lock()[0].content(),
+        params.content_blocks
+    );
+
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = Arc::new(Mutex::new(Some(sender)));
+    harness
+        .client
+        .on_notification_json(Arc::new(move |method, params| {
+            if method == "session.event"
+                && params
+                    .get("event")
+                    .and_then(|event| event.get("type"))
+                    .and_then(|kind| kind.deserialize::<String>().ok())
+                    .as_deref()
+                    == Some("tool/result")
+                && let Some(sender) = sender.lock().take()
+            {
+                let _ = sender.send(params);
+            }
+        }));
+    let message = Message::tool_result(
+        &CallId::new("lossless-call"),
+        vec![ContentBlock::text_utf16(&[0xdfff])],
+        false,
+    );
+    let agent = harness.agents.get(&SessionId::new("lossless")).unwrap();
+    agent
+        .session()
+        .append_json(
+            "tool/result",
+            JsonValue::object([
+                ("turn", json!(1).into()),
+                ("step", json!(1).into()),
+                ("message", JsonValue::from_serialize(&message).unwrap()),
+            ]),
+            AppendOptions {
+                surface_op: Some(seekdeep_core::session::SurfaceOp::append()),
+                ..AppendOptions::default()
+            },
+        )
+        .unwrap();
+    let notification = tokio::time::timeout(std::time::Duration::from_secs(2), receiver)
+        .await
+        .unwrap()
+        .unwrap();
+    let delivered: Message = notification
+        .get("event")
+        .unwrap()
+        .get("data")
+        .unwrap()
+        .get("message")
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(delivered, message);
+    assert!(notification.as_raw().contains(r#""text":"\udfff""#));
+    harness.server.shutdown().await.unwrap();
+    harness.context.root_fiber().dispose().await.unwrap();
 }
 
 #[test]
@@ -563,7 +660,7 @@ async fn real_agent_loop_executes_the_configured_model_and_streams_durable_notif
     let events = agent.session().events();
     assert!(events.iter().any(|event| {
         event.event_type == "assistant/message"
-            && event.data.pointer("/message/content/0/text") == Some(&json!("assembled SDK answer"))
+            && event.data["message"]["content"][0]["text"] == json!("assembled SDK answer")
     }));
     for _ in 0..100 {
         if notifications.lock().iter().any(|(method, params)| {
@@ -642,7 +739,7 @@ async fn forwards_session_status_lineage_and_local_subagent_terminal_notificatio
                 local: false,
                 stop_reason: SubagentStopReason::Completed,
                 last_assistant_message: Some(vec![seekdeep_llm::ContentBlock::Text {
-                    text: "must be ignored".to_owned(),
+                    text: "must be ignored".into(),
                 }]),
             }),
         )
@@ -729,7 +826,7 @@ async fn correlates_reused_child_ids_by_parent_scope_and_immutable_run_snapshot(
                     local,
                     stop_reason,
                     last_assistant_message: Some(vec![seekdeep_llm::ContentBlock::Text {
-                        text: run_id.to_owned(),
+                        text: run_id.into(),
                     }]),
                 }),
             )

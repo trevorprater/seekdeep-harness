@@ -4,7 +4,7 @@ English | [中文](session-reference.zh.md)
 
 Structured cross-session reference requests and prepared message contexts. The [package contract](../../packages/context/session-reference) defines canonical URIs, current-surface projection, tag-safe JSON and byte retention, stable errors, and the untrusted model prompt. Host adapters use these types instead of passing their UI mention syntax into the agent core.
 
-Source: [`packages/context/session-reference/src/types.ts`](../../packages/context/session-reference/src/types.ts)
+Source: [`packages/context/session-reference/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/session-reference/src/types.ts)
 
 ## Inputs and candidates
 
@@ -104,5 +104,5 @@ async prepare( agent: Agent, content: ContentBlock[], references: SessionReferen
 
 Types: [Agent](core.md) · [ContentBlock](llm-streaming.md)
 
-Source: [`packages/context/session-reference/src/index.ts:70`](../../packages/context/session-reference/src/index.ts)
+Source: [`packages/context/session-reference/src/index.ts:70`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/session-reference/src/index.ts)
 <!-- END GENERATED cordis-surface -->

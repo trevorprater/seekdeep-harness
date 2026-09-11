@@ -71,7 +71,7 @@ fn request_text(request: &GenerateOptions) -> String {
         .iter()
         .flat_map(seekdeep_llm::Message::content)
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -116,7 +116,7 @@ async fn real_driver_persists_one_ordered_reading_per_request_without_header_lea
         Arc::new(assert_supported_json_schema(json!({"type": "string"})).expect("schema")),
         Arc::new(|_, value| {
             Ok(vec![ContentBlock::Text {
-                text: value.as_str().unwrap_or_default().to_owned(),
+                text: value.as_str().unwrap_or_default().into(),
             }])
         }),
     );
@@ -175,7 +175,7 @@ async fn real_driver_persists_one_ordered_reading_per_request_without_header_lea
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "start".to_owned(),
+                text: "start".into(),
             }],
             MessageSource::user(),
         ))

@@ -1,6 +1,8 @@
 //! Finalized and partial Assistant content-block classifier parity.
 
-use seekdeep_client_runtime::{AssistantBlock, to_assistant_block, to_assistant_blocks};
+use seekdeep_client_runtime::{
+    AssistantBlock, ConversationValue, to_assistant_block, to_assistant_blocks,
+};
 use serde_json::json;
 
 #[test]
@@ -17,20 +19,23 @@ fn classifies_the_four_known_block_shapes_in_source_order() {
         json!({"type":"reasoning","text":"思考"}),
         json!({"type":"tool-call","id":"c1","name":"echo","arguments":"{}"}),
         json!({"type":"image","attachment":attachment}),
-    ];
+    ]
+    .into_iter()
+    .map(ConversationValue::from)
+    .collect::<Vec<_>>();
     assert_eq!(
         to_assistant_blocks(&blocks),
         vec![
             AssistantBlock::Text {
-                text: "正文".to_owned()
+                text: "正文".into()
             },
             AssistantBlock::Reasoning {
-                text: "思考".to_owned()
+                text: "思考".into()
             },
             AssistantBlock::ToolCall {
-                call_id: "c1".to_owned(),
-                name: "echo".to_owned(),
-                args_raw: "{}".to_owned()
+                call_id: "c1".into(),
+                name: "echo".into(),
+                args_raw: "{}".into()
             },
             AssistantBlock::Image {
                 attachment: blocks[3]["attachment"].clone()
@@ -40,14 +45,14 @@ fn classifies_the_four_known_block_shapes_in_source_order() {
     assert_eq!(
         to_assistant_block(&blocks[0]),
         AssistantBlock::Text {
-            text: "正文".to_owned()
+            text: "正文".into()
         }
     );
 }
 
 #[test]
 fn unknown_blocks_degrade_to_the_exact_raw_value() {
-    let block = json!({"type":"future","payload":{"x":1}});
+    let block = ConversationValue::from(json!({"type":"future","payload":{"x":1}}));
     assert_eq!(
         to_assistant_block(&block),
         AssistantBlock::Other {

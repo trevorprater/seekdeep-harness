@@ -1,6 +1,7 @@
 //! Real-browser protocol verification; no registry, gateway, or transport substitutes.
 
 pub(super) const DRIVER: &str = r#"import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -44,6 +45,35 @@ try {
   });
   await page.goto(origin + '/api/__remote_path_probe__');
   await page.setContent('<!doctype html><html><head></head><body></body></html>');
+  const mapDirectory = join(root, 'packages/api/gateway/lib');
+  const mapDigests = {};
+  for (const name of ['client.web.js.map', 'client_bg.wasm.map']) mapDigests[name] = createHash('sha256').update(await readFile(join(mapDirectory, name))).digest('hex');
+  const sourceMaps = await evaluate(async expected => {
+    const base = '/plugins/@seekdeep-ai/seekdeep-api-gateway/';
+    const read = async name => {
+      const response = await fetch(base + name);
+      if (!response.ok) throw new Error(`Host source map resource ${name} returned ${response.status}`);
+      return response;
+    };
+    const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', value)), byte => byte.toString(16).padStart(2, '0')).join('');
+    const script = await (await read('client.js')).text();
+    if (!script.includes('//# sourceMappingURL=client.js.map')) throw new Error('served browser script omitted its source map URL');
+    const jsResponse = await read('client.js.map'), wasmResponse = await read('client_bg.wasm.map');
+    if (!jsResponse.headers.get('content-type')?.startsWith('application/json') || !wasmResponse.headers.get('content-type')?.startsWith('application/json')) throw new Error('Host source map content types changed');
+    const jsBytes = await jsResponse.arrayBuffer(), wasmMapBytes = await wasmResponse.arrayBuffer();
+    if (await digest(jsBytes) !== expected['client.web.js.map'] || await digest(wasmMapBytes) !== expected['client_bg.wasm.map']) throw new Error('Host did not serve the maps for its browser script and WASM sidecar');
+    const jsMap = JSON.parse(new TextDecoder().decode(jsBytes)), wasmMap = JSON.parse(new TextDecoder().decode(wasmMapBytes));
+    if (jsMap.version !== 3 || jsMap.file !== 'client.js' || !jsMap.sources.length || !jsMap.mappings) throw new Error('served JavaScript source map omitted its bindings');
+    if (wasmMap.version !== 3 || wasmMap.file !== 'client_bg.wasm' || !wasmMap.sources.some(source => source.endsWith('.rs')) || !wasmMap.mappings) throw new Error('served WASM source map omitted Rust locations');
+    const module = await WebAssembly.compile(await (await read('client_bg.wasm')).arrayBuffer());
+    const sections = WebAssembly.Module.customSections(module, 'sourceMappingURL');
+    if (sections.length !== 1) throw new Error('served WASM must contain one sourceMappingURL section');
+    const section = new Uint8Array(sections[0]);
+    let offset = 0, length = 0, shift = 0, byte;
+    do { byte = section[offset++]; length |= (byte & 127) << shift; shift += 7; } while (byte & 128);
+    if (offset + length !== section.length || new TextDecoder().decode(section.subarray(offset)) !== 'client_bg.wasm.map') throw new Error('served WASM points at the wrong source map');
+    return { module: '@seekdeep-ai/seekdeep-api-gateway', javascriptSources: jsMap.sources.length, rustSources: wasmMap.sources.length, leanMapMatched: true, wasmMapMatched: true, wasmCustomSection: true };
+  }, mapDigests);
   const assets = {};
   for (const path of ['vendor/cordis/lib/client.js', 'vendor/cordis/lib/index.js', 'packages/typert/registry/lib/client.js', 'packages/client/connection/lib/client.js', 'packages/api/gateway/lib/client.js', 'packages/api/remotes/lib/client.js']) assets[path] = await readFile(join(root, path), 'utf8');
   const bytes = (await readFile(join(root, 'vendor/cordis/lib/client_bg.wasm'))).toString('base64');
@@ -57,7 +87,7 @@ try {
       bindings: await readFile(join(root, directory, stem + '.js'), 'utf8'),
       bytes: (await readFile(join(root, directory, stem + '_bg.wasm'))).toString('base64'), stem,
     });
-    loaderAssets = { boot: JSON.parse(match[1]), loader: await readRuntime('vendor/loader/lib', 'client'), modules: await readRuntime('packages/client/modules/lib', 'wasm', 'client.js'), immer: await readFile(join(root, 'support/browser-dependencies/node_modules/immer/dist/immer.production.mjs'), 'utf8') };
+    loaderAssets = { boot: JSON.parse(match[1]), loader: await readRuntime('vendor/loader/lib', 'client'), modules: await readRuntime('packages/client/modules/lib', 'wasm', 'client.js') };
     for (const id of ['@seekdeep-ai/seekdeep-api-remotes', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection']) {
       if (!loaderAssets.boot.entries.some(entry => entry.id === id)) throw new Error('initial Host boot graph omitted ' + id);
     }
@@ -76,6 +106,24 @@ try {
     const binding = blob(assets['vendor/cordis/lib/client.js']);
     const module = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(binding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
     const cordis = await import(module);
+    const stateNames = ['PENDING', 'LOADING', 'ACTIVE', 'FAILED', 'DISPOSED', 'UNLOADING'], states = cordis.FiberState;
+    if (Reflect.ownKeys(states).join(',') !== ['0', '1', '2', '3', '4', '5', ...stateNames].join(',')) throw new Error('FiberState numeric reverse entries or property order changed');
+    for (const [number, name] of stateNames.entries()) {
+      for (const [key, value] of [[number, name], [name, number]]) {
+        const descriptor = Object.getOwnPropertyDescriptor(states, key);
+        if (descriptor?.value !== value || !descriptor.writable || !descriptor.enumerable || !descriptor.configurable) throw new Error('FiberState property descriptors changed');
+      }
+    }
+    try {
+      states.ACTIVE = 20; states[2] = 'REPLACED';
+      if (states.ACTIVE !== 20 || states[2] !== 'REPLACED') throw new Error('FiberState export is not mutable');
+      const stateProbe = new cordis.Context();
+      if (stateProbe.fiber.state !== 2) throw new Error('FiberState export mutation changed compiled lifecycle states');
+      await stateProbe.fiber.dispose();
+    } finally { states.ACTIVE = 2; states[2] = 'ACTIVE'; }
+    const runtimeNameReads = [], nameGetter = Object.getOwnPropertyDescriptor(cordis.Fiber.prototype, 'name').get;
+    const nameProbe = { get runtime() { runtimeNameReads.push('runtime'); return { get name() { runtimeNameReads.push('name'); return 'browser runtime name'; } }; } };
+    if (nameGetter.call(nameProbe) !== 'browser runtime name' || runtimeNameReads.join(',') !== 'runtime,name,runtime,name') throw new Error('Fiber name getter did not reread its current runtime and name');
     const handoffs = new Map();
     class BrowserContext extends cordis.Context {}
     const client = new BrowserContext();
@@ -98,6 +146,18 @@ try {
     const lazyLogger = extensionOwner.intercept('logger', { get name() { lazyConfigReads++; return 'lazy-browser'; } });
     if (lazyConfigReads !== 0 || lazyLogger.logger().name !== 'lazy-browser' || lazyConfigReads !== 1 || extensionCalls !== 2) throw new Error('Context intercept config was evaluated before use');
     window.remotePathContextResults.extensionOverride = true;
+    const removeOuterScope = client.provide('browser-metadata-scope', 1), labels = Object.create(client[cordis.symbols.isolate]);
+    labels['browser-metadata-scope'] = Symbol('browser metadata scope');
+    const metadataScope = client.extend({ [cordis.symbols.isolate]: labels }), removeInnerScope = metadataScope.provide('browser-metadata-scope', 2);
+    if (client.get('browser-metadata-scope') !== 1 || metadataScope.get('browser-metadata-scope') !== 2) throw new Error('reflection used native scope metadata for a structurally isolated Context');
+    await removeInnerScope();
+    if (client.get('browser-metadata-scope') !== 1 || metadataScope.get('browser-metadata-scope') !== undefined) throw new Error('structural scope withdrawal affected another scope');
+    const structuralOwner = { state: 2, name: 'browser structural provider', store: Object.create(null), effect(setup) { return setup(); } };
+    const structuralContext = client.extend({ fiber: structuralOwner }), removeStructural = structuralContext.provide('browser-structural-provider', 7);
+    if (structuralContext.reflect._getImpl('browser-structural-provider').fiber !== structuralOwner || structuralOwner.store['browser-structural-provider'].value !== 7 || client.get('browser-structural-provider') !== 7) throw new Error('reflection assigned a structural provider to the native Fiber');
+    await removeStructural(); await removeOuterScope();
+    if (structuralOwner.store['browser-structural-provider'] !== undefined) throw new Error('structural provider retained its owned service');
+    Object.assign(window.remotePathContextResults, { metadataScope: true, structuralProvider: true });
     window.remotePathContextResults.lazyConfig = true;
     const independentReflection = new client.reflect.constructor(client);
     const removeIndependent = independentReflection.provide('browser-independent-record', 17);
@@ -126,7 +186,7 @@ try {
     }
     await runnerMount.dispose();
     if (runnerFiber.uid !== null || runner.epoch !== '__INACTIVE__') throw new Error('Fiber disposal left an active runner');
-    window.remotePathFiberResults = { sourceFields: true, sharedRunner: true, lifecycleDispatch: lifecycleTrace.slice(0, expectedLifecycle.length), asyncMethods: true, disposed: true };
+    window.remotePathFiberResults = { numericStateEnum: true, runtimeNameReads, sourceFields: true, sharedRunner: true, lifecycleDispatch: lifecycleTrace.slice(0, expectedLifecycle.length), asyncMethods: true, disposed: true };
     const delegatedParent = client.extend(), extendParent = delegatedParent.extend;
     let constructorContext, delegatedValue, delegatedConstructors = 0;
     Object.defineProperty(delegatedParent, 'extend', { value(metadata) { if (metadata.fiber) { delegatedConstructors++; constructorContext = metadata.fiber.ctx; } return extendParent.call(this, { ...metadata, delegated: true }); } });
@@ -173,6 +233,29 @@ try {
     if (startupFailure !== loggerFailure || client.logger.buffer.at(-1).args[0] !== loggerFailure || client.logger.buffer.at(-1).name !== 'browser-log-failure') throw new Error('Fiber failure did not reach the browser logger intact');
     await failedLoggingPlugin.dispose();
     window.remotePathLoggerResults = { installed: true, scoped: true, originalFailure: true, formatted: formattedLog };
+    const exporterFailure = new Error('browser exporter failure'), exporterTrace = [];
+    const iteratorLogger = new cordis.Logger({ name: 'iterator' }, { _snMessage: 0, exporters: { values() { return { [Symbol.iterator]() { return this; }, next() { return { done: false, value: { export() { throw exporterFailure; } } }; }, return() { exporterTrace.push('closed'); return {}; } }; } } });
+    let exporterCaught;
+    try { iteratorLogger.info('message'); } catch (error) { exporterCaught = error; }
+    if (exporterCaught !== exporterFailure || exporterTrace.join(',') !== 'closed') throw new Error('logger did not close a failed exporter iterator');
+    const metadataPrototype = { injected: true }, metadataMessages = [];
+    new cordis.Logger({ name: 'metadata', meta: { ['__proto__']: metadataPrototype } }, { _snMessage: 0, exporters: new Map([[1, { export(message) { metadataMessages.push(message); } }]]) }).info('message');
+    if (Object.getPrototypeOf(metadataMessages[0]) !== Object.prototype || Object.getOwnPropertyDescriptor(metadataMessages[0], '__proto__')?.value !== metadataPrototype) throw new Error('logger metadata did not use data-property spread');
+    const trailingFailure = new Error('browser trailing formatter'), trailingTrace = [], trailingArgs = ['message'];
+    trailingArgs[Symbol.iterator] = function* () { try { trailingTrace.push('first'); yield {}; trailingTrace.push('second'); yield {}; } finally { trailingTrace.push('closed'); } };
+    let trailingCaught;
+    try { cordis.Logger.format({ formatters: { o() { throw trailingFailure; } } }, { args: { slice() { return trailingArgs; } } }); } catch (error) { trailingCaught = error; }
+    if (trailingCaught !== trailingFailure || trailingTrace.join(',') !== 'first,closed') throw new Error('logger trailing arguments were consumed eagerly');
+    const invokeTarget = () => {}, invokeContext = {};
+    invokeTarget[cordis.symbols.tracker] = { property: 'ctx', noShadow: true };
+    let invokeReads = 0;
+    Object.defineProperty(invokeTarget, cordis.symbols.invoke, { get() { invokeReads++; return { apply(receiver, args) { return receiver.ctx === invokeContext ? args[0] : null; } }; } });
+    if (cordis.getTraceable(invokeContext, invokeTarget)(7) !== 7 || invokeReads !== 2) throw new Error('traced invocation lost its getter or custom apply semantics');
+    Object.assign(window.remotePathLoggerResults, { iteratorClosure: true, metadataSpread: true, trailingStreaming: true, tracedInvoke: true });
+    let descriptorFailure;
+    try { cordis.getPropertyDescriptor('text', 'length'); } catch (error) { descriptorFailure = error; }
+    if (!(descriptorFailure instanceof TypeError) || cordis.getPropertyDescriptor('', 'length') !== undefined) throw new Error('property-descriptor lookup changed primitive handling');
+    window.remotePathLoggerResults.descriptorBoundary = true;
     const originalEffectKey = cordis.symbols.effect, changedEffectKey = Symbol('browser effect key'), symbolTrace = [];
     try {
       cordis.symbols.effect = changedEffectKey;
@@ -577,11 +660,17 @@ try {
         { id: 'connection', name: '@seekdeep-ai/seekdeep-client-connection' },
       ];
       await Promise.all(entries.map(entry => loader.create(entry))); await loader.await();
-      const immerUrl = blob(loaderAssets.immer);
-      const immer = await import(immerUrl);
-      modules.registerStatic('immer', immer);
-      URL.revokeObjectURL(immerUrl);
       const runtime = await modules.import('@seekdeep-ai/seekdeep-client-runtime', '', undefined);
+      const initialStoreValue = { count: 0, nested: { value: 1 } }, snapshots = [];
+      const runtimeStore = runtime.createSnapshotStore(initialStoreValue, { flush: 'sync' });
+      const unsubscribeStore = runtimeStore.subscribe(() => snapshots.push(runtimeStore.getSnapshot()));
+      runtimeStore.update(draft => { draft.count++; draft.nested.value = 2; });
+      const updatedStoreValue = runtimeStore.getSnapshot();
+      if (updatedStoreValue.count !== 1 || updatedStoreValue.nested.value !== 2 || initialStoreValue.count !== 0 || initialStoreValue.nested.value !== 1 || updatedStoreValue.nested === initialStoreValue.nested || snapshots.length !== 1 || snapshots[0] !== updatedStoreValue) throw new Error('bundled runtime Store lost draft isolation or synchronous notification');
+      unsubscribeStore();
+      runtimeStore.update(draft => { draft.count++; });
+      if (runtimeStore.getSnapshot().count !== 2 || snapshots.length !== 1 || modules.loadCache.has('immer')) throw new Error('runtime Store cleanup failed or introduced an extra external dependency');
+      window.remotePathRuntimeStore = { immutableDrafts: true, notifications: true, unsubscribe: true, bundledImmer: true };
       const sessions = new runtime.SessionRuntime(client, client.connection.api, client.remote);
       const workspaces = new runtime.WorkspaceRuntime(client, client.connection.api, sessions);
       let pickerFailure;
@@ -765,7 +854,7 @@ try {
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
   await page.evaluate(result => { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result, null, 2); document.body.replaceChildren(pre); }, result);
   await page.screenshot({ path: join(output, 'remote-path.png'), fullPage: true });
-  console.log(JSON.stringify({ ...result, browserContext: await page.evaluate(() => window.remotePathContextResults), browserFiber: await page.evaluate(() => window.remotePathFiberResults), browserLogger: await page.evaluate(() => window.remotePathLoggerResults), browserSymbolStacks: await page.evaluate(() => window.remotePathSymbolStackResults), browserReflection: await page.evaluate(() => window.remotePathReflectionResults), browserServices: await page.evaluate(() => window.remotePathServiceResults), browserConstructors: await page.evaluate(() => window.remotePathConstructorResults), browserEffects: await page.evaluate(() => window.remotePathEffectResults), browserEventLifecycle: true, browser: await browser.version(), requests }));
+  console.log(JSON.stringify({ ...result, sourceMaps, browserContext: await page.evaluate(() => window.remotePathContextResults), browserFiber: await page.evaluate(() => window.remotePathFiberResults), browserLogger: await page.evaluate(() => window.remotePathLoggerResults), browserSymbolStacks: await page.evaluate(() => window.remotePathSymbolStackResults), browserReflection: await page.evaluate(() => window.remotePathReflectionResults), browserServices: await page.evaluate(() => window.remotePathServiceResults), browserConstructors: await page.evaluate(() => window.remotePathConstructorResults), browserEffects: await page.evaluate(() => window.remotePathEffectResults), runtimeStore: await page.evaluate(() => window.remotePathRuntimeStore), browserEventLifecycle: true, browser: await browser.version(), requests }));
 } finally {
   if (browser) await browser.close();
   if (server && server.exitCode === null && server.signalCode === null) {

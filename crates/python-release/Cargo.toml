@@ -15,13 +15,18 @@ indexmap.workspace = true
 regex.workspace = true
 regress.workspace = true
 seekdeep-python-sdk = { path = "../python-sdk" }
+seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-cordis = { path = "../cordis" }
 serde_yml.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

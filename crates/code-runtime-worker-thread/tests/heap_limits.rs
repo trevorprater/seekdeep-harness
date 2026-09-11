@@ -8,7 +8,7 @@ const BOUNDED_ALLOCATION: &str = "console.log('before'); const retained = []; fo
 
 fn request(program: &str) -> CodeRunRequest {
     CodeRunRequest {
-        program: program.to_owned(),
+        program: program.into(),
         bindings: Vec::new(),
         signal: None,
     }
@@ -38,7 +38,7 @@ async fn heap_limit_stops_only_the_over_budget_worker_and_preserves_logs() {
     );
     assert_eq!(
         limited.run(request("return 'alive'")).await.unwrap().value,
-        Some(json!("alive"))
+        Some(json!("alive").into())
     );
 
     let roomy = runtime(512.0)
@@ -47,5 +47,5 @@ async fn heap_limit_stops_only_the_over_budget_worker_and_preserves_logs() {
         .unwrap();
     assert_eq!(roomy.logs, ["before"]);
     assert_eq!(roomy.error, None);
-    assert_eq!(roomy.value, Some(json!(8)));
+    assert_eq!(roomy.value, Some(json!(8).into()));
 }

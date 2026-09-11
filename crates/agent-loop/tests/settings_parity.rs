@@ -206,7 +206,7 @@ async fn tool_groups_snapshot_the_live_cap_without_resizing_an_inflight_group() 
                 Arc::new(assert_supported_json_schema(json!({"type":"string"})).unwrap()),
                 Arc::new(|_, value| {
                     Ok(vec![ContentBlock::Text {
-                        text: value.as_str().unwrap().to_owned(),
+                        text: value.as_str().unwrap().into(),
                     }])
                 }),
             ),

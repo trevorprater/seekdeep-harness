@@ -43,7 +43,7 @@ fn event(seq: u64, event_type: &str, data: Value, surface_op: Option<SurfaceOp>)
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )

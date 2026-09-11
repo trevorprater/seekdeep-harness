@@ -264,7 +264,7 @@ async fn records_a_declared_tool_filter_in_the_descriptor() {
         Arc::new(|_args: serde_json::Value, _run| {
             Box::pin(async {
                 Ok(vec![ContentBlock::Text {
-                    text: "noop".to_owned(),
+                    text: "noop".into(),
                 }])
             })
         }),

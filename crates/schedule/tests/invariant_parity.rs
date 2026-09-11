@@ -54,7 +54,7 @@ fn malformed_event(seq: u64) -> SessionEvent {
         event_type: "schedule/change".to_owned(),
         seq,
         time: 1,
-        data: json!({"version": 9, "operation": "delete", "id": "schedule-1"}),
+        data: json!({"version": 9, "operation": "delete", "id": "schedule-1"}).into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,

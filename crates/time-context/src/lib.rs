@@ -274,7 +274,7 @@ fn reading(text: String) -> UserMessage {
         }])
         .expect("snapshot section serializes"),
     );
-    UserMessage::new(vec![ContentBlock::Text { text }], source)
+    UserMessage::new(vec![ContentBlock::text(text)], source)
 }
 
 fn install_listener(
@@ -425,7 +425,7 @@ pub fn user_rpc_message(text: &str, rpc_id: &str, time_zone: &str) -> UserMessag
     );
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         source,
     )

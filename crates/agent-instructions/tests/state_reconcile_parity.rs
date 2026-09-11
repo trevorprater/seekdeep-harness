@@ -307,7 +307,7 @@ async fn compacted_visible_instruction_rearms_unchanged_scope() {
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: "replacement checkpoint".to_owned(),
+                    text: "replacement checkpoint".into(),
                 }],
                 MessageSource::plugin("compact"),
             ))

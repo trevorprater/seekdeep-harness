@@ -4,7 +4,7 @@
 use std::hash::{Hash, Hasher};
 
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId};
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, JsonString};
 use seekdeep_session_title::SessionTitleSnapshot;
 use serde::{Deserialize, Serialize};
 
@@ -384,7 +384,7 @@ pub struct SessionEventSearchDocument {
     #[serde(flatten)]
     pub record: SessionEventRecord,
     /// First-party semantic text used by scan filters and full-text indexes.
-    pub text: String,
+    pub text: JsonString,
 }
 
 /// One cursor-paginated result page.

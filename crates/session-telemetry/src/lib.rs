@@ -5,6 +5,7 @@ use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_core::session::JsonValue;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -62,7 +63,7 @@ pub struct SessionTelemetryRecord {
     /// Identity attributes; string or number values only.
     pub attributes: Map<String, Value>,
     /// The complete payload, never mutated after handoff.
-    pub body: Value,
+    pub body: JsonValue,
 }
 
 /// The minimum backend contract the coordinator requires.
@@ -146,7 +147,7 @@ mod tests {
                 ("session.id".to_owned(), Value::String("s1".to_owned())),
                 ("event.seq".to_owned(), Value::Number(7.into())),
             ]),
-            body: serde_json::json!({"type": "tool/result"}),
+            body: serde_json::json!({"type": "tool/result"}).into(),
         };
         let value = serde_json::to_value(&record).expect("serialize");
         assert_eq!(value["channel"], "ledger");

@@ -105,7 +105,7 @@ fn commit_plan_mode(session: &Session, active: bool, turn: u64) {
         .unwrap();
 }
 
-fn plan(snapshot: &ProjectionSnapshot) -> &Value {
+fn plan(snapshot: &ProjectionSnapshot) -> &seekdeep_core::session::JsonValue {
     snapshot.values.get("plan").expect("plan value")
 }
 
@@ -265,7 +265,7 @@ fn cold_replay_recovers_pending_from_the_log_alone() {
     for event in hot.session.events() {
         if matches!(event.event_type.as_str(), "command/run" | "plan/mode") {
             cold.session
-                .append(&event.event_type, event.data, AppendOptions::default())
+                .append_json(&event.event_type, event.data, AppendOptions::default())
                 .unwrap();
         }
     }

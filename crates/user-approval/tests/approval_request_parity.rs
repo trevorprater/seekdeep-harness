@@ -145,10 +145,10 @@ async fn absent_optional_fields_are_omitted_from_the_asked_event() {
     let audit = audit(&session);
     let mut keys = audit[0]
         .data
-        .as_object()
+        .object_entries()
         .expect("asked data")
-        .keys()
-        .map(String::as_str)
+        .into_iter()
+        .map(|(key, _)| key.deserialize::<String>().expect("metadata key"))
         .collect::<Vec<_>>();
     keys.sort_unstable();
     assert_eq!(keys, ["id", "toolName"]);

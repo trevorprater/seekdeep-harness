@@ -222,7 +222,7 @@ impl HeadlessRunner {
         if !stopping.is_aborted() {
             handle.agent.followup(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: task.to_owned(),
+                    text: task.into(),
                 }],
                 MessageSource::user(),
             ))?;

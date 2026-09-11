@@ -109,22 +109,18 @@ pub fn collect_session_title_messages(
         if event.event_type != "user/message" {
             continue;
         }
-        let source_kind = event
-            .data
-            .get("source")
-            .and_then(|source| source.get("kind"))
-            .and_then(Value::as_str);
+        let source_kind = event.data["source"]["kind"].as_str();
         if source_kind != Some("user") {
             continue;
         }
-        let Some(content) = event.data.get("content").and_then(Value::as_array) else {
+        let Some(content) = event.data["content"].as_array() else {
             continue;
         };
         let text = content
             .iter()
             .filter_map(|block| {
-                if block.get("type").and_then(Value::as_str) == Some("text") {
-                    block.get("text").and_then(Value::as_str)
+                if block["type"].as_str() == Some("text") {
+                    block["text"].as_str()
                 } else {
                     None
                 }
@@ -552,11 +548,16 @@ impl SessionTitleService {
             || Ok(Value::Null),
             |state: &Value, event: &SessionEvent| {
                 if event.event_type == "session/title" {
-                    let title = event.data.get("title").cloned().unwrap_or(Value::Null);
+                    let title = event
+                        .data
+                        .get("title")
+                        .map(|title| title.deserialize::<Value>())
+                        .transpose()?
+                        .unwrap_or(Value::Null);
                     if title == *state {
                         Ok(ProjectionTransition::Unchanged)
                     } else {
-                        Ok(ProjectionTransition::Changed(title))
+                        Ok(ProjectionTransition::Changed(title.into()))
                     }
                 } else {
                     Ok(ProjectionTransition::Unchanged)
@@ -599,11 +600,7 @@ impl SessionTitleService {
         if !self.service_active() {
             return;
         }
-        let source_kind = event
-            .data
-            .get("source")
-            .and_then(|source| source.get("kind"))
-            .and_then(Value::as_str);
+        let source_kind = event.data["source"]["kind"].as_str();
         if source_kind != Some("user")
             || collect_session_title_messages(std::slice::from_ref(event), None).is_empty()
         {
@@ -683,14 +680,12 @@ impl SessionTitleService {
         };
         let provider = header
             .get("provider")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
+            .and_then(|provider| provider.deserialize::<String>().ok())
+            .unwrap_or_default();
         let model = header
             .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
+            .and_then(|model| model.deserialize::<String>().ok())
+            .unwrap_or_default();
         let _ = self.start_pending(
             session,
             &state,

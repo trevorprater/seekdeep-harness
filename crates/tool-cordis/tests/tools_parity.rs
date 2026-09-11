@@ -7,7 +7,7 @@ use seekdeep_agent::{
 };
 use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::{Context, EventArgs, EventReply};
-use seekdeep_core::session::{Session, SessionId};
+use seekdeep_core::session::{JsonValue, Session, SessionId};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, MessageSource, UserMessage};
 use seekdeep_scope::ScopeKey;
 use seekdeep_system_prompt::{AssembleContext, SystemPromptConfig};
@@ -59,6 +59,22 @@ fn harness() -> Harness {
     }
 }
 
+#[test]
+fn package_definition_presentation_preserves_raw_names_purpose_and_code() {
+    let harness = harness();
+    let arguments = JsonValue::parse(
+        r#"{"plugin":{"kind":"existing","pluginId":"abc-1"},"name":"\ud800","purpose":"\udfff","code":{"host":"return '\ud800';"}}"#.to_owned(),
+    ).unwrap();
+    let definition = harness.tools.get("cordis_define", None).unwrap();
+    let view = definition.present_call.as_ref().unwrap()(&arguments).unwrap();
+    let encoded = JsonValue::from_serialize(&view).unwrap();
+    assert_eq!(encoded["rawInput"], arguments["code"]);
+    let expected_title =
+        JsonValue::parse(r#""Register Cordis Plugin \"\ud800\" for abc-1: \udfff""#.to_owned())
+            .unwrap();
+    assert_eq!(encoded["title"].to_utf16(), expected_title.to_utf16());
+}
+
 async fn call(harness: &Harness, name: &str, arguments: Value) -> ToolExecutionResult {
     harness
         .tools
@@ -79,7 +95,7 @@ fn text(result: &ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -286,7 +302,7 @@ async fn explicit_plugin_references_inject_exact_base_or_unavailable_instruction
     assert!(!defined.is_error(), "{}", text(&defined));
     let message = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "modify @demo-1 and explain @ghost-9".to_owned(),
+            text: "modify @demo-1 and explain @ghost-9".into(),
         }],
         MessageSource::user(),
     );
@@ -325,7 +341,7 @@ async fn explicit_plugin_references_inject_exact_base_or_unavailable_instruction
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<String>();
@@ -336,7 +352,7 @@ async fn explicit_plugin_references_inject_exact_base_or_unavailable_instruction
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<String>();

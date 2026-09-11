@@ -53,7 +53,7 @@ fn text(result: &ToolExecutionResult) -> Option<&str> {
     let ContentBlock::Text { text } = success.content.first()? else {
         return None;
     };
-    Some(text)
+    text.as_str()
 }
 
 #[tokio::test]

@@ -769,7 +769,7 @@ impl SubagentContinuationManager {
         delivery: SubagentReportDelivery,
     ) -> anyhow::Result<MessageId> {
         let mut blocks = vec![ContentBlock::Text {
-            text: format!("Background subagent {} reported:", activation.child_id),
+            text: format!("Background subagent {} reported:", activation.child_id).into(),
         }];
         blocks.extend(content);
         let message = UserMessage::new(blocks, report_source(&activation.child_id));
@@ -1704,15 +1704,15 @@ impl SubagentContinuationManager {
             };
             let summary = settlement_summary(&activation.child_id, terminal.stop_reason);
             let mut blocks = vec![ContentBlock::Text {
-                text: summary.clone(),
+                text: summary.clone().into(),
             }];
             match &terminal.output {
                 None => blocks.push(ContentBlock::Text {
-                    text: "It left no closing message.".to_owned(),
+                    text: "It left no closing message.".into(),
                 }),
                 Some(output) => {
                     blocks.push(ContentBlock::Text {
-                        text: "Its closing message:".to_owned(),
+                        text: "Its closing message:".into(),
                     });
                     blocks.extend(output.clone());
                 }

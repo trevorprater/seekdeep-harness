@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use futures::{FutureExt as _, future::Shared};
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey};
-use seekdeep_core::session::{Session, SessionEvent};
+use seekdeep_core::session::{JsonValue, Session, SessionEvent};
 use seekdeep_llm::APP_IDENTITY;
 use seekdeep_session_telemetry::{
     SessionTelemetryBackend, SessionTelemetryCapture, SessionTelemetryChannel,
@@ -84,7 +84,7 @@ pub struct OtelLogRecord {
     /// Record attributes.
     pub attributes: Map<String, Value>,
     /// Record body.
-    pub body: Value,
+    pub body: JsonValue,
 }
 
 /// Validated exporter pipeline creation request.

@@ -2,12 +2,14 @@
 
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     ConversationBoundaryStatus, ConversationEventInput, ConversationLocation,
     ConversationLocationData, ConversationLocationDataChange, ConversationLocationEvent,
     ConversationLocationIndex, ConversationOwnedLocationData,
 };
-use serde_json::{Value, json};
+
+include!("support/conversation_json.rs");
 
 fn event(seq: u64, event_type: &str, data: Value) -> Rc<ConversationLocationEvent> {
     ConversationLocationEvent::new(seq, event_type, data)
@@ -34,16 +36,20 @@ fn location(index: &ConversationLocationIndex, event: &ConversationLocationEvent
 #[test]
 fn rebuild_resolves_boundaries_inheritance_session_affinity_and_unknown_coordinates() {
     let events = [
-        event(0, "context/message", json!({"turn":null})),
-        event(1, "turn/start", json!({"turn":1})),
-        event(2, "user/message", json!({})),
-        event(3, "step/start", json!({"turn":1,"step":1})),
-        event(4, "assistant/chunk", json!({})),
-        event(5, "step/end", json!({"turn":1,"step":1})),
-        event(6, "tool/result", json!({})),
-        event(7, "turn/end", json!({"turn":1})),
-        event(8, "context/message", json!({})),
-        event(9, "custom", json!({"turn":2,"step":3})),
+        event(
+            0,
+            "context/message",
+            conversation_json!({"turn":Value::from(serde_json::Value::Null)}),
+        ),
+        event(1, "turn/start", conversation_json!({"turn":1})),
+        event(2, "user/message", conversation_json!({})),
+        event(3, "step/start", conversation_json!({"turn":1,"step":1})),
+        event(4, "assistant/chunk", conversation_json!({})),
+        event(5, "step/end", conversation_json!({"turn":1,"step":1})),
+        event(6, "tool/result", conversation_json!({})),
+        event(7, "turn/end", conversation_json!({"turn":1})),
+        event(8, "context/message", conversation_json!({})),
+        event(9, "custom", conversation_json!({"turn":2,"step":3})),
     ];
     let inputs = events.iter().map(input).collect::<Vec<_>>();
     let mut index = ConversationLocationIndex::default();
@@ -88,7 +94,7 @@ fn rebuild_resolves_boundaries_inheritance_session_affinity_and_unknown_coordina
 #[test]
 fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
     let mut index = ConversationLocationIndex::default();
-    let turn_start = event(1, "turn/start", json!({"turn":1}));
+    let turn_start = event(1, "turn/start", conversation_json!({"turn":1}));
     assert_eq!(
         index
             .append_boundary(&turn_start)
@@ -97,10 +103,10 @@ fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
             .collect::<Vec<_>>(),
         [1]
     );
-    let before_step = event(2, "user/message", json!({}));
+    let before_step = event(2, "user/message", conversation_json!({}));
     index.append_non_boundary(&before_step);
     assert_eq!(location(&index, &before_step), "turn:1");
-    let step_start = event(3, "step/start", json!({"turn":1,"step":1}));
+    let step_start = event(3, "step/start", conversation_json!({"turn":1,"step":1}));
     assert_eq!(
         index
             .append_boundary(&step_start)
@@ -110,10 +116,10 @@ fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
         [1, 2, 3]
     );
     assert_eq!(location(&index, &before_step), "turn:1");
-    let in_step = event(4, "assistant/chunk", json!({}));
+    let in_step = event(4, "assistant/chunk", conversation_json!({}));
     index.append_non_boundary(&in_step);
     assert_eq!(location(&index, &in_step), "step:1:1");
-    let step_end = event(5, "step/end", json!({"turn":1,"step":1}));
+    let step_end = event(5, "step/end", conversation_json!({"turn":1,"step":1}));
     assert_eq!(
         index
             .append_boundary(&step_end)
@@ -122,10 +128,10 @@ fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
             .collect::<Vec<_>>(),
         [1, 2, 3, 4, 5]
     );
-    let after_step = event(6, "tool/result", json!({}));
+    let after_step = event(6, "tool/result", conversation_json!({}));
     index.append_non_boundary(&after_step);
     assert_eq!(location(&index, &after_step), "turn:1");
-    let turn_end = event(7, "turn/end", json!({"turn":1}));
+    let turn_end = event(7, "turn/end", conversation_json!({"turn":1}));
     assert_eq!(
         index
             .append_boundary(&turn_end)
@@ -134,12 +140,12 @@ fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
             .collect::<Vec<_>>(),
         [1, 2, 3, 4, 5, 6, 7]
     );
-    let after_turn = event(8, "context/message", json!({}));
+    let after_turn = event(8, "context/message", conversation_json!({}));
     index.append_non_boundary(&after_turn);
     assert_eq!(location(&index, &after_turn), "session");
     assert_eq!(
         index
-            .append_boundary(&event(9, "assistant/message", json!({})))
+            .append_boundary(&event(9, "assistant/message", conversation_json!({})))
             .unwrap_err()
             .to_string(),
         "conversation Location boundary expected, received assistant/message"
@@ -150,16 +156,20 @@ fn append_paths_update_only_the_tail_and_preserve_recorded_coordinates() {
 fn malformed_and_explicit_session_coordinates_degrade_without_ambient_state() {
     let mut index = ConversationLocationIndex::default();
     index
-        .append_boundary(&event(1, "turn/start", json!({"turn":1})))
+        .append_boundary(&event(1, "turn/start", conversation_json!({"turn":1})))
         .unwrap();
     let malformed = event(
         2,
         "custom",
-        json!({"turn":9_007_199_254_740_992_u64,"step":-1}),
+        conversation_json!({"turn":9_007_199_254_740_992_u64,"step":-1}),
     );
     index.append_non_boundary(&malformed);
     assert_eq!(location(&index, &malformed), "turn:1");
-    let session = event(3, "custom", json!({"turn":null,"step":1}));
+    let session = event(
+        3,
+        "custom",
+        conversation_json!({"turn":Value::from(serde_json::Value::Null),"step":1}),
+    );
     index.append_non_boundary(&session);
     assert_eq!(location(&index, &session), "session");
 }
@@ -168,14 +178,14 @@ fn malformed_and_explicit_session_coordinates_degrade_without_ambient_state() {
 #[allow(clippy::too_many_lines)] // One transaction covers replacement, transfer, conflict, and clear.
 fn location_data_keeps_reader_identity_enforces_ownership_and_supports_atomic_transfer() {
     let mut index = ConversationLocationIndex::default();
-    let start = event(1, "turn/start", json!({"turn":1}));
-    let step = event(2, "step/start", json!({"turn":1,"step":1}));
+    let start = event(1, "turn/start", conversation_json!({"turn":1}));
+    let step = event(2, "step/start", conversation_json!({"turn":1,"step":1}));
     index.rebuild(&[input(&start), input(&step)]).unwrap();
     let timeline = index.snapshot();
     let turn_store = timeline.turns[&1].data.clone();
     let step_store = timeline.turns[&1].steps[0].data.clone();
-    let turn_value = Rc::new(json!({"label":"one"}));
-    let step_value = Rc::new(json!([1, 2]));
+    let turn_value = Rc::new(conversation_json!({"label":"one"}));
+    let step_value = Rc::new(conversation_json!([1, 2]));
     assert!(
         index
             .replace_data(&[
@@ -226,7 +236,7 @@ fn location_data_keeps_reader_identity_enforces_ownership_and_supports_atomic_tr
             .unwrap()
     );
 
-    let transferred = Rc::new(json!({"label":"two"}));
+    let transferred = Rc::new(conversation_json!({"label":"two"}));
     assert!(
         index
             .apply_data(&[
@@ -235,7 +245,7 @@ fn location_data_keeps_reader_identity_enforces_ownership_and_supports_atomic_tr
                     previous: Some(ConversationLocationData::Turn {
                         turn: 1,
                         key: "summary".to_owned(),
-                        value: Rc::new(Value::Null),
+                        value: Rc::new(Value::from(serde_json::Value::Null)),
                     }),
                     next: None,
                 },
@@ -263,7 +273,7 @@ fn location_data_keeps_reader_identity_enforces_ownership_and_supports_atomic_tr
                 next: Some(ConversationLocationData::Turn {
                     turn: 1,
                     key: "summary".to_owned(),
-                    value: Rc::new(json!(3)),
+                    value: Rc::new(conversation_json!(3)),
                 }),
             }])
             .unwrap_err()
@@ -289,7 +299,7 @@ fn step_scoped_data_without_a_step_fails_at_the_publication_edge() {
                 turn: 1,
                 step: None,
                 key: "usage".to_owned(),
-                value: Rc::new(json!(1)),
+                value: Rc::new(conversation_json!(1)),
             },
         }])
         .unwrap_err();
@@ -301,9 +311,9 @@ fn step_scoped_data_without_a_step_fails_at_the_publication_edge() {
 
 #[test]
 fn loaded_end_boundaries_close_missing_starts_and_turn_boundaries_stay_turn_scoped() {
-    let call = event(10, "tool/call", json!({"turn":2,"step":3}));
-    let step_end = event(11, "step/end", json!({"turn":2,"step":3}));
-    let turn_end = event(12, "turn/end", json!({"turn":2}));
+    let call = event(10, "tool/call", conversation_json!({"turn":2,"step":3}));
+    let step_end = event(11, "step/end", conversation_json!({"turn":2,"step":3}));
+    let turn_end = event(12, "turn/end", conversation_json!({"turn":2}));
     let mut rebuilt = ConversationLocationIndex::default();
     rebuilt
         .rebuild(&[input(&call), input(&step_end), input(&turn_end)])
@@ -317,9 +327,9 @@ fn loaded_end_boundaries_close_missing_starts_and_turn_boundaries_stay_turn_scop
     assert!(step.start.is_none());
 
     let mut appended = ConversationLocationIndex::default();
-    let turn_start = event(1, "turn/start", json!({"turn":1}));
-    let step_start = event(2, "step/start", json!({"turn":1,"step":1}));
-    let turn_end = event(3, "turn/end", json!({"turn":1}));
+    let turn_start = event(1, "turn/start", conversation_json!({"turn":1}));
+    let step_start = event(2, "step/start", conversation_json!({"turn":1,"step":1}));
+    let turn_end = event(3, "turn/end", conversation_json!({"turn":1}));
     appended.append_boundary(&turn_start).unwrap();
     appended.append_boundary(&step_start).unwrap();
     appended.append_boundary(&turn_end).unwrap();

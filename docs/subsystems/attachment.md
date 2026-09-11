@@ -6,7 +6,7 @@ The attachment seam separates binary image ownership from the session log. A pro
 
 Unsent browser drafts may stay in memory and native clients may stage them in operating-system temporary storage. Once the host accepts a user message, its images move below `<SEEKDEEP_HOME>/attachments/v1` before the user event is appended. Structured model image output follows the same persist-before-event rule.
 
-Source: [`packages/attachment/attachment/src/types.ts`](../../packages/attachment/attachment/src/types.ts)
+Source: [`packages/attachment/attachment/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/attachment/attachment/src/types.ts)
 
 ## Identity and verified metadata
 
@@ -111,5 +111,5 @@ abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
 abstract readImage(ref: ImageAttachmentRef, signal?: AbortSignal): Promise<StoredImageAttachment>
 ```
 
-Source: [`packages/attachment/attachment/src/index.ts:29`](../../packages/attachment/attachment/src/index.ts)
+Source: [`packages/attachment/attachment/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/attachment/attachment/src/index.ts)
 <!-- END GENERATED cordis-surface -->

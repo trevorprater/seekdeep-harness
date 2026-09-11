@@ -2,7 +2,7 @@
 
 use seekdeep_compaction::is_compact_checkpoint_source;
 use seekdeep_core::session::{SessionId, derive_event_message};
-use seekdeep_llm::ContentBlock;
+use seekdeep_llm::{ContentBlock, JsonString};
 use seekdeep_session_query::types::SessionSurfaceSnapshot;
 use seekdeep_util::output_retention::{Omitted, TextRetainer, TextRetentionStrategy};
 use serde::{Deserialize, Serialize};
@@ -55,9 +55,9 @@ pub struct RetainedReferencedSession {
 #[derive(Clone, Debug, PartialEq)]
 struct ProjectedItem {
     role: ReferencedConversationRole,
-    text: String,
+    text: JsonString,
     checkpoint: bool,
-    original_text: String,
+    original_text: JsonString,
     omitted_bytes: usize,
 }
 
@@ -144,14 +144,14 @@ pub fn retain_referenced_session(
         };
         let removed = retained.remove(drop_index);
         omitted_messages += 1;
-        dropped_omitted_bytes += removed.original_text.len();
+        dropped_omitted_bytes += removed.original_text.len_utf8();
     }
 
     while size(&retained) > max_bytes {
         let mut longest_index = None;
         let mut longest_bytes = 0;
         for (index, item) in retained.iter().enumerate() {
-            let bytes = item.text.len();
+            let bytes = item.text.len_utf8();
             if bytes > longest_bytes {
                 longest_bytes = bytes;
                 longest_index = Some(index);
@@ -187,38 +187,36 @@ pub fn retain_referenced_session(
     })
 }
 
-fn text_content(content: &[ContentBlock]) -> String {
-    content
+fn text_content(content: &[ContentBlock]) -> JsonString {
+    let parts = content
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.clone()),
             _ => None,
         })
-        .collect::<Vec<_>>()
-        .join(
-            "
-",
-        )
+        .collect::<Vec<_>>();
+    JsonString::join(&parts, "\n")
 }
 
 struct Truncation {
-    text: String,
+    text: JsonString,
     omitted_bytes: usize,
 }
 
-fn truncate_with_notice(text: &str, max_output_bytes: usize) -> Truncation {
-    if text.len() <= max_output_bytes {
+fn truncate_with_notice(text: &JsonString, max_output_bytes: usize) -> Truncation {
+    if text.len_utf8() <= max_output_bytes {
         return Truncation {
-            text: text.to_owned(),
+            text: text.clone(),
             omitted_bytes: 0,
         };
     }
     let mut low = 0;
     let mut high = max_output_bytes;
     let mut best = Truncation {
-        text: String::new(),
-        omitted_bytes: text.len(),
+        text: JsonString::default(),
+        omitted_bytes: text.len_utf8(),
     };
+    let encoded = String::from_utf16_lossy(text.utf16_units());
     while low <= high {
         let retained_bytes = usize::midpoint(low, high);
         let head_bytes = retained_bytes.div_ceil(2);
@@ -227,7 +225,7 @@ fn truncate_with_notice(text: &str, max_output_bytes: usize) -> Truncation {
             head_bytes,
             tail_bytes,
         });
-        retainer.push_str(text);
+        retainer.push_str(&encoded);
         let result = retainer.finish();
         let Omitted::Exact(omitted) = result.omitted_bytes else {
             panic!("session-reference retention did not report exact omitted bytes");
@@ -239,7 +237,7 @@ fn truncate_with_notice(text: &str, max_output_bytes: usize) -> Truncation {
         );
         if candidate.len() <= max_output_bytes {
             best = Truncation {
-                text: candidate,
+                text: candidate.into(),
                 omitted_bytes: omitted,
             };
             low = retained_bytes + 1;

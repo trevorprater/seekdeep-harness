@@ -104,9 +104,14 @@ pub fn invoke(owner: &JsValue, name: &str, args: &Array) -> Result<JsValue, JsVa
 }
 
 /// Supplies the public Fiber prototype used by roots and registry mounts.
+///
+/// # Errors
+/// Propagates generator-constructor initialization failures.
 #[wasm_bindgen(js_name = configureFiberPrototype)]
-pub fn configure_fiber_prototype(prototype: Object) {
+pub fn configure_fiber_prototype(prototype: Object) -> Result<(), JsValue> {
+    super::browser_plugins::initialize_constructors()?;
     PROTOTYPE.with(|slot| *slot.borrow_mut() = Some(prototype));
+    Ok(())
 }
 
 pub(super) fn prototype() -> Option<Object> {
@@ -186,19 +191,22 @@ pub fn fiber_get_effects(owner: &JsValue) -> Result<Array, JsValue> {
 /// Propagates runtime and parent getter failures unchanged.
 #[wasm_bindgen(js_name = fiberName)]
 pub fn fiber_name(owner: &JsValue) -> Result<JsValue, JsValue> {
+    use super::browser_values::get;
+
     let mut current = owner.clone();
     loop {
-        let runtime = Reflect::get(&current, &"runtime".into())?;
+        let runtime = get(&current, &"runtime".into())?;
         if !runtime.is_null() && !runtime.is_undefined() {
-            let name = Reflect::get(&runtime, &"name".into())?;
+            let name = get(&runtime, &"name".into())?;
             if name.is_truthy() {
-                return Ok(name);
+                let runtime = get(&current, &"runtime".into())?;
+                return get(&runtime, &"name".into());
             }
         }
-        let parent = Reflect::get(&current, &"parent".into())?;
-        current = Reflect::get(&parent, &"fiber".into())?;
-        let parent = Reflect::get(&current, &"parent".into())?;
-        if current == Reflect::get(&parent, &"fiber".into())? {
+        let parent = get(&current, &"parent".into())?;
+        current = get(&parent, &"fiber".into())?;
+        let parent = get(&current, &"parent".into())?;
+        if current == get(&parent, &"fiber".into())? {
             return Ok("root".into());
         }
     }

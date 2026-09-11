@@ -8,7 +8,9 @@ use std::{
 };
 
 use futures::{FutureExt as _, StreamExt as _, future::LocalBoxFuture, stream::FuturesUnordered};
-use seekdeep_code_runtime::{CodeBindingFunction, CodeBindingNamespace, CodeRunFailureKind};
+use seekdeep_code_runtime::{
+    CodeBindingFunction, CodeBindingNamespace, CodeJsonString, CodeJsonValue, CodeRunFailureKind,
+};
 use seekdeep_llm::AbortSignal;
 use serde_json::{Value, json};
 
@@ -18,7 +20,7 @@ use crate::{
     snapshot::{SnapshotIntrinsics, snapshot_json},
     watchdog::{Control, Watchdog},
     worker_globals::{WORKER_GLOBALS, binding_setup},
-    worker_json::{decode_worker_json, encode_worker_json},
+    worker_json::{decode_worker_json, encode_code_json},
 };
 
 static INITIALIZE: Once = Once::new();
@@ -53,39 +55,10 @@ enum ReplyTarget {
 
 struct PendingReply {
     target: ReplyTarget,
-    result: anyhow::Result<Option<Value>>,
+    result: anyhow::Result<Option<CodeJsonValue>>,
 }
 
-/// Terminal engine state before the host-side output ledger is applied.
-#[derive(Debug)]
-pub(crate) enum EngineCompletion {
-    Success(Option<Value>),
-    Exception(String),
-    InvalidOutput,
-    OutputLimit,
-    WorkerExit(i32),
-    HeapLimit,
-    ComputeTimeout,
-    WallTimeout,
-    Abort(Value),
-    ForgedFailure(CodeRunFailureKind, String),
-}
-
-/// Complete worker-owned outcome.
-#[derive(Debug)]
-pub(crate) struct EngineOutcome {
-    pub(crate) logs: Vec<String>,
-    pub(crate) completion: EngineCompletion,
-}
-
-/// Execution bounds and cancellation observed within one worker.
-pub(crate) struct EngineLimits {
-    pub(crate) max_output_bytes: usize,
-    pub(crate) max_old_generation_size_mb: f64,
-    pub(crate) compute_ms: f64,
-    pub(crate) max_wall_ms: f64,
-    pub(crate) signal: AbortSignal,
-}
+pub(crate) use crate::outcome::{EngineCompletion, EngineLimits, EngineOutcome};
 
 struct RunStateGuard;
 
@@ -119,7 +92,7 @@ impl RunStateGuard {
         let state = RUN_STATE.with(|slot| slot.borrow_mut().take().expect("active worker"));
         drop(self);
         EngineOutcome {
-            logs: state.logs,
+            logs: state.logs.into_iter().map(Into::into).collect(),
             completion,
         }
     }
@@ -182,7 +155,7 @@ pub(crate) async fn evaluate_stripped_program(
             watchdog.control.leave();
             completion
         }
-        Err(message) => EngineCompletion::Exception(message),
+        Err(message) => EngineCompletion::Exception(message.into()),
     };
     let completion = watchdog.control.take_completion().unwrap_or(completion);
     Ok(guard.take(completion))
@@ -195,10 +168,10 @@ async fn run_program(
 ) -> EngineCompletion {
     let returned = match evaluate_script(scope, source) {
         Ok(value) => value,
-        Err(message) => return EngineCompletion::Exception(message),
+        Err(message) => return EngineCompletion::Exception(message.into()),
     };
     let Ok(promise) = v8::Local::<v8::Promise>::try_from(returned) else {
-        return EngineCompletion::Exception("program wrapper did not return a promise".to_owned());
+        return EngineCompletion::Exception("program wrapper did not return a promise".into());
     };
     let mut pending = FuturesUnordered::new();
     loop {
@@ -213,12 +186,14 @@ async fn run_program(
                     EngineCompletion::Success(None)
                 } else {
                     snapshot(scope, value).map_or(EngineCompletion::InvalidOutput, |value| {
-                        EngineCompletion::Success(Some(value))
+                        EngineCompletion::Success(Some(value.into()))
                     })
                 };
             }
             v8::PromiseState::Rejected => {
-                return EngineCompletion::Exception(render_rejection(scope, promise.result(scope)));
+                return EngineCompletion::Exception(
+                    render_rejection(scope, promise.result(scope)).into(),
+                );
             }
             v8::PromiseState::Pending => {}
         }
@@ -237,7 +212,7 @@ async fn run_program(
         if let Some(reply) = reply
             && let Err(message) = deliver_reply(scope, reply)
         {
-            return EngineCompletion::Exception(message);
+            return EngineCompletion::Exception(message.into());
         }
     }
 }
@@ -328,7 +303,7 @@ fn binding_function(global: &str, name: &str) -> Option<CodeBindingFunction> {
             .bindings
             .iter()
             .find(|namespace| namespace.global == global)
-            .and_then(|namespace| namespace.functions.get(name))
+            .and_then(|namespace| namespace.functions.get(&CodeJsonString::from(name)))
             .cloned()
     })
 }
@@ -362,7 +337,7 @@ fn binding_call<'s>(
     let argument = snapshot(scope, args.get(2)).ok_or("binding arguments must be lossless JSON")?;
     let function =
         binding_function(&global, &name).ok_or_else(|| unknown_binding(&global, &name))?;
-    let operation = function(argument);
+    let operation = function(argument.into());
     queue_promise(
         scope,
         async move { operation.await.map(Some) }.boxed_local(),
@@ -371,7 +346,7 @@ fn binding_call<'s>(
 
 fn queue_promise<'s>(
     scope: &mut v8::PinScope<'s, '_>,
-    operation: LocalBoxFuture<'static, anyhow::Result<Option<Value>>>,
+    operation: LocalBoxFuture<'static, anyhow::Result<Option<CodeJsonValue>>>,
 ) -> Result<v8::Local<'s, v8::Value>, String> {
     let resolver = v8::PromiseResolver::new(scope).ok_or("cannot create worker promise")?;
     let promise = resolver.get_promise(scope);
@@ -382,7 +357,7 @@ fn queue_promise<'s>(
 
 fn queue_reply(
     target: ReplyTarget,
-    operation: LocalBoxFuture<'static, anyhow::Result<Option<Value>>>,
+    operation: LocalBoxFuture<'static, anyhow::Result<Option<CodeJsonValue>>>,
 ) {
     RUN_STATE.with(|slot| {
         slot.borrow_mut()
@@ -481,7 +456,7 @@ fn forged_done(
         };
         return Some(EngineCompletion::ForgedFailure(
             kind,
-            property_string(scope, error, "message")?,
+            property_string(scope, error, "message")?.into(),
         ));
     }
     let value = property(scope, message, "value")?;
@@ -492,7 +467,7 @@ fn forged_done(
         snapshot(scope, value)
             .and_then(|wire| decode_worker_json(&wire))
             .map_or(EngineCompletion::InvalidOutput, |value| {
-                EngineCompletion::Success(Some(value))
+                EngineCompletion::Success(Some(value.into()))
             }),
     )
 }
@@ -523,7 +498,7 @@ fn port_call<'s>(
                 "binding arguments must be lossless JSON"
             )))
             .boxed_local(),
-            (Some(function), Some(argument)) => function(argument)
+            (Some(function), Some(argument)) => function(argument.into())
                 .map(|result| result.map(Some))
                 .boxed_local(),
         };
@@ -539,7 +514,7 @@ fn deliver_reply(scope: &mut v8::PinScope, reply: PendingReply) -> Result<(), St
             match reply.result {
                 Ok(value) => {
                     let value = match value {
-                        Some(value) => from_json(scope, &encode_worker_json(&value))?,
+                        Some(value) => from_code_json(scope, &encode_code_json(&value))?,
                         None => v8::undefined(scope).into(),
                     };
                     resolver
@@ -558,15 +533,17 @@ fn deliver_reply(scope: &mut v8::PinScope, reply: PendingReply) -> Result<(), St
         }
         ReplyTarget::Port(id) => {
             let reply = match reply.result {
-                Ok(Some(value)) => {
-                    json!({ "type": "reply", "id": null, "ok": true, "value": encode_worker_json(&value) })
-                }
+                Ok(Some(value)) => CodeJsonValue::parse(format!(
+                    "{{\"type\":\"reply\",\"id\":null,\"ok\":true,\"value\":{}}}",
+                    encode_code_json(&value).as_raw()
+                ))
+                .map_err(|error| error.to_string())?,
                 Ok(None) => return Err("missing port binding resolution".to_owned()),
-                Err(error) => {
-                    json!({ "type": "reply", "id": null, "ok": false, "message": error.to_string() })
-                }
+                Err(error) => CodeJsonValue::from(
+                    json!({ "type": "reply", "id": null, "ok": false, "message": error.to_string() }),
+                ),
             };
-            let reply = from_json(scope, &reply)?;
+            let reply = from_code_json(scope, &reply)?;
             let object =
                 v8::Local::<v8::Object>::try_from(reply).map_err(|_| "invalid reply object")?;
             let key = v8::String::new(scope, "id").ok_or("cannot allocate reply id")?;
@@ -587,12 +564,11 @@ fn deliver_reply(scope: &mut v8::PinScope, reply: PendingReply) -> Result<(), St
     Ok(())
 }
 
-fn from_json<'s>(
+fn from_code_json<'s>(
     scope: &mut v8::PinScope<'s, '_>,
-    value: &Value,
+    value: &CodeJsonValue,
 ) -> Result<v8::Local<'s, v8::Value>, String> {
-    let json = serde_json::to_string(value).map_err(|error| error.to_string())?;
-    let json = v8::String::new(scope, &json).ok_or("cannot allocate binding JSON")?;
+    let json = v8::String::new(scope, value.as_raw()).ok_or("cannot allocate binding JSON")?;
     v8::json::parse(scope, json).ok_or_else(|| "cannot decode binding JSON".to_owned())
 }
 

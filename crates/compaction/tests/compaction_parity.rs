@@ -81,7 +81,7 @@ impl CompactionEngine for StubEngine {
         let shadowed_seqs = surface[start_index..=end_index].to_vec();
         let compaction_id = CompactionId::new("stub-compaction");
         let summary = vec![ContentBlock::Text {
-            text: "stub".to_owned(),
+            text: "stub".into(),
         }];
         let start_event = agent.session.append(
             "compaction/start",
@@ -179,7 +179,7 @@ async fn region_records_log_only_lifecycle_checkpoint_and_signal_provenance() {
     let session = Session::create(&SessionId::new("compaction-region"), None, None).unwrap();
     let original = Message::user(
         vec![ContentBlock::Text {
-            text: "original".to_owned(),
+            text: "original".into(),
         }],
         MessageSource::user(),
     );
@@ -224,7 +224,7 @@ async fn region_records_log_only_lifecycle_checkpoint_and_signal_provenance() {
     let source = events
         .iter()
         .find(|event| event.event_type == "user/message" && event.seq != original.seq)
-        .and_then(|event| serde_json::from_value::<Message>(event.data.clone()).ok())
+        .and_then(|event| event.data.deserialize::<Message>().ok())
         .map(|message| message.source().clone())
         .unwrap();
     assert!(is_compact_checkpoint_source(&source));

@@ -161,7 +161,7 @@ async fn always_selects_only_the_first_eligible_human_message() {
     assert_eq!(requests.len(), 2);
     for options in requests.iter() {
         let text = match &options.messages[0].content()[0] {
-            ContentBlock::Text { text } => text.as_str(),
+            ContentBlock::Text { text } => text.as_str().expect("fixture uses scalar text"),
             other => panic!("expected a text block, got {other:?}"),
         };
         assert!(text.contains("first input"));

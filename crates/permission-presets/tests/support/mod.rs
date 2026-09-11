@@ -99,7 +99,7 @@ impl AgentController for RecordingController {
         wakeup: bool,
     ) -> Result<(), AgentControlError> {
         let text = match message.content() {
-            [ContentBlock::Text { text }] => text.clone(),
+            [ContentBlock::Text { text }] => text.as_str().expect("fixture uses scalar text").to_owned(),
             content => format!("{content:?}"),
         };
         self.sent.lock().push(SentMessage {
@@ -264,7 +264,7 @@ pub(crate) fn event_pairs(session: &Session) -> Vec<(String, Value)> {
     session
         .events()
         .into_iter()
-        .map(|event| (event.event_type, event.data))
+        .map(|event| (event.event_type, event.data.deserialize().expect("fixture uses scalar JSON")))
         .collect()
 }
 

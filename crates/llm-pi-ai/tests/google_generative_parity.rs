@@ -123,9 +123,7 @@ fn request_for(provider: &str) -> GenerateOptions {
         ModelId::new("gemini-2.5-flash"),
         vec![Message::new(
             MessageRole::User,
-            vec![ContentBlock::Text {
-                text: "hi".to_owned(),
-            }],
+            vec![ContentBlock::Text { text: "hi".into() }],
             MessageSource::plugin("test"),
         )],
     );

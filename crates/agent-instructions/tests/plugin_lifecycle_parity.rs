@@ -37,9 +37,7 @@ fn agent(id: &str, cwd: &std::path::Path, context: &seekdeep_cordis::Context) ->
 
 fn prompt(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -77,7 +75,9 @@ fn instruction_text(decision: &PreStepDecision) -> Vec<String> {
         .iter()
         .flat_map(|message| message.content())
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.clone()),
+            ContentBlock::Text { text } => {
+                Some(text.as_str().expect("fixture uses scalar text").to_owned())
+            }
             _ => None,
         })
         .collect()

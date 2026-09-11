@@ -14,7 +14,7 @@ fn event(event_type: &str, seq: u64, data: serde_json::Value) -> SessionEvent {
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).expect("fixture sequence fits i64") + 1,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,

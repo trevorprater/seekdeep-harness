@@ -14,6 +14,7 @@ use seekdeep_cordis::{
 };
 use seekdeep_core::session::{Session, SessionEvent, SessionId};
 use seekdeep_llm::{LLM, MessageSource, UserMessage};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_scope::carrier_key_of;
 use seekdeep_sdk_protocol::{
     InitializeParams, InitializeResult, JsonRpcLineTransport, SdkRunStatus, ServerInfo,
@@ -115,7 +116,7 @@ pub struct HarnessSdkJsonRpcServer {
     agents: Arc<AgentRegistry>,
     state: Mutex<ServerState>,
     subscriptions: Mutex<Vec<EffectHandle>>,
-    notifications: tokio::sync::mpsc::UnboundedSender<(String, Map<String, Value>)>,
+    notifications: tokio::sync::mpsc::UnboundedSender<(String, JsonValue)>,
     notification_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     shutdown: Arc<ShutdownState>,
     ready: std::sync::atomic::AtomicBool,
@@ -163,7 +164,7 @@ impl HarnessSdkJsonRpcServer {
         let notification_task = tokio::spawn(async move {
             while let Some((method, params)) = receiver.recv().await {
                 if notification_transport
-                    .notify(method, Some(params))
+                    .notify_json(method, Some(params))
                     .await
                     .is_err()
                 {
@@ -293,20 +294,34 @@ impl HarnessSdkJsonRpcServer {
         method: &str,
         params: Map<String, Value>,
     ) -> anyhow::Result<Value> {
+        self.handle_request_json(method, Value::Object(params).into())
+            .await?
+            .try_into_serde_json()
+            .map_err(Into::into)
+    }
+
+    /// Dispatches a request with exact JSON string code units in its content.
+    ///
+    /// # Errors
+    ///
+    /// Returns typed decoding, method, initialization, prompt, or shutdown failures.
+    pub async fn handle_request_json(
+        self: &Arc<Self>,
+        method: &str,
+        params: JsonValue,
+    ) -> anyhow::Result<JsonValue> {
         self.wait_until_ready().await;
         match method {
             "initialize" => {
                 validate_max_tokens(&params)?;
-                Ok(serde_json::to_value(
-                    self.initialize(serde_json::from_value(Value::Object(params))?)
-                        .await?,
+                Ok(JsonValue::from_serialize(
+                    &self.initialize(params.deserialize()?).await?,
                 )?)
             }
-            "session/prompt" => Ok(serde_json::to_value(
-                self.prompt(serde_json::from_value(Value::Object(params))?)
-                    .await?,
+            "session/prompt" => Ok(JsonValue::from_serialize(
+                &self.prompt(params.deserialize()?).await?,
             )?),
-            "shutdown" => Ok(Value::Object(self.shutdown().await?)),
+            "shutdown" => Ok(Value::Object(self.shutdown().await?).into()),
             _ => anyhow::bail!("unknown SeekDeep Harness SDK runtime method: {method}"),
         }
     }
@@ -453,7 +468,7 @@ impl HarnessSdkJsonRpcServer {
     }
 
     fn notify(&self, method: &str, payload: &impl serde::Serialize) {
-        let Ok(Value::Object(params)) = serde_json::to_value(payload) else {
+        let Ok(params) = JsonValue::from_serialize(payload) else {
             return;
         };
         let _ = self.notifications.send((method.to_owned(), params));
@@ -581,7 +596,7 @@ fn resolve_path(value: &str) -> anyhow::Result<String> {
     Ok(resolved.clean().to_string_lossy().into_owned())
 }
 
-fn validate_max_tokens(params: &Map<String, Value>) -> anyhow::Result<()> {
+fn validate_max_tokens(params: &JsonValue) -> anyhow::Result<()> {
     let Some(value) = params.get("maxTokens") else {
         return Ok(());
     };

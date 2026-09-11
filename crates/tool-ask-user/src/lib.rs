@@ -128,7 +128,7 @@ pub fn definition(
         output_schema(),
         Arc::new(|_: &ToolArgs, value: &AskUserQuestionAnswer| {
             Ok(vec![ContentBlock::Text {
-                text: serde_json::to_string(value)?,
+                text: serde_json::to_string(value)?.into(),
             }])
         }),
     );

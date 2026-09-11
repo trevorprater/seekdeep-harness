@@ -204,7 +204,7 @@ fn text(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -376,25 +376,31 @@ async fn presentation_agent_requirement_and_configuration_match_the_public_contr
         .get("terminal_send", None)
         .unwrap();
     assert!(matches!(
-        send.present_call.as_ref().unwrap()(&json!({
-            "sessionId": "pty-1",
-            "text": "python3"
-        })),
+        send.present_call.as_ref().unwrap()(
+            &json!({
+                "sessionId": "pty-1",
+                "text": "python3"
+            })
+            .into()
+        ),
         Some(seekdeep_tools::ToolCallView::Terminal(_))
     ));
     assert!(matches!(
-        send.present_call.as_ref().unwrap()(&json!({
-            "sessionId": "pty-1",
-            "text": "make",
-            "run_in_background": true
-        })),
+        send.present_call.as_ref().unwrap()(
+            &json!({
+                "sessionId": "pty-1",
+                "text": "make",
+                "run_in_background": true
+            })
+            .into()
+        ),
         Some(seekdeep_tools::ToolCallView::Generic(_))
     ));
     let presented = send.present_result.as_ref().unwrap()(
-        &json!({ "sessionId": "pty-1", "text": "x" }),
+        &json!({ "sessionId": "pty-1", "text": "x" }).into(),
         &seekdeep_tools::ToolResult {
             content: vec![ContentBlock::Text {
-                text: "output".to_owned(),
+                text: "output".into(),
             }],
             is_error: false,
             meta: None,

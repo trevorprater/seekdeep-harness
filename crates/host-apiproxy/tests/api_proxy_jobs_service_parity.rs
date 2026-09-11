@@ -351,7 +351,7 @@ async fn inbox_splices_broadcast_the_pending_queue_and_attach_replays_it() {
     let mut mux = harness.mux(signal.clone());
     let message = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "Queue item to edit".to_owned(),
+            text: "Queue item to edit".into(),
         }],
         MessageSource::user(),
     );
@@ -370,7 +370,7 @@ async fn inbox_splices_broadcast_the_pending_queue_and_attach_replays_it() {
     );
     let steer = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "steer now".to_owned(),
+            text: "steer now".into(),
         }],
         MessageSource::user(),
     );

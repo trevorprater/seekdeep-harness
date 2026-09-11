@@ -145,7 +145,7 @@ async fn asks_provider_and_projects_structured_answer_to_compact_json_text() {
     assert_eq!(
         result.content(),
         [ContentBlock::Text {
-            text: "{\"answers\":[{\"id\":\"pkg\",\"selected\":[\"pnpm\"]}]}".to_owned(),
+            text: "{\"answers\":[{\"id\":\"pkg\",\"selected\":[\"pnpm\"]}]}".into(),
         }]
     );
     let seen = provider.seen.lock();
@@ -221,7 +221,7 @@ async fn projects_custom_and_multiselect_answers_exactly() {
     assert_eq!(
         success.content,
         [ContentBlock::Text {
-            text: serde_json::to_string(&expected).unwrap(),
+            text: serde_json::to_string(&expected).unwrap().into(),
         }]
     );
 }

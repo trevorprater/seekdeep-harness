@@ -168,7 +168,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         json!({"type":"string"}),
         Arc::new(|_args: &EditorArgs, value: &String| {
             Ok(vec![ContentBlock::Text {
-                text: value.clone(),
+                text: value.clone().into(),
             }])
         }),
     );
@@ -904,7 +904,7 @@ fn present_editor_call(args: &EditorArgs) -> ToolCallView {
     };
     match args.command {
         EditorCommand::View => ToolCallView::Generic(GenericCallView {
-            title: format!("view {}", args.path),
+            title: format!("view {}", args.path).into(),
             kind: Some(ToolCallKind::Read),
             raw_input: None,
             content: None,
@@ -929,7 +929,7 @@ fn present_editor_call(args: &EditorArgs) -> ToolCallView {
             locations: Some(vec![location(None)]),
         }),
         EditorCommand::Insert => ToolCallView::Generic(GenericCallView {
-            title: format!("insert {}", args.path),
+            title: format!("insert {}", args.path).into(),
             kind: Some(ToolCallKind::Edit),
             raw_input: None,
             content: None,

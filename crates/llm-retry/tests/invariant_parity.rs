@@ -1,7 +1,7 @@
 //! Behavioral mirror of the durable `llm/retry` invariant suite.
 
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionId},
+    session::{AppendOptions, JsonValue, Session, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
@@ -96,6 +96,42 @@ fn accepts_successive_bounded_and_unbounded_records_in_open_steps() {
     let unbounded = open_step("always");
     append_retry(&unbounded, always(), 1, 1);
     seekdeep_llm_retry::invariant::validate_session(&unbounded).unwrap();
+}
+
+#[test]
+fn raw_retry_reads_preserve_opaque_fields_and_decode_escaped_chain_identity() {
+    let session = open_step("raw-retry");
+    let raw = r#"{"retryId":"cha\u0069n","turn":1,"step":1,"provider":"m\u006fck","mode":"always","policyKey":"[\"always\",500]","retry":1,"delayMs":1,"failure":{"message":"busy","code":"RATE_LIMIT","opaque":{"\ud800":"\udfff","large":1e+99}},"opaque":{"literal":"\\ud800"}}"#;
+    let data = JsonValue::parse(raw.to_owned()).unwrap();
+    assert!(data.clone().try_into_serde_json().is_err());
+    session
+        .append_json("llm/retry", data, AppendOptions::default())
+        .unwrap();
+    session
+        .append(
+            "llm/retry-started",
+            json!({"retryId":"chain","turn":1,"step":1,"retry":1}),
+            AppendOptions::default(),
+        )
+        .unwrap();
+    session
+        .append(
+            "llm/retry",
+            json!({
+                "retryId":"chain","turn":1,"step":1,"provider":"mock",
+                "mode":"always","policyKey":"[\"always\",500]","retry":2,
+                "delayMs":1,"failure":failure()
+            }),
+            AppendOptions::default(),
+        )
+        .unwrap();
+    seekdeep_llm_retry::invariant::validate_session(&session).unwrap();
+    let events = session.events();
+    let first = events
+        .iter()
+        .find(|event| event.event_type == "llm/retry")
+        .unwrap();
+    assert_eq!(first.data.as_raw(), raw);
 }
 
 #[test]

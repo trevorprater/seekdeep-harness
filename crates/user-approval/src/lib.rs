@@ -423,7 +423,8 @@ impl ApprovalService {
                     "The approval policy changed from \"{}\" to \"{}\" (changed by the user).",
                     previous.as_str(),
                     policy.as_str()
-                ),
+                )
+                .into(),
             }],
             MessageSource::plugin("user-approval"),
         ))?;
@@ -688,9 +689,14 @@ pub fn plugin() -> Plugin {
 pub fn effective_approval_policy(events: &[SessionEvent]) -> Option<ApprovalPolicy> {
     events.iter().rev().find_map(|event| {
         (event.event_type == "approval/policy")
-            .then(|| event.data.get("policy").and_then(Value::as_str))
+            .then(|| {
+                event
+                    .data
+                    .get("policy")
+                    .and_then(|value| value.deserialize::<String>().ok())
+            })
             .flatten()
-            .and_then(ApprovalPolicy::parse)
+            .and_then(|policy| ApprovalPolicy::parse(&policy))
     })
 }
 

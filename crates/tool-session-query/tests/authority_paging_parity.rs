@@ -229,7 +229,7 @@ fn output(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            seekdeep_llm::ContentBlock::Text { text } => Some(text.as_str()),
+            seekdeep_llm::ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()

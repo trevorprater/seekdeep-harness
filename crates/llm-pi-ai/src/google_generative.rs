@@ -11,7 +11,7 @@ use std::{
 use futures::StreamExt as _;
 use parking_lot::Mutex;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use seekdeep_llm_deepseek::sse::{ByteStream, parse_sse};
 use serde_json::{Map, Value, json};
 
@@ -19,6 +19,7 @@ use crate::{
     adapter::{BoxPiEventStream, PiExecutionRequest, PiProtocolExecutor},
     catalog::{PiModel, PiThinkingLevel},
     context::{PiContext, PiMessage, PiUserContent, PiUserContentBlock},
+    json::{sanitize_surrogates, text_is_blank},
     replay::{
         PiAssistantBlock, PiAssistantMessage, PiAssistantRole, PiCost, PiResponseId, PiStopReason,
         PiUsage,
@@ -361,7 +362,7 @@ fn native_events(
                                     PiAssistantEvent::ThinkingStart { content_index: index_u64(index), partial: output.clone() }
                                 } else {
                                     output.content.push(PiAssistantBlock::Text {
-                                        text: String::new(), text_signature: part.get("thoughtSignature").and_then(Value::as_str).map(str::to_owned),
+                                        text: JsonString::default(), text_signature: part.get("thoughtSignature").and_then(Value::as_str).map(str::to_owned),
                                     });
                                     PiAssistantEvent::TextStart { content_index: index_u64(index), partial: output.clone() }
                                 }.into_open_block(index));
@@ -512,7 +513,7 @@ fn convert_messages(model: &PiModel, context: &PiContext) -> Vec<Value> {
         match message {
             PiMessage::User(message) => {
                 let parts = match &message.content {
-                    PiUserContent::Text(text) => vec![json!({"text":text})],
+                    PiUserContent::Text(text) => vec![json!({"text":sanitize_surrogates(text)})],
                     PiUserContent::Blocks(blocks) => blocks.iter().map(google_input).collect(),
                 };
                 if !parts.is_empty() {
@@ -527,9 +528,11 @@ fn convert_messages(model: &PiModel, context: &PiContext) -> Vec<Value> {
                         PiAssistantBlock::Text {
                             text,
                             text_signature,
-                        } if !text.trim().is_empty() => {
-                            let mut part =
-                                Map::from_iter([("text".to_owned(), Value::String(text.clone()))]);
+                        } if !text_is_blank(text) => {
+                            let mut part = Map::from_iter([(
+                                "text".to_owned(),
+                                Value::String(sanitize_surrogates(text)),
+                            )]);
                             if same && valid_signature(text_signature.as_deref()) {
                                 part.insert(
                                     "thoughtSignature".to_owned(),
@@ -597,11 +600,11 @@ fn convert_messages(model: &PiModel, context: &PiContext) -> Vec<Value> {
                     .content
                     .iter()
                     .filter_map(|block| match block {
-                        PiUserContentBlock::Text { text } => Some(text.as_str()),
+                        PiUserContentBlock::Text { text } => Some(text.clone()),
                         PiUserContentBlock::Image { .. } => None,
                     })
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                    .collect::<Vec<_>>();
+                let text = sanitize_surrogates(&JsonString::join(&text, "\n"));
                 let key = if message.is_error { "error" } else { "output" };
                 let mut response = Map::new();
                 response.insert(key.to_owned(), Value::String(text));
@@ -624,7 +627,7 @@ fn convert_messages(model: &PiModel, context: &PiContext) -> Vec<Value> {
 
 fn google_input(block: &PiUserContentBlock) -> Value {
     match block {
-        PiUserContentBlock::Text { text } => json!({"text":text}),
+        PiUserContentBlock::Text { text } => json!({"text":sanitize_surrogates(text)}),
         PiUserContentBlock::Image { data, mime_type } => {
             json!({"inlineData":{"mimeType":mime_type,"data":data}})
         }
@@ -663,7 +666,7 @@ fn close_block(block: OpenBlock, output: &PiAssistantMessage) -> PiAssistantEven
             content_index: index_u64(index),
             content: match &output.content[index] {
                 PiAssistantBlock::Text { text, .. } => text.clone(),
-                _ => String::new(),
+                _ => JsonString::default(),
             },
             partial: output.clone(),
         },

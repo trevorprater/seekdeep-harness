@@ -343,7 +343,7 @@ fn validate_tool_call(
     let call_id = event
         .data
         .get("callId")
-        .and_then(serde_json::Value::as_str)
+        .and_then(|value| value.deserialize::<String>().ok())
         .ok_or_else(|| SessionInvariantError("tool/call lacks callId".to_owned()))?;
     trace.pending_calls.insert(CallId::new(call_id));
     Ok(())
@@ -363,18 +363,19 @@ fn validate_tool_result(
     let call_id = event
         .data
         .pointer("/message/source/callId")
-        .and_then(serde_json::Value::as_str)
+        .and_then(|value| value.deserialize::<String>().ok())
         .ok_or_else(|| SessionInvariantError("tool/result lacks source callId".to_owned()))?;
     let call_id = CallId::new(call_id);
     let synthetic_not_started = event
         .data
         .pointer("/message/content/0/isError")
-        .and_then(serde_json::Value::as_bool)
+        .and_then(seekdeep_lossless_json::JsonRef::as_bool)
         == Some(true)
         && event
             .data
             .pointer("/error/code")
-            .and_then(serde_json::Value::as_str)
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
             == Some(TOOL_NOT_STARTED);
     if !trace.pending_calls.contains(&call_id) && !synthetic_not_started {
         return fail(format!(
@@ -406,7 +407,7 @@ fn field(event: &SessionEvent, name: &str) -> Result<i64, SessionInvariantError>
     event
         .data
         .get(name)
-        .and_then(serde_json::Value::as_i64)
+        .and_then(|value| value.deserialize::<i64>().ok())
         .ok_or_else(|| SessionInvariantError(format!("{} lacks numeric {name}", event.event_type)))
 }
 
@@ -433,7 +434,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: i64::try_from(seq).expect("small seq"),
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

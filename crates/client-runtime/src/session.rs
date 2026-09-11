@@ -10,9 +10,9 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     AssemblerEventDefinitions, AssemblerViewDefinitions, ConversationEventInput,
-    ConversationNodeAssembler, ConversationPublication, Notifier, NotifierScheduler,
-    PendingClientResponse, PendingKind, PendingResponder, PendingWait, ProjectionValueStore,
-    ProjectionsBaseline, QueueItemInput, RuntimeDisposer, SessionQueueMirror,
+    ConversationNodeAssembler, ConversationPublication, ConversationValue, Notifier,
+    NotifierScheduler, PendingClientResponse, PendingKind, PendingResponder, PendingWait,
+    ProjectionValueStore, ProjectionsBaseline, QueueItemInput, RuntimeDisposer, SessionQueueMirror,
 };
 
 /// Messages requested per history page.
@@ -52,7 +52,7 @@ pub struct SessionHistoryEntry {
     /// Exact durable event.
     pub event: Rc<crate::ConversationLocationEvent>,
     /// Optional envelope-level presentation view.
-    pub view: Option<Rc<Value>>,
+    pub view: Option<Rc<ConversationValue>>,
 }
 
 impl SessionHistoryEntry {
@@ -202,7 +202,7 @@ pub struct SessionSnapshot {
     /// Session identity.
     pub session_id: SessionId,
     /// Current Chat target snapshot, when registered.
-    pub chat: Option<Rc<Value>>,
+    pub chat: Option<Rc<ConversationValue>>,
     /// Stable pending interaction array.
     pub pending: Rc<Vec<Rc<PendingWait>>>,
     /// Authoritative transient queue snapshot.
@@ -312,7 +312,7 @@ pub struct SessionOptions {
 #[allow(clippy::struct_excessive_bools)] // One owner keeps the lifecycle transitions atomic.
 struct SessionState {
     events: Vec<Rc<crate::ConversationLocationEvent>>,
-    views: Vec<Option<Rc<Value>>>,
+    views: Vec<Option<Rc<ConversationValue>>>,
     base_seq: u64,
     has_more: bool,
     open_state: SessionOpenState,
@@ -465,7 +465,7 @@ impl ClientSession {
 
     /// Reads one registered Conversation target snapshot.
     #[must_use]
-    pub fn conversation_snapshot(&self, target: &str) -> Option<Rc<Value>> {
+    pub fn conversation_snapshot(&self, target: &str) -> Option<Rc<ConversationValue>> {
         self.conversation.borrow().snapshot(target)
     }
 
@@ -479,7 +479,7 @@ impl ClientSession {
     pub(crate) fn conversation_snapshot_to_browser(
         &self,
         target: &str,
-        snapshot: &Value,
+        snapshot: &ConversationValue,
     ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue> {
         self.conversation
             .borrow()
@@ -1196,8 +1196,8 @@ impl ClientSession {
             entry
                 .event
                 .data
-                .get("id")
-                .and_then(Value::as_str)
+                .get_value("id")
+                .and_then(ConversationValue::as_str)
                 .is_some_and(|id| {
                     self.queue
                         .borrow_mut()
@@ -1399,24 +1399,27 @@ fn internal_error(message: impl Into<String>) -> ClientRpcError {
 /// A generic command row alone remains control-plane content; every other visible Chat Node
 /// activates the conversation. The encoded Chat snapshot lists its nodes as an array keyed by
 /// `key`; a keyed object is the legacy shape.
-fn chat_has_visible_content(chat: &Value) -> bool {
-    let Some(order) = chat.get("order").and_then(Value::as_array) else {
+fn chat_has_visible_content(chat: &ConversationValue) -> bool {
+    let Some(order) = chat
+        .get_value("order")
+        .and_then(ConversationValue::as_array)
+    else {
         return false;
     };
     let node_kind = |key: &str| -> Option<&str> {
-        let nodes = chat.get("nodes")?;
-        let node = match nodes {
-            Value::Array(nodes) => nodes
-                .iter()
-                .find(|node| node.get("key").and_then(Value::as_str) == Some(key))?,
-            Value::Object(nodes) => nodes.get(key)?,
-            _ => return None,
+        let nodes = chat.get_value("nodes")?;
+        let node = if let Some(nodes) = nodes.as_array() {
+            nodes.iter().find(|node| {
+                node.get_value("key").and_then(ConversationValue::as_str) == Some(key)
+            })?
+        } else {
+            nodes.get_value(key)?
         };
-        node.get("kind").and_then(Value::as_str)
+        node.get_value("kind").and_then(ConversationValue::as_str)
     };
     order
         .iter()
-        .filter_map(Value::as_str)
+        .filter_map(ConversationValue::as_str)
         .any(|key| node_kind(key) != Some("command"))
 }
 
@@ -1433,12 +1436,12 @@ mod visible_content_tests {
             "order": ["9:command1"],
             "nodes": [{"key": "9:command1", "kind": "command"}],
         });
-        assert!(!chat_has_visible_content(&encoded));
+        assert!(!chat_has_visible_content(&encoded.into()));
         let legacy = json!({
             "order": ["9:command1"],
             "nodes": {"9:command1": {"kind": "command"}},
         });
-        assert!(!chat_has_visible_content(&legacy));
+        assert!(!chat_has_visible_content(&legacy.into()));
         let activated = json!({
             "encoding": "seekdeep-chat-v1",
             "order": ["9:command1", "13:input-message1"],
@@ -1447,6 +1450,6 @@ mod visible_content_tests {
                 {"key": "13:input-message1", "kind": "input-message"}
             ],
         });
-        assert!(chat_has_visible_content(&activated));
+        assert!(chat_has_visible_content(&activated.into()));
     }
 }

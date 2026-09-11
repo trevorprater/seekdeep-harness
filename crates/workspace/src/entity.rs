@@ -11,6 +11,7 @@ use std::{
 use futures::{FutureExt as _, future::BoxFuture};
 use parking_lot::Mutex;
 use seekdeep_core::session::SessionId;
+use seekdeep_lossless_json::JsonValue;
 use thiserror::Error;
 
 use crate::spec::WorkspaceRecord;
@@ -296,10 +297,11 @@ impl Workspace {
                     return Err(Unchanged.into());
                 }
                 next.updated_at = now_iso();
-                Ok(serde_json::to_value(next)?)
+                Ok(JsonValue::from_serialize(&next)?)
             },
             move |raw| {
-                let next: WorkspaceRecord = serde_json::from_value(raw.clone())
+                let next: WorkspaceRecord = raw
+                    .deserialize()
                     .expect("Workspace mutation produced its declared record schema");
                 let mut landed = committed_entity.record_mutation.lock();
                 if mutation_number >= *landed {

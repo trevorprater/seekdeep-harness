@@ -320,7 +320,7 @@ mod tests {
             event_type: "test/event".to_owned(),
             seq,
             time: 1,
-            data: json!({"seq": seq}),
+            data: json!({"seq": seq}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: Some(true),

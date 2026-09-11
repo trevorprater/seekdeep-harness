@@ -16,6 +16,7 @@ seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-jobs = { path = "../jobs" }
+seekdeep-llm = { path = "../llm" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }

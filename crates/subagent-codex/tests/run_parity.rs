@@ -114,7 +114,7 @@ impl Harness {
         SubagentStartRequest {
             label: None,
             prompt: vec![ContentBlock::Text {
-                text: "do the task".to_owned(),
+                text: "do the task".into(),
             }],
             parent: agent(&self.workspace.path().to_string_lossy(), "fixture-parent"),
             signal,
@@ -161,7 +161,7 @@ fn text(result: &seekdeep_subagent::SubagentResult) -> String {
         .output
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -237,6 +237,25 @@ async fn real_managed_process_returns_exact_output_denies_approval_and_reaches_q
         run.dispose().await.unwrap();
         harness.quiescent().await;
     }
+}
+
+#[tokio::test]
+async fn real_managed_process_preserves_surrogate_text_and_ignores_opaque_wire_metadata() {
+    let harness = Harness::new();
+    let expected = ContentBlock::text_utf16(&[0x41, 0xd800, 0x42, 0xdc00]);
+    let mut request = harness.request(AbortSignal::default());
+    request.prompt = vec![expected.clone()];
+    let run = start_codex_run(request, harness.spec("raw-text"))
+        .await
+        .unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(3), run.result())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.stop_reason, SubagentStopReason::Completed);
+    assert_eq!(result.output, vec![expected]);
+    run.dispose().await.unwrap();
+    harness.quiescent().await;
 }
 
 #[tokio::test]

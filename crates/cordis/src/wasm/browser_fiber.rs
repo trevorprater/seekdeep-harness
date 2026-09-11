@@ -108,7 +108,6 @@ impl BrowserLifecycle {
             &Array::of2(name, &JsValue::TRUE),
         )?;
         let mut available = implementation.is_truthy();
-        let store = Reflect::get(owner, &"_store".into())?;
         if available {
             let checked = (|| -> Result<bool, JsValue> {
                 if !Reflect::get(&implementation, &"check".into())?.is_truthy() {
@@ -116,7 +115,8 @@ impl BrowserLifecycle {
                 }
                 let check = Reflect::get(&implementation, &"check".into())?;
                 let value = Reflect::get(&implementation, &"value".into())?;
-                let receiver = super::tracing::Tracer::new(context.clone()).trace(&value)?;
+                let context = Reflect::get(owner, &"ctx".into())?;
+                let receiver = super::tracing::Tracer::new(context).trace(&value)?;
                 super::browser_registry::method(&check, "call", &Array::of1(&receiver))
                     .map(|value| value.is_truthy())
             })();
@@ -132,11 +132,14 @@ impl BrowserLifecycle {
                 }
             };
         }
+        let store = Reflect::get(owner, &"_store".into())?;
         if available {
-            Reflect::set(&store, name, &implementation)?;
+            super::browser_values::set(&store, name, &implementation)?;
         } else {
-            return Reflect::delete_property(store.unchecked_ref::<Object>(), name)
-                .map(JsValue::from_bool);
+            if Reflect::delete_property(store.unchecked_ref::<Object>(), name)? {
+                return Ok(JsValue::TRUE);
+            }
+            return Err(js_sys::TypeError::new("Cannot delete property").into());
         }
         Ok(JsValue::UNDEFINED)
     }
@@ -185,9 +188,9 @@ impl BrowserLifecycle {
 
     pub(super) fn refresh(owner: &JsValue) -> Result<(), JsValue> {
         let inject = Reflect::get(owner, &"inject".into())?;
-        let store = Reflect::get(owner, &"_store".into())?;
         let mut epoch = String::new();
         for key in Object::keys(&Object::from(inject)).iter() {
+            let store = Reflect::get(owner, &"_store".into())?;
             let implementation = Reflect::get(&store, &key)?;
             if !implementation.is_truthy() {
                 return method(
@@ -198,9 +201,8 @@ impl BrowserLifecycle {
                 .map(|_| ());
             }
             let fiber = Reflect::get(&implementation, &"fiber".into())?;
-            epoch.push(':');
             let uid = Reflect::get(&fiber, &"uid".into())?;
-            let text = Function::new_with_args("value", "return `${value}`;")
+            let text = Function::new_with_args("value", "return ':' + value;")
                 .call1(&JsValue::UNDEFINED, &uid)?;
             epoch.push_str(
                 &text
@@ -236,24 +238,8 @@ impl BrowserLifecycle {
     pub(super) fn reload(&self, owner: JsValue) -> Result<Promise, JsValue> {
         let stored = Reflect::get(&owner, &"_store".into())?;
         let store = Object::new();
-        for name in Reflect::own_keys(&stored)?.iter() {
-            let descriptor =
-                Reflect::get_own_property_descriptor(stored.unchecked_ref::<Object>(), &name)?;
-            if !Reflect::get(&descriptor, &"enumerable".into())?.is_truthy() {
-                continue;
-            }
-            Reflect::define_property(
-                &store,
-                &name,
-                &super::object(&[
-                    ("value", Reflect::get(&stored, &name)?),
-                    ("writable", true.into()),
-                    ("enumerable", true.into()),
-                    ("configurable", true.into()),
-                ])?,
-            )?;
-        }
-        Reflect::set(&owner, &"store".into(), &store)?;
+        super::browser_values::spread_into(&store, &stored)?;
+        super::browser_values::set(&owner, &"store".into(), &store)?;
         let epoch = super::browser_runner::epoch(&owner)?;
         let lifecycle = self.clone();
         Ok(future_to_promise(async move {
@@ -269,7 +255,7 @@ impl BrowserLifecycle {
                 };
                 match result {
                     Ok(()) => {
-                        Reflect::set(&owner, &"_error".into(), &JsValue::UNDEFINED)?;
+                        super::browser_values::set(&owner, &"_error".into(), &JsValue::UNDEFINED)?;
                     }
                     Err(error) => {
                         let error = js_cause(&error).unwrap_or_else(|| js_error(&error));
@@ -277,7 +263,7 @@ impl BrowserLifecycle {
                             &Reflect::get(&owner, &"ctx".into())?,
                             &error,
                         )?;
-                        Reflect::set(&owner, &"_error".into(), &error)?;
+                        super::browser_values::set(&owner, &"_error".into(), &error)?;
                         super::browser_values::set(
                             &super::browser_runner::runner(&owner)?,
                             &"epoch".into(),
@@ -289,7 +275,7 @@ impl BrowserLifecycle {
             let updated = owner.clone();
             let update = Closure::wrap(Box::new(move || {
                 if super::browser_runner::epoch(&updated)? == epoch {
-                    Reflect::set(&updated, &"inertia".into(), &JsValue::UNDEFINED)?;
+                    super::browser_values::set(&updated, &"inertia".into(), &JsValue::UNDEFINED)?;
                     Ok(JsValue::UNDEFINED)
                 } else {
                     invoke_transition(&updated, "_unload", 5)
@@ -302,39 +288,20 @@ impl BrowserLifecycle {
     }
 
     pub(super) fn unload(&self, owner: JsValue) -> Promise {
-        let effects = if let Some(native) = self.native_fiber() {
-            native.take_browser_effects_for(&owner)
-        } else {
-            match super::browser_effects::snapshot(&owner) {
-                Ok(effects) => effects,
-                Err(error) => return Promise::reject(&error),
-            }
+        let settled = match super::browser_effects::unload(&owner) {
+            Ok(settled) => settled,
+            Err(error) => return Promise::reject(&error),
         };
-        let pending = Array::new();
-        for effect in effects.into_iter().rev() {
-            let owner = owner.clone();
-            pending.push(&future_to_promise(async move {
-                if let Err(error) = effect.dispose().await {
-                    let error = js_cause(&error).unwrap_or_else(|| js_error(&error));
-                    super::browser_logger::log_error(
-                        &Reflect::get(&owner, &"ctx".into())?,
-                        &error,
-                    )?;
-                }
-                Ok(JsValue::UNDEFINED)
-            }));
-        }
-        let settled = Promise::all(&pending);
         let lifecycle = self.clone();
         future_to_promise(async move {
             JsFuture::from(settled).await?;
-            Reflect::set(&owner, &"store".into(), &JsValue::UNDEFINED)?;
+            super::browser_values::set(&owner, &"store".into(), &JsValue::UNDEFINED)?;
             let updated = owner.clone();
             let update = Closure::wrap(Box::new(move || {
                 if super::browser_runner::is_active(&super::browser_runner::epoch(&updated)?) {
                     invoke_transition(&updated, "_reload", 1)
                 } else {
-                    Reflect::set(&updated, &"inertia".into(), &JsValue::UNDEFINED)?;
+                    super::browser_values::set(&updated, &"inertia".into(), &JsValue::UNDEFINED)?;
                     Ok(JsValue::UNDEFINED)
                 }
             }) as Box<dyn Fn() -> Result<JsValue, JsValue>>)
@@ -370,23 +337,19 @@ impl BrowserLifecycle {
         no_save: &JsValue,
     ) -> Result<JsValue, JsValue> {
         method(owner, "assertActive", &Array::new())?;
-        Reflect::set(owner, &"_config".into(), config)?;
+        super::browser_values::set(owner, &"_config".into(), config)?;
         if Reflect::get(owner, &"state".into())?.as_f64() != Some(2.0) {
-            Reflect::set(owner, &"_error".into(), &JsValue::UNDEFINED)?;
+            super::browser_values::set(owner, &"_error".into(), &JsValue::UNDEFINED)?;
             Self::request(owner)?;
             return Ok(JsValue::UNDEFINED);
         }
-        let config = method(
-            owner,
-            "_resolveConfig",
-            &Array::of1(&Reflect::get(owner, &"_config".into())?),
-        )?;
+        let config = method(owner, "_resolveConfig", &Array::of1(config))?;
         let accepted = config.clone();
         let receiver = owner.clone();
         let next =
             wasm_bindgen::closure::Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
-                Reflect::set(&receiver, &"config".into(), &accepted)?;
-                Reflect::set(&receiver, &"_error".into(), &JsValue::UNDEFINED)?;
+                super::browser_values::set(&receiver, &"config".into(), &accepted)?;
+                super::browser_values::set(&receiver, &"_error".into(), &JsValue::UNDEFINED)?;
                 method(&receiver, "restart", &Array::new())
             })
                 as Box<dyn Fn() -> Result<JsValue, JsValue>>)
@@ -460,7 +423,7 @@ async fn root_startup(owner: &JsValue) -> Result<(), JsValue> {
         "_resolveConfig",
         &Array::of1(&Reflect::get(owner, &"_config".into())?),
     )?;
-    Reflect::set(owner, &"config".into(), &config)?;
+    super::browser_values::set(owner, &"config".into(), &config)?;
     let result = super::browser_registry::method(
         owner,
         "_execute",
@@ -472,7 +435,7 @@ async fn root_startup(owner: &JsValue) -> Result<(), JsValue> {
 
 fn invoke_transition(owner: &JsValue, operation: &str, state: u8) -> Result<JsValue, JsValue> {
     let inertia = method(owner, operation, &Array::new())?;
-    Reflect::set(owner, &"inertia".into(), &inertia)?;
+    super::browser_values::set(owner, &"inertia".into(), &inertia)?;
     Ok(state.into())
 }
 

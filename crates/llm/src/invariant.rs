@@ -243,9 +243,7 @@ mod tests {
             },
             StreamChunk::BlockEnd {
                 index: 0,
-                block: ContentBlock::Text {
-                    text: "a".to_owned(),
-                },
+                block: ContentBlock::Text { text: "a".into() },
             },
             StreamChunk::Finish {
                 reason: FinishReason::Stop,
@@ -348,9 +346,7 @@ mod tests {
             (
                 vec![StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text {
-                        text: String::new(),
-                    },
+                    block: ContentBlock::Text { text: "".into() },
                 }],
                 "has no open block",
             ),

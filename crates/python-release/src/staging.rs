@@ -38,7 +38,7 @@ pub fn copy_package(source: &Path, destination: &Path) -> anyhow::Result<()> {
 fn ignored(name: &str) -> bool {
     matches!(
         name,
-        ".venv" | ".pytest_cache" | "__pycache__" | "dist" | "node_modules"
+        ".venv" | ".pytest_cache" | "__pycache__" | "dist" | "node_modules" | "code-runtime-node"
     ) || name.strip_suffix(".pyc").is_some()
         || name.starts_with("seekdeep-jsonrpc-agent-pkg-")
         || name.starts_with("seekdeep-python-sdk-ffi-")
@@ -186,6 +186,13 @@ pub fn stage_runtime(
         &crate::runtime_binding_target(executable_name)?,
     )?;
     copy_file(&binding, &runtime.join(&binding_name))?;
+    let target = crate::runtime_binding_target(executable_name)?;
+    let node_assets = crate::node_runtime::adjacent_directory(executable, &target)?;
+    crate::node_runtime::copy_directory(
+        &node_assets,
+        &runtime.join(crate::node_runtime::DIRECTORY),
+        &target,
+    )?;
     let package = runtime
         .parent()
         .ok_or_else(|| anyhow::anyhow!("runtime package parent is absent"))?;

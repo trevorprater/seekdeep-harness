@@ -342,7 +342,7 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<()> {
                         &escalation_modes,
                     ),
                 };
-                Ok(vec![ContentBlock::Text { text }])
+                Ok(vec![ContentBlock::text(text)])
             }
         }),
     );
@@ -828,11 +828,11 @@ fn output_schema() -> Value {
 fn present_bash_call(args: &BashArgs) -> ToolCallView {
     if args.run_in_background == Some(true) {
         return ToolCallView::Generic(GenericCallView {
-            title: args.command.clone(),
+            title: args.command.clone().into(),
             kind: Some(ToolCallKind::Execute),
-            raw_input: Some(json!(args.command)),
+            raw_input: Some(json!(args.command).into()),
             content: Some(vec![ContentBlock::Text {
-                text: args.description.clone(),
+                text: args.description.clone().into(),
             }]),
             locations: None,
         });
@@ -848,11 +848,12 @@ fn present_bash_result(args: &BashArgs, result: &ToolResult) -> Option<ToolResul
     let [ContentBlock::Text { text: raw }] = result.content.as_slice() else {
         return None;
     };
+    let raw = raw.as_str()?;
     if args.run_in_background == Some(true) || result.is_error {
         return Some(ToolResultView::Generic(GenericResultView {
             title: None,
             content: Some(vec![ContentBlock::Text {
-                text: format!("```console\n{}\n```", raw.trim_end_matches('\n')),
+                text: format!("```console\n{}\n```", raw.trim_end_matches('\n')).into(),
             }]),
         }));
     }
@@ -1116,9 +1117,7 @@ mod tests {
 
     fn result(text: &str, is_error: bool) -> ToolResult {
         ToolResult {
-            content: vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            content: vec![ContentBlock::Text { text: text.into() }],
             is_error,
             meta: None,
         }
@@ -1234,12 +1233,8 @@ mod tests {
         assert!(present_bash_result(&foreground, &empty).is_none());
         let multiple = ToolResult {
             content: vec![
-                ContentBlock::Text {
-                    text: "a".to_owned(),
-                },
-                ContentBlock::Text {
-                    text: "b".to_owned(),
-                },
+                ContentBlock::Text { text: "a".into() },
+                ContentBlock::Text { text: "b".into() },
             ],
             is_error: false,
             meta: None,

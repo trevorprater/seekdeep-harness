@@ -1,8 +1,9 @@
 //! Human-readable JSON unit format and strict durable-boundary parser.
 
 use indexmap::IndexMap;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{KvUnitDescriptor, StorageError, StorageErrorCode};
-use serde_json::{Map, Number, Value};
+use serde_json::{Number, Value};
 
 /// Authoritative state of one open JSON unit.
 #[derive(Clone, Debug, PartialEq)]
@@ -10,32 +11,36 @@ pub struct UnitState {
     /// Durable format version.
     pub version: u64,
     /// Global singleton or null before its first write.
-    pub global: Value,
+    pub global: JsonValue,
     /// Declared tables and insertion-ordered records.
-    pub tables: IndexMap<String, Map<String, Value>>,
+    pub tables: IndexMap<String, IndexMap<String, JsonValue>>,
 }
 
 /// Serializes exact `JSON.stringify(document, null, 2)` layout plus one newline.
 #[must_use]
 pub fn serialize(name: &str, state: &UnitState) -> String {
-    let tables = state
-        .tables
-        .iter()
-        .map(|(name, records)| (name.clone(), Value::Object(records.clone())))
-        .collect::<Map<_, _>>();
-    let document = Value::Object(Map::from_iter([
+    let tables = JsonValue::object(state.tables.iter().map(|(name, records)| {
         (
-            "unit".to_owned(),
-            Value::Object(Map::from_iter([
-                ("name".to_owned(), Value::String(name.to_owned())),
-                ("version".to_owned(), Value::Number(state.version.into())),
-            ])),
+            name.clone(),
+            JsonValue::object(
+                records
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone())),
+            ),
+        )
+    }));
+    let document = JsonValue::object([
+        (
+            "unit",
+            JsonValue::object([
+                ("name", Value::String(name.to_owned()).into()),
+                ("version", Value::Number(state.version.into()).into()),
+            ]),
         ),
-        ("global".to_owned(), state.global.clone()),
-        ("tables".to_owned(), Value::Object(tables)),
-    ]));
-    let mut output = String::new();
-    write_pretty(&document, 0, &mut output);
+        ("global", state.global.clone()),
+        ("tables", tables),
+    ]);
+    let mut output = document.stringify_pretty();
     output.push('\n');
     output
 }
@@ -46,53 +51,48 @@ pub fn serialize(name: &str, state: &UnitState) -> String {
 ///
 /// Returns typed malformed-medium or version-mismatch failures.
 pub fn parse(text: &str, descriptor: &KvUnitDescriptor) -> Result<UnitState, StorageError> {
-    let document: Value = serde_json::from_str(text).map_err(|error| {
+    let document = JsonValue::parse(text.to_owned()).map_err(|error| {
         StorageError::with_source(
             StorageErrorCode::MalformedMedium,
             format!("unit '{}': file is not valid JSON", descriptor.name),
             error.into(),
         )
     })?;
-    let object = document.as_object().ok_or_else(|| {
-        StorageError::new(
+    if !document.is_object() {
+        return Err(StorageError::new(
             StorageErrorCode::MalformedMedium,
             format!("unit '{}': file is not a JSON object", descriptor.name),
-        )
-    })?;
-    let unit = object.get("unit").and_then(Value::as_object);
+        ));
+    }
+    let unit = document.get("unit").filter(|unit| unit.is_object());
+    let version = unit
+        .and_then(|unit| unit.get("version"))
+        .and_then(|version| version.deserialize::<Number>().ok());
     let header_valid = unit.is_some_and(|unit| {
-        unit.get("name").and_then(Value::as_str) == Some(descriptor.name.as_str())
-            && unit.get("version").is_some_and(Value::is_number)
-    });
+        unit.get("name")
+            .is_some_and(|name| name == descriptor.name.as_str())
+    }) && version.is_some();
     if !header_valid {
         return Err(StorageError::new(
             StorageErrorCode::MalformedMedium,
             format!("unit '{}': missing or foreign unit header", descriptor.name),
         ));
     }
-    let Some(version) = unit
-        .and_then(|unit| unit.get("version"))
-        .and_then(Value::as_number)
-    else {
-        return Err(StorageError::new(
-            StorageErrorCode::MalformedMedium,
-            format!("unit '{}': missing or foreign unit header", descriptor.name),
-        ));
-    };
-    if !number_equals_u64(version, descriptor.version) {
+    let version = version.expect("validated unit header has a numeric version");
+    if !number_equals_u64(&version, descriptor.version) {
         return Err(StorageError::new(
             StorageErrorCode::VersionMismatch,
             format!(
                 "unit '{}': stored version {} != expected {}",
                 descriptor.name,
-                javascript_number(version),
+                javascript_number(&version),
                 descriptor.version
             ),
         ));
     }
-    let stored_tables = object
+    let stored_tables = document
         .get("tables")
-        .and_then(Value::as_object)
+        .filter(|tables| tables.is_object())
         .ok_or_else(|| {
             StorageError::new(
                 StorageErrorCode::MalformedMedium,
@@ -102,8 +102,17 @@ pub fn parse(text: &str, descriptor: &KvUnitDescriptor) -> Result<UnitState, Sto
     let mut tables = IndexMap::new();
     for table in &descriptor.tables {
         let records = match stored_tables.get(table) {
-            None => Map::new(),
-            Some(Value::Object(records)) => records.clone(),
+            None => IndexMap::new(),
+            Some(records) if records.is_object() => records.deserialize().map_err(|error| {
+                StorageError::with_source(
+                    StorageErrorCode::MalformedMedium,
+                    format!(
+                        "unit '{}': table '{table}' has an invalid record key",
+                        descriptor.name
+                    ),
+                    error.into(),
+                )
+            })?,
             Some(_) => {
                 return Err(StorageError::new(
                     StorageErrorCode::MalformedMedium,
@@ -118,7 +127,9 @@ pub fn parse(text: &str, descriptor: &KvUnitDescriptor) -> Result<UnitState, Sto
     }
     Ok(UnitState {
         version: descriptor.version,
-        global: object.get("global").cloned().unwrap_or(Value::Null),
+        global: document
+            .get("global")
+            .map_or_else(|| Value::Null.into(), |value| value.to_owned()),
         tables,
     })
 }
@@ -152,64 +163,4 @@ fn javascript_number(number: &Number) -> String {
         },
         |value| value.to_string(),
     )
-}
-
-fn write_pretty(value: &Value, depth: usize, output: &mut String) {
-    match value {
-        Value::Null => output.push_str("null"),
-        Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
-        Value::Number(value) => output.push_str(&javascript_number(value)),
-        Value::String(value) => output.push_str(
-            &serde_json::to_string(value).expect("serializing a Rust string cannot fail"),
-        ),
-        Value::Array(values) => write_array(values, depth, output),
-        Value::Object(values) => write_object(values, depth, output),
-    }
-}
-
-fn write_array(values: &[Value], depth: usize, output: &mut String) {
-    if values.is_empty() {
-        output.push_str("[]");
-        return;
-    }
-    output.push_str("[\n");
-    for (index, value) in values.iter().enumerate() {
-        indent(depth + 1, output);
-        write_pretty(value, depth + 1, output);
-        output.push_str(if index + 1 == values.len() {
-            "\n"
-        } else {
-            ",\n"
-        });
-    }
-    indent(depth, output);
-    output.push(']');
-}
-
-fn write_object(values: &Map<String, Value>, depth: usize, output: &mut String) {
-    if values.is_empty() {
-        output.push_str("{}");
-        return;
-    }
-    output.push_str("{\n");
-    for (index, (key, value)) in values.iter().enumerate() {
-        indent(depth + 1, output);
-        output
-            .push_str(&serde_json::to_string(key).expect("serializing a Rust string cannot fail"));
-        output.push_str(": ");
-        write_pretty(value, depth + 1, output);
-        output.push_str(if index + 1 == values.len() {
-            "\n"
-        } else {
-            ",\n"
-        });
-    }
-    indent(depth, output);
-    output.push('}');
-}
-
-fn indent(depth: usize, output: &mut String) {
-    for _ in 0..depth {
-        output.push_str("  ");
-    }
 }

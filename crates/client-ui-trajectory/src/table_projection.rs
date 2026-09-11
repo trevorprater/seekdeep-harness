@@ -4,7 +4,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{
     AssistantMetricDetail, CollapsedSummaryKind, TrajectoryCell, TrajectoryCellKind,
@@ -727,10 +728,10 @@ pub fn trajectory_message_source_label(source: &Value) -> String {
     let Some(properties) = source.as_object() else {
         return "Unknown".to_owned();
     };
-    match properties.get("kind").and_then(Value::as_str) {
+    match properties.get_value("kind").and_then(Value::as_str) {
         Some("user") => "User".to_owned(),
         Some("plugin") => properties
-            .get("plugin")
+            .get_value("plugin")
             .and_then(Value::as_str)
             .filter(|plugin| !plugin.is_empty())
             .map_or_else(
@@ -738,7 +739,7 @@ pub fn trajectory_message_source_label(source: &Value) -> String {
                 |plugin| format!("Plugin · {plugin}"),
             ),
         Some("goal") => properties
-            .get("round")
+            .get_value("round")
             .and_then(Value::as_f64)
             .filter(|round| *round > 0.0)
             .map_or_else(
@@ -944,7 +945,7 @@ pub fn trajectory_parent_records(
 pub fn parse_trajectory_json_container(value: &str) -> Option<Value> {
     serde_json::from_str(value)
         .ok()
-        .filter(|value| matches!(value, Value::Object(_) | Value::Array(_)))
+        .filter(|value| matches!(value, Value::object(_) | Value::array(&_)))
 }
 
 /// Parses the exact object-shaped Tool schema accepted by the inspector.
@@ -952,9 +953,9 @@ pub fn parse_trajectory_json_container(value: &str) -> Option<Value> {
 pub fn parse_trajectory_tool_schema(value: &str) -> Option<ParsedTrajectoryToolSchema> {
     let parsed: Value = serde_json::from_str(value).ok()?;
     let schema = parsed.as_object()?;
-    let name = schema.get("name")?.as_str()?.to_owned();
-    let description = schema.get("description")?.as_str()?.to_owned();
-    let parameters = schema.get("parameters")?.clone();
+    let name = schema.get_value("name")?.as_str()?.to_owned();
+    let description = schema.get_value("description")?.as_str()?.to_owned();
+    let parameters = schema.get_value("parameters")?.clone();
     if !parameters.is_object() {
         return None;
     }

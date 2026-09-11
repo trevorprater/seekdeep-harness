@@ -5,9 +5,11 @@ use std::sync::Arc;
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentOptions};
+use seekdeep_code_runtime::CodeBindingFailure;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_jobs::{JOBS, JobHooks, JobOutcome, JobStart, JobTerminalStatus};
-use seekdeep_llm::{ContentBlock, ModelId, ProviderId};
+use seekdeep_llm::{ContentBlock, JsonString, ModelId, ProviderId, assistant_text};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_subagent::{
     ContinuableStartRequest, ContinuableStartSpec, SUBAGENTS, SubagentProvider, SubagentResult,
     SubagentRun, SubagentRuntime, SubagentStopReason,
@@ -17,7 +19,7 @@ use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, TOOLS, ToolDefinition, ToolRestriction, ToolRuntime,
     define_tool,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error as _};
 use serde_json::{Value, json};
 
 /// Loader plugin name.
@@ -115,12 +117,12 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 struct DelegationArgs {
     description: String,
-    prompt: String,
+    prompt: JsonString,
     #[serde(default)]
     run_in_background: Option<bool>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(
     tag = "kind",
     rename_all = "lowercase",
@@ -135,8 +137,42 @@ enum DelegationValue {
     },
     Foreground {
         run_id: seekdeep_core::session::SessionId,
-        output: Vec<Value>,
+        output: Vec<ContentBlock>,
     },
+}
+
+impl<'de> Deserialize<'de> for DelegationValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let kind: String = json_field(&value, "kind")?;
+        match kind.as_str() {
+            "background" => Ok(Self::Background {
+                job_id: json_field(&value, "jobId")?,
+            }),
+            "continuable" => Ok(Self::Continuable {
+                subagent_id: json_field(&value, "subagentId")?,
+            }),
+            "foreground" => Ok(Self::Foreground {
+                run_id: json_field(&value, "runId")?,
+                output: json_field(&value, "output")?,
+            }),
+            _ => Err(D::Error::unknown_variant(
+                &kind,
+                &["background", "continuable", "foreground"],
+            )),
+        }
+    }
+}
+
+fn json_field<T: serde::de::DeserializeOwned, E: serde::de::Error>(
+    value: &JsonValue,
+    field: &'static str,
+) -> Result<T, E> {
+    value
+        .get(field)
+        .ok_or_else(|| E::missing_field(field))?
+        .deserialize()
+        .map_err(E::custom)
 }
 
 struct Wording {
@@ -189,15 +225,8 @@ fn output_schema() -> Value {
     })
 }
 
-fn output_value_text(values: &[Value]) -> String {
-    values
-        .iter()
-        .filter_map(|value| {
-            let object = value.as_object()?;
-            (object.get("type")?.as_str()? == "text")
-                .then(|| object.get("text")?.as_str().map(str::to_owned))?
-        })
-        .collect()
+fn output_value_text(values: &[ContentBlock]) -> JsonString {
+    assistant_text(values)
 }
 
 fn stop_reason_error(result: &SubagentResult) -> Option<&'static str> {
@@ -210,18 +239,16 @@ fn stop_reason_error(result: &SubagentResult) -> Option<&'static str> {
     }
 }
 
-fn partial_text_error(headline: &str, output: &[ContentBlock]) -> String {
-    let text = output
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
-            _ => None,
-        })
-        .collect::<String>();
+fn partial_text_error(headline: &str, output: &[ContentBlock]) -> JsonString {
+    let text = assistant_text(output);
     if text.is_empty() {
-        headline.to_owned()
+        headline.into()
     } else {
-        format!("{headline}\nPartial output before the run ended:\n{text}")
+        let mut message = JsonString::from(format!(
+            "{headline}\nPartial output before the run ended:\n"
+        ));
+        message.push_utf16(text.utf16_units());
+        message
     }
 }
 
@@ -230,16 +257,13 @@ async fn settle_foreground(run: Arc<dyn SubagentRun>) -> anyhow::Result<Delegati
         Err(error) => Err(error),
         Ok(result) => {
             if let Some(error) = stop_reason_error(&result) {
-                Err(anyhow::anyhow!(partial_text_error(error, &result.output)))
+                Err(anyhow::Error::new(CodeBindingFailure {
+                    message: partial_text_error(error, &result.output),
+                }))
             } else {
-                let output = result
-                    .output
-                    .iter()
-                    .map(serde_json::to_value)
-                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(DelegationValue::Foreground {
                     run_id: run.id().clone(),
-                    output,
+                    output: result.output,
                 })
             }
         }
@@ -249,10 +273,20 @@ async fn settle_foreground(run: Arc<dyn SubagentRun>) -> anyhow::Result<Delegati
         (Ok(value), Ok(())) => Ok(value),
         (Err(error), Ok(())) => Err(error),
         (Ok(_), Err(disposal)) => Err(disposal),
-        (Err(error), Err(disposal)) => Err(anyhow::anyhow!(
-            "subagent run failed: {error}; dispose failed: {disposal}"
-        )),
+        (Err(error), Err(disposal)) => {
+            let mut message = JsonString::from("subagent run failed: ");
+            message.push_utf16(delegation_error_text(&error).utf16_units());
+            message.push_str("; dispose failed: ");
+            message.push_utf16(delegation_error_text(&disposal).utf16_units());
+            Err(anyhow::Error::new(CodeBindingFailure { message }))
+        }
     }
+}
+
+fn delegation_error_text(error: &anyhow::Error) -> JsonString {
+    error
+        .downcast_ref::<CodeBindingFailure>()
+        .map_or_else(|| error.to_string().into(), |error| error.message.clone())
 }
 
 fn map_job_outcome(outcome: seekdeep_subagent::JobOutcome) -> JobOutcome {
@@ -427,14 +461,14 @@ impl DelegationMount {
                 Arc::new(|_args: &DelegationArgs, value: &DelegationValue| {
                     let text = match value {
                         DelegationValue::Background { job_id } => {
-                            format!("started background subagent task {job_id}")
+                            format!("started background subagent task {job_id}").into()
                         }
                         DelegationValue::Continuable { subagent_id } => {
-                            format!("started subagent {subagent_id}")
+                            format!("started subagent {subagent_id}").into()
                         }
                         DelegationValue::Foreground { output, .. } => output_value_text(output),
                     };
-                    Ok(vec![ContentBlock::Text { text }])
+                    Ok(vec![ContentBlock::text(text)])
                 }),
             ),
             Arc::new(move |args: DelegationArgs, run| {
@@ -505,9 +539,13 @@ impl DelegationMount {
         }
     }
 
-    fn continuable_request(&self, prompt: String, parent: Arc<Agent>) -> ContinuableStartRequest {
+    fn continuable_request(
+        &self,
+        prompt: JsonString,
+        parent: Arc<Agent>,
+    ) -> ContinuableStartRequest {
         ContinuableStartRequest {
-            prompt: vec![ContentBlock::Text { text: prompt }],
+            prompt: vec![ContentBlock::text(prompt)],
             parent,
             agent_options: self.config.agent_options.clone().map(AgentOptions::from),
             max_depth: self.numeric_max_depth(),

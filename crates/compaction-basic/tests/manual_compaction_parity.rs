@@ -30,9 +30,9 @@ use seekdeep_core::{
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::{
-    AbortSignal, AdapterStream, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
-    LlmModelContext, LlmResolvedModelInfo, LlmRuntime, Message, MessageSource, ModelId, ProviderId,
-    StreamChunk, TokenUsage, UserMessage,
+    AbortSignal, AdapterStream, ContentBlock, FinishReason, GenerateOptions, JsonString,
+    LlmAdapter, LlmModelContext, LlmResolvedModelInfo, LlmRuntime, Message, MessageSource, ModelId,
+    ProviderId, StreamChunk, TokenUsage, UserMessage,
 };
 use seekdeep_system_prompt::{SystemPrompt, SystemPromptConfig};
 use seekdeep_token_meter::{TokenMeterConfig, TokenMeterInstallation};
@@ -58,7 +58,7 @@ impl Default for SummaryState {
         Self {
             calls: Mutex::new(Vec::new()),
             summary: Mutex::new(vec![ContentBlock::Text {
-                text: "checkpoint".to_owned(),
+                text: "checkpoint".into(),
             }]),
             raw_output: Mutex::new(None),
             usage: Mutex::new(None),
@@ -211,7 +211,7 @@ fn append_closed_history(session: &Session, turns: u64, last_turn: u64) {
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: format!("{} {turn}", PROMPT.repeat(60)),
+                    text: format!("{} {turn}", PROMPT.repeat(60)).into(),
                 }],
                 MessageSource::user(),
             ))
@@ -243,7 +243,7 @@ fn append_closed_history(session: &Session, turns: u64, last_turn: u64) {
                 "turn": turn,
                 "step": 1,
                 "message": Message::assistant(
-                    vec![ContentBlock::Text { text: format!("answer {turn}") }],
+                    vec![ContentBlock::Text { text: format!("answer {turn}").into() }],
                     MODEL,
                     MODEL,
                 )
@@ -395,7 +395,7 @@ async fn standalone_bracket_preserves_command_identity_turns_and_checkpoint_sour
     let checkpoint = events
         .iter()
         .filter(|event| event.event_type == "user/message")
-        .filter_map(|event| serde_json::from_value::<Message>(event.data.clone()).ok())
+        .filter_map(|event| event.data.deserialize::<Message>().ok())
         .find(|message| is_compact_checkpoint_source(message.source()))
         .unwrap();
     assert_eq!(
@@ -602,7 +602,7 @@ async fn selected_head_or_middle_replacement_is_changed_and_flushes_error_close(
                     "user/message",
                     serde_json::to_value(Message::user(
                         vec![ContentBlock::Text {
-                            text: "competing replacement".to_owned(),
+                            text: "competing replacement".into(),
                         }],
                         MessageSource::plugin("rival"),
                     ))
@@ -716,7 +716,7 @@ async fn turnless_history_compacts_without_creating_a_turn() {
             &session,
             "user/message",
             serde_json::to_value(Message::user(
-                vec![ContentBlock::Text { text }],
+                vec![ContentBlock::text(text)],
                 MessageSource::user(),
             ))
             .unwrap(),
@@ -872,7 +872,7 @@ async fn manual_summary_preserves_raw_output_usage_and_marker_duration() {
     let harness = Harness::new();
     let raw = vec![
         ContentBlock::Text {
-            text: "checkpoint".to_owned(),
+            text: "checkpoint".into(),
         },
         ContentBlock::Reasoning {
             text: "hidden reasoning".to_owned(),
@@ -917,6 +917,60 @@ async fn manual_summary_preserves_raw_output_usage_and_marker_duration() {
     assert_eq!(summary.data["rawOutput"], json!(raw));
     assert_eq!(summary.data["usage"]["inputTokens"], 40);
     assert!(end.time >= start.time);
+    harness.dispose().await;
+}
+
+#[tokio::test]
+async fn manual_summary_and_checkpoint_replay_preserve_utf16_text() {
+    let harness = Harness::new();
+    let text = JsonString::from_utf16(&[0xd800, 0x61, 0xdfff, 0xd83d, 0xde00]);
+    let content = vec![ContentBlock::Text { text: text.clone() }];
+    *harness.state.summary.lock() = content.clone();
+    *harness.state.raw_output.lock() = Some(content);
+    let session = harness.closed("manual-utf16-output", 2, 2);
+    let result = harness
+        .engine
+        .compact_now(
+            &manual_context(
+                session.clone(),
+                true,
+                AbortSignal::default(),
+                Arc::new(AtomicUsize::new(0)),
+            ),
+            &AbortSignal::default(),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(&result.summary[0], ContentBlock::Text { text: actual } if actual == &text));
+    let events = session.events();
+    let summary = events
+        .iter()
+        .find(|event| event.event_type == "compaction/summary")
+        .unwrap();
+    assert_eq!(
+        summary.data["summary"][0]["text"].to_utf16(),
+        Some(text.to_utf16())
+    );
+    assert_eq!(
+        summary.data["rawOutput"][0]["text"].to_utf16(),
+        Some(text.to_utf16())
+    );
+    let wire = serde_json::to_string(&events).unwrap();
+    let seed: Vec<SessionEvent> = serde_json::from_str(&wire).unwrap();
+    let replay = harness.create("manual-utf16-replay", Some(seed));
+    let checkpoint = replay
+        .events()
+        .iter()
+        .filter_map(seekdeep_core::session::derive_event_message)
+        .find(|message| is_compact_checkpoint_source(message.source()))
+        .unwrap();
+    assert!(
+        checkpoint.content().iter().any(|block| {
+            matches!(block, ContentBlock::Text { text: actual } if actual == &text)
+        })
+    );
     harness.dispose().await;
 }
 
@@ -1003,7 +1057,7 @@ fn rejecting_append(event_type: &'static str, message: &'static str) -> Compacti
                 message.to_owned(),
             ));
         }
-        session.append(current, data, options)
+        session.append_json(current, data, options)
     })
 }
 
@@ -1272,7 +1326,7 @@ impl LlmAdapter for TextAdapter {
                 StreamChunk::BlockEnd {
                     index: 0,
                     block: ContentBlock::Text {
-                        text: "answer".to_owned(),
+                        text: "answer".into(),
                     },
                 },
                 StreamChunk::Finish {
@@ -1442,9 +1496,7 @@ impl LoopHarness {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -1458,7 +1510,9 @@ fn derived_text(session: &Session) -> Vec<String> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str()),
+                    ContentBlock::Text { text } => {
+                        Some(text.as_str().expect("fixture uses scalar text"))
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -1509,7 +1563,9 @@ async fn loop_holds_followup_until_manual_bracket_flushes_then_runs_from_checkpo
                     .content()
                     .iter()
                     .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Text { text } => {
+                            Some(text.as_str().expect("fixture uses scalar text"))
+                        }
                         _ => None,
                     })
                     .collect::<Vec<_>>()
@@ -1532,7 +1588,7 @@ async fn loop_keeps_injected_context_pending_and_marker_listener_order_stable() 
         agent
             .inject(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "INJECTED CONTEXT".to_owned(),
+                    text: "INJECTED CONTEXT".into(),
                 }],
                 MessageSource::plugin("test"),
             ))
@@ -1604,7 +1660,7 @@ async fn loop_marker_listeners_inject_reentrantly_without_reordering_bracket() {
                     agent
                         .inject(UserMessage::new(
                             vec![ContentBlock::Text {
-                                text: format!("from {}", event.event_type),
+                                text: format!("from {}", event.event_type).into(),
                             }],
                             MessageSource::plugin("listener"),
                         ))

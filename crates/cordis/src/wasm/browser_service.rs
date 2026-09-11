@@ -31,7 +31,7 @@ pub fn create_callable(
     .into_js_value();
     let function = Function::new_with_args(
         "invoke",
-        "const self = function(...args) { return invoke(self,this,args); }; return self;",
+        "'use strict'; const self = function(...args) { return invoke(self,this,args); }; return self;",
     )
     .call1(&JsValue::UNDEFINED, &invoke)?;
     values::define(&function, &"name".into(), name)?;

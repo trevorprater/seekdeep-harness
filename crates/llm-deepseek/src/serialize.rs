@@ -1,8 +1,8 @@
 //! Serialize provider-neutral messages into DeepSeek chat completions.
 
 use seekdeep_llm::{
-    ContentBlock, GenerateOptions, LlmError, LlmRequestPurpose, Message, MessageRole,
-    content_has_image,
+    ContentBlock, GenerateOptions, JsonString, LlmError, LlmRequestPurpose, Message, MessageRole,
+    assistant_text, content_has_image,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,18 +100,8 @@ fn resolve_thinking(
     })
 }
 
-fn flatten_text(blocks: &[ContentBlock]) -> String {
-    blocks
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
-            ContentBlock::Reasoning { .. }
-            | ContentBlock::Image { .. }
-            | ContentBlock::ToolCall { .. }
-            | ContentBlock::ToolResult { .. }
-            | ContentBlock::Unknown { .. } => None,
-        })
-        .collect()
+fn flatten_text(blocks: &[ContentBlock]) -> JsonString {
+    assistant_text(blocks)
 }
 
 fn assert_text_only(blocks: &[ContentBlock]) -> Result<(), LlmError> {
@@ -197,7 +187,7 @@ pub fn serialize_messages(messages: &[Message]) -> Result<Vec<WireMessage>, LlmE
                     wire.push(WireMessage::Tool {
                         tool_call_id: tool_call_id.as_str().to_owned(),
                         content: if content.is_empty() {
-                            "(no output)".to_owned()
+                            "(no output)".into()
                         } else {
                             content
                         },
@@ -221,7 +211,7 @@ pub fn serialize_request(
     let mut messages = Vec::new();
     if let Some(system) = &options.system {
         messages.push(WireMessage::System {
-            content: system.clone(),
+            content: system.clone().into(),
         });
     }
     messages.extend(serialize_messages(&options.messages)?);

@@ -4,6 +4,7 @@
 pub mod config_catalog;
 /// Cordis catalog, client slot catalog, and inspect catalog generators over the pinned source tree.
 pub mod cordis_catalog;
+pub mod doc_graphs;
 /// macOS runtime-wheel deployment-target validation.
 pub mod macos_deployment;
 /// Session persistence catalog generation and validation.

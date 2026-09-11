@@ -1,14 +1,20 @@
 //! Declarative plugin-tree parsing, patch layering, and executable loading.
 
 mod expression;
+mod host_hmr;
 mod javascript_plugin;
 /// Generic Cordis file-launcher lifecycle.
 pub mod launcher;
+mod node_plugin;
+mod node_tools;
+mod node_watch;
+pub use node_watch::{HostFileWatcher, HostWatchEvent};
 /// Source-compatible profile patch parsing and ordered composition.
 pub mod profile_patch;
 mod sandbox_service;
 
 pub use expression::ExpressionEnvironment;
+pub use host_hmr::HostHmrChange;
 pub use javascript_plugin::{DynamicHostGuardFailure, DynamicHostRuntime, LoadedDynamicHostPlugin};
 pub use sandbox_service::{
     SANDBOX_SERVICES, SandboxServiceDispatcher, SandboxServiceMethod, SandboxServiceRegistration,
@@ -98,6 +104,25 @@ pub struct LoaderSettlement {
 }
 
 impl LoaderSettlement {
+    /// Opens a file watch through this catalog's shared Node realm.
+    ///
+    /// # Errors
+    ///
+    /// Returns detached-loader, invalid-watcher, or runtime startup failures.
+    pub fn watch_files(
+        &self,
+        roots: &[PathBuf],
+        options: &Value,
+        ignored: Option<&(PathBuf, Vec<String>)>,
+    ) -> Result<Arc<HostFileWatcher>, LoaderError> {
+        node_watch::HostFileWatcher::open(
+            &self.attached()?.catalog.node_realm()?,
+            roots,
+            options,
+            ignored,
+        )
+    }
+
     fn pending() -> (Arc<Self>, LoaderSettlementCompletion) {
         let (sender, result) = tokio::sync::watch::channel(None);
         let settlement = Arc::new(Self {
@@ -268,7 +293,8 @@ impl LoaderSettlement {
     ///
     /// # Errors
     ///
-    /// Returns candidate import, disposal, application, or rollback failures.
+    /// Returns candidate import, synchronous registration, or rollback failures.
+    /// Replacement application failures are reported by the Loader settlement barrier.
     pub async fn reload_module(
         &self,
         path: impl AsRef<Path>,
@@ -690,6 +716,14 @@ pub enum LoaderError {
     /// A file-backed compatibility plugin failed to import.
     #[error("{0}")]
     ModuleLoad(String),
+    /// An import failure retaining the JavaScript error and compiler diagnostics.
+    #[error("{message}")]
+    StructuredModuleLoad {
+        /// Import failure rendered for callers that accept only text.
+        message: String,
+        /// Original error fields, including ordered compiler messages and locations.
+        error: Value,
+    },
     /// A document could not be parsed.
     #[error("loader: invalid composition document: {0}")]
     InvalidDocument(String),
@@ -721,6 +755,28 @@ pub enum LoaderError {
     Disposal(String),
 }
 
+impl LoaderError {
+    /// Returns captured import-error fields without coercing compiler diagnostics.
+    #[must_use]
+    pub fn structured_error(&self) -> Option<&Value> {
+        match self {
+            Self::StructuredModuleLoad { error, .. } => Some(error),
+            Self::InvalidEntryId
+            | Self::InvalidPluginSpecifier
+            | Self::Unavailable
+            | Self::UpdateInProgress
+            | Self::DuplicatePlugin(_)
+            | Self::UnknownPlugin(_)
+            | Self::ModuleLoad(_)
+            | Self::InvalidDocument(_)
+            | Self::SettlementService(_)
+            | Self::PluginImport { .. }
+            | Self::PluginStartup { .. }
+            | Self::Disposal(_) => None,
+        }
+    }
+}
+
 /// Process-local mapping from declarative names to compiled Rust plugins.
 #[derive(Clone)]
 pub struct PluginCatalog {
@@ -732,6 +788,7 @@ pub struct PluginCatalog {
     closed_bare_plugins: bool,
     hmr_externals: Arc<RwLock<BTreeSet<PathBuf>>>,
     hmr_transaction: Arc<tokio::sync::Mutex<()>>,
+    node_realm: Arc<parking_lot::Mutex<Option<Arc<node_plugin::NodeRealm>>>>,
 }
 
 #[derive(Clone)]
@@ -759,6 +816,7 @@ impl Default for PluginCatalog {
             closed_bare_plugins: false,
             hmr_externals: Arc::new(RwLock::new(BTreeSet::new())),
             hmr_transaction: Arc::new(tokio::sync::Mutex::new(())),
+            node_realm: Arc::default(),
         }
     }
 }
@@ -865,11 +923,14 @@ impl PluginCatalog {
         {
             return Err(LoaderError::UnknownPlugin(specifier.to_string()));
         }
+        let realm = self.node_realm()?;
         let path = resolve_plugin_path(
+            &realm,
             context,
             specifier.as_str(),
             self.bare_module_base.as_deref(),
         )?;
+        let path = path.canonicalize().unwrap_or(path);
         let key = path.to_string_lossy().into_owned();
         if let Some(plugin) = self.compatibility_plugins.read().get(&key).cloned() {
             return Ok(ResolvedPlugin {
@@ -877,8 +938,7 @@ impl PluginCatalog {
                 module_path: Some(path),
             });
         }
-        let loaded = javascript_plugin::load(&path, self.expressions.process_facade())
-            .map_err(|error| LoaderError::ModuleLoad(format!("{specifier}: {error:#}")))?;
+        let loaded = realm.load(&path)?;
         let plugin = loaded.plugin;
         self.compatibility_dependencies
             .write()
@@ -894,18 +954,18 @@ impl PluginCatalog {
 
     fn prepare_hmr_candidates(
         &self,
-        affected: &[String],
+        changed: &[PathBuf],
+        roots: &[String],
+        fibers: &Value,
     ) -> Result<Vec<HmrCandidate>, LoaderError> {
-        affected
-            .iter()
-            .map(|key| {
-                let loaded =
-                    javascript_plugin::load(Path::new(key), self.expressions.process_facade())
-                        .map_err(|error| LoaderError::ModuleLoad(format!("{key}: {error:#}")))?;
+        self.node_realm()?
+            .prepare(changed, roots, &self.hmr_externals.read(), fibers)?
+            .into_iter()
+            .map(|(key, loaded)| {
                 let previous_plugin = self
                     .compatibility_plugins
                     .read()
-                    .get(key)
+                    .get(&key)
                     .cloned()
                     .ok_or_else(|| {
                         LoaderError::ModuleLoad(format!("missing cached plugin {key}"))
@@ -913,7 +973,7 @@ impl PluginCatalog {
                 let previous_dependencies = self
                     .compatibility_dependencies
                     .read()
-                    .get(key)
+                    .get(&key)
                     .cloned()
                     .unwrap_or_default();
                 Ok(HmrCandidate {
@@ -925,6 +985,17 @@ impl PluginCatalog {
                 })
             })
             .collect()
+    }
+
+    fn node_realm(&self) -> Result<Arc<node_plugin::NodeRealm>, LoaderError> {
+        let mut realm = self.node_realm.lock();
+        if realm.is_none() {
+            *realm = Some(node_plugin::NodeRealm::start()?);
+        }
+        Ok(realm
+            .as_ref()
+            .expect("initialized Node plugin realm")
+            .clone())
     }
 
     fn install_hmr_candidates(&self, candidates: &[HmrCandidate], rollback: bool) {
@@ -1471,6 +1542,7 @@ fn resolve_include_path(
 }
 
 fn resolve_plugin_path(
+    realm: &node_plugin::NodeRealm,
     context: &Context,
     configured: &str,
     bare_module_base: Option<&Path>,
@@ -1485,7 +1557,7 @@ fn resolve_plugin_path(
             .map_err(|()| LoaderError::UnknownPlugin(format!("plugin URL must use file: {url}")));
     }
     if !configured.starts_with('.') {
-        return resolve_bare_plugin_path(context, configured, bare_module_base);
+        return resolve_bare_plugin_path(realm, context, configured, bare_module_base);
     }
     let base = context
         .meta("loader.base_url")
@@ -1499,6 +1571,7 @@ fn resolve_plugin_path(
 }
 
 fn resolve_bare_plugin_path(
+    realm: &node_plugin::NodeRealm,
     context: &Context,
     configured: &str,
     explicit_base: Option<&Path>,
@@ -1522,46 +1595,13 @@ fn resolve_bare_plugin_path(
             ))
         })?
     };
-    for ancestor in start.ancestors() {
-        let package = ancestor.join("node_modules").join(configured);
-        let manifest_path = package.join("package.json");
-        let Ok(source) = std::fs::read_to_string(&manifest_path) else {
-            continue;
-        };
-        let manifest: Value = serde_json::from_str(&source).map_err(|error| {
-            LoaderError::ModuleLoad(format!(
-                "failed to parse {}: {error}",
-                manifest_path.display()
-            ))
-        })?;
-        let export = manifest
-            .get("exports")
-            .and_then(package_export)
-            .or_else(|| manifest.get("module").and_then(Value::as_str))
-            .or_else(|| manifest.get("main").and_then(Value::as_str))
-            .unwrap_or("index.js");
-        let resolved = package.join(export);
-        if resolved.is_file() {
-            return Ok(resolved);
-        }
-        return Err(LoaderError::ModuleLoad(format!(
-            "package {configured:?} entry does not exist: {}",
-            resolved.display()
-        )));
-    }
-    Err(LoaderError::UnknownPlugin(configured.to_owned()))
-}
-
-fn package_export(value: &Value) -> Option<&str> {
-    match value {
-        Value::String(value) => Some(value),
-        Value::Object(exports) => exports
-            .get(".")
-            .and_then(package_export)
-            .or_else(|| exports.get("import").and_then(package_export))
-            .or_else(|| exports.get("default").and_then(package_export)),
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::Array(_) => None,
-    }
+    let base = url::Url::from_directory_path(&start).map_err(|()| {
+        LoaderError::UnknownPlugin(format!(
+            "bare module base is not absolute: {}",
+            start.display()
+        ))
+    })?;
+    realm.resolve(configured, base.as_str())
 }
 
 fn profile_entry_to_runtime(entry: &profile_patch::ProfileEntry) -> Result<Entry, LoaderError> {
@@ -1947,38 +1987,6 @@ impl MountedEntry {
         }
     }
 
-    async fn replace_runtime_for_hmr(
-        &mut self,
-        catalog: &PluginCatalog,
-    ) -> Result<(), LoaderError> {
-        let previous = self.options.clone();
-        let previous_plugin = self.plugin.clone().map(|plugin| ResolvedPlugin {
-            plugin,
-            module_path: self.module_path.clone(),
-        });
-        let parent = self.parent_context.clone();
-        if let Err(error) = self.dispose_runtime().await {
-            tracing::warn!(entry = %previous.id, %error, "Host HMR plugin disposal failed");
-        }
-        match mount_entry(catalog, &parent, &previous).await {
-            Ok(next) => {
-                *self = next;
-                Ok(())
-            }
-            Err(error) => {
-                match mount_entry_with_plugin(catalog, &parent, &previous, previous_plugin).await {
-                    Ok(restored) => {
-                        *self = restored;
-                        Err(error)
-                    }
-                    Err(rollback) => Err(LoaderError::Disposal(format!(
-                        "{error}; loader entry rollback failed: {rollback}"
-                    ))),
-                }
-            }
-        }
-    }
-
     async fn dispose_runtime(&mut self) -> Result<(), LoaderError> {
         let mut errors = Vec::new();
         if let Err(error) = dispose_entries(&mut self.children).await {
@@ -2157,29 +2165,6 @@ fn module_paths_in_order(entries: &[MountedEntry]) -> Vec<PathBuf> {
     paths
 }
 
-fn reload_mounted_entries<'a>(
-    catalog: &'a PluginCatalog,
-    entries: &'a mut [MountedEntry],
-    affected: &'a BTreeSet<PathBuf>,
-) -> Pin<Box<dyn Future<Output = Result<Vec<EntryId>, LoaderError>> + Send + 'a>> {
-    Box::pin(async move {
-        let mut reloaded = Vec::new();
-        for entry in entries {
-            if entry
-                .module_path
-                .as_ref()
-                .is_some_and(|path| affected.contains(path))
-                && entry.fiber.is_some()
-            {
-                entry.replace_runtime_for_hmr(catalog).await?;
-                reloaded.push(entry.options.id.clone());
-            }
-            reloaded.extend(reload_mounted_entries(catalog, &mut entry.children, affected).await?);
-        }
-        Ok(reloaded)
-    })
-}
-
 fn locate_fiber<'a>(
     entries: &'a [MountedEntry],
     target: &Arc<PluginFiber>,
@@ -2225,9 +2210,11 @@ struct CompositionRuntime {
     entries: parking_lot::Mutex<Option<Vec<MountedEntry>>>,
     fibers: RwLock<Vec<Arc<PluginFiber>>>,
     entry_snapshot: RwLock<Vec<LoaderEntrySnapshot>>,
+    include_paths: RwLock<BTreeSet<PathBuf>>,
     programmatic: parking_lot::Mutex<Vec<MountedEntry>>,
     initializing: AtomicBool,
     disposed: AtomicBool,
+    hmr_retired: parking_lot::Mutex<Vec<Arc<PluginFiber>>>,
 }
 
 impl std::fmt::Debug for CompositionRuntime {
@@ -2249,6 +2236,7 @@ impl CompositionRuntime {
     ) -> Self {
         let fibers = collect_fibers(&entries);
         let entry_snapshot = collect_entry_snapshot(&entries);
+        let include_paths = host_hmr::include_paths(&entry_specs(&entries));
         Self {
             context,
             catalog,
@@ -2257,9 +2245,11 @@ impl CompositionRuntime {
             entries: parking_lot::Mutex::new(Some(entries)),
             fibers: RwLock::new(fibers),
             entry_snapshot: RwLock::new(entry_snapshot),
+            include_paths: RwLock::new(include_paths),
             programmatic: parking_lot::Mutex::new(Vec::new()),
             initializing: AtomicBool::new(true),
             disposed: AtomicBool::new(false),
+            hmr_retired: parking_lot::Mutex::new(Vec::new()),
         }
     }
 
@@ -2289,6 +2279,7 @@ impl CompositionRuntime {
     fn restore_entries(&self, entries: Vec<MountedEntry>) {
         *self.fibers.write() = collect_fibers(&entries);
         *self.entry_snapshot.write() = collect_entry_snapshot(&entries);
+        *self.include_paths.write() = host_hmr::include_paths(&entry_specs(&entries));
         *self.entries.lock() = Some(entries);
     }
 
@@ -2511,74 +2502,7 @@ impl CompositionRuntime {
     }
 
     async fn reload_module(&self, path: &Path) -> Result<HostHmrOutcome, LoaderError> {
-        let _hmr = self.catalog.hmr_transaction.lock().await;
-        let changed = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        if self.catalog.hmr_externals.read().contains(&changed) {
-            return Ok(HostHmrOutcome::FullRestart);
-        }
-
-        let affected_set = self
-            .catalog
-            .compatibility_dependencies
-            .read()
-            .iter()
-            .filter(|(_, dependencies)| dependencies.contains(&changed))
-            .map(|(key, _)| key.clone())
-            .collect::<BTreeSet<_>>();
-        let affected = {
-            let entries = self.entries.lock();
-            let entries = entries.as_ref().ok_or(LoaderError::Unavailable)?;
-            module_paths_in_order(entries)
-                .into_iter()
-                .map(|path| path.to_string_lossy().into_owned())
-                .filter(|key| affected_set.contains(key))
-                .collect::<Vec<_>>()
-        };
-        if affected.is_empty() {
-            let _ = self.context.events().emit(
-                &self.context,
-                "hmr/change",
-                &seekdeep_cordis::EventArgs::one(changed),
-            );
-            return Ok(HostHmrOutcome::Untracked);
-        }
-
-        let candidates = self.catalog.prepare_hmr_candidates(&affected)?;
-
-        let completion = self.settlement.begin();
-        let (_operation, mut entries) = self.take_entries().await?;
-        self.catalog.install_hmr_candidates(&candidates, false);
-        let affected_paths = affected.iter().map(PathBuf::from).collect::<BTreeSet<_>>();
-        let result = reload_mounted_entries(&self.catalog, &mut entries, &affected_paths).await;
-        match result {
-            Ok(reloaded) => {
-                self.restore_entries(entries);
-                completion.finish(Ok(()));
-                let _ = self.context.events().emit(
-                    &self.context,
-                    "hmr/reload",
-                    &seekdeep_cordis::EventArgs::one(HostHmrReload {
-                        changed,
-                        entries: reloaded.clone(),
-                    }),
-                );
-                Ok(HostHmrOutcome::Reloaded(reloaded))
-            }
-            Err(error) => {
-                self.catalog.install_hmr_candidates(&candidates, true);
-                let rollback =
-                    reload_mounted_entries(&self.catalog, &mut entries, &affected_paths).await;
-                self.restore_entries(entries);
-                let error = match rollback {
-                    Ok(_) => error,
-                    Err(rollback) => LoaderError::Disposal(format!(
-                        "{error}; Host HMR rollback failed: {rollback}"
-                    )),
-                };
-                completion.finish(Err(Arc::from(error.to_string())));
-                Err(error)
-            }
-        }
+        self.reload_modules(&[path.to_owned()]).await
     }
 
     async fn dispose(&self) -> Result<(), LoaderError> {
@@ -2586,6 +2510,8 @@ impl CompositionRuntime {
         let programmatic_result = self.dispose_programmatic().await;
         let (_operation, mut entries) = self.take_entries().await?;
         let declarative_result = dispose_entries(&mut entries).await;
+        let retired = std::mem::take(&mut *self.hmr_retired.lock());
+        futures::future::join_all(retired.iter().map(PluginFiber::dispose)).await;
         self.fibers.write().clear();
         self.entry_snapshot.write().clear();
         match (programmatic_result, declarative_result) {
@@ -2726,7 +2652,8 @@ impl LoadedComposition {
     ///
     /// # Errors
     ///
-    /// Returns candidate import, disposal, application, or rollback failures.
+    /// Returns candidate import, synchronous registration, or rollback failures.
+    /// Replacement application failures are reported by the Loader settlement barrier.
     pub async fn reload_module(
         &self,
         path: impl AsRef<Path>,

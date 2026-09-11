@@ -3,7 +3,11 @@
 use std::rc::Rc;
 
 use seekdeep_client_runtime::*;
-use serde_json::json;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
+
+macro_rules! json {
+    ($($tokens:tt)*) => { Value::from(serde_json::json!($($tokens)*)) };
+}
 
 #[test]
 fn block_start_builds_empty_known_and_unknown_blocks() {
@@ -16,25 +20,25 @@ fn block_start_builds_empty_known_and_unknown_blocks() {
     ] {
         accumulator.push(&PartialChunk::BlockStart {
             index,
-            block_type: block_type.to_owned(),
+            block_type: block_type.into(),
         });
     }
     assert_eq!(
         accumulator.partial().blocks.as_ref(),
         &[
             Rc::new(AssistantBlock::Text {
-                text: String::new()
+                text: JsonString::default()
             }),
             Rc::new(AssistantBlock::Reasoning {
-                text: String::new()
+                text: JsonString::default()
             }),
             Rc::new(AssistantBlock::ToolCall {
-                call_id: String::new(),
-                name: String::new(),
-                args_raw: String::new()
+                call_id: JsonString::default(),
+                name: JsonString::default(),
+                args_raw: JsonString::default()
             }),
             Rc::new(AssistantBlock::Other {
-                block: serde_json::Value::Null
+                block: Value::from(serde_json::Value::Null)
             }),
         ]
     );
@@ -46,23 +50,23 @@ fn text_and_reasoning_accumulate_and_restart_when_lane_changes() {
     for text in ["无 start ", "也累积"] {
         accumulator.push(&PartialChunk::TextDelta {
             index: 0,
-            text: text.to_owned(),
+            text: text.into(),
         });
     }
     assert_eq!(
         accumulator.partial().blocks[0].as_ref(),
         &AssistantBlock::Text {
-            text: "无 start 也累积".to_owned()
+            text: "无 start 也累积".into()
         }
     );
     accumulator.push(&PartialChunk::ReasoningDelta {
         index: 0,
-        text: "换型重起".to_owned(),
+        text: "换型重起".into(),
     });
     assert_eq!(
         accumulator.partial().blocks[0].as_ref(),
         &AssistantBlock::Reasoning {
-            text: "换型重起".to_owned()
+            text: "换型重起".into()
         }
     );
 }
@@ -73,31 +77,31 @@ fn history_prefix_tool_deltas_and_block_end_follow_source_rules() {
         1,
         0,
         vec![Rc::new(AssistantBlock::Text {
-            text: "已有".to_owned(),
+            text: "已有".into(),
         })],
     );
     accumulator.push(&PartialChunk::TextDelta {
         index: 0,
-        text: "增量".to_owned(),
+        text: "增量".into(),
     });
     accumulator.push(&PartialChunk::ToolCallDelta {
         index: 1,
-        id: "c1".to_owned(),
+        id: "c1".into(),
         name: None,
-        arguments_delta: "{\"a\"".to_owned(),
+        arguments_delta: "{\"a\"".into(),
     });
     accumulator.push(&PartialChunk::ToolCallDelta {
         index: 1,
-        id: "late".to_owned(),
-        name: Some("echo".to_owned()),
-        arguments_delta: ":1}".to_owned(),
+        id: "late".into(),
+        name: Some("echo".into()),
+        arguments_delta: ":1}".into(),
     });
     assert_eq!(
         accumulator.partial().blocks[1].as_ref(),
         &AssistantBlock::ToolCall {
-            call_id: "c1".to_owned(),
-            name: "echo".to_owned(),
-            args_raw: "{\"a\":1}".to_owned(),
+            call_id: "c1".into(),
+            name: "echo".into(),
+            args_raw: "{\"a\":1}".into(),
         }
     );
     accumulator.push(&PartialChunk::BlockEnd {
@@ -107,7 +111,7 @@ fn history_prefix_tool_deltas_and_block_end_follow_source_rules() {
     assert_eq!(
         accumulator.partial().blocks[0].as_ref(),
         &AssistantBlock::Text {
-            text: "定稿全文".to_owned()
+            text: "定稿全文".into()
         }
     );
 }
@@ -118,20 +122,20 @@ fn invisible_variants_keep_snapshot_and_sparse_indexes_compact_in_order() {
     let first = accumulator.partial();
     assert!(Rc::ptr_eq(&first, &accumulator.partial()));
     assert!(!accumulator.push(&PartialChunk::Other {
-        chunk_type: "usage".to_owned()
+        chunk_type: "usage".into()
     }));
     assert!(Rc::ptr_eq(&first, &accumulator.partial()));
     accumulator.push(&PartialChunk::BlockStart {
         index: 2,
-        block_type: "text".to_owned(),
+        block_type: "text".into(),
     });
     accumulator.push(&PartialChunk::TextDelta {
         index: 2,
-        text: "高位".to_owned(),
+        text: "高位".into(),
     });
     accumulator.push(&PartialChunk::BlockStart {
         index: 0,
-        block_type: "reasoning".to_owned(),
+        block_type: "reasoning".into(),
     });
     let second = accumulator.partial();
     assert!(!Rc::ptr_eq(&first, &second));
@@ -153,17 +157,17 @@ fn each_delta_replaces_only_its_block_reference() {
         0,
         vec![
             Rc::new(AssistantBlock::Text {
-                text: "a".to_owned(),
+                text: "a".into(),
             }),
             Rc::new(AssistantBlock::Text {
-                text: "stable".to_owned(),
+                text: "stable".into(),
             }),
         ],
     );
     let before = accumulator.partial();
     accumulator.push(&PartialChunk::TextDelta {
         index: 0,
-        text: "b".to_owned(),
+        text: "b".into(),
     });
     let after = accumulator.partial();
     assert!(!Rc::ptr_eq(&before.blocks[0], &after.blocks[0]));
@@ -184,4 +188,33 @@ fn visible_chunk_discriminants_match_source() {
     for chunk_type in ["usage", "finish", "future"] {
         assert!(!is_visible_assistant_chunk(chunk_type));
     }
+}
+
+#[test]
+fn streamed_surrogates_join_without_replacing_unchanged_blocks_or_raw_payloads() {
+    let high = JsonString::from_utf16(&[0xd800]);
+    let low = JsonString::from_utf16(&[0xdc00]);
+    let raw = Value::parse(r#"{"type":"future","payload":{"\udfff":"\ud800"}}"#.to_owned())
+        .unwrap();
+    let mut accumulator = PartialAccumulator::new(
+        1,
+        0,
+        vec![Rc::new(to_assistant_block(&raw))],
+    );
+    let before = accumulator.partial();
+    accumulator.push(&PartialChunk::TextDelta {
+        index: 1,
+        text: high.clone(),
+    });
+    let mid = accumulator.partial();
+    assert!(Rc::ptr_eq(&before.blocks[0], &mid.blocks[0]));
+    assert_eq!(mid.blocks[1].as_ref(), &AssistantBlock::Text { text: high });
+    accumulator.push(&PartialChunk::TextDelta { index: 1, text: low });
+    let after = accumulator.partial();
+    assert!(Rc::ptr_eq(&mid.blocks[0], &after.blocks[0]));
+    assert_eq!(
+        after.blocks[1].as_ref(),
+        &AssistantBlock::Text { text: JsonString::from_utf16(&[0xd800, 0xdc00]) }
+    );
+    assert_eq!(after.blocks[0].as_ref(), &AssistantBlock::Other { block: raw });
 }

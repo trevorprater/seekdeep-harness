@@ -189,7 +189,7 @@ fn bundle_zod_format(root: &Path, bundle: &str, format: &str) -> anyhow::Result<
         "install the pinned browser build dependencies: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile"
     );
     let entry = format!(
-        "import {{ z as __seekdeepRemoteZod }} from {};\n{bundle}",
+        "{bundle}\nimport {{ z as __seekdeepRemoteZod }} from {};\n",
         serde_json::to_string(&zod.to_string_lossy())?
     );
     let mut child = Command::new("node")
@@ -198,7 +198,8 @@ fn bundle_zod_format(root: &Path, bundle: &str, format: &str) -> anyhow::Result<
             "--bundle",
             format,
             "--platform=browser",
-            "--target=es2022",
+            "--target=es2024",
+            "--sourcemap=inline",
             "--legal-comments=inline",
             "--sourcefile=api-remotes.js",
         ])
@@ -321,7 +322,7 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
     let tests = if gateway {
         format!(
             "{tests}\nconst loadCordisCopy = () => import('./cordis-copy.mjs');\n{}",
-            registry_driver::GATEWAY_ADDITIONAL
+            gateway_additional_tests()
         )
     } else {
         tests
@@ -452,10 +453,20 @@ fn source_gateway_regressions(source: &Path, source_package: &Path) -> anyhow::R
         "{source_test}\nconst loadCordisCopy = () => import({});\n{}",
         serde_json::to_string(&format!(
             "{}?cordis-copy",
-            source.join("vendor/cordis/lib/index.js").display()
+            source.join("vendor/cordis/src/index.ts").display()
         ))?,
-        registry_driver::GATEWAY_ADDITIONAL
+        gateway_additional_tests()
     ))
+}
+
+fn gateway_additional_tests() -> String {
+    [
+        registry_driver::GATEWAY_ADDITIONAL,
+        include_str!("../../crates/cordis/tests/fixtures/browser_context_reflect_service.mjs"),
+        include_str!("remote_contracts/fiber_registry_cases.js"),
+        include_str!("../../crates/cordis/tests/fixtures/logger_utils_priority.spec.ts"),
+    ]
+    .join("\n")
 }
 
 pub(super) fn browser_path(source: &Path) -> anyhow::Result<()> {

@@ -15,7 +15,8 @@ use serde_json::Value;
 pub use bridge::{AcpBridge, AcpBridgeConfig, AcpContinuableDrainHook};
 pub use client::{AcpClient, AcpPermissionHandler, AcpUpdateObserver};
 pub use codec::{
-    acp_content_text, acp_prompt_to_text, acp_stop_reason, prompt_has_unsupported_content,
+    acp_content_text, acp_content_text_json, acp_prompt_to_text, acp_prompt_to_text_json,
+    acp_stop_reason, prompt_has_unsupported_content, prompt_has_unsupported_content_json,
     to_acp_prompt, turn_end_to_stop_reason,
 };
 pub use types::{

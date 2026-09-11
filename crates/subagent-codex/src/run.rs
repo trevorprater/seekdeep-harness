@@ -68,7 +68,7 @@ pub fn codex_app_server_argv(platform: &str) -> Vec<String> {
 /// # Errors
 ///
 /// Returns the source-compatible text-only or empty-task failure.
-pub fn text_task(prompt: &[ContentBlock]) -> anyhow::Result<Vec<String>> {
+pub fn text_task(prompt: &[ContentBlock]) -> anyhow::Result<Vec<seekdeep_llm::JsonString>> {
     if prompt.is_empty() {
         anyhow::bail!("subagent-codex: the one-shot task must contain only text blocks");
     }

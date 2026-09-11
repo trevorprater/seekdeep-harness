@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use seekdeep_cordis::{Context, EventArgs};
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionError, SessionId},
+    session::{AppendOptions, JsonValue, Session, SessionError, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
@@ -59,6 +59,26 @@ async fn accepts_historical_and_live_parallel_snapshots() {
         .expect("seeds historical parallel");
     // Live validation accepts the same parallel snapshot too.
     write(&session, parallel).expect("live parallel");
+}
+
+#[tokio::test]
+async fn accepts_raw_content_and_opaque_fields_and_rejects_exact_utf16_duplicates() {
+    let (_, session) = setup().await;
+    let payload = JsonValue::parse(
+        r#"{"todos":[{"content":"\ud800","status":"pending","\udfff":"\ud800"},{"content":"\\ud800","status":"completed"}],"\ud800":{"raw":"\udfff"}}"#.to_owned(),
+    ).unwrap();
+    session
+        .append_json("todo/write", payload.clone(), AppendOptions::default())
+        .unwrap();
+    assert_eq!(session.events().last().unwrap().data, payload);
+    let duplicate = JsonValue::parse(
+        r#"{"todos":[{"content":"\ud800","status":"pending"},{"content":"\uD800","status":"completed"}]}"#.to_owned(),
+    ).unwrap();
+    let error = session
+        .append_json("todo/write", duplicate, AppendOptions::default())
+        .unwrap_err();
+    assert!(error.to_string().contains(r#"repeats content "\ud800""#));
+    assert_eq!(session.events().len(), 1);
 }
 
 #[tokio::test]

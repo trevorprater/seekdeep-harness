@@ -18,7 +18,7 @@ use base64::Engine as _;
 use futures::{Stream, StreamExt as _};
 use http::header::{HeaderName, HeaderValue};
 use parking_lot::Mutex;
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -26,6 +26,7 @@ use crate::{
     catalog::{PiModel, PiThinkingLevel},
     config::PiCacheRetention,
     context::{PiContext, PiMessage, PiToolResultMessage, PiUserContent, PiUserContentBlock},
+    json::{sanitize_surrogates, scalar_text_is_blank},
     replay::{
         PiAssistantBlock, PiAssistantMessage, PiAssistantRole, PiCost, PiStopReason, PiUsage,
     },
@@ -593,13 +594,14 @@ fn user_blocks(content: &PiUserContent) -> anyhow::Result<Vec<ContentBlock>> {
             let mut content = Vec::new();
             for block in blocks {
                 match block {
-                    PiUserContentBlock::Text { text } if !text.trim().is_empty() => {
-                        content.push(ContentBlock::Text(text.clone()));
+                    PiUserContentBlock::Text { text } => {
+                        if let Some(text) = nonblank_text(text) {
+                            content.push(ContentBlock::Text(text));
+                        }
                     }
                     PiUserContentBlock::Image { data, mime_type } => {
                         content.push(ContentBlock::Image(image_block(data, mime_type)?));
                     }
-                    PiUserContentBlock::Text { .. } => {}
                 }
             }
             if content.is_empty() {
@@ -617,15 +619,17 @@ fn assistant_blocks(
     let mut output = Vec::new();
     for block in &message.content {
         match block {
-            PiAssistantBlock::Text { text, .. } if !text.trim().is_empty() => {
-                output.push(ContentBlock::Text(text.clone()));
+            PiAssistantBlock::Text { text, .. } => {
+                if let Some(text) = nonblank_text(text) {
+                    output.push(ContentBlock::Text(text));
+                }
             }
             PiAssistantBlock::Thinking {
                 thinking,
                 thinking_signature,
                 redacted,
             } => {
-                if thinking.trim().is_empty() {
+                if scalar_text_is_blank(thinking) {
                     continue;
                 }
                 if *redacted == Some(true) {
@@ -635,7 +639,9 @@ fn assistant_blocks(
                         ReasoningContentBlock::RedactedContent(bytes.into()),
                     ));
                 } else if is_anthropic_claude(model)
-                    && thinking_signature.as_deref().is_none_or(str::is_empty)
+                    && thinking_signature
+                        .as_deref()
+                        .is_none_or(scalar_text_is_blank)
                 {
                     output.push(ContentBlock::Text(thinking.clone()));
                 } else {
@@ -662,7 +668,6 @@ fn assistant_blocks(
                     .input(document(&Value::Object(arguments.clone())))
                     .build()?,
             )),
-            PiAssistantBlock::Text { .. } => {}
         }
     }
     Ok(output)
@@ -672,13 +677,14 @@ fn tool_result(message: &PiToolResultMessage) -> anyhow::Result<ToolResultBlock>
     let mut content = Vec::new();
     for block in &message.content {
         match block {
-            PiUserContentBlock::Text { text } if !text.trim().is_empty() => {
-                content.push(ToolResultContentBlock::Text(text.clone()));
+            PiUserContentBlock::Text { text } => {
+                if let Some(text) = nonblank_text(text) {
+                    content.push(ToolResultContentBlock::Text(text));
+                }
             }
             PiUserContentBlock::Image { data, mime_type } => {
                 content.push(ToolResultContentBlock::Image(image_block(data, mime_type)?));
             }
-            PiUserContentBlock::Text { .. } => {}
         }
     }
     if content.is_empty() {
@@ -977,13 +983,13 @@ fn estimate_message_tokens(message: &PiMessage) -> u64 {
         PiMessage::User(message) => estimate_user_content_characters(&message.content),
         PiMessage::ToolResult(message) => message.content.iter().fold(0_u64, |total, block| {
             total.saturating_add(match block {
-                PiUserContentBlock::Text { text } => utf16_len(text),
+                PiUserContentBlock::Text { text } => json_string_len(text),
                 PiUserContentBlock::Image { .. } => 4800,
             })
         }),
         PiMessage::Assistant(message) => message.content.iter().fold(0_u64, |total, block| {
             total.saturating_add(match block {
-                PiAssistantBlock::Text { text, .. } => utf16_len(text),
+                PiAssistantBlock::Text { text, .. } => json_string_len(text),
                 PiAssistantBlock::Thinking { thinking, .. } => utf16_len(thinking),
                 PiAssistantBlock::ToolCall {
                     name, arguments, ..
@@ -999,10 +1005,10 @@ fn estimate_message_tokens(message: &PiMessage) -> u64 {
 
 fn estimate_user_content_characters(content: &PiUserContent) -> u64 {
     match content {
-        PiUserContent::Text(text) => utf16_len(text),
+        PiUserContent::Text(text) => json_string_len(text),
         PiUserContent::Blocks(blocks) => blocks.iter().fold(0_u64, |total, block| {
             total.saturating_add(match block {
-                PiUserContentBlock::Text { text } => utf16_len(text),
+                PiUserContentBlock::Text { text } => json_string_len(text),
                 PiUserContentBlock::Image { .. } => 4800,
             })
         }),
@@ -1015,6 +1021,10 @@ fn estimate_text_tokens(text: &str) -> u64 {
 
 fn utf16_len(text: &str) -> u64 {
     u64::try_from(text.encode_utf16().count()).unwrap_or(u64::MAX)
+}
+
+fn json_string_len(text: &JsonString) -> u64 {
+    u64::try_from(text.len_utf16()).unwrap_or(u64::MAX)
 }
 
 fn bedrock_additional_fields(request: &PiExecutionRequest) -> Option<Value> {
@@ -1078,12 +1088,13 @@ fn image_block(
         .build()?)
 }
 
-fn required_text(text: &str) -> String {
-    if text.trim().is_empty() {
-        "<empty>".to_owned()
-    } else {
-        text.to_owned()
-    }
+fn nonblank_text(text: &JsonString) -> Option<String> {
+    let sanitized = sanitize_surrogates(text);
+    (!scalar_text_is_blank(&sanitized)).then_some(sanitized)
+}
+
+fn required_text(text: &JsonString) -> String {
+    nonblank_text(text).unwrap_or_else(|| "<empty>".to_owned())
 }
 
 fn document(value: &Value) -> Document {
@@ -1203,7 +1214,7 @@ fn ensure_text(
     let index = output.content.len();
     slots.insert(wire, index);
     output.content.push(PiAssistantBlock::Text {
-        text: String::new(),
+        text: JsonString::default(),
         text_signature: None,
     });
     (index, true)
@@ -1291,7 +1302,7 @@ mod request_tests {
                 system_prompt: Some("system".to_owned()),
                 messages: vec![PiMessage::User(PiUserMessage {
                     role: PiUserRole::User,
-                    content: PiUserContent::Text("hello".to_owned()),
+                    content: PiUserContent::Text("hello".into()),
                     timestamp: 0,
                 })],
                 tools: None,
@@ -1388,9 +1399,7 @@ mod request_tests {
                 role: PiToolResultRole::ToolResult,
                 tool_call_id: CallId::new("second"),
                 tool_name: "two".to_owned(),
-                content: vec![PiUserContentBlock::Text {
-                    text: " ".to_owned(),
-                }],
+                content: vec![PiUserContentBlock::Text { text: " ".into() }],
                 is_error: true,
                 timestamp: 0,
             }),
@@ -1459,17 +1468,54 @@ mod request_tests {
         request.context.system_prompt = None;
         request.context.messages = vec![PiMessage::User(PiUserMessage {
             role: PiUserRole::User,
-            content: PiUserContent::Text("x".repeat(400)),
+            content: PiUserContent::Text("x".repeat(400).into()),
             timestamp: 0,
         })];
         assert_eq!(estimate_context_tokens(&request.context), 100);
         assert_eq!(bedrock_max_tokens(&request), 804);
         request.context.messages = vec![PiMessage::User(PiUserMessage {
             role: PiUserRole::User,
-            content: PiUserContent::Text("😀".to_owned()),
+            content: PiUserContent::Text("😀".into()),
             timestamp: 0,
         })];
         assert_eq!(estimate_context_tokens(&request.context), 1);
+    }
+
+    #[test]
+    fn reasoning_text_and_signature_blank_checks_use_ecmascript_whitespace() {
+        let request = request("anthropic.claude-sonnet-4-v1:0", "Claude Sonnet 4");
+        let mut message = empty_assistant(&request.model);
+        message.content = vec![PiAssistantBlock::Thinking {
+            thinking: "reasoning".to_owned(),
+            thinking_signature: Some("\u{feff}".to_owned()),
+            redacted: None,
+        }];
+        assert!(matches!(
+            &assistant_blocks(&message, &request.model).unwrap()[0],
+            ContentBlock::Text(text) if text == "reasoning"
+        ));
+        message.content = vec![PiAssistantBlock::Thinking {
+            thinking: "\u{feff}".to_owned(),
+            thinking_signature: Some("sig".to_owned()),
+            redacted: None,
+        }];
+        assert!(
+            assistant_blocks(&message, &request.model)
+                .unwrap()
+                .is_empty()
+        );
+        message.content = vec![PiAssistantBlock::Thinking {
+            thinking: "\u{85}".to_owned(),
+            thinking_signature: Some("\u{85}".to_owned()),
+            redacted: None,
+        }];
+        let blocks = assistant_blocks(&message, &request.model).unwrap();
+        let ContentBlock::ReasoningContent(ReasoningContentBlock::ReasoningText(text)) = &blocks[0]
+        else {
+            panic!("NEL is neither blank reasoning nor a blank signature")
+        };
+        assert_eq!(text.text(), "\u{85}");
+        assert_eq!(text.signature(), Some("\u{85}"));
     }
 
     #[test]

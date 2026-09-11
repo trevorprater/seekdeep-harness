@@ -114,7 +114,7 @@ fn event(seq: u64, event_type: &str, data: serde_json::Value) -> SessionEvent {
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).unwrap(),
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: Some(SurfaceOp::append()),
         ignorable: None,
@@ -176,4 +176,31 @@ fn renders_relationships_unabridged_json_and_semantic_neighbors() {
     assert!(rendered.contains("\"nested\": true"));
     assert!(rendered.contains("before text"));
     assert!(rendered.contains("(no semantic text)"));
+}
+
+#[test]
+fn event_read_preserves_surrogate_keys_in_json_and_raw_neighbor_text() {
+    let mut target = event(1, "custom/event", json!({}));
+    target.data =
+        seekdeep_core::session::JsonValue::parse(r#"{"payload":{"\ud800":"\udfff"}}"#.into())
+            .unwrap();
+    let mut before = event(0, "tool/result", json!({}));
+    before.data = seekdeep_core::session::JsonValue::parse(r#"{"message":{"content":[{"type":"tool-result","toolCallId":"call","content":[{"type":"text","text":"before\ud800after"}]}]}}"#.into()).unwrap();
+    let window = SessionEventWindow {
+        session: header(),
+        target: target.clone(),
+        events: vec![before, target],
+        start_seq: 0,
+        end_seq: 1,
+    };
+    let title = TitleView {
+        text: "A title".into(),
+        unavailable_code: None,
+    };
+    let rendered =
+        presentation::format_event_read(&SessionId::new("session"), &title, &window).unwrap();
+    assert!(rendered.contains("\"payload\": {\n"));
+    assert!(rendered.contains("\"\\ud800\": \"\\udfff\""));
+    assert!(rendered.utf16_units().contains(&0xd800));
+    assert!(!rendered.contains("�"));
 }

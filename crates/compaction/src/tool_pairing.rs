@@ -4,7 +4,6 @@
 
 use anyhow::anyhow;
 use seekdeep_core::session::{Session, SessionEvent};
-use serde_json::Value;
 
 /// Balance of the cut at a sequence's surface position plus an offset.
 fn cut_balance(session: &Session, seq: u64, offset: usize) -> anyhow::Result<bool> {
@@ -58,13 +57,11 @@ fn event_delta(event: &SessionEvent) -> i64 {
                 .data
                 .get("message")
                 .and_then(|message| message.get("content"))
-                .and_then(|content| content.as_array())
+                .and_then(|content| content.array_items())
                 .map_or(0, |blocks| {
                     blocks
                         .iter()
-                        .filter(|block| {
-                            block.get("type").and_then(Value::as_str) == Some("tool-call")
-                        })
+                        .filter(|block| block.get("type").is_some_and(|kind| kind == "tool-call"))
                         .count()
                 });
             i64::try_from(count).unwrap_or(i64::MAX)
@@ -96,7 +93,7 @@ pub fn tool_pairing_balanced_after(session: &Session, seq: u64) -> anyhow::Resul
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -105,7 +102,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

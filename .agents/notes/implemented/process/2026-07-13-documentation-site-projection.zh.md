@@ -12,15 +12,21 @@ Status: implemented
 
 权威 Markdown 保留在其所属的仓库层级中。面向产品的指南位于 `docs/user/`，生成的参考资料保留在现有生成目录中，架构页面和实操手册（cookbook）页面也保留在现有的 `docs/` 路径。
 
-`website/docs.ts` 是一份显式的发布 manifest（元数据清单）。每个条目将一个权威源文件映射到稳定的公开路由、侧边栏、分区和顺序。因此，新增或移除已发布页面是一项可评审的 manifest 变更，而不是隐式目录扫描的结果。
+[发布 manifest（元数据清单）](../../../../website/docs.json) 是由 Rust 的 `DocsManifest` 与 `DocsPage` 类型校验的显式允许列表。每个条目将一个权威源文件映射到稳定的公开路由、侧边栏、分区和顺序。因此，新增或移除已发布页面是一项可评审的 manifest 变更，而不是隐式目录扫描的结果。
 
-在 VitePress 启动或构建之前，`scripts/project-doc-site.ts` 会把 manifest 投影到被忽略的 `website/.generated/` 目录。生成目录树遵循公开路由，使 VitePress 导航、locale 检测和本地搜索使用同一套路由命名。每个页面都会获得一个指向其权威仓库文件的 `editSource` frontmatter 字段；编辑链接回调只读取该页面的数据，因此公开 URL 与源文件布局彼此独立。
+在 VitePress 启动或构建之前，由 `pnpm docs:project` 调用的 [Rust 投影器](../../../../crates/repository-tools/src/doc_site.rs)会把 manifest 投影到被忽略的 `website/.generated/` 目录。生成目录树遵循公开路由，使 VitePress 导航、locale 检测和本地搜索使用同一套路由命名。每个页面都会获得一个指向其权威仓库文件的 `editSource` frontmatter 字段；编辑链接回调只读取该页面的数据，因此公开 URL 与源文件布局彼此独立。
+
+`docs:prepare` 在 Rust 中生成导航与 locale 配置，并将[文档运行时](../../../../crates/docs-site-runtime/src/lib.rs)编译为供 Node 和浏览器使用的 WASM。VitePress 适配器仅连接这些已编译回调：权威编辑链接校验、Markdown 插值转义、源文件监视筛选，以及拥有明确生命周期的侧边栏滚动监听器。根锁文件的网站 importer 提供独立的冻结安装，因此文档构建不需要已移除的 TypeScript 工作区实现。生成的配置、依赖和浏览器资源保留在被忽略的缓存中。
+
+VitePress 将主题回调序列化为函数文本。Rust 运行时创建不依赖词法闭包的编辑链接委托，主题在水合前等待共享浏览器运行时；服务端渲染使用已初始化的 Node 绑定。在回调中捕获模块局部运行时，会在 VitePress 反序列化时丢失该引用。
 
 各 locale 的首页投影只保留权威 YAML frontmatter。面向仓库的正文保留其 H1 和双语源文件链接；frontmatter 实现[保持 locale 不变的快速开始重定向](../simplification/2026-08-11-quickstart-documentation-home.md)，网站导航负责切换 locale。
 
-投影器解析 Markdown 链接，但不会重新序列化文档。指向另一个已发布源文件的链接会变成站内相对路由；指向未发布仓库文件的链接会变成 `deepseek-ai/seekdeep-harness` 仓库主页下的源文件链接；仓库图片会被拷贝进生成树并从那里引用（[原因](2026-08-06-doc-site-carries-its-images.md)）。相对目标不存在时，投影会失败。单元测试会锁定这些转换行为，`docs:check` 则运行投影器测试和 VitePress 生产构建，并将二者纳入 `doc-sync` 和并行文档门禁。
+投影器解析 Markdown 链接，但不会重新序列化文档。指向另一个已发布源文件的链接会变成站内相对路由；指向未发布仓库文件的链接会变成 `trevorprater/seekdeep-harness` 仓库主页下的源文件链接；仓库图片会被拷贝进生成树并从那里引用（[原因](2026-08-06-doc-site-carries-its-images.md)）。相对目标不存在时，投影会失败。`docs:check` 运行投影器与配置的源码差分测试、VitePress 生产构建、渲染后片段校验，以及 Node 和 Chromium 中的已构建 WASM 回调对比。
 
-`verify-public-repository-links` 会拒绝已跟踪文件中指向不可用旧仓库的引用。源文件链接和编辑链接使用当前仓库主页。
+逐字声明目录保留锁定 oracle 中的确切声明路径和行号。其 Rust 生成器调用[源码链接渲染器](../../../../crates/repository-tools/src/doc_source_links.rs)，将这些声明链接到 `fugue-labs/deepseek-harness` 中由 `SOURCE_SNAPSHOT` 指定的修订。包文档链接使用所属 Rust crate 的本地路径。网站投影器不会通过静默读取另一个仓库来解析缺失的本地目标。
+
+`verify-public-repository-links` 会拒绝已跟踪文件中指向不可用旧仓库的引用。网站准备阶段将构建修订用于仓库源码链接，将当前分支用于权威编辑链接；CI 可以通过 GitHub 修订和分支元数据提供这些值。
 
 `website/AGENTS.md` 是网站子树中唯一维护的 Markdown 文件。投影器测试会枚举所有已跟踪文件和未被忽略的未跟踪文件，并拒绝网站中的任何其他 Markdown，因此网站专用的 locale、路由、API 或生成源文件副本无法绕过发布 manifest。
 

@@ -66,7 +66,7 @@ fn tool(name: &str, reply: &str) -> ToolDefinition {
             output_schema,
             Arc::new(|_, value| {
                 Ok(vec![ContentBlock::Text {
-                    text: value.as_str().unwrap_or_default().to_owned(),
+                    text: value.as_str().unwrap_or_default().into(),
                 }])
             }),
         ),
@@ -90,7 +90,9 @@ fn input(name: &str, agent: Option<ScopeKey>) -> ToolExecutionInput {
 async fn run(tools: &Arc<ToolRuntime>, name: &str, agent: Option<ScopeKey>) -> String {
     let result = tools.execute(input(name, agent)).await;
     match result.content().first() {
-        Some(ContentBlock::Text { text }) => text.clone(),
+        Some(ContentBlock::Text { text }) => {
+            text.as_str().expect("ordinary fixture text").to_owned()
+        }
         other => format!("{other:?}"),
     }
 }
@@ -598,7 +600,7 @@ async fn scoped_guards_run_after_pre_and_unwind_independently() {
     let mut definition = tool("t", "ran:t");
     definition.execute = Arc::new(move |_, _| {
         tool_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Ok(json!("ran:t")) })
+        Box::pin(async { Ok(json!("ran:t").into()) })
     });
     mounted
         .tools
@@ -648,7 +650,7 @@ async fn global_guards_compose_monotonically() {
     let mut definition = tool("t", "ran:t");
     definition.execute = Arc::new(move |_, _| {
         tool_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Ok(json!("ran:t")) })
+        Box::pin(async { Ok(json!("ran:t").into()) })
     });
     mounted
         .tools
@@ -775,7 +777,7 @@ async fn one_token_and_one_structural_argument_snapshot_flow_through_pipeline() 
     safe.execute = Arc::new(move |arguments, _| {
         body_calls.fetch_add(1, Ordering::SeqCst);
         *body_args.lock() = Some(arguments);
-        Box::pin(async { Ok(json!("safe")) })
+        Box::pin(async { Ok(json!("safe").into()) })
     });
     mounted.tools.register(&mounted.root, safe).expect("safe");
     mounted
@@ -846,7 +848,7 @@ async fn one_token_and_one_structural_argument_snapshot_flow_through_pipeline() 
         )
         .await;
     assert!(!result.is_error());
-    assert_eq!(*observed_args.lock(), Some(caller_arguments));
+    assert_eq!(*observed_args.lock(), Some(caller_arguments.into()));
     assert_eq!(tokens.lock().len(), 2);
     assert_eq!(safe_calls.load(Ordering::SeqCst), 1);
 }
@@ -873,7 +875,7 @@ async fn non_cloneable_arguments_are_unrepresentable_and_structural_input_publis
     let mut definition = tool("t", "ran:t");
     definition.execute = Arc::new(move |_, _| {
         tool_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async { Ok(json!("ran:t")) })
+        Box::pin(async { Ok(json!("ran:t").into()) })
     });
     mounted
         .tools
@@ -1058,7 +1060,7 @@ async fn normalized_error_shell_uses_the_owned_input_snapshot() {
             CallId::new("stable-error"),
             "missing".to_owned(),
             Some(key),
-            arguments
+            arguments.into()
         ))
     );
 }
@@ -1078,7 +1080,7 @@ async fn nested_arguments_are_snapshotted_into_the_executed_value() {
     let mut definition = tool("t", "ran:t");
     definition.execute = Arc::new(move |arguments, _| {
         *body_seen.lock() = Some(arguments);
-        Box::pin(async { Ok(json!("ran:t")) })
+        Box::pin(async { Ok(json!("ran:t").into()) })
     });
     mounted
         .tools
@@ -1095,7 +1097,7 @@ async fn nested_arguments_are_snapshotted_into_the_executed_value() {
         ))
         .await;
     assert!(!result.is_error());
-    assert_eq!(*seen.lock(), Some(arguments));
+    assert_eq!(*seen.lock(), Some(arguments.into()));
 }
 
 #[tokio::test]

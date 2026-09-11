@@ -9,7 +9,7 @@ use js_sys::{Array, Function, Object, Promise, Reflect, Symbol, WeakMap};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
-use super::{js_anyhow, object, set};
+use super::{js_anyhow, object};
 use crate::fiber::EffectHandle;
 
 thread_local! {
@@ -129,6 +129,33 @@ pub(crate) fn snapshot(owner: &JsValue) -> Result<Vec<EffectHandle>, JsValue> {
         .collect())
 }
 
+pub(super) fn unload(owner: &JsValue) -> Result<Promise, JsValue> {
+    let list = Reflect::get(owner, &"_disposables".into())?;
+    let cleared = method(&list, "clear", &Array::new())?;
+    let owner = owner.clone();
+    let dispose = callback(move |dispose| {
+        let outer = super::browser_runner::runner(&owner)
+            .and_then(|runner| super::browser_values::get(&runner, &"getOuterStack".into()));
+        let owner = owner.clone();
+        Ok(future_to_promise(async move {
+            let result = async {
+                let composition = super::browser_stack::Composition::disposal(outer?)?;
+                let result =
+                    composition.run(|| run_disposable_with(&dispose, Some(&composition)))?;
+                JsFuture::from(Promise::resolve(&result)).await
+            }
+            .await;
+            if let Err(error) = result {
+                super::browser_logger::log_error(&Reflect::get(&owner, &"ctx".into())?, &error)?;
+            }
+            Ok(JsValue::UNDEFINED)
+        })
+        .into())
+    });
+    let pending = method(&cleared, "map", &Array::of1(&dispose))?;
+    Ok(Promise::all(pending.unchecked_ref::<Array>()))
+}
+
 pub(super) fn diagnostics(owner: &JsValue) -> Result<Array, JsValue> {
     let list = Reflect::get(owner, &"_disposables".into())?;
     let result = Array::new();
@@ -204,7 +231,9 @@ impl Effect {
 
     fn deactivate(&self) -> Result<bool, JsValue> {
         let active = self.active()?;
-        super::browser_values::set(&self.runner, &"epoch".into(), &JsValue::FALSE)?;
+        if active {
+            super::browser_values::set(&self.runner, &"epoch".into(), &JsValue::FALSE)?;
+        }
         Ok(active)
     }
 
@@ -247,14 +276,13 @@ impl Effect {
     }
 
     fn remove(&self) -> Result<(), JsValue> {
-        let remove = self.remove.borrow().clone();
-        if remove.is_function() {
-            Reflect::apply(
-                remove.unchecked_ref::<Function>(),
-                &JsValue::UNDEFINED,
-                &Array::new(),
-            )?;
-        }
+        let remove = self
+            .remove
+            .borrow()
+            .clone()
+            .dyn_into::<Function>()
+            .map_err(|_| js_sys::TypeError::new("removeWrapper is not a function"))?;
+        Reflect::apply(&remove, &JsValue::UNDEFINED, &Array::new())?;
         Ok(())
     }
 
@@ -405,9 +433,9 @@ impl Effect {
         )
         .call1(&JsValue::UNDEFINED, &invoke)?
         .dyn_into::<Object>()?;
-        set(
-            wrapper.unchecked_ref(),
-            "then",
+        super::browser_values::set(
+            wrapper,
+            &"then".into(),
             &js_sys::Proxy::new(&target, &handler),
         )
     }
@@ -438,7 +466,7 @@ pub(super) fn effect_on_owner(
         setup_failed: Cell::new(false),
         setup_barrier: RefCell::default(),
         in_flight: RefCell::new(JsValue::UNDEFINED),
-        remove: RefCell::new(JsValue::UNDEFINED),
+        remove: RefCell::new(disposer(|| Ok(JsValue::FALSE))?),
     });
     let collector = effect.clone();
     super::browser_values::set(
@@ -453,7 +481,7 @@ pub(super) fn effect_on_owner(
         Err(reason) => {
             effect.executing.set(false);
             effect.setup_failed.set(true);
-            effect.deactivate()?;
+            super::browser_values::set(&effect.runner, &"epoch".into(), &JsValue::FALSE)?;
             let cleanup = effect.finalize(|| effect.dispose());
             let rejected = effect
                 .setup_barrier

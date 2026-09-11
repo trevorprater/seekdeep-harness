@@ -16,6 +16,7 @@ parking_lot.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-storage-domain = { path = "../storage-domain" }
 seekdeep-util = { path = "../util" }

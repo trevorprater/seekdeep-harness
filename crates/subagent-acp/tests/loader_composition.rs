@@ -175,7 +175,7 @@ async fn loader_inherits_parent_workspace_into_process_and_remote_session() {
         .agent
         .followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "Delegate once.".to_owned(),
+                text: "Delegate once.".into(),
             }],
             MessageSource {
                 kind: "user".to_owned(),
@@ -194,7 +194,8 @@ async fn loader_inherits_parent_workspace_into_process_and_remote_session() {
         result
             .data
             .pointer("/message/content/0/content/0/text")
-            .and_then(|value| value.as_str()),
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref(),
         Some(expected.as_str())
     );
     parent.dispose().await.unwrap();

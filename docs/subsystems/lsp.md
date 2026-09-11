@@ -4,7 +4,7 @@ English | [中文](lsp.zh.md)
 
 The LSP seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.md) exposing semantic code navigation on one `ctx.lsp` service, split across packages: Service Definition ([seekdeep-lsp](../../packages/lsp/lsp), `ctx.lsp` + the provider registry), a generic Service Provider ([seekdeep-lsp-stdio](../../packages/lsp/lsp-stdio), a configured stdio language-server host), and Consumer ([seekdeep-tool-lsp](../../packages/lsp/tool-lsp), the `lsp` tool schema). LSP is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A provider swap does not change how the model asks for navigation.
 
-Source: [`packages/lsp/lsp/src/types.ts`](../../packages/lsp/lsp/src/types.ts)
+Source: [`packages/lsp/lsp/src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/lsp/lsp/src/types.ts)
 
 ## Operations and coordinates
 
@@ -198,5 +198,5 @@ registerProvider(provider: LspProvider): () => void
 query(request: LspQueryRequest, signal?: AbortSignal): Promise<LspQueryResult>
 ```
 
-Source: [`packages/lsp/lsp/src/types.ts:113`](../../packages/lsp/lsp/src/types.ts)
+Source: [`packages/lsp/lsp/src/types.ts:113`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/lsp/lsp/src/types.ts)
 <!-- END GENERATED cordis-surface -->

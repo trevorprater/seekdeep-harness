@@ -10,6 +10,7 @@ use super::{object, set};
 thread_local! {
     static ROOTS: WeakMap = WeakMap::new();
     static FIBER_REMOVERS: WeakMap = WeakMap::new();
+    static FIBER_RUNTIMES: WeakMap = WeakMap::new();
     static PROTOTYPE: RefCell<Option<Object>> = const { RefCell::new(None) };
 }
 
@@ -150,7 +151,7 @@ fn invoke(service: &JsValue, name: &str, args: &Array) -> Result<JsValue, JsValu
         let current = Reflect::get(service, &"_counter".into())?;
         let next = Function::new_with_args("value", "return ++value;")
             .call1(&JsValue::UNDEFINED, &current)?;
-        Reflect::set(service, &"_counter".into(), &next)?;
+        super::browser_values::set(service, &"_counter".into(), &next)?;
         return Ok(next);
     }
     if name == "inject" {
@@ -165,21 +166,32 @@ fn invoke(service: &JsValue, name: &str, args: &Array) -> Result<JsValue, JsValu
     if name == "plugin" {
         return plugin(service, &args.get(0), &args.get(1), &args.get(2));
     }
-    let internal = Reflect::get(service, &"_internal".into())?;
     if name == "size" {
+        let internal = Reflect::get(service, &"_internal".into())?;
         return Reflect::get(&internal, &"size".into());
     }
     if matches!(name, "keys" | "values" | "entries" | "forEach") {
+        let internal = Reflect::get(service, &"_internal".into())?;
         return method(&internal, name, args);
     }
     let key = method(service, "resolve", &Array::of1(&args.get(0)))?;
     if name == "has" {
         return Ok(JsValue::from_bool(
-            key.is_truthy() && method(&internal, "has", &Array::of1(&key))?.is_truthy(),
+            key.is_truthy()
+                && method(
+                    &Reflect::get(service, &"_internal".into())?,
+                    "has",
+                    &Array::of1(&key),
+                )?
+                .is_truthy(),
         ));
     }
     let runtime = if key.is_truthy() {
-        method(&internal, "get", &Array::of1(&key))?
+        method(
+            &Reflect::get(service, &"_internal".into())?,
+            "get",
+            &Array::of1(&key),
+        )?
     } else {
         key.clone()
     };
@@ -189,7 +201,11 @@ fn invoke(service: &JsValue, name: &str, args: &Array) -> Result<JsValue, JsValu
     if !runtime.is_truthy() {
         return Ok(JsValue::UNDEFINED);
     }
-    method(&internal, "delete", &Array::of1(&key))?;
+    method(
+        &Reflect::get(service, &"_internal".into())?,
+        "delete",
+        &Array::of1(&key),
+    )?;
     let fibers = Reflect::get(&runtime, &"fibers".into())?;
     super::browser_values::for_each(&fibers, |fiber| {
         method(&fiber, "dispose", &Array::new()).map(|_| ())
@@ -236,9 +252,16 @@ fn plugin(
         ])?
         .into();
         let callback = Reflect::get(&runtime, &"callback".into())?;
-        method(&internal, "set", &Array::of2(&callback, &runtime))?;
+        method(
+            &Reflect::get(service, &"_internal".into())?,
+            "set",
+            &Array::of2(&callback, &runtime),
+        )?;
     }
-    let inject = resolve_inject(&Reflect::get(descriptor, &"inject".into())?, None)?;
+    let inject = resolve_inject(
+        &Reflect::get(descriptor, &"inject".into())?,
+        JsValue::UNDEFINED,
+    )?;
     let native = Reflect::get(&context, &"__seekdeepContext".into())?;
     let args = Array::of4(&runtime, &inject, config, &context);
     args.push(stack);
@@ -251,8 +274,12 @@ fn plugin(
 /// # Errors
 /// Propagates prototype, key, and value getter failures unchanged.
 #[wasm_bindgen(js_name = resolveInject)]
-pub fn resolve_inject(inject: &JsValue, result: Option<JsValue>) -> Result<JsValue, JsValue> {
-    let result = result.unwrap_or_else(|| Object::create(&Object::from(JsValue::NULL)).into());
+pub fn resolve_inject(inject: &JsValue, result: JsValue) -> Result<JsValue, JsValue> {
+    let result = if result.is_undefined() {
+        Object::create(&Object::from(JsValue::NULL)).into()
+    } else {
+        result
+    };
     if !inject.is_truthy() {
         return Ok(result);
     }
@@ -263,7 +290,7 @@ pub fn resolve_inject(inject: &JsValue, result: Option<JsValue>) -> Result<JsVal
     } else {
         if Reflect::has(inject, &super::browser_symbols::get("checkProto")?)? {
             let parent = Object::get_prototype_of(inject.unchecked_ref::<Object>());
-            let inherited = resolve_inject(&parent, None)?;
+            let inherited = resolve_inject(&parent, JsValue::UNDEFINED)?;
             super::browser_values::assign(&result, &Array::of1(&inherited))?;
         }
         for name in Object::keys(inject.unchecked_ref::<Object>()).iter() {
@@ -289,6 +316,7 @@ pub(super) fn attach(runtime: &JsValue, fiber: &JsValue) -> Result<(), JsValue> 
         &Array::of1(fiber),
     )?;
     FIBER_REMOVERS.with(|entries| entries.set(fiber.unchecked_ref::<Object>(), &remove));
+    FIBER_RUNTIMES.with(|entries| entries.set(fiber.unchecked_ref::<Object>(), runtime));
     Ok(())
 }
 
@@ -297,20 +325,22 @@ pub(super) fn inherit_intercepts(
     child: &JsValue,
     inject: &JsValue,
 ) -> Result<(), JsValue> {
-    let names = Object::keys(inject.unchecked_ref::<Object>());
-    if names.length() == 0 {
+    let entries = Object::entries(inject.unchecked_ref::<Object>());
+    if entries.length() == 0 {
         return Ok(());
     }
     let key = super::browser_symbols::context_key("intercept")?;
     let inherited = Reflect::get(parent, &super::browser_symbols::context_key("intercept")?)?;
     let intercepts = Object::create(inherited.unchecked_ref::<Object>());
-    Reflect::set(child, &key, &intercepts)?;
-    for name in names.iter() {
-        let value = Reflect::get(inject, &name)?;
+    super::browser_values::set(child, &key, &intercepts)?;
+    for entry in entries.iter() {
+        let entry = entry.unchecked_into::<Array>();
+        let name = entry.get(0);
+        let value = entry.get(1);
         if !value.is_null() && !value.is_undefined() {
             let intercepts =
                 Reflect::get(child, &super::browser_symbols::context_key("intercept")?)?;
-            Reflect::set(&intercepts, &name, &value)?;
+            super::browser_values::set(&intercepts, &name, &value)?;
         }
     }
     Ok(())
@@ -335,7 +365,7 @@ pub(super) fn tracks(fiber: &JsValue) -> Result<bool, JsValue> {
 pub(super) fn withdraw(fiber: &JsValue) -> Result<(), JsValue> {
     let context = Reflect::get(fiber, &"ctx".into())?;
     let registry = Reflect::get(&context, &"registry".into())?;
-    let runtime = Reflect::get(fiber, &"runtime".into())?;
+    let runtime = FIBER_RUNTIMES.with(|entries| entries.get(fiber.unchecked_ref::<Object>()));
     let callback = Reflect::get(&runtime, &"callback".into())?;
     if method(&registry, "has", &Array::of1(&callback))?.is_truthy() {
         let remove = FIBER_REMOVERS.with(|entries| entries.get(fiber.unchecked_ref::<Object>()));

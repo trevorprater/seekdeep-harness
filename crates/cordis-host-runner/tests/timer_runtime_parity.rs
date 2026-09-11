@@ -660,7 +660,7 @@ async fn dynamic_tool_execution_can_await_a_generation_owned_timeout() {
         execution.await.unwrap(),
         ToolExecutionResult::Success(ref success)
             if success.value == json!("ticked")
-                && success.content == [ContentBlock::Text { text: "ticked".to_owned() }]
+                && success.content == [ContentBlock::Text { text: "ticked".into() }]
     ));
     runner.stop(&session, &defined.plugin_id).await;
     context.fiber().dispose().await.unwrap();

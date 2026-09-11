@@ -40,7 +40,7 @@ fn result_text(result: &seekdeep_subagent::SubagentResult) -> String {
         .output
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -145,7 +145,7 @@ impl RealHarness {
                 SubagentStartRequest {
                     label: None,
                     prompt: vec![ContentBlock::Text {
-                        text: prompt.to_owned(),
+                        text: prompt.into(),
                     }],
                     parent: Arc::clone(&self.parent),
                     signal,

@@ -1,6 +1,11 @@
 //! Post-build verification of metadata, native payload names, and executable bits.
 
-use std::{fs::File, io::Read as _, path::Path};
+use std::{
+    collections::BTreeSet,
+    fs::{self, File},
+    io::Read as _,
+    path::Path,
+};
 
 use indexmap::IndexMap;
 use serde_json::{Value, json};
@@ -94,27 +99,111 @@ pub fn verify_wheel(
                     path.display()
                 );
             }
+            verify_node_payload(
+                &mut archive,
+                &crate::runtime_binding_target(&platform.executable)?,
+            )?;
         }
         Package::Sdk => {
-            anyhow::ensure!(
-                binding_files.is_empty(),
-                "SDK wheel unexpectedly contains native binding libraries"
-            );
-            anyhow::ensure!(
-                runtime_files.is_empty(),
-                "SDK wheel unexpectedly contains runtime executables: {}",
-                python_repr(&json!(runtime_files))
-            );
-            let requirement = format!("{RUNTIME_DISTRIBUTION}=={version}");
-            let requirements = metadata.get("requires-dist").cloned().unwrap_or_default();
-            anyhow::ensure!(
-                requirements.contains(&requirement),
-                "{} does not pin {requirement}; found {}",
-                path.display(),
-                python_repr(&json!(requirements))
-            );
+            verify_sdk_payload(
+                path,
+                version,
+                &metadata,
+                &names,
+                &runtime_files,
+                &binding_files,
+            )?;
         }
     }
+    Ok(())
+}
+
+fn verify_sdk_payload(
+    path: &Path,
+    version: &str,
+    metadata: &Headers,
+    names: &[String],
+    runtime_files: &[&String],
+    binding_files: &[&String],
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !names
+            .iter()
+            .any(|name| name.contains("/runtime/code-runtime-node/")),
+        "SDK wheel unexpectedly contains a compiled Node runtime"
+    );
+    anyhow::ensure!(
+        binding_files.is_empty(),
+        "SDK wheel unexpectedly contains native binding libraries"
+    );
+    anyhow::ensure!(
+        runtime_files.is_empty(),
+        "SDK wheel unexpectedly contains runtime executables: {}",
+        python_repr(&json!(runtime_files))
+    );
+    let requirement = format!("{RUNTIME_DISTRIBUTION}=={version}");
+    let requirements = metadata.get("requires-dist").cloned().unwrap_or_default();
+    anyhow::ensure!(
+        requirements.contains(&requirement),
+        "{} does not pin {requirement}; found {}",
+        path.display(),
+        python_repr(&json!(requirements))
+    );
+    Ok(())
+}
+
+fn verify_node_payload(
+    archive: &mut zip::ZipArchive<File>,
+    target: &crate::executable::Target,
+) -> anyhow::Result<()> {
+    const PREFIX: &str = "deepseek_harness_runtime/runtime/code-runtime-node/";
+    let temporary = tempfile::tempdir()?;
+    let assets = temporary.path().join(crate::node_runtime::DIRECTORY);
+    fs::create_dir(&assets)?;
+    let mut found = BTreeSet::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let Some(relative) = entry.name().strip_prefix(PREFIX).map(str::to_owned) else {
+            continue;
+        };
+        if relative.is_empty() {
+            continue;
+        }
+        anyhow::ensure!(
+            crate::node_runtime::safe_relative(Path::new(&relative)) && !relative.contains('\\'),
+            "runtime wheel contains an unsafe Node asset path: {relative}"
+        );
+        anyhow::ensure!(
+            found.insert(relative.clone()),
+            "runtime wheel contains a duplicate Node asset: {relative}"
+        );
+        let mode = entry.unix_mode().unwrap_or_default();
+        anyhow::ensure!(
+            mode & 0o170_000 != 0o120_000,
+            "runtime wheel contains a linked Node asset: {relative}"
+        );
+        let destination = assets.join(&relative);
+        if entry.is_dir() {
+            fs::create_dir_all(&destination)?;
+        } else {
+            fs::create_dir_all(
+                destination
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("Node asset has no parent"))?,
+            )?;
+            let mut output = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&destination)?;
+            std::io::copy(&mut entry, &mut output)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                fs::set_permissions(&destination, fs::Permissions::from_mode(mode & 0o777))?;
+            }
+        }
+    }
+    crate::node_runtime::verify_directory(&assets, target)?;
     Ok(())
 }
 

@@ -2,19 +2,16 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use crate::{COMPACT_CHECKPOINT_PLUGIN, CompactionId};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent, is_replacement_surface_event},
+    session::{JsonValue, Session, SessionEvent, is_replacement_surface_event},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use seekdeep_llm::MessageSource;
-use serde_json::Value;
-
-use crate::{CompactionId, is_compact_checkpoint_source};
 
 const PACKAGE_NAME: &str = "seekdeep-compaction";
 
@@ -283,7 +280,7 @@ fn validate_turn_boundary(
 fn apply_turn_boundary(trace: &mut SessionTrace, event: &SessionEvent) -> bool {
     match event.event_type.as_str() {
         "turn/start" => {
-            trace.open_turn = event.data.get("turn").and_then(Value::as_u64);
+            trace.open_turn = event.data.get_value("turn").and_then(JsonValue::as_u64);
             true
         }
         "turn/end" => {
@@ -336,9 +333,7 @@ fn validate_compaction_event(
     match event.event_type.as_str() {
         "session/end-seed" => return Ok(Some(CompactionTransition::EndSeed)),
         "user/message"
-            if is_replacement_surface_event(event)
-                && checkpoint_source(&event.data)
-                    .is_some_and(|source| is_compact_checkpoint_source(&source)) =>
+            if is_replacement_surface_event(event) && is_checkpoint_source(&event.data) =>
         {
             validate_checkpoint(trace, event, failure)?;
             return Ok(None);
@@ -352,13 +347,13 @@ fn validate_compaction_event(
     match event.event_type.as_str() {
         "compaction/start" => {
             validate_id(
-                data.get("compactionId"),
+                data.get_value("compactionId"),
                 "compaction/start compactionId",
                 failure,
             )?;
-            if data.get("sourceCommandId").is_some() {
+            if data.get_value("sourceCommandId").is_some() {
                 validate_id(
-                    data.get("sourceCommandId"),
+                    data.get_value("sourceCommandId"),
                     "compaction/start sourceCommandId",
                     failure,
                 )?;
@@ -374,13 +369,13 @@ fn validate_compaction_event(
                     ))
                     .into());
             }
-            let turn = data.get("turn").and_then(Value::as_u64);
+            let turn = data.get_value("turn").and_then(JsonValue::as_u64);
             validate_owner(turn, trace.open_turn, "compaction/start", failure)?;
             Ok(Some(CompactionTransition::Start {
-                compaction_id: CompactionId::new(required_string(data.get("compactionId"))?),
+                compaction_id: CompactionId::new(required_string(data.get_value("compactionId"))?),
                 source_command_id: data
-                    .get("sourceCommandId")
-                    .and_then(Value::as_str)
+                    .get_value("sourceCommandId")
+                    .and_then(JsonValue::as_str)
                     .map(str::to_owned),
                 start_seq: event.seq,
                 turn,
@@ -388,13 +383,13 @@ fn validate_compaction_event(
         }
         "compaction/summary" => {
             validate_id(
-                data.get("compactionId"),
+                data.get_value("compactionId"),
                 "compaction/summary compactionId",
                 failure,
             )?;
-            if data.get("sourceCommandId").is_some() {
+            if data.get_value("sourceCommandId").is_some() {
                 validate_id(
-                    data.get("sourceCommandId"),
+                    data.get_value("sourceCommandId"),
                     "compaction/summary sourceCommandId",
                     failure,
                 )?;
@@ -404,19 +399,20 @@ fn validate_compaction_event(
                     .fail("compaction/summary has no matching compaction/start")
                     .into());
             };
-            if data.get("compactionId").and_then(Value::as_str) != Some(open.compaction_id.as_str())
+            if data.get_value("compactionId").and_then(JsonValue::as_str)
+                != Some(open.compaction_id.as_str())
             {
                 return Err(failure
                     .fail(format!(
                         "compaction/summary id {} does not match compaction/start id {}",
-                        js_string_opt(data.get("compactionId")),
+                        js_string_opt(data.get_value("compactionId")),
                         open.compaction_id.as_str()
                     ))
                     .into());
             }
             validate_source_command_id(
                 "compaction/summary",
-                data.get("sourceCommandId"),
+                data.get_value("sourceCommandId"),
                 open.source_command_id.as_deref(),
                 failure,
             )?;
@@ -426,17 +422,21 @@ fn validate_compaction_event(
                     .fail("compaction/summary repeated within one compaction")
                     .into());
             }
-            let seqs = data.get("shadowedSeqs").and_then(Value::as_array);
+            let seqs = data.get_value("shadowedSeqs").and_then(JsonValue::as_array);
             let Some(seqs) = seqs.filter(|seqs| !seqs.is_empty()) else {
                 return Err(failure
                     .fail("compaction/summary shadowedSeqs must be non-empty")
                     .into());
             };
-            let range = data.get("shadowedRange");
-            let start = range.and_then(|r| r.get("start")).and_then(Value::as_u64);
-            let end = range.and_then(|r| r.get("end")).and_then(Value::as_u64);
-            if seqs.first().and_then(Value::as_u64) != start
-                || seqs.last().and_then(Value::as_u64) != end
+            let range = data.get_value("shadowedRange");
+            let start = range
+                .and_then(|r| r.get_value("start"))
+                .and_then(JsonValue::as_u64);
+            let end = range
+                .and_then(|r| r.get_value("end"))
+                .and_then(JsonValue::as_u64);
+            if seqs.first().and_then(JsonValue::as_u64) != start
+                || seqs.last().and_then(JsonValue::as_u64) != end
             {
                 return Err(failure
                     .fail(
@@ -444,7 +444,11 @@ fn validate_compaction_event(
                     )
                     .into());
             }
-            if !data.get("shadowedTokenCount").is_some_and(Value::is_u64) {
+            if data
+                .get_value("shadowedTokenCount")
+                .and_then(JsonValue::as_u64)
+                .is_none()
+            {
                 return Err(failure
                     .fail(
                         "compaction/summary shadowedTokenCount must be a non-negative safe integer",
@@ -460,13 +464,13 @@ fn validate_compaction_event(
         }
         "compaction/end" => {
             validate_id(
-                data.get("compactionId"),
+                data.get_value("compactionId"),
                 "compaction/end compactionId",
                 failure,
             )?;
-            if data.get("sourceCommandId").is_some() {
+            if data.get_value("sourceCommandId").is_some() {
                 validate_id(
-                    data.get("sourceCommandId"),
+                    data.get_value("sourceCommandId"),
                     "compaction/end sourceCommandId",
                     failure,
                 )?;
@@ -476,28 +480,29 @@ fn validate_compaction_event(
                     .fail("compaction/end has no matching compaction/start")
                     .into());
             };
-            if data.get("compactionId").and_then(Value::as_str) != Some(open.compaction_id.as_str())
+            if data.get_value("compactionId").and_then(JsonValue::as_str)
+                != Some(open.compaction_id.as_str())
             {
                 return Err(failure
                     .fail(format!(
                         "compaction/end id {} does not match compaction/start id {}",
-                        js_string_opt(data.get("compactionId")),
+                        js_string_opt(data.get_value("compactionId")),
                         open.compaction_id.as_str()
                     ))
                     .into());
             }
             validate_source_command_id(
                 "compaction/end",
-                data.get("sourceCommandId"),
+                data.get_value("sourceCommandId"),
                 open.source_command_id.as_deref(),
                 failure,
             )?;
-            let turn = data.get("turn").and_then(Value::as_u64);
+            let turn = data.get_value("turn").and_then(JsonValue::as_u64);
             if turn != open.turn {
                 return Err(failure
                     .fail(format!(
                         "compaction/end owner {} does not match compaction/start owner {}",
-                        data.get("turn")
+                        data.get_value("turn")
                             .map_or_else(|| "undefined".to_owned(), js_string),
                         open.turn
                             .map_or_else(|| "null".to_owned(), |turn| turn.to_string())
@@ -521,15 +526,15 @@ fn validate_checkpoint(
     event: &SessionEvent,
     failure: &InvariantFailure,
 ) -> anyhow::Result<()> {
-    let source = event.data.get("source").cloned().unwrap_or(Value::Null);
+    let source = &event.data["source"];
     validate_id(
-        source.get("compactionId"),
+        source.get_value("compactionId"),
         "compaction checkpoint compactionId",
         failure,
     )?;
-    if source.get("sourceCommandId").is_some() {
+    if source.get_value("sourceCommandId").is_some() {
         validate_id(
-            source.get("sourceCommandId"),
+            source.get_value("sourceCommandId"),
             "compaction checkpoint sourceCommandId",
             failure,
         )?;
@@ -539,18 +544,20 @@ fn validate_checkpoint(
             .fail("compaction checkpoint has no matching compaction/start")
             .into());
     };
-    if source.get("compactionId").and_then(Value::as_str) != Some(open.compaction_id.as_str()) {
+    if source.get_value("compactionId").and_then(JsonValue::as_str)
+        != Some(open.compaction_id.as_str())
+    {
         return Err(failure
             .fail(format!(
                 "compaction checkpoint id {} does not match compaction/start id {}",
-                js_string_opt(source.get("compactionId")),
+                js_string_opt(source.get_value("compactionId")),
                 open.compaction_id.as_str()
             ))
             .into());
     }
     validate_source_command_id(
         "compaction checkpoint",
-        source.get("sourceCommandId"),
+        source.get_value("sourceCommandId"),
         open.source_command_id.as_deref(),
         failure,
     )
@@ -587,11 +594,11 @@ fn apply_compaction_transition(transition: CompactionTransition) -> Option<Compa
 }
 
 fn validate_id(
-    value: Option<&Value>,
+    value: Option<&JsonValue>,
     label: &str,
     failure: &InvariantFailure,
 ) -> anyhow::Result<()> {
-    if value.and_then(Value::as_str).is_none_or(str::is_empty) {
+    if value.and_then(JsonValue::as_str).is_none_or(str::is_empty) {
         return Err(failure
             .fail(format!("{label} must be a non-empty string"))
             .into());
@@ -601,14 +608,14 @@ fn validate_id(
 
 fn validate_source_command_id(
     event_type: &str,
-    value: Option<&Value>,
+    value: Option<&JsonValue>,
     expected: Option<&str>,
     failure: &InvariantFailure,
 ) -> anyhow::Result<()> {
     if value.is_some() {
         validate_id(value, &format!("{event_type} sourceCommandId"), failure)?;
     }
-    if value.and_then(Value::as_str) != expected {
+    if value.and_then(JsonValue::as_str) != expected {
         return Err(failure
             .fail(format!(
                 "{event_type} sourceCommandId {} does not match compaction/start sourceCommandId {}",
@@ -620,37 +627,39 @@ fn validate_source_command_id(
     Ok(())
 }
 
-fn checkpoint_source(data: &Value) -> Option<MessageSource> {
-    let source = data.get("source")?;
-    serde_json::from_value(source.clone()).ok()
+fn is_checkpoint_source(data: &JsonValue) -> bool {
+    let source = &data["source"];
+    source["kind"] == "plugin" && source["plugin"] == COMPACT_CHECKPOINT_PLUGIN
 }
 
-fn required_string(value: Option<&Value>) -> anyhow::Result<String> {
+fn required_string(value: Option<&JsonValue>) -> anyhow::Result<String> {
     value
-        .and_then(Value::as_str)
+        .and_then(JsonValue::as_str)
         .map(str::to_owned)
         .ok_or_else(|| anyhow::anyhow!("compaction id must be a string"))
 }
 
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => value.clone(),
-        Value::Array(values) => values
+fn js_string(value: &JsonValue) -> String {
+    if let Some(values) = value.as_array() {
+        values
             .iter()
-            .map(|value| match value {
-                Value::Null => String::new(),
-                other => js_string(other),
+            .map(|value| {
+                if value.is_null() {
+                    String::new()
+                } else {
+                    js_string(value)
+                }
             })
             .collect::<Vec<_>>()
-            .join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+            .join(",")
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.as_str().unwrap_or(value.as_raw()).to_owned()
     }
 }
 
-fn js_string_opt(value: Option<&Value>) -> String {
+fn js_string_opt(value: Option<&JsonValue>) -> String {
     value.map_or_else(|| "undefined".to_owned(), js_string)
 }
 

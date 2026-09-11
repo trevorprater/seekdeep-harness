@@ -52,6 +52,23 @@ pub(super) fn set(value: &JsValue, key: &JsValue, field: &JsValue) -> Result<(),
     }
 }
 
+pub(super) fn define_data(value: &JsValue, key: &JsValue, field: &JsValue) -> Result<(), JsValue> {
+    let descriptor = Object::create(&Object::from(JsValue::NULL));
+    for (name, entry) in [
+        ("value", field.clone()),
+        ("writable", JsValue::TRUE),
+        ("enumerable", JsValue::TRUE),
+        ("configurable", JsValue::TRUE),
+    ] {
+        Reflect::set(&descriptor, &name.into(), &entry)?;
+    }
+    if Reflect::define_property(value.unchecked_ref::<Object>(), key, &descriptor)? {
+        Ok(())
+    } else {
+        Err(js_sys::TypeError::new("Cannot define property").into())
+    }
+}
+
 pub(super) fn assign(target: &JsValue, sources: &Array) -> Result<JsValue, JsValue> {
     let object = Reflect::get(&js_sys::global(), &"Object".into())?;
     let args = Array::of1(target);
@@ -59,6 +76,21 @@ pub(super) fn assign(target: &JsValue, sources: &Array) -> Result<JsValue, JsVal
         args.push(&source);
     }
     super::browser_registry::method(&object, "assign", &args)
+}
+
+pub(super) fn spread_into(target: &JsValue, source: &JsValue) -> Result<(), JsValue> {
+    if source.is_null() || source.is_undefined() {
+        return Ok(());
+    }
+    let boxed = super::boxed_object(source);
+    for key in Reflect::own_keys(&boxed)?.iter() {
+        let descriptor = Reflect::get_own_property_descriptor(&boxed, &key)?;
+        if descriptor.is_undefined() || !get(&descriptor, &"enumerable".into())?.is_truthy() {
+            continue;
+        }
+        define_data(target, &key, &get(source, &key)?)?;
+    }
+    Ok(())
 }
 
 pub(super) fn define(value: &JsValue, key: &JsValue, field: &JsValue) -> Result<(), JsValue> {
@@ -114,11 +146,8 @@ pub fn property_descriptor(target: &JsValue, key: &JsValue) -> Result<JsValue, J
     let object = Reflect::get(&js_sys::global(), &"Object".into())?;
     let mut target = target.clone();
     while target.is_truthy() {
-        let descriptor = super::browser_registry::method(
-            &object,
-            "getOwnPropertyDescriptor",
-            &Array::of2(&target, key),
-        )?;
+        let descriptor =
+            Reflect::get_own_property_descriptor(target.unchecked_ref::<Object>(), key)?;
         if descriptor.is_truthy() {
             return Ok(descriptor);
         }

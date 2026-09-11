@@ -17,7 +17,10 @@ use seekdeep_hook_protocol::{
     MergedHookOutcome, RunHookOptions, append_hook_invoked, append_hook_result,
     create_detached_runs, matches_matcher, merge_hook_outputs, run_hook,
 };
-use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{
+    AbortSignal, ContentBlock, JsonString, MessageSource, UserMessage, assistant_text,
+};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_schemastery::Schema;
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
 use seekdeep_shell::{SHELL, ShellService};
@@ -109,9 +112,10 @@ impl Bridge {
         &self,
         point: &str,
         match_query: &str,
-        payload: Value,
+        payload: impl Into<JsonValue>,
         options: RunPointOptions<'_>,
     ) -> anyhow::Result<MergedHookOutcome> {
+        let payload = payload.into();
         let groups = self.hooks.get(point).cloned().unwrap_or_default();
         let mut outputs = Vec::new();
         let workdir = options
@@ -370,7 +374,8 @@ fn register_pre_step(context: &Context, bridge: &Arc<Bridge>) -> anyhow::Result<
                 );
                 let mut payload = bridge.turn_base(Some(&event.agent), "UserPromptSubmit");
                 payload["turn_id"] = Value::String(event.payload.turn.to_string());
-                payload["prompt"] = Value::String(prompt);
+                let mut payload = JsonValue::from(payload);
+                payload.insert("prompt", prompt.into())?;
                 let merged = bridge
                     .run_point(
                         "UserPromptSubmit",
@@ -491,7 +496,8 @@ fn register_post_tool(context: &Context, bridge: &Arc<Bridge>) -> anyhow::Result
                         feedback: vec![ContentBlock::Text {
                             text: merged
                                 .reason
-                                .unwrap_or_else(|| "blocked by PostToolUse hook".to_owned()),
+                                .unwrap_or_else(|| "blocked by PostToolUse hook".to_owned())
+                                .into(),
                         }],
                         additional_contexts: ours.into_iter().collect(),
                     })));
@@ -546,7 +552,7 @@ fn register_stop(context: &Context, bridge: &Arc<Bridge>) -> anyhow::Result<()> 
                         .reason
                         .unwrap_or_else(|| "continue: blocked by Stop hook".to_owned());
                     if let Err(error) = event.agent.steer(UserMessage::new(
-                        vec![ContentBlock::Text { text }],
+                        vec![ContentBlock::text(text)],
                         MessageSource::plugin("hooks-codex"),
                     )) {
                         warn(
@@ -570,7 +576,7 @@ fn context_from(merged: &MergedHookOutcome) -> Option<UserMessage> {
                 .additional_context
                 .iter()
                 .cloned()
-                .map(|text| ContentBlock::Text { text })
+                .map(ContentBlock::text)
                 .collect(),
             MessageSource::plugin("hooks-codex"),
         )
@@ -615,11 +621,23 @@ fn fold_post_context(decision: PostToolDecision, ours: Option<UserMessage>) -> P
     }
 }
 
-fn pre_tool_payload(bridge: &Bridge, execution: &ToolExecution) -> Value {
-    let mut payload = bridge.turn_base(execution.agent.as_ref(), "PreToolUse");
-    payload["tool_name"] = Value::String(execution.name.clone());
-    payload["tool_input"] = json!({"command": command_of(&execution.arguments)});
-    payload["tool_use_id"] = Value::String(execution.call_id.as_str().to_owned());
+fn pre_tool_payload(bridge: &Bridge, execution: &ToolExecution) -> JsonValue {
+    let mut payload = JsonValue::from(bridge.turn_base(execution.agent.as_ref(), "PreToolUse"));
+    payload
+        .insert("tool_name", Value::String(execution.name.clone()).into())
+        .expect("hook payload is an object");
+    payload
+        .insert(
+            "tool_input",
+            JsonValue::object([("command", command_of(&execution.arguments).into())]),
+        )
+        .expect("hook payload is an object");
+    payload
+        .insert(
+            "tool_use_id",
+            Value::String(execution.call_id.as_str().to_owned()).into(),
+        )
+        .expect("hook payload is an object");
     payload
 }
 
@@ -627,31 +645,38 @@ fn post_tool_payload(
     bridge: &Bridge,
     execution: &ToolExecution,
     result: &ToolExecutionResult,
-) -> Value {
-    let mut payload = bridge.turn_base(execution.agent.as_ref(), "PostToolUse");
-    payload["tool_name"] = Value::String(execution.name.clone());
-    payload["tool_input"] = json!({"command": command_of(&execution.arguments)});
-    payload["tool_use_id"] = Value::String(execution.call_id.as_str().to_owned());
-    payload["tool_response"] = Value::String(blocks_to_text(result.content()));
+) -> JsonValue {
+    let mut payload = JsonValue::from(bridge.turn_base(execution.agent.as_ref(), "PostToolUse"));
+    payload
+        .insert("tool_name", Value::String(execution.name.clone()).into())
+        .expect("hook payload is an object");
+    payload
+        .insert(
+            "tool_input",
+            JsonValue::object([("command", command_of(&execution.arguments).into())]),
+        )
+        .expect("hook payload is an object");
+    payload
+        .insert(
+            "tool_use_id",
+            Value::String(execution.call_id.as_str().to_owned()).into(),
+        )
+        .expect("hook payload is an object");
+    payload
+        .insert("tool_response", blocks_to_text(result.content()).into())
+        .expect("hook payload is an object");
     payload
 }
 
-fn command_of(arguments: &Value) -> &str {
+fn command_of(arguments: &JsonValue) -> JsonString {
     arguments
-        .as_object()
-        .and_then(|object| object.get("command"))
-        .and_then(Value::as_str)
+        .get("command")
+        .and_then(|value| value.deserialize().ok())
         .unwrap_or_default()
 }
 
-fn blocks_to_text(blocks: &[ContentBlock]) -> String {
-    blocks
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
-            _ => None,
-        })
-        .collect()
+fn blocks_to_text(blocks: &[ContentBlock]) -> JsonString {
+    assistant_text(blocks)
 }
 
 fn last_turn(agent: Option<&Arc<Agent>>) -> u64 {
@@ -664,7 +689,7 @@ fn last_turn(agent: Option<&Arc<Agent>>) -> u64 {
                 .rev()
                 .find(|event| event.event_type == "turn/start")
         })
-        .and_then(|event| event.data.get("turn").and_then(Value::as_u64))
+        .and_then(|event| event.data["turn"].as_u64())
         .unwrap_or(0)
 }
 

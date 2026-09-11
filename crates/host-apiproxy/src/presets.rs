@@ -685,7 +685,7 @@ impl PresetApiProxyRuntime {
                             .get("text")
                             .and_then(Value::as_str)
                             .unwrap_or_default()
-                            .to_owned(),
+                            .into(),
                     })
                     .collect();
                 let replacement = UserMessage::try_from_message(Message::from_existing(
@@ -1161,7 +1161,7 @@ impl PresetApiProxyRuntime {
             return Ok(content
                 .into_iter()
                 .map(|part| match part {
-                    PromptContentPart::Text { text } => ContentBlock::Text { text },
+                    PromptContentPart::Text { text } => ContentBlock::text(text),
                     PromptContentPart::Image { .. } => unreachable!("checked above"),
                 })
                 .collect());
@@ -1231,7 +1231,7 @@ impl PresetApiProxyRuntime {
         let mut durable = Vec::with_capacity(prepared.len());
         for part in prepared {
             match part {
-                PreparedPromptPart::Text(text) => durable.push(ContentBlock::Text { text }),
+                PreparedPromptPart::Text(text) => durable.push(ContentBlock::text(text)),
                 PreparedPromptPart::Image(image) => durable.push(ContentBlock::Image {
                     attachment: attachments.save_image(image).await?,
                 }),

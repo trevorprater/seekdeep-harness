@@ -103,7 +103,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: 1,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: Some(SurfaceOp::append()),
             ignorable: None,
@@ -126,7 +126,7 @@ mod tests {
                 event_type: "assistant/chunk".to_owned(),
                 seq: 1,
                 time: 1,
-                data: json!({}),
+                data: json!({}).into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,
@@ -141,7 +141,7 @@ mod tests {
                         "source": { "kind": "model", "provider": "mock", "model": "mock" },
                         "content": text_block("replacement")
                     }
-                }),
+                }).into(),
                 source_event_seqs: Some(vec![0]),
                 surface_op: Some(SurfaceOp::Replace(SurfaceReplace {
                     op: "replace".to_owned(),
@@ -154,7 +154,7 @@ mod tests {
                 event_type: "turn/end".to_owned(),
                 seq: 3,
                 time: 1,
-                data: json!({ "reason": { "kind": "interrupted" } }),
+                data: json!({ "reason": { "kind": "interrupted" } }).into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,
@@ -181,7 +181,7 @@ mod tests {
                 .iter()
                 .map(|document| (
                     document.record.seq,
-                    document.text.as_str(),
+                    document.text.as_str().expect("fixture uses scalar text"),
                     document.record.surface
                 ))
                 .collect::<Vec<_>>(),
@@ -199,7 +199,7 @@ mod tests {
             event_type: "assistant/message".to_owned(),
             seq: 0,
             time: 1,
-            data: json!({}),
+            data: json!({}).into(),
             source_event_seqs: None,
             surface_op: Some(SurfaceOp::Replace(SurfaceReplace {
                 op: "replace".to_owned(),

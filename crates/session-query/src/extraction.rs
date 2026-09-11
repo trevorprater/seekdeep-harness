@@ -1,12 +1,12 @@
 //! First-party semantic text extraction for session-query consumers.
 
 use seekdeep_core::session::SessionEvent;
-use seekdeep_llm::ContentBlock;
-use serde_json::Value;
+use seekdeep_llm::{ContentBlock, JsonString};
+use seekdeep_lossless_json::JsonRef;
 
 /// Extracts searchable semantic text from one first-party session event.
 #[must_use]
-pub fn extract_session_event_text(event: &SessionEvent) -> String {
+pub fn extract_session_event_text(event: &SessionEvent) -> JsonString {
     match event.event_type.as_str() {
         "user/message" => content_text(event.data.get("content")),
         "assistant/message" => content_text(
@@ -31,7 +31,7 @@ pub fn extract_session_event_text(event: &SessionEvent) -> String {
         ]),
         "todo/write" => {
             let mut parts = Vec::new();
-            if let Some(todos) = event.data.get("todos").and_then(Value::as_array) {
+            if let Some(todos) = event.data.get("todos").and_then(JsonRef::array_items) {
                 for todo in todos {
                     parts.push(str_value(todo.get("status")));
                     parts.push(str_value(todo.get("content")));
@@ -40,61 +40,67 @@ pub fn extract_session_event_text(event: &SessionEvent) -> String {
             join_text(&parts)
         }
         "turn/end" => turn_end_text(event.data.get("reason")),
-        _ => String::new(),
+        _ => JsonString::default(),
     }
 }
 
-fn turn_end_text(reason: Option<&Value>) -> String {
+fn turn_end_text(reason: Option<JsonRef<'_>>) -> JsonString {
     let Some(reason) = reason else {
-        return String::new();
+        return JsonString::default();
     };
-    match reason.get("kind").and_then(Value::as_str) {
+    match reason
+        .get("kind")
+        .and_then(|kind| kind.deserialize::<String>().ok())
+        .as_deref()
+    {
         Some("error") => join_text(&[
-            "error".to_owned(),
+            "error".into(),
             str_value(reason.get("error").and_then(|error| error.get("message"))),
         ]),
-        Some("aborted") => "aborted".to_owned(),
+        Some("aborted") => "aborted".into(),
         Some("max-tokens" | "interrupted") => str_value(reason.get("kind")),
-        _ => String::new(),
+        _ => JsonString::default(),
     }
 }
 
-fn content_text(content: Option<&Value>) -> String {
+fn content_text(content: Option<JsonRef<'_>>) -> JsonString {
     let Some(content) = content else {
-        return String::new();
+        return JsonString::default();
     };
-    let blocks: Vec<ContentBlock> = serde_json::from_value(content.clone()).unwrap_or_default();
+    let blocks: Vec<ContentBlock> = content.deserialize().unwrap_or_default();
     let parts = blocks.iter().flat_map(block_text).collect::<Vec<_>>();
     join_text(&parts)
 }
 
-fn block_text(block: &ContentBlock) -> Vec<String> {
+fn block_text(block: &ContentBlock) -> Vec<JsonString> {
     match block {
         ContentBlock::Text { text } => vec![text.clone()],
         ContentBlock::ToolCall {
             name, arguments, ..
-        } => vec![name.clone(), arguments.clone()],
+        } => vec![name.clone().into(), arguments.clone().into()],
         ContentBlock::ToolResult { content, .. } => content.iter().flat_map(block_text).collect(),
         _ => Vec::new(),
     }
 }
 
-fn str_value(value: Option<&Value>) -> String {
-    value.and_then(Value::as_str).unwrap_or_default().to_owned()
+fn str_value(value: Option<JsonRef<'_>>) -> JsonString {
+    value
+        .and_then(|value| value.deserialize().ok())
+        .unwrap_or_default()
 }
 
-fn join_text(parts: &[String]) -> String {
-    parts
+fn join_text(parts: &[JsonString]) -> JsonString {
+    let parts = parts
         .iter()
         .map(|part| part.trim())
         .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect::<Vec<_>>();
+    JsonString::join(&parts, "\n")
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -103,7 +109,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq: 0,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -156,5 +162,16 @@ mod tests {
             json!({"reason": {"kind": "error", "error": {"message": "boom"}}}),
         );
         assert_eq!(extract_session_event_text(&event), "error\nboom");
+    }
+
+    #[test]
+    fn nested_tool_text_keeps_unpaired_surrogates_in_semantic_documents() {
+        let mut event = event("tool/result", json!({}));
+        event.data = seekdeep_lossless_json::JsonValue::parse(
+            r#"{"message":{"content":[{"type":"tool-result","toolCallId":"call","content":[{"type":"text","text":"  \ud800  "},{"type":"text","text":"\\ud800"}]}]}}"#.into(),
+        ).unwrap();
+        let text = extract_session_event_text(&event);
+        assert_eq!(text.as_raw(), r#""\ud800\n\\ud800""#);
+        assert_eq!(serde_json::to_string(&text).unwrap(), text.as_raw());
     }
 }

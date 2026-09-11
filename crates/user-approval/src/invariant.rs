@@ -8,13 +8,12 @@ use std::{
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent},
+    session::{JsonValue, Session, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use serde_json::Value;
 
 const PACKAGE_NAME: &str = "seekdeep-user-approval";
 
@@ -297,12 +296,11 @@ fn apply(trace: &mut Trace, transition: Transition) {
     }
 }
 
-fn string(value: &Value, key: &str) -> String {
+fn string(value: &JsonValue, key: &str) -> String {
     value
         .get(key)
-        .and_then(Value::as_str)
+        .and_then(|value| value.deserialize().ok())
         .unwrap_or_default()
-        .to_owned()
 }
 
 fn required_session(args: &EventArgs, event: &str) -> anyhow::Result<Arc<Session>> {

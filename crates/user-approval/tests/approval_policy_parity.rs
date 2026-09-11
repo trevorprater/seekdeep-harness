@@ -286,7 +286,7 @@ fn live_policy_switch_appends_once_and_queues_one_notice() {
         injected[0].content(),
         [ContentBlock::Text {
             text: "The approval policy changed from \"ask\" to \"never\" (changed by the user)."
-                .to_owned(),
+                .into(),
         }]
     );
     assert_eq!(

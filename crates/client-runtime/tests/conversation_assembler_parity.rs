@@ -6,6 +6,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
     AssemblerViewDefinition, AssemblerViewDefinitions, ChatConversationViewMetadata,
@@ -16,7 +17,8 @@ use seekdeep_client_runtime::{
     ConversationTimelineSnapshot, ConversationViewNode, ConversationVisibility,
     conversation_context_key,
 };
-use serde_json::{Map, Value, json};
+
+include!("support/conversation_json.rs");
 
 struct EventDefinitions {
     entries: Vec<Rc<AssemblerNodeDefinition>>,
@@ -53,8 +55,8 @@ impl TestViewBuilder {
             .nodes
             .iter()
             .map(|(key, node)| (key.clone(), node.data.as_ref().clone()))
-            .collect::<Map<_, _>>();
-        Rc::new(json!({"order":self.order,"nodes":nodes}))
+            .collect::<Vec<_>>();
+        Rc::new(conversation_json!({"order":self.order,"nodes":Value::object(nodes)}))
     }
 }
 
@@ -219,7 +221,7 @@ fn exact_business_id_append_updates_only_its_context_and_keeps_match_collection_
             observed_collections
                 .borrow_mut()
                 .push(Rc::as_ptr(&context.matches) as usize);
-            Ok(Some(Rc::new(json!({
+            Ok(Some(Rc::new(conversation_json!({
                 "callSeq":accepted.event.seq,
                 "results":0
             }))))
@@ -229,7 +231,7 @@ fn exact_business_id_append_updates_only_its_context_and_keeps_match_collection_
             update_collections
                 .borrow_mut()
                 .push(Rc::as_ptr(&context.matches) as usize);
-            Ok(Some(Rc::new(json!({
+            Ok(Some(Rc::new(conversation_json!({
                 "callSeq":context.state.as_ref().unwrap()["callSeq"],
                 "results":context.state.as_ref().unwrap()["results"].as_u64().unwrap()+1
             }))))
@@ -238,7 +240,11 @@ fn exact_business_id_append_updates_only_its_context_and_keeps_match_collection_
     definition.build_view_node = Some(Rc::new(|context| {
         Ok(Some(node(
             context,
-            context.state.as_deref().cloned().unwrap_or(Value::Null),
+            context
+                .state
+                .as_deref()
+                .cloned()
+                .unwrap_or(Value::from(serde_json::Value::Null)),
         )))
     }));
     let apply_calls = Rc::new(Cell::new(0));
@@ -246,8 +252,8 @@ fn exact_business_id_append_updates_only_its_context_and_keeps_match_collection_
     assembler
         .replace_window(
             &[
-                at(1, "tool/call", json!({"callId":"a"})),
-                at(2, "tool/call", json!({"callId":"b"})),
+                at(1, "tool/call", conversation_json!({"callId":"a"})),
+                at(2, "tool/call", conversation_json!({"callId":"b"})),
             ],
             false,
         )
@@ -256,18 +262,18 @@ fn exact_business_id_append_updates_only_its_context_and_keeps_match_collection_
     starts.set(0);
 
     assembler
-        .append(&at(3, "tool/result", json!({"callId":"a"})))
+        .append(&at(3, "tool/result", conversation_json!({"callId":"a"})))
         .unwrap();
     assembler.flush().unwrap();
     assert_eq!(starts.get(), 0);
     assert_eq!(updates.get(), 1);
     assert_eq!(
         node_data(&assembler, &conversation_context_key("tool", "a")),
-        json!({"callSeq":1,"results":1})
+        conversation_json!({"callSeq":1,"results":1})
     );
     assert_eq!(
         node_data(&assembler, &conversation_context_key("tool", "b")),
-        json!({"callSeq":2,"results":0})
+        conversation_json!({"callSeq":2,"results":0})
     );
     let collections = match_collections.borrow();
     assert_eq!(collections[0], collections[2]);
@@ -293,10 +299,12 @@ fn prepend_collects_updates_then_replays_once_when_the_start_arrives() {
                 _ => None,
             })
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(json!(0)))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(conversation_json!(0)))),
         move |context, _accepted| {
             observed.set(observed.get() + 1);
-            Ok(Some(Rc::new(json!(context_number(context) + 1))))
+            Ok(Some(Rc::new(conversation_json!(
+                context_number(context) + 1
+            ))))
         },
     );
     definition.build_view_node = Some(Rc::new(|context| {
@@ -306,15 +314,15 @@ fn prepend_collects_updates_then_replays_once_when_the_start_arrives() {
                 .state
                 .as_deref()
                 .cloned()
-                .unwrap_or(json!("pending")),
+                .unwrap_or(conversation_json!("pending")),
         )))
     }));
     let mut assembler = assembler(vec![Rc::new(definition)], None, Rc::new(Cell::new(0)));
     assembler
         .replace_window(
             &[
-                at(10, "linear/update", json!({})),
-                at(11, "linear/update", json!({})),
+                at(10, "linear/update", conversation_json!({})),
+                at(11, "linear/update", conversation_json!({})),
             ],
             true,
         )
@@ -327,8 +335,8 @@ fn prepend_collects_updates_then_replays_once_when_the_start_arrives() {
     assembler
         .prepend(
             &[
-                at(1, "linear/start", json!({})),
-                at(2, "linear/update", json!({})),
+                at(1, "linear/start", conversation_json!({})),
+                at(2, "linear/update", conversation_json!({})),
             ],
             false,
         )
@@ -358,15 +366,15 @@ fn start_after_an_earlier_update_fails_without_reverse_folding() {
                 _ => None,
             })
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     let mut assembler = assembler(vec![Rc::new(definition)], None, Rc::new(Cell::new(0)));
     let error = assembler
         .replace_window(
             &[
-                at(1, "turn/start", json!({"turn":1})),
-                at(2, "turn/end", json!({"turn":1})),
+                at(1, "turn/start", conversation_json!({"turn":1})),
+                at(2, "turn/end", conversation_json!({"turn":1})),
             ],
             false,
         )
@@ -405,9 +413,9 @@ fn source_definition(
                 accepted
                     .event
                     .data
-                    .get("value")
+                    .get_value("value")
                     .cloned()
-                    .unwrap_or(json!(1)),
+                    .unwrap_or(conversation_json!(1)),
             )))
         },
         |_context, accepted| Ok(Some(Rc::new(accepted.event.data["value"].clone()))),
@@ -435,7 +443,9 @@ fn reader_window_gap_replays_when_prepend_supplies_a_nearer_predecessor_or_close
             Ok(Some(Rc::new(
                 reader
                     .previous("source")
-                    .map_or(json!(-1), |previous| previous.state.as_ref().clone()),
+                    .map_or(conversation_json!(-1), |previous| {
+                        previous.state.as_ref().clone()
+                    }),
             )))
         },
         |context, _accepted| Ok(context.state.clone()),
@@ -455,7 +465,7 @@ fn reader_window_gap_replays_when_prepend_supplies_a_nearer_predecessor_or_close
         Rc::new(Cell::new(0)),
     );
     with_predecessor
-        .replace_window(&[at(10, "consumer/start", json!({}))], true)
+        .replace_window(&[at(10, "consumer/start", conversation_json!({}))], true)
         .unwrap();
     with_predecessor.flush().unwrap();
     assert_eq!(
@@ -466,7 +476,10 @@ fn reader_window_gap_replays_when_prepend_supplies_a_nearer_predecessor_or_close
         -1
     );
     with_predecessor
-        .prepend(&[at(5, "source/start", json!({"value":7}))], false)
+        .prepend(
+            &[at(5, "source/start", conversation_json!({"value":7}))],
+            false,
+        )
         .unwrap();
     with_predecessor.flush().unwrap();
     assert_eq!(starts.get(), 2);
@@ -492,7 +505,7 @@ fn reader_window_gap_replays_when_prepend_supplies_a_nearer_predecessor_or_close
         },
         move |_context, _accepted, reader| {
             observed.set(observed.get() + 1);
-            Ok(Some(Rc::new(json!(
+            Ok(Some(Rc::new(conversation_json!(
                 reader.previous("missing").map_or(-1, |_| 1)
             ))))
         },
@@ -506,7 +519,7 @@ fn reader_window_gap_replays_when_prepend_supplies_a_nearer_predecessor_or_close
     }));
     let mut empty = assembler(vec![Rc::new(consumer)], None, Rc::new(Cell::new(0)));
     empty
-        .replace_window(&[at(10, "consumer/start", json!({}))], true)
+        .replace_window(&[at(10, "consumer/start", conversation_json!({}))], true)
         .unwrap();
     assert_eq!(
         empty.prepend(&[], false).unwrap(),
@@ -532,7 +545,9 @@ fn append_replays_direct_and_transitive_reader_dependents_in_start_order() {
             Ok(Some(Rc::new(
                 reader
                     .previous("source")
-                    .map_or(json!(-1), |previous| previous.state.as_ref().clone()),
+                    .map_or(conversation_json!(-1), |previous| {
+                        previous.state.as_ref().clone()
+                    }),
             )))
         },
         |context, _accepted| Ok(context.state.clone()),
@@ -554,15 +569,15 @@ fn append_replays_direct_and_transitive_reader_dependents_in_start_order() {
     direct
         .replace_window(
             &[
-                at(1, "source/start", json!({"value":1})),
-                at(2, "consumer/start", json!({})),
+                at(1, "source/start", conversation_json!({"value":1})),
+                at(2, "consumer/start", conversation_json!({})),
             ],
             false,
         )
         .unwrap();
     assert_eq!(
         direct
-            .append(&at(3, "source/update", json!({"value":2})))
+            .append(&at(3, "source/update", conversation_json!({"value":2})))
             .unwrap(),
         ConversationPublication::Immediate
     );
@@ -591,7 +606,7 @@ fn append_replays_direct_and_transitive_reader_dependents_in_start_order() {
                 .previous("x")
                 .and_then(|previous| previous.state.as_i64())
                 .unwrap_or(0);
-            Ok(Some(Rc::new(json!(a + x))))
+            Ok(Some(Rc::new(conversation_json!(a + x))))
         },
         |context, _accepted| Ok(context.state.clone()),
     );
@@ -615,7 +630,7 @@ fn append_replays_direct_and_transitive_reader_dependents_in_start_order() {
                 .previous("middle")
                 .and_then(|previous| previous.state.as_i64())
                 .unwrap_or(0);
-            Ok(Some(Rc::new(json!(a * 100 + middle))))
+            Ok(Some(Rc::new(conversation_json!(a * 100 + middle))))
         },
         |context, _accepted| Ok(context.state.clone()),
     );
@@ -638,19 +653,19 @@ fn append_replays_direct_and_transitive_reader_dependents_in_start_order() {
     transitive
         .replace_window(
             &[
-                at(1, "a/start", json!({"value":1})),
-                at(2, "x/start", json!({"value":10})),
-                at(3, "middle/start", json!({})),
-                at(4, "final/start", json!({})),
+                at(1, "a/start", conversation_json!({"value":1})),
+                at(2, "x/start", conversation_json!({"value":10})),
+                at(3, "middle/start", conversation_json!({})),
+                at(4, "final/start", conversation_json!({})),
             ],
             false,
         )
         .unwrap();
     transitive
-        .append(&at(5, "x/update", json!({"value":20})))
+        .append(&at(5, "x/update", conversation_json!({"value":20})))
         .unwrap();
     transitive
-        .append(&at(6, "a/update", json!({"value":2})))
+        .append(&at(6, "a/update", conversation_json!({"value":2})))
         .unwrap();
     transitive.flush().unwrap();
     assert_eq!(
@@ -687,7 +702,9 @@ fn closing_a_step_replays_location_state_and_updates_only_owned_nodes() {
         move |context, accepted, _reader| {
             assert!(context.state.is_none());
             observed.set(observed.get() + 1);
-            Ok(Some(Rc::new(json!(location_status(&accepted.location)))))
+            Ok(Some(Rc::new(conversation_json!(location_status(
+                &accepted.location
+            )))))
         },
         |context, _accepted| Ok(context.state.clone()),
     );
@@ -702,8 +719,8 @@ fn closing_a_step_replays_location_state_and_updates_only_owned_nodes() {
     assembler
         .replace_window(
             &[
-                at(1, "turn/start", json!({"turn":1})),
-                at(2, "step/start", json!({"turn":1,"step":1})),
+                at(1, "turn/start", conversation_json!({"turn":1})),
+                at(2, "step/start", conversation_json!({"turn":1,"step":1})),
             ],
             false,
         )
@@ -712,7 +729,7 @@ fn closing_a_step_replays_location_state_and_updates_only_owned_nodes() {
     let key = conversation_context_key("step-probe", "1:1");
     assert_eq!(node_data(&assembler, &key), "open");
     assembler
-        .append(&at(3, "step/end", json!({"turn":1,"step":1})))
+        .append(&at(3, "step/end", conversation_json!({"turn":1,"step":1})))
         .unwrap();
     assembler.flush().unwrap();
     assert_eq!(starts.get(), 2);
@@ -737,9 +754,13 @@ fn step_then_turn_location_data_publish_in_phase_order_and_keep_reader_identity(
                 _ => None,
             })
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(json!({"turn":1,"step":1,"value":1})))),
+        |_context, _accepted, _reader| {
+            Ok(Some(Rc::new(
+                conversation_json!({"turn":1,"step":1,"value":1}),
+            )))
+        },
         |_context, accepted| {
-            Ok(Some(Rc::new(json!({
+            Ok(Some(Rc::new(conversation_json!({
                 "turn":1,"step":1,"value":accepted.event.data["value"]
             }))))
         },
@@ -751,7 +772,7 @@ fn step_then_turn_location_data_publish_in_phase_order_and_keep_reader_identity(
                 turn: 1,
                 step: Some(1),
                 key: "scope-probe".to_owned(),
-                value: Rc::new(json!({"value":state["value"]})),
+                value: Rc::new(conversation_json!({"value":state["value"]})),
             })));
         }
         let seen = context.start.as_ref().and_then(|accepted| {
@@ -766,7 +787,7 @@ fn step_then_turn_location_data_publish_in_phase_order_and_keep_reader_identity(
         Ok(Some(Rc::new(ConversationLocationData::Turn {
             turn: 1,
             key: "scope-probe".to_owned(),
-            value: Rc::new(json!({"valueSeenFromStep":seen.unwrap_or(-1)})),
+            value: Rc::new(conversation_json!({"valueSeenFromStep":seen.unwrap_or(-1)})),
         })))
     }));
     definition.build_view_node = Some(Rc::new(|context| {
@@ -777,7 +798,7 @@ fn step_then_turn_location_data_publish_in_phase_order_and_keep_reader_identity(
         };
         Ok(Some(node(
             context,
-            json!({
+            conversation_json!({
                 "step":step.data.get("scope-probe").unwrap()["value"],
                 "turn":turn.data.get("scope-probe").unwrap()["valueSeenFromStep"]
             }),
@@ -787,20 +808,30 @@ fn step_then_turn_location_data_publish_in_phase_order_and_keep_reader_identity(
     assembler
         .replace_window(
             &[
-                at(1, "turn/start", json!({"turn":1})),
-                at(2, "step/start", json!({"turn":1,"step":1})),
+                at(1, "turn/start", conversation_json!({"turn":1})),
+                at(2, "step/start", conversation_json!({"turn":1,"step":1})),
             ],
             false,
         )
         .unwrap();
     assembler.flush().unwrap();
     let key = conversation_context_key("scope-probe", "1:1");
-    assert_eq!(node_data(&assembler, &key), json!({"step":1,"turn":1}));
+    assert_eq!(
+        node_data(&assembler, &key),
+        conversation_json!({"step":1,"turn":1})
+    );
     assembler
-        .append(&at(3, "scope/update", json!({"turn":1,"step":1,"value":2})))
+        .append(&at(
+            3,
+            "scope/update",
+            conversation_json!({"turn":1,"step":1,"value":2}),
+        ))
         .unwrap();
     assembler.flush().unwrap();
-    assert_eq!(node_data(&assembler, &key), json!({"step":2,"turn":2}));
+    assert_eq!(
+        node_data(&assembler, &key),
+        conversation_json!({"step":2,"turn":2})
+    );
 }
 
 #[test]
@@ -810,11 +841,11 @@ fn timeline_changes_publish_even_without_a_claiming_business_definition() {
     assembler.replace_window(&[], false).unwrap();
     assembler.flush().unwrap();
     assembler
-        .append(&at(1, "turn/start", json!({"turn":1})))
+        .append(&at(1, "turn/start", conversation_json!({"turn":1})))
         .unwrap();
     assembler.flush().unwrap();
     assert_eq!(apply_calls.get(), 1);
-    assert_eq!(snapshot(&assembler)["order"], json!([]));
+    assert_eq!(snapshot(&assembler)["order"], conversation_json!([]));
 }
 
 fn fallback_definition(starts: Rc<Cell<u64>>) -> Rc<AssemblerNodeDefinition> {
@@ -829,7 +860,7 @@ fn fallback_definition(starts: Rc<Cell<u64>>) -> Rc<AssemblerNodeDefinition> {
         },
         move |_context, _accepted, _reader| {
             observed.set(observed.get() + 1);
-            Ok(Some(Rc::new(json!("fallback"))))
+            Ok(Some(Rc::new(conversation_json!("fallback"))))
         },
         |context, _accepted| Ok(context.state.clone()),
     );
@@ -855,7 +886,9 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
                 }),
             )
         }),
-        start: Rc::new(|_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null)))),
+        start: Rc::new(|_context, _accepted, _reader| {
+            Ok(Some(Rc::new(Value::from(serde_json::Value::Null))))
+        }),
         update: Rc::new(|context, _accepted| Ok(context.state.clone())),
         publication: None,
         build_location_data: None,
@@ -868,7 +901,7 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
         Rc::new(Cell::new(0)),
     );
     state_claim
-        .replace_window(&[at(1, "event", json!({}))], false)
+        .replace_window(&[at(1, "event", conversation_json!({}))], false)
         .unwrap();
     state_claim.flush().unwrap();
     assert_eq!(starts.get(), 1);
@@ -884,7 +917,7 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     other_target.target = Some("trajectory".to_owned());
@@ -896,7 +929,7 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
         Rc::new(Cell::new(0)),
     );
     other_claim
-        .replace_window(&[at(1, "event", json!({}))], false)
+        .replace_window(&[at(1, "event", conversation_json!({}))], false)
         .unwrap();
     assert_eq!(starts.get(), 1);
 
@@ -910,7 +943,7 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     same_target.build_view_node = Some(Rc::new(|_context| Ok(None)));
@@ -921,7 +954,7 @@ fn fallback_is_target_specific_and_state_only_claims_do_not_suppress_it() {
         Rc::new(Cell::new(0)),
     );
     same_claim
-        .replace_window(&[at(1, "event", json!({}))], false)
+        .replace_window(&[at(1, "event", conversation_json!({}))], false)
         .unwrap();
     assert_eq!(starts.get(), 0);
 }
@@ -939,7 +972,7 @@ fn publication_uses_the_highest_claimed_cadence_and_context_keys_use_utf16_lengt
                     }),
                 )
             },
-            |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+            |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
             |context, _accepted| Ok(context.state.clone()),
         );
         definition.target = None;
@@ -956,7 +989,9 @@ fn publication_uses_the_highest_claimed_cadence_and_context_keys_use_utf16_lengt
     );
     assembler.replace_window(&[], false).unwrap();
     assert_eq!(
-        assembler.append(&at(1, "pulse", json!({}))).unwrap(),
+        assembler
+            .append(&at(1, "pulse", conversation_json!({})))
+            .unwrap(),
         ConversationPublication::AnimationFrame
     );
     assert_eq!(conversation_context_key("😀x", "id"), "3:😀xid");
@@ -979,18 +1014,23 @@ fn withdrawing_nodes_undefined_state_and_duplicate_starts_fail_before_corrupting
                 _ => None,
             })
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(json!(true)))),
-        |_context, _accepted| Ok(Some(Rc::new(json!(false)))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(conversation_json!(true)))),
+        |_context, _accepted| Ok(Some(Rc::new(conversation_json!(false)))),
     );
     toggle.build_view_node = Some(Rc::new(|context| {
-        Ok((context.state.as_deref() == Some(&json!(true))).then(|| node(context, json!(true))))
+        Ok(
+            (context.state.as_deref() == Some(&conversation_json!(true)))
+                .then(|| node(context, conversation_json!(true))),
+        )
     }));
     let mut withdrawal = assembler(vec![Rc::new(toggle)], None, Rc::new(Cell::new(0)));
     withdrawal
-        .replace_window(&[at(1, "toggle/start", json!({}))], false)
+        .replace_window(&[at(1, "toggle/start", conversation_json!({}))], false)
         .unwrap();
     withdrawal.flush().unwrap();
-    withdrawal.append(&at(2, "toggle/hide", json!({}))).unwrap();
+    withdrawal
+        .append(&at(2, "toggle/hide", conversation_json!({})))
+        .unwrap();
     assert!(
         withdrawal
             .flush()
@@ -1016,7 +1056,7 @@ fn withdrawing_nodes_undefined_state_and_duplicate_starts_fail_before_corrupting
     let mut invalid = assembler(vec![Rc::new(undefined_start)], None, Rc::new(Cell::new(0)));
     assert!(
         invalid
-            .replace_window(&[at(1, "start", json!({}))], false)
+            .replace_window(&[at(1, "start", conversation_json!({}))], false)
             .unwrap_err()
             .to_string()
             .contains("Definition \"undefined-start\" returned undefined from start()")
@@ -1032,7 +1072,7 @@ fn withdrawing_nodes_undefined_state_and_duplicate_starts_fail_before_corrupting
                 }),
             )
         },
-        |_context, accepted, _reader| Ok(Some(Rc::new(json!(accepted.event.seq)))),
+        |_context, accepted, _reader| Ok(Some(Rc::new(conversation_json!(accepted.event.seq)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     duplicate.build_view_node = Some(Rc::new(|context| {
@@ -1043,12 +1083,12 @@ fn withdrawing_nodes_undefined_state_and_duplicate_starts_fail_before_corrupting
     }));
     let mut duplicate = assembler(vec![Rc::new(duplicate)], None, Rc::new(Cell::new(0)));
     duplicate
-        .replace_window(&[at(1, "start", json!({}))], false)
+        .replace_window(&[at(1, "start", conversation_json!({}))], false)
         .unwrap();
     duplicate.flush().unwrap();
     assert!(
         duplicate
-            .append(&at(2, "start", json!({})))
+            .append(&at(2, "start", conversation_json!({})))
             .unwrap_err()
             .to_string()
             .contains("received more than one start Match")
@@ -1077,17 +1117,19 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
                 _ => None,
             })
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(json!(true)))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(conversation_json!(true)))),
         |_context, _accepted| Ok(None),
     );
-    undefined.build_view_node = Some(Rc::new(|context| Ok(Some(node(context, json!(true))))));
+    undefined.build_view_node = Some(Rc::new(|context| {
+        Ok(Some(node(context, conversation_json!(true))))
+    }));
     let mut undefined = assembler(vec![Rc::new(undefined)], None, Rc::new(Cell::new(0)));
     undefined
-        .replace_window(&[at(1, "start", json!({}))], false)
+        .replace_window(&[at(1, "start", conversation_json!({}))], false)
         .unwrap();
     assert!(
         undefined
-            .append(&at(2, "update", json!({})))
+            .append(&at(2, "update", conversation_json!({})))
             .unwrap_err()
             .to_string()
             .contains("returned undefined from update()")
@@ -1103,7 +1145,7 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     unstable.build_view_node = Some(Rc::new(|context| {
@@ -1112,14 +1154,14 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
             kind: context.kind.clone(),
             id: context.id.clone(),
             target: "chat".to_owned(),
-            data: Rc::new(Value::Null),
+            data: Rc::new(Value::from(serde_json::Value::Null)),
             placement: None,
             chat: None,
         })))
     }));
     let mut unstable = assembler(vec![Rc::new(unstable)], None, Rc::new(Cell::new(0)));
     unstable
-        .replace_window(&[at(1, "start", json!({}))], false)
+        .replace_window(&[at(1, "start", conversation_json!({}))], false)
         .unwrap();
     assert!(
         unstable
@@ -1139,7 +1181,7 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     invalid_data.build_location_data = Some(Rc::new(|_context, scope| {
@@ -1147,13 +1189,13 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
             Rc::new(ConversationLocationData::Turn {
                 turn: 1,
                 key: "owned".to_owned(),
-                value: Rc::new(Value::Null),
+                value: Rc::new(Value::from(serde_json::Value::Null)),
             })
         }))
     }));
     let mut invalid_data = assembler(vec![Rc::new(invalid_data)], None, Rc::new(Cell::new(0)));
     invalid_data
-        .replace_window(&[at(1, "start", json!({}))], false)
+        .replace_window(&[at(1, "start", conversation_json!({}))], false)
         .unwrap();
     assert!(
         invalid_data
@@ -1176,7 +1218,7 @@ fn chat_nodes_require_ordering_location_and_visibility_metadata() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     definition.build_view_node = Some(Rc::new(|context| {
@@ -1185,14 +1227,14 @@ fn chat_nodes_require_ordering_location_and_visibility_metadata() {
             kind: context.kind.clone(),
             id: context.id.clone(),
             target: "chat".to_owned(),
-            data: Rc::new(Value::Null),
+            data: Rc::new(Value::from(serde_json::Value::Null)),
             placement: None,
             chat: None,
         })))
     }));
     let mut value = assembler(vec![Rc::new(definition)], None, Rc::new(Cell::new(0)));
     value
-        .replace_window(&[at(1, "start", json!({}))], false)
+        .replace_window(&[at(1, "start", conversation_json!({}))], false)
         .unwrap();
     assert!(
         value
@@ -1215,7 +1257,7 @@ fn turn_location_membership_changes_rebuild_existing_turn_nodes() {
                 }),
             )
         },
-        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::from(serde_json::Value::Null)))),
         |context, _accepted| Ok(context.state.clone()),
     );
     definition.build_view_node = Some(Rc::new(|context| {
@@ -1226,18 +1268,25 @@ fn turn_location_membership_changes_rebuild_existing_turn_nodes() {
                 -1
             }
         });
-        Ok(Some(node(context, json!(count))))
+        Ok(Some(node(context, conversation_json!(count))))
     }));
     let apply_calls = Rc::new(Cell::new(0));
     let mut assembler = assembler(vec![Rc::new(definition)], None, apply_calls.clone());
     assembler
-        .replace_window(&[at(1, "turn/start", json!({"turn":1}))], false)
+        .replace_window(
+            &[at(1, "turn/start", conversation_json!({"turn":1}))],
+            false,
+        )
         .unwrap();
     assembler.flush().unwrap();
     let key = conversation_context_key("turn-probe", "1");
     assert_eq!(node_data(&assembler, &key), 0);
     assembler
-        .append(&at(2, "step/start", json!({"turn":1,"step":1})))
+        .append(&at(
+            2,
+            "step/start",
+            conversation_json!({"turn":1,"step":1}),
+        ))
         .unwrap();
     assembler.flush().unwrap();
     assert_eq!(apply_calls.get(), 1);

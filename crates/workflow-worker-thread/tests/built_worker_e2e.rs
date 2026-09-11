@@ -85,7 +85,7 @@ async fn compiled_worker_runs_under_a_scrubbed_plain_process_and_exits_cleanly()
                         call_id,
                         result: ChildResult {
                             output: vec![seekdeep_llm::ContentBlock::Text {
-                                text: "forty-two".to_owned(),
+                                text: "forty-two".into(),
                             }],
                             structured: None,
                             stop_reason: "completed".to_owned(),

@@ -273,6 +273,9 @@ fn bundle_route_serves_the_browser_pair_and_revisions_cover_the_sidecar() {
 
     fs::write(directory.join("client.web.js"), "lean bundle").unwrap();
     fs::write(directory.join("client_bg.wasm"), b"\0asm").unwrap();
+    fs::write(directory.join("client.js.map"), "embedded map").unwrap();
+    fs::write(directory.join("client.web.js.map"), "lean map").unwrap();
+    fs::write(directory.join("client_bg.wasm.map"), "wasm map").unwrap();
     let paired_rev = host.rebuilt(&id).unwrap().unwrap();
     assert_ne!(paired_rev, embedded_rev, "the pair joins the revision");
 
@@ -284,6 +287,21 @@ fn bundle_route_serves_the_browser_pair_and_revisions_cover_the_sidecar() {
     assert_eq!(bundle.content_type, Some("text/javascript; charset=utf-8"));
     assert_eq!(bundle.body, b"lean bundle");
     assert!(!bundle.immutable);
+    for (resource, expected) in [
+        ("client.js.map", b"lean map".as_slice()),
+        ("client_bg.wasm.map", b"wasm map"),
+    ] {
+        let response = host.serve(
+            &hyper::Method::GET,
+            &format!("/plugins/{name}/{resource}?rev={paired_rev}"),
+        );
+        assert_eq!(response.status, hyper::StatusCode::OK);
+        assert_eq!(
+            response.content_type,
+            Some("application/json; charset=utf-8")
+        );
+        assert_eq!(response.body, expected);
+    }
     let sidecar = host.serve(
         &hyper::Method::GET,
         &format!("/plugins/{name}/client_bg.wasm?rev={paired_rev}"),

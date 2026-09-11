@@ -10,8 +10,31 @@ use swc_common::{
 use swc_ecma_parser::TsSyntax;
 use swc_ts_fast_strip::{Mode, Options};
 
+use crate::CodeJsonString;
+
 const PREFIX: &str = "async function __seekdeep_program__() {\n";
 const SUFFIX: &str = "\n}";
+
+pub(crate) fn stripped_body(stripped: &str) -> anyhow::Result<&str> {
+    stripped
+        .strip_prefix(PREFIX)
+        .and_then(|stripped| stripped.strip_suffix(SUFFIX))
+        .ok_or_else(|| anyhow::anyhow!("TypeScript erasure changed the program wrapper"))
+}
+
+/// Erases a JavaScript source string using Node/Amaro's UTF-8 encoding boundary.
+///
+/// # Errors
+///
+/// Returns the first Node-compatible diagnostic for invalid or unsupported syntax.
+pub fn strip_typescript_program(program: &CodeJsonString) -> anyhow::Result<String> {
+    if let Some(program) = program.as_str() {
+        strip_typescript(program)
+    } else {
+        // Amaro receives UTF-8, replacing lone source surrogates before parsing.
+        strip_typescript(&String::from_utf16_lossy(program.utf16_units()))
+    }
+}
 
 #[derive(Clone, Default)]
 struct FirstDiagnostic(Arc<parking_lot::Mutex<Option<String>>>);

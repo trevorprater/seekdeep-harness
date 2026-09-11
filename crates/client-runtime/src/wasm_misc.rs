@@ -38,11 +38,10 @@ pub fn to_assistant_block_js(block: JsValue) -> Result<JsValue, JsValue> {
         }
         Some("tool-call") => {
             set(&result, "kind", &JsValue::from_str("tool-call"))?;
-            let id = Reflect::get(&block, &JsValue::from_str("id"))?;
             set(
                 &result,
                 "callId",
-                &id.as_string().map_or(id, |id| JsValue::from_str(&id)),
+                &Reflect::get(&block, &JsValue::from_str("id"))?,
             )?;
             set(
                 &result,

@@ -1848,7 +1848,7 @@ mod tests {
 
     use seekdeep_cordis::{Context, Fiber};
     use seekdeep_core::invariant::validate_persisted_session_events;
-    use seekdeep_core::session::{AppendOptions, Session};
+    use seekdeep_core::session::{AppendOptions, JsonValue, Session, SurfaceOp};
     use seekdeep_core::session_store::CreateSessionOptions;
     use seekdeep_session_persistence::{SessionPersistence, SessionPersistenceAborted};
     use serde_json::json;
@@ -1931,6 +1931,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn code_dispatch_and_root_tool_text_survive_jsonl_append_and_fresh_replay() {
+        for compression in [JsonlCompression::None, JsonlCompression::Zstd] {
+            let temporary = tempfile::tempdir().unwrap();
+            let (writer, _, _) = backend_with_compression(temporary.path(), compression);
+            let session =
+                Session::create(&SessionId::new("lossless-code-replay"), None, None).unwrap();
+            session.append_json(
+                "tool/code-dispatch-start",
+                JsonValue::parse(r#"{"rootCallId":"lossless-call","parentCallId":"lossless-call","subCallId":"lossless-call:code:1","name":"echo","arguments":{"payload":{"\ud800":["\udfff","😀","\\ud800"]}}}"#.to_owned()).unwrap(),
+                AppendOptions::default(),
+            ).unwrap();
+            session.append_json(
+                "tool/code-dispatch",
+                JsonValue::parse(r#"{"rootCallId":"lossless-call","parentCallId":"lossless-call","subCallId":"lossless-call:code:1","name":"echo","arguments":{"payload":{"\ud800":["\udfff","😀","\\ud800"]}},"isError":false,"content":[{"type":"text","text":"{\"\\ud800\":[\"\\udfff\",\"😀\",\"\\\\ud800\"]}"}]}"#.to_owned()).unwrap(),
+                AppendOptions::default(),
+            ).unwrap();
+            session.append_json(
+                "tool/result",
+                JsonValue::parse(r#"{"message":{"source":{"kind":"tool","callId":"lossless-call"},"content":[{"type":"tool-result","toolCallId":"lossless-call","content":[{"type":"text","text":"\ud800"}]}],"role":"user","id":"lossless-result"}}"#.to_owned()).unwrap(),
+                AppendOptions { surface_op: Some(SurfaceOp::append()), ..AppendOptions::default() },
+            ).unwrap();
+            writer.create(session.header()).await.unwrap();
+            let events = session.events();
+            writer.append(session.id(), &events[..1]).await.unwrap();
+            writer.append(session.id(), &events[1..]).await.unwrap();
+            let raw = writer.read_raw(session.id(), None).await.unwrap().unwrap();
+            assert!(!raw.content.contains('\u{fffd}'));
+            for (line, expected) in raw.content.lines().skip(1).zip(&events) {
+                let actual: SessionEvent = serde_json::from_str(line).unwrap();
+                assert_eq!(actual, *expected);
+            }
+
+            let (reader, _, _) = backend_with_compression(temporary.path(), compression);
+            let loaded = reader.load(session.id()).await.unwrap();
+            assert_eq!(loaded.events, events);
+            let restored = Session::create(session.id(), Some(loaded.events), None).unwrap();
+            assert_eq!(restored.derive_messages(), session.derive_messages());
+            let messages = JsonValue::from_serialize(&restored.derive_messages()).unwrap();
+            assert_eq!(
+                messages
+                    .pointer("/0/content/0/content/0/text")
+                    .unwrap()
+                    .to_utf16()
+                    .unwrap(),
+                [0xd800]
+            );
+            let restored_events = restored.events();
+            let payload = restored_events[1]
+                .data
+                .pointer("/arguments/payload")
+                .unwrap();
+            let entries = payload.object_entries().unwrap();
+            assert_eq!(entries[0].0.to_utf16().unwrap(), [0xd800]);
+            let items = entries[0].1.array_items().unwrap();
+            assert_eq!(items[0].to_utf16().unwrap(), [0xdfff]);
+            assert_eq!(items[1].to_utf16().unwrap(), [0xd83d, 0xde00]);
+            assert_eq!(
+                items[2].to_utf16().unwrap(),
+                "\\ud800".encode_utf16().collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn source_logged_route_fact_round_trips_without_enabling_the_loop_invariant() {
         for compression in [JsonlCompression::None, JsonlCompression::Zstd] {
             let temporary = tempfile::tempdir().expect("tempdir");
@@ -2003,7 +2067,7 @@ mod tests {
             .await
             .expect("inspect legacy");
         assert_eq!(
-            inspected.events[1].data["id"],
+            inspected.events[1].data.as_serde_json().unwrap()["id"],
             "legacy-message:legacy-append:1"
         );
         let retired: SessionEvent =
@@ -2167,7 +2231,7 @@ mod tests {
             event_type: "session/title".to_owned(),
             seq: 2,
             time: 10,
-            data: json!({}),
+            data: json!({}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -2593,7 +2657,10 @@ mod tests {
             Some("turn/end")
         );
         assert_eq!(
-            loaded.events.last().map(|event| &event.data["turn"]),
+            loaded
+                .events
+                .last()
+                .map(|event| &event.data.as_serde_json().unwrap()["turn"]),
             Some(&json!(2))
         );
     }

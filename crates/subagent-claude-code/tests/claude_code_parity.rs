@@ -49,7 +49,7 @@ impl Harness {
         SubagentStartRequest {
             label: Some("fixture".to_owned()),
             prompt: vec![ContentBlock::Text {
-                text: "do the task".to_owned(),
+                text: "do the task".into(),
             }],
             parent: agent(
                 &self.context,
@@ -108,7 +108,7 @@ fn result_text(result: &seekdeep_subagent::SubagentResult) -> String {
         .output
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -146,9 +146,12 @@ fn pure_task_result_spawn_and_config_contracts_are_exact() {
         .contains("must not be empty")
     );
     assert_eq!(
-        successful_result(&json!({
-            "type":"result","subtype":"success","is_error":false,"result":"answer"
-        }))
+        successful_result(
+            &json!({
+                "type":"result","subtype":"success","is_error":false,"result":"answer"
+            })
+            .into()
+        )
         .unwrap(),
         "answer"
     );
@@ -157,7 +160,7 @@ fn pure_task_result_spawn_and_config_contracts_are_exact() {
         json!({"type":"result","subtype":"success","is_error":false,"result":" "}),
         json!({"type":"result","subtype":"error_during_execution","is_error":true,"errors":["one","two"]}),
     ] {
-        assert!(successful_result(&invalid).is_err());
+        assert!(successful_result(&invalid.into()).is_err());
     }
     assert_eq!(
         prompt_frame("exact"),
@@ -278,6 +281,33 @@ async fn real_fixture_receives_exact_task_flags_workspace_environment_and_latest
     second.dispose().await.unwrap();
     harness.quiescent().await;
     harness.context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn real_fixture_preserves_surrogate_text_and_ignores_opaque_result_metadata() {
+    for (mode, expected) in [
+        (
+            "raw-text",
+            ContentBlock::text_utf16(&[0x41, 0xd800, 0x42, 0xdc00]),
+        ),
+        ("raw-metadata", ContentBlock::text("scalar answer")),
+    ] {
+        let harness = Harness::new();
+        let mut request = harness.request(AbortSignal::default());
+        request.prompt = vec![expected.clone()];
+        let run = start_claude_code_run(request, harness.spec(mode))
+            .await
+            .unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(3), run.result())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.stop_reason, SubagentStopReason::Completed, "{mode}");
+        assert_eq!(result.output, vec![expected], "{mode}");
+        run.dispose().await.unwrap();
+        harness.quiescent().await;
+        harness.context.fiber().dispose().await.unwrap();
+    }
 }
 
 #[tokio::test]

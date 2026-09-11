@@ -117,7 +117,7 @@ async fn yaml_loads_required_policy_and_generates_one_provider_title() -> anyhow
         "user/message",
         serde_json::to_value(UserMessage::new(
             vec![ContentBlock::Text {
-                text: "Compose a title through Loader".to_owned(),
+                text: "Compose a title through Loader".into(),
             }],
             MessageSource::user(),
         ))?,

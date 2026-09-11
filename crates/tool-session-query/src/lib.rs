@@ -287,7 +287,7 @@ fn event_read_definition(context: &Context) -> anyhow::Result<seekdeep_tools::To
     )
 }
 
-fn text_output<Args>() -> DefineToolOutput<Args, String> {
+fn text_output<Args>() -> DefineToolOutput<Args, seekdeep_llm::JsonString> {
     DefineToolOutput::new(
         json!({"type":"string"}),
         Arc::new(|_, value| {

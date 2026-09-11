@@ -14,12 +14,36 @@ use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::AbortSignal;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
+pub mod json;
+pub use json::{CodeJsonString, CodeJsonValue};
 
 /// Async host binding resolution.
-pub type CodeBindingFuture = Pin<Box<dyn Future<Output = anyhow::Result<Value>> + Send + 'static>>;
+pub type CodeBindingFuture =
+    Pin<Box<dyn Future<Output = anyhow::Result<CodeJsonValue>> + Send + 'static>>;
 /// One host-side function exposed to a program.
-pub type CodeBindingFunction = Arc<dyn Fn(Value) -> CodeBindingFuture + Send + Sync + 'static>;
+pub type CodeBindingFunction =
+    Arc<dyn Fn(CodeJsonValue) -> CodeBindingFuture + Send + Sync + 'static>;
+
+/// A host binding rejection whose program-visible message may contain lone
+/// UTF-16 surrogates. Backends retain `message` when transporting this error.
+#[derive(Debug)]
+pub struct CodeBindingFailure {
+    /// The exact program-visible rejection message.
+    pub message: CodeJsonString,
+}
+
+impl fmt::Display for CodeBindingFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(
+            self.message
+                .as_str()
+                .unwrap_or_else(|| self.message.as_raw()),
+        )
+    }
+}
+
+impl std::error::Error for CodeBindingFailure {}
 
 /// Program-visible typed rejection contract for one namespace.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,7 +52,7 @@ pub struct CodeBindingErrorClass {
     /// Constructor global and resulting error name.
     pub name: String,
     /// Own property carrying the rejected member name.
-    pub member_name_property: String,
+    pub member_name_property: CodeJsonString,
 }
 
 /// Named async functions exposed under one program global.
@@ -37,7 +61,7 @@ pub struct CodeBindingNamespace {
     /// Portable global identifier.
     pub global: String,
     /// Exact callable members in declaration order.
-    pub functions: IndexMap<String, CodeBindingFunction>,
+    pub functions: IndexMap<CodeJsonString, CodeBindingFunction>,
     /// Optional typed member-rejection contract.
     pub error_class: Option<CodeBindingErrorClass>,
 }
@@ -57,7 +81,7 @@ impl fmt::Debug for CodeBindingNamespace {
 #[derive(Clone, Debug)]
 pub struct CodeRunRequest {
     /// Program body in the backend's declared language.
-    pub program: String,
+    pub program: CodeJsonString,
     /// Host namespaces exposed to the program.
     pub bindings: Vec<CodeBindingNamespace>,
     /// Optional caller cancellation.
@@ -89,7 +113,7 @@ pub struct CodeRunFailure {
     /// Failure class.
     pub kind: CodeRunFailureKind,
     /// Human-readable self-correction detail.
-    pub message: String,
+    pub message: CodeJsonString,
 }
 
 /// Resolved outcome of one run.
@@ -97,10 +121,14 @@ pub struct CodeRunFailure {
 #[serde(deny_unknown_fields)]
 pub struct CodeRunResult {
     /// Lossless JSON completion, if the program returned one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub value: Option<Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "json::deserialize_optional"
+    )]
+    pub value: Option<CodeJsonValue>,
     /// Ordered captured log text.
-    pub logs: Vec<String>,
+    pub logs: Vec<CodeJsonString>,
     /// Present exactly when the run failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<CodeRunFailure>,
@@ -282,6 +310,15 @@ pub static PORTABLE_RESERVED_WORDS: LazyLock<HashSet<&'static str>> = LazyLock::
 #[must_use]
 pub fn is_dunder_member(name: &str) -> bool {
     name.len() > 4 && name.starts_with("__") && name.ends_with("__")
+        && !name.contains(['\n', '\r', '\u{2028}', '\u{2029}'])
+}
+
+/// Matches the source's dunder expression on exact JavaScript string code units.
+#[must_use]
+pub fn is_dunder_member_string(name: &CodeJsonString) -> bool {
+    let units = name.utf16_units();
+    units.len() > 4 && units.starts_with(&[95, 95]) && units.ends_with(&[95, 95])
+        && !units.iter().any(|unit| matches!(unit, 10 | 13 | 0x2028 | 0x2029))
 }
 
 /// Registers the seam's explained empty invariant companion.
@@ -298,11 +335,12 @@ pub fn register_invariant(
 #[cfg(test)]
 mod tests {
     use parking_lot::Mutex;
+    use serde_json::Value;
 
     use super::*;
 
     struct StubRuntime {
-        requests: Mutex<Vec<String>>,
+        requests: Mutex<Vec<CodeJsonString>>,
         next: Mutex<CodeRunResult>,
     }
 
@@ -326,14 +364,15 @@ mod tests {
                             .signal
                             .as_ref()
                             .and_then(AbortSignal::reason)
-                            .map_or_else(|| "undefined".to_owned(), |reason| reason.to_string()),
+                            .map_or_else(|| "undefined".to_owned(), |reason| reason.to_string())
+                            .into(),
                     }),
                     ..CodeRunResult::default()
                 });
             }
             for namespace in request.bindings {
                 for function in namespace.functions.values() {
-                    function(serde_json::json!({ "from": "stub" })).await?;
+                    function(serde_json::json!({ "from": "stub" }).into()).await?;
                 }
             }
             Ok(self.next.lock().clone())
@@ -360,14 +399,14 @@ mod tests {
         let observed = calls.clone();
         let result = runtime
             .run(CodeRunRequest {
-                program: "return 1".to_owned(),
+                program: "return 1".into(),
                 bindings: vec![CodeBindingNamespace {
                     global: "tools".to_owned(),
                     functions: IndexMap::from_iter([(
-                        "probe".to_owned(),
+                        "probe".into(),
                         Arc::new(move |arguments| {
                             observed.lock().push(arguments);
-                            Box::pin(async { Ok(Value::Null) }) as CodeBindingFuture
+                            Box::pin(async { Ok(Value::Null.into()) }) as CodeBindingFuture
                         }) as CodeBindingFunction,
                     )]),
                     error_class: None,
@@ -384,16 +423,16 @@ mod tests {
         assert_eq!(implementation.requests.lock().as_slice(), &["return 1"]);
 
         *implementation.next.lock() = CodeRunResult {
-            logs: vec!["boom".to_owned()],
+            logs: vec!["boom".into()],
             error: Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Exception,
-                message: "boom".to_owned(),
+                message: "boom".into(),
             }),
             ..CodeRunResult::default()
         };
         let failed = runtime
             .run(CodeRunRequest {
-                program: "throw".to_owned(),
+                program: "throw".into(),
                 bindings: Vec::new(),
                 signal: None,
             })
@@ -415,7 +454,7 @@ mod tests {
         signal.abort_with_reason(serde_json::json!("cancelled"));
         let result = runtime
             .run(CodeRunRequest {
-                program: "return 1".to_owned(),
+                program: "return 1".into(),
                 bindings: Vec::new(),
                 signal: Some(signal),
             })
@@ -425,7 +464,7 @@ mod tests {
             result.error,
             Some(CodeRunFailure {
                 kind: CodeRunFailureKind::Abort,
-                message: "\"cancelled\"".to_owned(),
+                message: "\"cancelled\"".into(),
             })
         );
     }
@@ -456,9 +495,10 @@ mod tests {
         for name in ["__dict__", "__init__", "__x__"] {
             assert!(is_dunder_member(name));
         }
-        for name in ["_private", "name", "__mid", "__", "____"] {
+        for name in ["_private", "name", "__mid", "__", "____", "__\n__", "__\r__", "__\u{2028}__", "__\u{2029}__", "__x__\n"] {
             assert!(!is_dunder_member(name));
         }
+        assert!(is_dunder_member_string(&CodeJsonString::from_utf16(&[95, 95, 0xd800, 95, 95])));
         for name in ["function", "lambda", "nonlocal", "class"] {
             assert!(PORTABLE_RESERVED_WORDS.contains(name));
         }
@@ -468,11 +508,11 @@ mod tests {
     #[test]
     fn result_wire_shape_and_invariant_identity_are_exact() {
         let result = CodeRunResult {
-            value: Some(Value::Null),
-            logs: vec!["line".to_owned()],
+            value: Some(Value::Null.into()),
+            logs: vec!["line".into()],
             error: Some(CodeRunFailure {
                 kind: CodeRunFailureKind::WorkerExit,
-                message: "gone".to_owned(),
+                message: "gone".into(),
             }),
         };
         assert_eq!(

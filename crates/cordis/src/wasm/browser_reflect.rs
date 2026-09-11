@@ -1,8 +1,8 @@
 //! Browser accessor definitions, mixin ownership, and receiver-driven reflection methods.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
-use js_sys::{Array, Function, Object, Reflect, Symbol, WeakMap};
+use js_sys::{Array, Function, Object, Reflect, WeakMap};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use super::{
@@ -10,6 +10,7 @@ use super::{
     browser_values as values, object, tracing::Tracer,
 };
 
+mod mixin;
 mod provider;
 use super::browser_values::for_each;
 
@@ -58,16 +59,32 @@ fn initialize_fields(
 pub(super) fn check_service(props: &JsValue, name: &str) -> Result<(), JsValue> {
     let definition = values::get(props, &name.into())?;
     if definition.is_truthy() {
-        let kind = values::get(&definition, &"type".into())?;
+        let kind = values::get(&values::get(props, &name.into())?, &"type".into())?;
         if kind.as_string().as_deref() != Some("service") {
-            let kind = values::template_string(&kind)?;
+            let kind = values::template_string(&values::get(
+                &values::get(props, &name.into())?,
+                &"type".into(),
+            )?)?;
             return Err(js_sys::Error::new(&format!(
-                "property {name:?} is already declared as {kind}"
+                "property \"{name}\" is already declared as {kind}"
             ))
             .into());
         }
+    } else {
+        let existing = values::get(props, &name.into())?;
+        if existing.is_null() || existing.is_undefined() {
+            values::set(
+                props,
+                &name.into(),
+                &object(&[("type", "service".into())])?.into(),
+            )?;
+        }
     }
-    Ok(())
+    values::set(
+        props,
+        &name.into(),
+        &object(&[("type", "service".into())])?.into(),
+    )
 }
 
 pub(super) fn root(context: &WasmContext) -> Result<JsValue, JsValue> {
@@ -164,17 +181,18 @@ fn invoke(service: &JsValue, name: &str, args: &Array) -> Result<JsValue, JsValu
         "mixin" => mixin(service, &args.get(0), &args.get(1)),
         "_getImpl" => implementation(service, &args.get(0), &args.get(1)),
         "get" => {
+            let context = values::get(service, &"ctx".into())?;
             let record = method(service, "_getImpl", args)?;
             let value = if record.is_null() || record.is_undefined() {
                 JsValue::UNDEFINED
             } else {
                 values::get(&record, &"value".into())?
             };
-            Tracer::new(values::get(service, &"ctx".into())?).trace(&value)
+            Tracer::new(context).trace(&value)
         }
         "set" => set(service, &args.get(0), &args.get(1)),
         "trace" => Tracer::new(values::get(service, &"ctx".into())?).trace(&args.get(0)),
-        "bind" => Tracer::new(values::get(service, &"ctx".into())?).bind(&args.get(0)),
+        "bind" => bind(service, &args.get(0)),
         "notify" => notify(service, &args.get(0), &args.get(1)),
         "provide" => provide(service, &args.get(0), &args.get(1), &args.get(2)),
         _ => unreachable!("reflection prototype has a closed method set"),
@@ -194,11 +212,12 @@ fn provide(
         let native = super::context_core(&context, &JsValue::UNDEFINED)?;
         let store = values::get(&owner, &"store".into())?;
         let props = values::get(&owner, &"props".into())?;
-        if native.is_undefined()
+        if !name.is_string()
+            || native.is_undefined()
             || !method(
                 &native,
                 "reflectionRecordsMatch",
-                &Array::of2(&store, &props),
+                &Array::of4(&store, &props, &name, &context),
             )?
             .is_truthy()
         {
@@ -226,13 +245,15 @@ pub(super) fn notify_waiters(service: &JsValue, name: &str) -> Result<JsValue, J
 }
 
 fn notify(service: &JsValue, names: &JsValue, filter: &JsValue) -> Result<JsValue, JsValue> {
-    let context = values::get(service, &"ctx".into())?;
     let filter = if filter.is_undefined() {
-        let owner = context.clone();
+        let owner = service.clone();
         Closure::wrap(Box::new(move |context: JsValue, name: JsValue| {
             Ok(
                 values::get(&values::get(&context, &symbol("isolate")?)?, &name)?
-                    == values::get(&values::get(&owner, &symbol("isolate")?)?, &name)?,
+                    == values::get(
+                        &values::get(&values::get(&owner, &"ctx".into())?, &symbol("isolate")?)?,
+                        &name,
+                    )?,
             )
         })
             as Box<dyn Fn(JsValue, JsValue) -> Result<bool, JsValue>>)
@@ -240,7 +261,7 @@ fn notify(service: &JsValue, names: &JsValue, filter: &JsValue) -> Result<JsValu
     } else {
         filter.clone()
     };
-    let registry = values::get(&context, &"registry".into())?;
+    let registry = values::get(&values::get(service, &"ctx".into())?, &"registry".into())?;
     let runtimes = method(&registry, "values", &Array::new())?;
     let affected = Array::new();
     for_each(&runtimes, |runtime| {
@@ -267,6 +288,7 @@ fn notify(service: &JsValue, names: &JsValue, filter: &JsValue) -> Result<JsValu
         })
     })?;
     for_each(names, |name| {
+        let context = values::get(service, &"ctx".into())?;
         let receiver = Object::create(context.unchecked_ref::<Object>());
         let (name_for_filter, callback) = (name.clone(), filter.clone());
         let selected = Closure::wrap(Box::new(move |target: JsValue| {
@@ -275,6 +297,7 @@ fn notify(service: &JsValue, names: &JsValue, filter: &JsValue) -> Result<JsValu
             as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
         .into_js_value();
         values::set(&receiver, &symbol("filter")?, &selected)?;
+        let events = values::get(&values::get(service, &"ctx".into())?, &"events".into())?;
         let implementation = method(service, "_getImpl", &Array::of2(&name, &JsValue::FALSE))?;
         let value = if implementation.is_null() || implementation.is_undefined() {
             JsValue::UNDEFINED
@@ -282,7 +305,7 @@ fn notify(service: &JsValue, names: &JsValue, filter: &JsValue) -> Result<JsValu
             values::get(&implementation, &"value".into())?
         };
         method(
-            &values::get(&context, &"events".into())?,
+            &events,
             "emit",
             &Array::of4(&receiver, &"internal/service".into(), &name, &value),
         )?;
@@ -323,14 +346,17 @@ fn set(service: &JsValue, name: &JsValue, value: &JsValue) -> Result<JsValue, Js
     let context = values::get(service, &"ctx".into())?;
     let key = values::get(&values::get(&context, &symbol("isolate")?)?, name)?;
     let record = values::get(&values::get(service, &"store".into())?, &key)?;
-    let display = values::template_string(name)?;
     if !record.is_truthy() {
+        let display = values::template_string(name)?;
         return Err(js_sys::Error::new(&format!(
             "cannot set property \"{display}\" without provide"
         ))
         .into());
     }
-    if values::get(&record, &"fiber".into())? != values::get(&context, &"fiber".into())? {
+    if values::get(&record, &"fiber".into())?
+        != values::get(&values::get(service, &"ctx".into())?, &"fiber".into())?
+    {
+        let display = values::template_string(name)?;
         return Err(js_sys::Error::new(&format!(
             "cannot set property \"{display}\" in multiple fibers"
         ))
@@ -354,10 +380,8 @@ fn accessor(service: &JsValue, name: &JsValue, options: &JsValue) -> Result<JsVa
             .call2(&JsValue::UNDEFINED, &name, &kind)?;
             return Err(js_sys::Error::new(&message.as_string().unwrap_or_default()).into());
         }
-        let definition = values::assign(
-            &object(&[("type", "accessor".into())])?.into(),
-            &Array::of1(&options),
-        )?;
+        let definition = object(&[("type", "accessor".into())])?;
+        values::spread_into(&definition, &options)?;
         values::set(&props, &name, &definition)?;
         let name = name.clone();
         Ok(Closure::wrap(Box::new(move || {
@@ -375,6 +399,45 @@ fn effect(service: &JsValue, setup: &JsValue, label: &JsValue) -> Result<JsValue
     method(&fiber, "effect", &Array::of2(setup, label))
 }
 
+fn bind(service: &JsValue, callback: &JsValue) -> Result<JsValue, JsValue> {
+    let owner = service.clone();
+    let apply = Closure::wrap(
+        Box::new(move |target: Function, receiver: JsValue, args: Array| {
+            let receiver = method(&owner, "trace", &Array::of1(&receiver))?;
+            let args = traced_arguments(&owner, &args)?;
+            Reflect::apply(&target, &receiver, &args)
+        }) as Box<dyn Fn(Function, JsValue, Array) -> Result<JsValue, JsValue>>,
+    )
+    .into_js_value();
+    let owner = service.clone();
+    let construct = Closure::wrap(Box::new(
+        move |target: Function, args: Array, new_target: Function| {
+            Reflect::construct_with_new_target(
+                &target,
+                &traced_arguments(&owner, &args)?,
+                &new_target,
+            )
+        },
+    )
+        as Box<dyn Fn(Function, Array, Function) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    values::proxy(
+        callback,
+        &object(&[("apply", apply), ("construct", construct)])?,
+    )
+}
+
+fn traced_arguments(service: &JsValue, args: &Array) -> Result<Array, JsValue> {
+    let owner = service.clone();
+    let trace =
+        Closure::wrap(
+            Box::new(move |value: JsValue| method(&owner, "trace", &Array::of1(&value)))
+                as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>,
+        )
+        .into_js_value();
+    method(args, "map", &Array::of1(&trace)).map(wasm_bindgen::JsCast::unchecked_into)
+}
+
 fn label(operation: &str, value: &JsValue) -> Result<JsValue, JsValue> {
     let json = values::get(&js_sys::global(), &"JSON".into())?;
     let value = method(&json, "stringify", &Array::of1(value))?;
@@ -382,55 +445,9 @@ fn label(operation: &str, value: &JsValue) -> Result<JsValue, JsValue> {
 }
 
 fn mixin(service: &JsValue, source: &JsValue, mixins: &JsValue) -> Result<JsValue, JsValue> {
-    let (owner, source, mixins) = (service.clone(), source.clone(), mixins.clone());
-    let label = label("mixin", &source)?;
-    let setup = Closure::wrap(Box::new(move || mixin_iterator(&owner, &source, &mixins))
-        as Box<dyn Fn() -> Result<JsValue, JsValue>>)
-    .into_js_value();
+    let label = label("mixin", source)?;
+    let setup = mixin::setup(service, source, mixins)?;
     effect(service, &setup, &label)
-}
-
-fn mixin_iterator(
-    service: &JsValue,
-    source: &JsValue,
-    mixins: &JsValue,
-) -> Result<JsValue, JsValue> {
-    let entries = if Array::is_array(mixins) {
-        Array::from(mixins)
-            .iter()
-            .map(|key| JsValue::from(Array::of2(&key, &key)))
-            .collect::<Array>()
-    } else {
-        method(
-            &values::get(&js_sys::global(), &"Object".into())?,
-            "entries",
-            &Array::of1(mixins),
-        )?
-        .unchecked_into::<Array>()
-    };
-    let (service, source) = (service.clone(), source.clone());
-    let index = Cell::new(0);
-    let next = Closure::wrap(Box::new(move || {
-        let position = index.get();
-        index.set(position + 1);
-        if position >= entries.length() {
-            return object(&[("done", true.into())]).map(Into::into);
-        }
-        let entry = entries.get(position);
-        let key = values::get(&entry, &0.into())?;
-        let name = values::get(&entry, &1.into())?;
-        let options = mixin_options(&source, &key)?;
-        let disposer = method(&service, "accessor", &Array::of2(&name, &options))?;
-        object(&[("done", false.into()), ("value", disposer)]).map(Into::into)
-    }) as Box<dyn Fn() -> Result<JsValue, JsValue>>)
-    .into_js_value();
-    let iterator = object(&[("next", next)])?;
-    values::set(
-        &iterator,
-        &Symbol::iterator(),
-        &Function::new_no_args("return this;"),
-    )?;
-    Ok(iterator.into())
 }
 
 fn mixin_options(source: &JsValue, key: &JsValue) -> Result<JsValue, JsValue> {

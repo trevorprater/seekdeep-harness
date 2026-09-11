@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, rc::Rc};
 
+use crate::ConversationValue as Value;
 use indexmap::{IndexMap, IndexSet};
-use serde_json::Value;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -25,24 +25,29 @@ pub struct ConversationLocationEvent {
 impl ConversationLocationEvent {
     /// Creates one already-validated Session event view.
     #[must_use]
-    pub fn new(seq: u64, event_type: impl Into<String>, data: Value) -> Rc<Self> {
+    pub fn new(seq: u64, event_type: impl Into<String>, data: impl Into<Value>) -> Rc<Self> {
         Rc::new(Self {
             seq,
             time: 0,
             event_type: event_type.into(),
-            data,
+            data: data.into(),
             wire: None,
         })
     }
 
     /// Creates one already-validated Session event with its recorded timestamp.
     #[must_use]
-    pub fn with_time(seq: u64, time: i64, event_type: impl Into<String>, data: Value) -> Rc<Self> {
+    pub fn with_time(
+        seq: u64,
+        time: i64,
+        event_type: impl Into<String>,
+        data: impl Into<Value>,
+    ) -> Rc<Self> {
         Rc::new(Self {
             seq,
             time,
             event_type: event_type.into(),
-            data,
+            data: data.into(),
             wire: None,
         })
     }
@@ -53,28 +58,41 @@ impl ConversationLocationEvent {
         seq: u64,
         time: i64,
         event_type: impl Into<String>,
-        data: Value,
-        wire: Value,
+        data: impl Into<Value>,
+        wire: impl Into<Value>,
     ) -> Rc<Self> {
         Rc::new(Self {
             seq,
             time,
             event_type: event_type.into(),
-            data,
-            wire: Some(wire),
+            data: data.into(),
+            wire: Some(wire.into()),
         })
     }
 
     /// Returns the exact wire event or the canonical minimal event shape.
     #[must_use]
+    #[expect(
+        clippy::missing_panics_doc,
+        reason = "validated event fields always serialize"
+    )]
     pub fn wire_value(&self) -> Value {
         self.wire.clone().unwrap_or_else(|| {
-            serde_json::json!({
-                "seq":self.seq,
-                "time":self.time,
-                "type":self.event_type,
-                "data":self.data,
+            #[derive(serde::Serialize)]
+            struct Event<'a> {
+                seq: u64,
+                time: i64,
+                #[serde(rename = "type")]
+                kind: &'a str,
+                data: &'a Value,
+            }
+            Value::from_serialize(&Event {
+                seq: self.seq,
+                time: self.time,
+                kind: &self.event_type,
+                data: &self.data,
             })
+            .expect("validated Conversation event serializes")
         })
     }
 }
@@ -1060,7 +1078,7 @@ fn ensure_step_draft(
 }
 
 fn payload_coordinates(event: &ConversationLocationEvent) -> Coordinates {
-    let session = event.data.get("turn").is_some_and(Value::is_null);
+    let session = event.data.get_value("turn").is_some_and(Value::is_null);
     if session {
         return Coordinates {
             session: true,
@@ -1075,7 +1093,7 @@ fn payload_coordinates(event: &ConversationLocationEvent) -> Coordinates {
 }
 
 fn safe_member(data: &Value, key: &str) -> Option<u64> {
-    data.get(key)
+    data.get_value(key)
         .and_then(Value::as_u64)
         .filter(|value| *value <= MAX_SAFE_INTEGER)
 }

@@ -420,7 +420,7 @@ async fn cold_resume_rehydrates_the_prior_fact_into_the_next_model_request() -> 
     handle.agent.when_idle()?.await?;
     handle.agent.followup(UserMessage::new(
         vec![ContentBlock::Text {
-            text: "What phrase did I ask you to remember?".to_owned(),
+            text: "What phrase did I ask you to remember?".into(),
         }],
         MessageSource::user(),
     ))?;
@@ -472,7 +472,7 @@ async fn seed_unknown_tool_outcome(
     persistence.create(&header).await?;
     let user = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "Perform one side-effecting remote mutation.".to_owned(),
+            text: "Perform one side-effecting remote mutation.".into(),
         }],
         MessageSource::user(),
     );

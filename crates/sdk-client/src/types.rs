@@ -3,8 +3,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use seekdeep_core::session::{SessionEvent, SessionId};
+use seekdeep_llm::JsonString;
+use seekdeep_lossless_json::JsonValue;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 /// One server-to-client notification as received from the wire.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -13,7 +14,7 @@ pub struct HarnessNotification {
     /// JSON-RPC notification method.
     pub method: String,
     /// Raw method-specific params.
-    pub params: Map<String, Value>,
+    pub params: JsonValue,
 }
 
 /// Predicate deciding whether a subscription receives one notification.
@@ -78,7 +79,7 @@ pub struct RunResult {
     /// Root session.
     pub session_id: SessionId,
     /// Concatenated final assistant text.
-    pub final_response: String,
+    pub final_response: JsonString,
     /// Root session events in wire order.
     pub events: Vec<SessionEvent>,
     /// Root and discovered-descendant notifications in wire order.

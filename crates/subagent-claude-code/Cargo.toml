@@ -24,6 +24,7 @@ seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-subagent = { path = "../subagent" }
 seekdeep-subprocess = { path = "../subprocess" }
 seekdeep-util = { path = "../util" }

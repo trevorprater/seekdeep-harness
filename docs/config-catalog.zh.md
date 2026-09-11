@@ -30,7 +30,7 @@ export interface AcpConfig {
 
 依赖：`Stream`（`@agentclientprotocol/sdk`）
 
-来源：[`packages/acp/acp/src/index.ts:70`](../packages/acp/acp/src/index.ts)
+来源：[`packages/acp/acp/src/index.ts:70`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/acp/acp/src/index.ts)
 
 <a id="deepseek-aiseekdeep-acp-demo"></a>
 
@@ -83,9 +83,9 @@ export interface Config {
 }
 ```
 
-依赖：[`agentCore`](../packages/examples/agent-spine-demo/src/index.ts) · [`JsonlCompression`](../packages/session/session-persistence-jsonl/src/index.ts) · [`ToolsConfig`](#deepseek-aiseekdeep-tools)
+依赖：[`agentCore`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/examples/agent-spine-demo/src/index.ts) · [`JsonlCompression`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-persistence-jsonl/src/index.ts) · [`ToolsConfig`](#deepseek-aiseekdeep-tools)
 
-来源：[`packages/examples/acp-demo/src/index.ts:39`](../packages/examples/acp-demo/src/index.ts)
+来源：[`packages/examples/acp-demo/src/index.ts:39`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/examples/acp-demo/src/index.ts)
 
 <a id="deepseek-aiseekdeep-agent-default-model"></a>
 
@@ -101,7 +101,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/core/agent-default-model/src/index.ts:41`](../packages/core/agent-default-model/src/index.ts)
+来源：[`packages/core/agent-default-model/src/index.ts:41`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-default-model/src/index.ts)
 
 <a id="deepseek-aiseekdeep-agent-instructions"></a>
 
@@ -131,7 +131,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/context/agent-instructions/src/config.ts:18`](../packages/context/agent-instructions/src/config.ts)
+来源：[`packages/context/agent-instructions/src/config.ts:18`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/agent-instructions/src/config.ts)
 
 <a id="deepseek-aiseekdeep-agent-loop"></a>
 
@@ -163,7 +163,7 @@ export interface Config {
 
 依赖：[`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/core.md)
 
-来源：[`packages/core/agent-loop/src/index.ts:255`](../packages/core/agent-loop/src/index.ts)
+来源：[`packages/core/agent-loop/src/index.ts:255`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-loop/src/index.ts)
 
 <a id="deepseek-aiseekdeep-agent-presets"></a>
 
@@ -201,7 +201,7 @@ export interface PresetRoot {
 export type PresetTrust = 'system' | 'user'
 ```
 
-来源：[`packages/preset/agent-presets/src/preset.ts:52`](../packages/preset/agent-presets/src/preset.ts)
+来源：[`packages/preset/agent-presets/src/preset.ts:52`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/preset/agent-presets/src/preset.ts)
 
 <a id="deepseek-aiseekdeep-agent-spine-demo"></a>
 
@@ -291,9 +291,9 @@ export interface GoalConfig {
 }
 ```
 
-依赖：[`AgentLoopConfig`](#deepseek-aiseekdeep-agent-loop) · [`GoalDomainConfig`](#deepseek-aiseekdeep-goal) · [`InvariantConfig`](#deepseek-aiseekdeep-invariants) · [`JobsConfig`](#deepseek-aiseekdeep-jobs-local) · [`SessionTitleConfig`](#deepseek-aiseekdeep-session-title) · [`SkillFileSystem`](../packages/skill/skill-filesystem/src/index.ts) · [`SkillRegistryConfig`](#deepseek-aiseekdeep-skill) · [`SystemPromptConfig`](#deepseek-aiseekdeep-system-prompt) · [`toolBash`](../packages/shell/tool-bash/src/index.ts) · [`toolGoal`](../packages/goal/tool-goal/src/index.ts) · [`toolJobs`](../packages/jobs/tool-jobs/src/index.ts) · [`ToolsConfig`](#deepseek-aiseekdeep-tools) · [`toolSkill`](../packages/skill/tool-skill/src/index.ts) · [`workspaceContext`](../packages/context/agent-instructions/src/index.ts)
+依赖：[`AgentLoopConfig`](#deepseek-aiseekdeep-agent-loop) · [`GoalDomainConfig`](#deepseek-aiseekdeep-goal) · [`InvariantConfig`](#deepseek-aiseekdeep-invariants) · [`JobsConfig`](#deepseek-aiseekdeep-jobs-local) · [`SessionTitleConfig`](#deepseek-aiseekdeep-session-title) · [`SkillFileSystem`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/skill-filesystem/src/index.ts) · [`SkillRegistryConfig`](#deepseek-aiseekdeep-skill) · [`SystemPromptConfig`](#deepseek-aiseekdeep-system-prompt) · [`toolBash`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/tool-bash/src/index.ts) · [`toolGoal`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/goal/tool-goal/src/index.ts) · [`toolJobs`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/tool-jobs/src/index.ts) · [`ToolsConfig`](#deepseek-aiseekdeep-tools) · [`toolSkill`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/tool-skill/src/index.ts) · [`workspaceContext`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/agent-instructions/src/index.ts)
 
-来源：[`packages/examples/agent-spine-demo/src/index.ts:92`](../packages/examples/agent-spine-demo/src/index.ts)
+来源：[`packages/examples/agent-spine-demo/src/index.ts:92`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/examples/agent-spine-demo/src/index.ts)
 
 <a id="deepseek-aiseekdeep-agent-tool-presentation"></a>
 
@@ -317,7 +317,7 @@ export interface Config {
 
 依赖：[`ToolPresentationMode`](subsystems/tools.md)
 
-来源：[`packages/core/agent-tool-presentation/src/index.ts:38`](../packages/core/agent-tool-presentation/src/index.ts)
+来源：[`packages/core/agent-tool-presentation/src/index.ts:38`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent-tool-presentation/src/index.ts)
 
 <a id="deepseek-aiseekdeep-attachment-local"></a>
 
@@ -339,7 +339,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/attachment/attachment-local/src/index.ts:24`](../packages/attachment/attachment-local/src/index.ts)
+来源：[`packages/attachment/attachment-local/src/index.ts:24`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/attachment/attachment-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-bash-local"></a>
 
@@ -365,7 +365,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/bash-local/src/index.ts:41`](../packages/shell/bash-local/src/index.ts)
+来源：[`packages/shell/bash-local/src/index.ts:41`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/bash-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-bash-sandbox"></a>
 
@@ -386,7 +386,7 @@ export type Config = LocalConfig
 
 依赖：[`LocalConfig`](#deepseek-aiseekdeep-bash-local)
 
-来源：[`packages/shell/bash-sandbox/src/index.ts:35`](../packages/shell/bash-sandbox/src/index.ts)
+来源：[`packages/shell/bash-sandbox/src/index.ts:35`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/bash-sandbox/src/index.ts)
 
 <a id="deepseek-aiseekdeep-client-connection"></a>
 
@@ -411,7 +411,7 @@ export interface ConnectionConfig {
 }
 ```
 
-来源：[`packages/client/connection/src/index.ts:50`](../packages/client/connection/src/index.ts)
+来源：[`packages/client/connection/src/index.ts:50`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/connection/src/index.ts)
 
 <a id="deepseek-aiseekdeep-client-hmr"></a>
 
@@ -427,7 +427,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
+来源：[`packages/client/hmr/src/index.ts:31`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/hmr/src/index.ts)
 
 <a id="deepseek-aiseekdeep-code-runtime-worker-thread"></a>
 
@@ -464,7 +464,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
+来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/code-runtime/code-runtime-worker-thread/src/index.ts)
 
 <a id="deepseek-aiseekdeep-compaction-basic"></a>
 
@@ -510,7 +510,7 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 }
 ```
 
-来源：[`packages/compaction/compaction-basic/src/types.ts:38`](../packages/compaction/compaction-basic/src/types.ts)
+来源：[`packages/compaction/compaction-basic/src/types.ts:38`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/compaction/compaction-basic/src/types.ts)
 
 <a id="deepseek-aiseekdeep-compaction-tool-result-pruner"></a>
 
@@ -530,7 +530,7 @@ export interface ToolResultPruneConfig {
 }
 ```
 
-来源：[`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](../packages/compaction/compaction-tool-result-pruner/src/types.ts)
+来源：[`packages/compaction/compaction-tool-result-pruner/src/types.ts:4`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/compaction/compaction-tool-result-pruner/src/types.ts)
 
 <a id="deepseek-aiseekdeep-cordis-host-runner"></a>
 
@@ -546,7 +546,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/extensions/cordis-host-runner/src/index.ts:88`](../packages/extensions/cordis-host-runner/src/index.ts)
+来源：[`packages/extensions/cordis-host-runner/src/index.ts:88`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/extensions/cordis-host-runner/src/index.ts)
 
 <a id="deepseek-aiseekdeep-credentials-local"></a>
 
@@ -566,7 +566,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/credentials/credentials-local/src/index.ts:55`](../packages/credentials/credentials-local/src/index.ts)
+来源：[`packages/credentials/credentials-local/src/index.ts:55`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/credentials/credentials-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-e2b"></a>
 
@@ -584,7 +584,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/e2b/e2b/src/index.ts:43`](../packages/e2b/e2b/src/index.ts)
+来源：[`packages/e2b/e2b/src/index.ts:43`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/e2b/e2b/src/index.ts)
 
 <a id="deepseek-aiseekdeep-fs-local"></a>
 
@@ -603,7 +603,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/fs-local/src/index.ts:41`](../packages/fs/fs-local/src/index.ts)
+来源：[`packages/fs/fs-local/src/index.ts:41`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/fs-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-fs-sandbox"></a>
 
@@ -623,7 +623,7 @@ export type Config = LocalConfig
 
 依赖：[`LocalConfig`](#deepseek-aiseekdeep-fs-local)
 
-来源：[`packages/fs/fs-sandbox/src/index.ts:49`](../packages/fs/fs-sandbox/src/index.ts)
+来源：[`packages/fs/fs-sandbox/src/index.ts:49`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/fs-sandbox/src/index.ts)
 
 <a id="deepseek-aiseekdeep-goal"></a>
 
@@ -639,7 +639,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/goal/goal/src/index.ts:116`](../packages/goal/goal/src/index.ts)
+来源：[`packages/goal/goal/src/index.ts:116`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/goal/goal/src/index.ts)
 
 <a id="deepseek-aiseekdeep-headless"></a>
 
@@ -655,7 +655,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/bundle/headless/src/index.ts:31`](../packages/bundle/headless/src/index.ts)
+来源：[`packages/bundle/headless/src/index.ts:31`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/bundle/headless/src/index.ts)
 
 <a id="deepseek-aiseekdeep-hooks-claude-code"></a>
 
@@ -693,7 +693,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/hooks/hooks-claude-code/src/index.ts:45`](../packages/hooks/hooks-claude-code/src/index.ts)
+来源：[`packages/hooks/hooks-claude-code/src/index.ts:45`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/hooks/hooks-claude-code/src/index.ts)
 
 <a id="deepseek-aiseekdeep-hooks-codex"></a>
 
@@ -720,7 +720,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-codex/src/index.ts)
+来源：[`packages/hooks/hooks-codex/src/index.ts:44`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/hooks/hooks-codex/src/index.ts)
 
 <a id="deepseek-aiseekdeep-host-apiproxy"></a>
 
@@ -754,7 +754,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/apiproxy/src/index.ts:41`](../packages/host/apiproxy/src/index.ts)
+来源：[`packages/host/apiproxy/src/index.ts:41`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/apiproxy/src/index.ts)
 
 <a id="deepseek-aiseekdeep-host-directory-picker-browse"></a>
 
@@ -768,7 +768,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
+来源：[`packages/host/directory-picker-browse/src/index.ts:181`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/directory-picker-browse/src/index.ts)
 
 <a id="deepseek-aiseekdeep-host-frontend-static"></a>
 
@@ -784,7 +784,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/frontend-static/src/index.ts:28`](../packages/host/frontend-static/src/index.ts)
+来源：[`packages/host/frontend-static/src/index.ts:28`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/frontend-static/src/index.ts)
 
 <a id="deepseek-aiseekdeep-host-webserver"></a>
 
@@ -800,7 +800,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/webserver/src/index.ts:45`](../packages/host/webserver/src/index.ts)
+来源：[`packages/host/webserver/src/index.ts:45`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aiseekdeep-invariants"></a>
 
@@ -818,7 +818,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/runtime-diagnostics/invariants/src/index.ts:15`](../packages/runtime-diagnostics/invariants/src/index.ts)
+来源：[`packages/runtime-diagnostics/invariants/src/index.ts:15`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/runtime-diagnostics/invariants/src/index.ts)
 
 <a id="deepseek-aiseekdeep-jobs-local"></a>
 
@@ -835,7 +835,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+来源：[`packages/jobs/jobs-local/src/index.ts:31`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/jobs-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-llm-deepseek"></a>
 
@@ -888,9 +888,9 @@ export interface DeepSeekCatalogModel {
 }
 ```
 
-依赖：[`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
+依赖：[`RetryPolicyConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/index.ts)
 
-来源：[`packages/llm/llm-deepseek/src/index.ts:62`](../packages/llm/llm-deepseek/src/index.ts)
+来源：[`packages/llm/llm-deepseek/src/index.ts:62`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-deepseek/src/index.ts)
 
 <a id="deepseek-aiseekdeep-llm-pi-ai"></a>
 
@@ -1078,9 +1078,9 @@ type PiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFormat']>
 type WithheldThinkingFormat = 'chat-template' | 'qwen-chat-template'
 ```
 
-依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`）
+依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`）
 
-来源：[`packages/llm/llm-pi-ai/src/config.ts:172`](../packages/llm/llm-pi-ai/src/config.ts)
+来源：[`packages/llm/llm-pi-ai/src/config.ts:172`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aiseekdeep-llm-replay"></a>
 
@@ -1146,9 +1146,9 @@ export interface ReplayModelConfig {
 }
 ```
 
-依赖：[`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
+依赖：[`ModelModality`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/index.ts)
 
-来源：[`packages/test-support/llm-replay/src/index.ts:776`](../packages/test-support/llm-replay/src/index.ts)
+来源：[`packages/test-support/llm-replay/src/index.ts:776`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/llm-replay/src/index.ts)
 
 <a id="deepseek-aiseekdeep-llm-retry"></a>
 
@@ -1161,7 +1161,7 @@ export interface ReplayModelConfig {
 export type Config = Readonly<Record<string, never>>
 ```
 
-来源：[`packages/llm/llm-retry/src/index.ts:24`](../packages/llm/llm-retry/src/index.ts)
+来源：[`packages/llm/llm-retry/src/index.ts:24`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-retry/src/index.ts)
 
 <a id="deepseek-aiseekdeep-lsp-stdio"></a>
 
@@ -1203,7 +1203,7 @@ export interface LspLocalServerConfig {
 }
 ```
 
-来源：[`packages/lsp/lsp-stdio/src/index.ts:82`](../packages/lsp/lsp-stdio/src/index.ts)
+来源：[`packages/lsp/lsp-stdio/src/index.ts:82`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/lsp/lsp-stdio/src/index.ts)
 
 <a id="deepseek-aiseekdeep-mcp-client"></a>
 
@@ -1300,7 +1300,7 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:122`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:122`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aiseekdeep-message-feedback"></a>
 
@@ -1316,7 +1316,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/feedback/message-feedback/src/index.ts:49`](../packages/feedback/message-feedback/src/index.ts)
+来源：[`packages/feedback/message-feedback/src/index.ts:49`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/feedback/message-feedback/src/index.ts)
 
 <a id="deepseek-aiseekdeep-permission-presets"></a>
 
@@ -1355,7 +1355,7 @@ export interface PresetSpec {
 
 依赖：[`ApprovalPolicy`](subsystems/approval.md) · [`SandboxMode`](subsystems/sandbox.md)
 
-来源：[`packages/interaction/permission-presets/src/index.ts:140`](../packages/interaction/permission-presets/src/index.ts)
+来源：[`packages/interaction/permission-presets/src/index.ts:140`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/permission-presets/src/index.ts)
 
 <a id="deepseek-aiseekdeep-persona"></a>
 
@@ -1379,7 +1379,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/preset/persona/src/index.ts:34`](../packages/preset/persona/src/index.ts)
+来源：[`packages/preset/persona/src/index.ts:34`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/preset/persona/src/index.ts)
 
 <a id="deepseek-aiseekdeep-plan-mode"></a>
 
@@ -1395,7 +1395,7 @@ export interface PlanModeConfig {
 }
 ```
 
-来源：[`packages/plan/plan-mode/src/index.ts:70`](../packages/plan/plan-mode/src/index.ts)
+来源：[`packages/plan/plan-mode/src/index.ts:70`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/plan/plan-mode/src/index.ts)
 
 <a id="deepseek-aiseekdeep-pwsh-local"></a>
 
@@ -1428,7 +1428,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/pwsh-local/src/index.ts:58`](../packages/shell/pwsh-local/src/index.ts)
+来源：[`packages/shell/pwsh-local/src/index.ts:58`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/pwsh-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-pwsh-sandbox"></a>
 
@@ -1450,7 +1450,7 @@ export type Config = LocalConfig
 
 依赖：[`LocalConfig`](#deepseek-aiseekdeep-pwsh-local)
 
-来源：[`packages/shell/pwsh-sandbox/src/index.ts:40`](../packages/shell/pwsh-sandbox/src/index.ts)
+来源：[`packages/shell/pwsh-sandbox/src/index.ts:40`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/pwsh-sandbox/src/index.ts)
 
 <a id="deepseek-aiseekdeep-repeat-tool-reminder"></a>
 
@@ -1484,7 +1484,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/guard/repeat-tool-reminder/src/index.ts:28`](../packages/guard/repeat-tool-reminder/src/index.ts)
+来源：[`packages/guard/repeat-tool-reminder/src/index.ts:28`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/guard/repeat-tool-reminder/src/index.ts)
 
 <a id="deepseek-aiseekdeep-sandbox-local"></a>
 
@@ -1516,7 +1516,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/sandbox/sandbox-local/src/index.ts:44`](../packages/sandbox/sandbox-local/src/index.ts)
+来源：[`packages/sandbox/sandbox-local/src/index.ts:44`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sandbox/sandbox-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-sandbox-policy"></a>
 
@@ -1543,7 +1543,7 @@ export interface Config {
 
 依赖：[`SandboxMode`](subsystems/sandbox.md)
 
-来源：[`packages/sandbox/sandbox-policy/src/index.ts:67`](../packages/sandbox/sandbox-policy/src/index.ts)
+来源：[`packages/sandbox/sandbox-policy/src/index.ts:67`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sandbox/sandbox-policy/src/index.ts)
 
 <a id="deepseek-aiseekdeep-sdk-jsonrpc-server"></a>
 
@@ -1567,7 +1567,7 @@ export interface JsonRpcConfig {
 
 依赖：`Readable`（`node:stream`）· `Writable`（`node:stream`）
 
-来源：[`packages/sdk/server/src/index.ts:29`](../packages/sdk/server/src/index.ts)
+来源：[`packages/sdk/server/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sdk/server/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-persistence-jsonl"></a>
 
@@ -1606,7 +1606,7 @@ export interface Config {
 export type JsonlCompression = 'zstd' | 'none'
 ```
 
-来源：[`packages/session/session-persistence-jsonl/src/index.ts:60`](../packages/session/session-persistence-jsonl/src/index.ts)
+来源：[`packages/session/session-persistence-jsonl/src/index.ts:60`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-persistence-jsonl/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-persistence-sqlite"></a>
 
@@ -1651,7 +1651,7 @@ export interface Config {
 export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ```
 
-来源：[`packages/session/session-persistence-sqlite/src/index.ts:70`](../packages/session/session-persistence-sqlite/src/index.ts)
+来源：[`packages/session/session-persistence-sqlite/src/index.ts:70`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-persistence-sqlite/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-projection-cache"></a>
 
@@ -1674,7 +1674,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/session/session-projection-cache/src/index.ts:42`](../packages/session/session-projection-cache/src/index.ts)
+来源：[`packages/session/session-projection-cache/src/index.ts:42`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-projection-cache/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-query-sqlite"></a>
 
@@ -1718,9 +1718,9 @@ export type OpenAt = 'startup' | 'first-search' | 'never'
 export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ```
 
-依赖：[`SessionQueryConfig`](../packages/session-query/session-query/src/index.ts)
+依赖：[`SessionQueryConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/session-query/src/index.ts)
 
-来源：[`packages/session-query/session-query-sqlite/src/index.ts:89`](../packages/session-query/session-query-sqlite/src/index.ts)
+来源：[`packages/session-query/session-query-sqlite/src/index.ts:89`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/session-query-sqlite/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-reference"></a>
 
@@ -1740,7 +1740,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
+来源：[`packages/context/session-reference/src/config.ts:11`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/session-reference/src/config.ts)
 
 <a id="deepseek-aiseekdeep-session-telemetry-otel"></a>
 
@@ -1786,7 +1786,7 @@ export enum SessionTelemetryMode {
 
 依赖：`BatchLogRecordProcessorOptions`（`@opentelemetry/sdk-logs`）· `OTLPExporterNodeConfigBase`（`@opentelemetry/otlp-exporter-base`）
 
-来源：[`packages/session/session-telemetry-otel/src/index.ts:91`](../packages/session/session-telemetry-otel/src/index.ts)
+来源：[`packages/session/session-telemetry-otel/src/index.ts:91`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-telemetry-otel/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-title"></a>
 
@@ -1806,7 +1806,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/session/session-title/src/index.ts:79`](../packages/session/session-title/src/index.ts)
+来源：[`packages/session/session-title/src/index.ts:79`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-title-all-prompts-llm"></a>
 
@@ -1819,9 +1819,9 @@ export interface Config {
 export type Config = SessionTitleLlmConfig
 ```
 
-依赖：[`SessionTitleLlmConfig`](../packages/session/session-title-llm/src/index.ts)
+依赖：[`SessionTitleLlmConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title-llm/src/index.ts)
 
-来源：[`packages/session/session-title-all-prompts-llm/src/index.ts:15`](../packages/session/session-title-all-prompts-llm/src/index.ts)
+来源：[`packages/session/session-title-all-prompts-llm/src/index.ts:15`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title-all-prompts-llm/src/index.ts)
 
 <a id="deepseek-aiseekdeep-session-title-first-prompt-llm"></a>
 
@@ -1834,9 +1834,9 @@ export type Config = SessionTitleLlmConfig
 export type Config = SessionTitleLlmConfig
 ```
 
-依赖：[`SessionTitleLlmConfig`](../packages/session/session-title-llm/src/index.ts)
+依赖：[`SessionTitleLlmConfig`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title-llm/src/index.ts)
 
-来源：[`packages/session/session-title-first-prompt-llm/src/index.ts:15`](../packages/session/session-title-first-prompt-llm/src/index.ts)
+来源：[`packages/session/session-title-first-prompt-llm/src/index.ts:15`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title-first-prompt-llm/src/index.ts)
 
 <a id="deepseek-aiseekdeep-settings-file"></a>
 
@@ -1856,7 +1856,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/settings/settings-file/src/index.ts:21`](../packages/settings/settings-file/src/index.ts)
+来源：[`packages/settings/settings-file/src/index.ts:21`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings-file/src/index.ts)
 
 <a id="deepseek-aiseekdeep-shell-env"></a>
 
@@ -1870,7 +1870,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/shell-env/src/index.ts:29`](../packages/shell/shell-env/src/index.ts)
+来源：[`packages/shell/shell-env/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/shell-env/src/index.ts)
 
 <a id="deepseek-aiseekdeep-skill"></a>
 
@@ -1884,7 +1884,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/skill/skill/src/index.ts:279`](../packages/skill/skill/src/index.ts)
+来源：[`packages/skill/skill/src/index.ts:279`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/skill/src/index.ts)
 
 <a id="deepseek-aiseekdeep-skill-filesystem"></a>
 
@@ -1922,7 +1922,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/skill/skill-filesystem/src/index.ts:49`](../packages/skill/skill-filesystem/src/index.ts)
+来源：[`packages/skill/skill-filesystem/src/index.ts:49`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/skill-filesystem/src/index.ts)
 
 <a id="deepseek-aiseekdeep-spill-local"></a>
 
@@ -1940,7 +1940,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/spill/spill-local/src/index.ts:22`](../packages/spill/spill-local/src/index.ts)
+来源：[`packages/spill/spill-local/src/index.ts:22`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill-local/src/index.ts)
 
 <a id="deepseek-aiseekdeep-spill-policy"></a>
 
@@ -1960,7 +1960,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/spill/spill-policy/src/index.ts:60`](../packages/spill/spill-policy/src/index.ts)
+来源：[`packages/spill/spill-policy/src/index.ts:60`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill-policy/src/index.ts)
 
 <a id="deepseek-aiseekdeep-storage-domain"></a>
 
@@ -1983,7 +1983,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/storage/storage-domain/src/index.ts:52`](../packages/storage/storage-domain/src/index.ts)
+来源：[`packages/storage/storage-domain/src/index.ts:52`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/storage/storage-domain/src/index.ts)
 
 <a id="deepseek-aiseekdeep-storage-json"></a>
 
@@ -2004,7 +2004,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/storage/storage-json/src/index.ts:27`](../packages/storage/storage-json/src/index.ts)
+来源：[`packages/storage/storage-json/src/index.ts:27`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/storage/storage-json/src/index.ts)
 
 <a id="deepseek-aiseekdeep-storage-sqlite"></a>
 
@@ -2044,7 +2044,7 @@ export interface Config {
 export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 ```
 
-来源：[`packages/storage/storage-sqlite/src/index.ts:24`](../packages/storage/storage-sqlite/src/index.ts)
+来源：[`packages/storage/storage-sqlite/src/index.ts:24`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/storage/storage-sqlite/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-acp"></a>
 
@@ -2097,7 +2097,7 @@ export interface Config {
 export type PermissionPolicy = 'allow' | 'reject'
 ```
 
-来源：[`packages/subagent/subagent-acp/src/index.ts:27`](../packages/subagent/subagent-acp/src/index.ts)
+来源：[`packages/subagent/subagent-acp/src/index.ts:27`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-acp/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-claude-code"></a>
 
@@ -2118,7 +2118,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/subagent/subagent-claude-code/src/index.ts:32`](../packages/subagent/subagent-claude-code/src/index.ts)
+来源：[`packages/subagent/subagent-claude-code/src/index.ts:32`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-claude-code/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-codex"></a>
 
@@ -2139,7 +2139,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/subagent/subagent-codex/src/index.ts:30`](../packages/subagent/subagent-codex/src/index.ts)
+来源：[`packages/subagent/subagent-codex/src/index.ts:30`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-codex/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-seekdeep-sdk"></a>
 
@@ -2192,7 +2192,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/subagent/subagent-seekdeep-sdk/src/index.ts:29`](../packages/subagent/subagent-seekdeep-sdk/src/index.ts)
+来源：[`packages/subagent/subagent-seekdeep-sdk/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-dsh-sdk/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-fork-in-process"></a>
 
@@ -2208,7 +2208,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/subagent/subagent-fork-in-process/src/index.ts:31`](../packages/subagent/subagent-fork-in-process/src/index.ts)
+来源：[`packages/subagent/subagent-fork-in-process/src/index.ts:31`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-fork-in-process/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subagent-spawn-in-process"></a>
 
@@ -2224,7 +2224,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/subagent/subagent-spawn-in-process/src/index.ts:25`](../packages/subagent/subagent-spawn-in-process/src/index.ts)
+来源：[`packages/subagent/subagent-spawn-in-process/src/index.ts:25`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-spawn-in-process/src/index.ts)
 
 <a id="deepseek-aiseekdeep-subprocess-e2b"></a>
 
@@ -2240,7 +2240,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/e2b/subprocess-e2b/src/index.ts:25`](../packages/e2b/subprocess-e2b/src/index.ts)
+来源：[`packages/e2b/subprocess-e2b/src/index.ts:25`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/e2b/subprocess-e2b/src/index.ts)
 
 <a id="deepseek-aiseekdeep-system-prompt"></a>
 
@@ -2267,7 +2267,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/core/system-prompt/src/index.ts:186`](../packages/core/system-prompt/src/index.ts)
+来源：[`packages/core/system-prompt/src/index.ts:186`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/system-prompt/src/index.ts)
 
 <a id="deepseek-aiseekdeep-terminal-bash"></a>
 
@@ -2312,7 +2312,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/terminal/terminal-bash/src/config.ts:6`](../packages/terminal/terminal-bash/src/config.ts)
+来源：[`packages/terminal/terminal-bash/src/config.ts:6`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/terminal/terminal-bash/src/config.ts)
 
 <a id="deepseek-aiseekdeep-time-context"></a>
 
@@ -2330,7 +2330,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/context/time-context/src/index.ts:27`](../packages/context/time-context/src/index.ts)
+来源：[`packages/context/time-context/src/index.ts:27`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/time-context/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tmux-context"></a>
 
@@ -2346,7 +2346,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/context/tmux-context/src/index.ts:34`](../packages/context/tmux-context/src/index.ts)
+来源：[`packages/context/tmux-context/src/index.ts:34`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/context/tmux-context/src/index.ts)
 
 <a id="deepseek-aiseekdeep-token-meter"></a>
 
@@ -2357,7 +2357,7 @@ export interface Config {
 export type TokenMeterConfig = Record<string, never>
 ```
 
-来源：[`packages/llm/token-meter/src/types.ts:12`](../packages/llm/token-meter/src/types.ts)
+来源：[`packages/llm/token-meter/src/types.ts:12`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/token-meter/src/types.ts)
 
 <a id="deepseek-aiseekdeep-tool-bash"></a>
 
@@ -2373,7 +2373,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/tool-bash/src/index.ts:34`](../packages/shell/tool-bash/src/index.ts)
+来源：[`packages/shell/tool-bash/src/index.ts:34`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/tool-bash/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-bash-persistent"></a>
 
@@ -2395,7 +2395,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/tool-bash-persistent/src/index.ts:405`](../packages/shell/tool-bash-persistent/src/index.ts)
+来源：[`packages/shell/tool-bash-persistent/src/index.ts:405`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/tool-bash-persistent/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-fs"></a>
 
@@ -2417,7 +2417,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/tool-fs/src/index.ts:25`](../packages/fs/tool-fs/src/index.ts)
+来源：[`packages/fs/tool-fs/src/index.ts:25`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/tool-fs/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-fs-search"></a>
 
@@ -2452,7 +2452,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/tool-fs-search/src/index.ts:73`](../packages/fs/tool-fs-search/src/index.ts)
+来源：[`packages/fs/tool-fs-search/src/index.ts:73`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/tool-fs-search/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-goal"></a>
 
@@ -2468,7 +2468,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/goal/tool-goal/src/index.ts:26`](../packages/goal/tool-goal/src/index.ts)
+来源：[`packages/goal/tool-goal/src/index.ts:26`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/goal/tool-goal/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-jobs"></a>
 
@@ -2502,7 +2502,7 @@ export interface Config {
 export type CompletionDelivery = 'quiet' | 'wakeup'
 ```
 
-来源：[`packages/jobs/tool-jobs/src/index.ts:32`](../packages/jobs/tool-jobs/src/index.ts)
+来源：[`packages/jobs/tool-jobs/src/index.ts:32`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/tool-jobs/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-lsp"></a>
 
@@ -2522,7 +2522,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/lsp/tool-lsp/src/index.ts:58`](../packages/lsp/tool-lsp/src/index.ts)
+来源：[`packages/lsp/tool-lsp/src/index.ts:58`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/lsp/tool-lsp/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-pwsh"></a>
 
@@ -2538,7 +2538,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/shell/tool-pwsh/src/index.ts:52`](../packages/shell/tool-pwsh/src/index.ts)
+来源：[`packages/shell/tool-pwsh/src/index.ts:52`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/tool-pwsh/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-ralph"></a>
 
@@ -2560,7 +2560,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/workflow/tool-ralph/src/index.ts:23`](../packages/workflow/tool-ralph/src/index.ts)
+来源：[`packages/workflow/tool-ralph/src/index.ts:23`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/workflow/tool-ralph/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-session-query"></a>
 
@@ -2578,7 +2578,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/session-query/tool-session-query/src/index.ts:29`](../packages/session-query/tool-session-query/src/index.ts)
+来源：[`packages/session-query/tool-session-query/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/tool-session-query/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-skill"></a>
 
@@ -2594,7 +2594,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/skill/tool-skill/src/index.ts:61`](../packages/skill/tool-skill/src/index.ts)
+来源：[`packages/skill/tool-skill/src/index.ts:61`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/tool-skill/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-str-replace-editor"></a>
 
@@ -2612,7 +2612,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/fs/tool-str-replace-editor/src/index.ts:497`](../packages/fs/tool-str-replace-editor/src/index.ts)
+来源：[`packages/fs/tool-str-replace-editor/src/index.ts:497`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/tool-str-replace-editor/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-subagent"></a>
 
@@ -2677,7 +2677,7 @@ export interface Config {
 
 依赖：[`AgentOptions`](subsystems/core.md)
 
-来源：[`packages/subagent/tool-subagent/src/index.ts:29`](../packages/subagent/tool-subagent/src/index.ts)
+来源：[`packages/subagent/tool-subagent/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-subagent-report"></a>
 
@@ -2699,7 +2699,7 @@ export interface Config {
 
 依赖：[`SubagentReportDelivery`](subsystems/subagent.md)
 
-来源：[`packages/subagent/tool-subagent-report/src/index.ts:27`](../packages/subagent/tool-subagent-report/src/index.ts)
+来源：[`packages/subagent/tool-subagent-report/src/index.ts:27`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/tool-subagent-report/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-terminal"></a>
 
@@ -2717,7 +2717,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/terminal/tool-terminal/src/index.ts:35`](../packages/terminal/tool-terminal/src/index.ts)
+来源：[`packages/terminal/tool-terminal/src/index.ts:35`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/terminal/tool-terminal/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-todo"></a>
 
@@ -2739,7 +2739,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
+来源：[`packages/todo/tool-todo/src/index.ts:29`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/todo/tool-todo/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-web"></a>
 
@@ -2765,7 +2765,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/web/tool-web/src/index.ts:37`](../packages/web/tool-web/src/index.ts)
+来源：[`packages/web/tool-web/src/index.ts:37`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/tool-web/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tool-workflow"></a>
 
@@ -2783,7 +2783,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/workflow/tool-workflow/src/index.ts:33`](../packages/workflow/tool-workflow/src/index.ts)
+来源：[`packages/workflow/tool-workflow/src/index.ts:33`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/workflow/tool-workflow/src/index.ts)
 
 <a id="deepseek-aiseekdeep-tools"></a>
 
@@ -2819,7 +2819,7 @@ export interface Config {
 export type ToolPresentationMode = 'native' | 'code' | 'both'
 ```
 
-来源：[`packages/core/tools/src/index.ts:654`](../packages/core/tools/src/index.ts)
+来源：[`packages/core/tools/src/index.ts:654`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/tools/src/index.ts)
 
 <a id="deepseek-aiseekdeep-typert-loader"></a>
 
@@ -2835,7 +2835,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/typert/loader/src/index.ts:47`](../packages/typert/loader/src/index.ts)
+来源：[`packages/typert/loader/src/index.ts:47`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/typert/loader/src/index.ts)
 
 <a id="deepseek-aiseekdeep-user-approval"></a>
 
@@ -2866,7 +2866,7 @@ export interface Config {
 export type ApprovalPolicy = 'ask' | 'never'
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:177`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/user-approval/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web"></a>
 
@@ -2887,7 +2887,7 @@ export interface WebRuntimeConfig {
 }
 ```
 
-来源：[`packages/web/web/src/index.ts:55`](../packages/web/web/src/index.ts)
+来源：[`packages/web/web/src/index.ts:55`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web-app"></a>
 
@@ -2912,7 +2912,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/bundle/web-app/src/index.ts:38`](../packages/bundle/web-app/src/index.ts)
+来源：[`packages/bundle/web-app/src/index.ts:38`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/bundle/web-app/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web-fetch-http"></a>
 
@@ -2938,7 +2938,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/web/web-fetch-http/src/index.ts:34`](../packages/web/web-fetch-http/src/index.ts)
+来源：[`packages/web/web-fetch-http/src/index.ts:34`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web-fetch-http/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web-search-deepseek"></a>
 
@@ -2966,7 +2966,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/web/web-search-deepseek/src/index.ts:46`](../packages/web/web-search-deepseek/src/index.ts)
+来源：[`packages/web/web-search-deepseek/src/index.ts:46`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web-search-deepseek/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web-search-exa"></a>
 
@@ -2990,7 +2990,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/web/web-search-exa/src/index.ts:38`](../packages/web/web-search-exa/src/index.ts)
+来源：[`packages/web/web-search-exa/src/index.ts:38`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web-search-exa/src/index.ts)
 
 <a id="deepseek-aiseekdeep-web-search-perplexity"></a>
 
@@ -3014,7 +3014,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/web/web-search-perplexity/src/index.ts:32`](../packages/web/web-search-perplexity/src/index.ts)
+来源：[`packages/web/web-search-perplexity/src/index.ts:32`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web-search-perplexity/src/index.ts)
 
 <a id="deepseek-aiseekdeep-workflow-worker-thread"></a>
 
@@ -3044,132 +3044,132 @@ export interface Config {
 }
 ```
 
-来源：[`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
+来源：[`packages/workflow/workflow-worker-thread/src/index.ts:32`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/workflow/workflow-worker-thread/src/index.ts)
 
 ## 无配置的可加载插件
 
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
 
-- `@seekdeep-ai/seekdeep-agent`（[`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts)）
-- `@seekdeep-ai/seekdeep-api-gateway` — 需要 `typert`（[`packages/api/gateway/src/index.ts`](../packages/api/gateway/src/index.ts)）
-- `@seekdeep-ai/seekdeep-api-remotes`（[`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-locale`（[`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-modules` — 需要 `webServer` · `loader`（[`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-runtime`（[`packages/client/runtime/src/index.ts`](../packages/client/runtime/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-agent-preset`（[`packages/client/ui-agent-preset/src/index.ts`](../packages/client/ui-agent-preset/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-commands`（[`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-conversation`（[`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-cordis`（[`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-deliverables` — 需要 `systemPrompt`（[`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-directory-picker-browse`（[`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-directory-picker-native`（[`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-goal`（[`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-input-trigger`（[`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-jobs`（[`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-layout`（[`packages/client/ui-layout/src/index.ts`](../packages/client/ui-layout/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-message-feedback`（[`packages/client/ui-message-feedback/src/index.ts`](../packages/client/ui-message-feedback/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-model-selection`（[`packages/client/ui-model-selection/src/index.ts`](../packages/client/ui-model-selection/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-permission-presets`（[`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-plan`（[`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-settings`（[`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-settings-general`（[`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-settings-models`（[`packages/client/ui-settings-models/src/index.ts`](../packages/client/ui-settings-models/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory`（[`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-settings-plugins`（[`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-sidebar`（[`packages/client/ui-sidebar/src/index.ts`](../packages/client/ui-sidebar/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-skill`（[`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-subagent`（[`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-theme`（[`packages/client/ui-theme/src/index.ts`](../packages/client/ui-theme/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-tool`（[`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts)）
-- `@seekdeep-ai/seekdeep-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts)）
-- `@seekdeep-ai/seekdeep-command-feedback` — 需要 `commands`（[`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts)）
-- `@seekdeep-ai/seekdeep-command-goal` — 需要 `commands` · `goals`（[`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts)）
-- `@seekdeep-ai/seekdeep-commands`（[`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts)）
-- `@seekdeep-ai/seekdeep-cordis-client-runner`（[`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts)）
-- `@seekdeep-ai/seekdeep-fs-e2b` — 需要 `e2b`（[`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts)）
-- `@seekdeep-ai/seekdeep-fs-observation-policy`（[`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts)）
-- `@seekdeep-ai/seekdeep-goal-round-driver` — 需要 `agents` · `goals` · `sessions`（[`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts)）
-- `@seekdeep-ai/seekdeep-host-directory-picker-auto` — 需要 `webServer` · `loader`（[`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts)）
-- `@seekdeep-ai/seekdeep-host-directory-picker-native`（[`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts)）
-- `@seekdeep-ai/seekdeep-host-plugin-inventory` — 需要 `loader`（[`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts)）
-- `@seekdeep-ai/seekdeep-llm`（[`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts)）
-- `@seekdeep-ai/seekdeep-lsp`（[`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts)）
-- `@seekdeep-ai/seekdeep-schedule` — 需要 `agents` · `sessions` · `tools` · `sessionPersistence`（[`packages/schedule/schedule/src/index.ts`](../packages/schedule/schedule/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session`（[`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-checkpoint-policy` — 需要 `llm` · `sessionPersistence` · `sessions` · `tools`（[`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-log-export` — 需要 `commands`（[`packages/session-query/session-log-export/src/index.ts`](../packages/session-query/session-log-export/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-projection`（[`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-stats` — 需要 `sessionProjections`（[`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts)）
-- `@seekdeep-ai/seekdeep-skill-badge` — 需要 `skills`（[`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts)）
-- `@seekdeep-ai/seekdeep-storage`（[`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts)）
-- `@seekdeep-ai/seekdeep-subagent`（[`packages/subagent/subagent/src/index.ts`](../packages/subagent/subagent/src/index.ts)）
-- `@seekdeep-ai/seekdeep-subprocess-local`（[`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts)）
-- `@seekdeep-ai/seekdeep-terminal`（[`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts)）
-- `@seekdeep-ai/seekdeep-tool-ask-user` — 需要 `tools` · `userInteraction`（[`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts)）
-- `@seekdeep-ai/seekdeep-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts)）
-- `@seekdeep-ai/seekdeep-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)）
-- `@seekdeep-ai/seekdeep-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）
-- `@seekdeep-ai/seekdeep-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
-- `@seekdeep-ai/seekdeep-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）
+- `@seekdeep-ai/seekdeep-agent`（[`packages/core/agent/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/agent/src/index.ts)）
+- `@seekdeep-ai/seekdeep-api-gateway` — 需要 `typert`（[`packages/api/gateway/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/api/gateway/src/index.ts)）
+- `@seekdeep-ai/seekdeep-api-remotes`（[`packages/api/remotes/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/api/remotes/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-locale`（[`packages/client/locale/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/locale/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-modules` — 需要 `webServer` · `loader`（[`packages/client/modules/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/modules/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-runtime`（[`packages/client/runtime/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/runtime/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-agent-preset`（[`packages/client/ui-agent-preset/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-agent-preset/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-commands`（[`packages/client/ui-commands/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-commands/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-conversation`（[`packages/client/ui-conversation/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-cordis`（[`packages/extensions/ui-cordis/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/extensions/ui-cordis/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-deliverables` — 需要 `systemPrompt`（[`packages/client/ui-deliverables/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-deliverables/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-directory-picker-browse`（[`packages/client/ui-directory-picker-browse/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-directory-picker-browse/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-directory-picker-native`（[`packages/client/ui-directory-picker-native/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-directory-picker-native/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-goal`（[`packages/client/ui-goal/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-goal/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-input-trigger`（[`packages/client/ui-input-trigger/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-input-trigger/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-jobs`（[`packages/client/ui-jobs/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-jobs/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-layout`（[`packages/client/ui-layout/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-layout/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-message-feedback`（[`packages/client/ui-message-feedback/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-message-feedback/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-model-selection`（[`packages/client/ui-model-selection/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-model-selection/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-permission-presets`（[`packages/client/ui-permission-presets/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-permission-presets/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-plan`（[`packages/client/ui-plan/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-plan/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-settings`（[`packages/client/ui-settings/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-settings/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-settings-general`（[`packages/client/ui-settings-general/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-settings-general/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-settings-models`（[`packages/client/ui-settings-models/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-settings-models/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory`（[`packages/client/ui-settings-plugin-inventory/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-settings-plugin-inventory/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-settings-plugins`（[`packages/client/ui-settings-plugins/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-settings-plugins/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-sidebar`（[`packages/client/ui-sidebar/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-sidebar/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-skill`（[`packages/client/ui-skill/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-skill/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-subagent`（[`packages/client/ui-subagent/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-subagent/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-theme`（[`packages/client/ui-theme/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-theme/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-tool`（[`packages/client/ui-tool/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-tool/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-trajectory/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-user-questions/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-workflow-run/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-workspace/src/index.ts)）
+- `@seekdeep-ai/seekdeep-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/compaction/command-compact/src/index.ts)）
+- `@seekdeep-ai/seekdeep-command-feedback` — 需要 `commands`（[`packages/feedback/command-feedback/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/feedback/command-feedback/src/index.ts)）
+- `@seekdeep-ai/seekdeep-command-goal` — 需要 `commands` · `goals`（[`packages/goal/command-goal/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/goal/command-goal/src/index.ts)）
+- `@seekdeep-ai/seekdeep-commands`（[`packages/interaction/commands/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/commands/src/index.ts)）
+- `@seekdeep-ai/seekdeep-cordis-client-runner`（[`packages/extensions/cordis-client-runner/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/extensions/cordis-client-runner/src/index.ts)）
+- `@seekdeep-ai/seekdeep-fs-e2b` — 需要 `e2b`（[`packages/e2b/fs-e2b/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/e2b/fs-e2b/src/index.ts)）
+- `@seekdeep-ai/seekdeep-fs-observation-policy`（[`packages/fs/fs-observation-policy/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/fs-observation-policy/src/index.ts)）
+- `@seekdeep-ai/seekdeep-goal-round-driver` — 需要 `agents` · `goals` · `sessions`（[`packages/goal/goal-round-driver/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/goal/goal-round-driver/src/index.ts)）
+- `@seekdeep-ai/seekdeep-host-directory-picker-auto` — 需要 `webServer` · `loader`（[`packages/host/directory-picker-auto/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/directory-picker-auto/src/index.ts)）
+- `@seekdeep-ai/seekdeep-host-directory-picker-native`（[`packages/host/directory-picker-native/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/directory-picker-native/src/index.ts)）
+- `@seekdeep-ai/seekdeep-host-plugin-inventory` — 需要 `loader`（[`packages/host/plugin-inventory/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/plugin-inventory/src/index.ts)）
+- `@seekdeep-ai/seekdeep-llm`（[`packages/llm/llm/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/index.ts)）
+- `@seekdeep-ai/seekdeep-lsp`（[`packages/lsp/lsp/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/lsp/lsp/src/index.ts)）
+- `@seekdeep-ai/seekdeep-schedule` — 需要 `agents` · `sessions` · `tools` · `sessionPersistence`（[`packages/schedule/schedule/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/schedule/schedule/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session`（[`packages/core/session/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/session/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-checkpoint-policy` — 需要 `llm` · `sessionPersistence` · `sessions` · `tools`（[`packages/session/session-checkpoint-policy/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-checkpoint-policy/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-log-export` — 需要 `commands`（[`packages/session-query/session-log-export/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/session-log-export/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-projection`（[`packages/session/session-projection/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-projection/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-stats` — 需要 `sessionProjections`（[`packages/session/session-stats/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-stats/src/index.ts)）
+- `@seekdeep-ai/seekdeep-skill-badge` — 需要 `skills`（[`packages/skill/skill-badge/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/skill/skill-badge/src/index.ts)）
+- `@seekdeep-ai/seekdeep-storage`（[`packages/storage/storage/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/storage/storage/src/index.ts)）
+- `@seekdeep-ai/seekdeep-subagent`（[`packages/subagent/subagent/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/index.ts)）
+- `@seekdeep-ai/seekdeep-subprocess-local`（[`packages/subprocess/subprocess-local/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subprocess/subprocess-local/src/index.ts)）
+- `@seekdeep-ai/seekdeep-terminal`（[`packages/terminal/terminal/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/terminal/terminal/src/index.ts)）
+- `@seekdeep-ai/seekdeep-tool-ask-user` — 需要 `tools` · `userInteraction`（[`packages/interaction/tool-ask-user/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/tool-ask-user/src/index.ts)）
+- `@seekdeep-ai/seekdeep-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/guard/timeout-policy/src/index.ts)）
+- `@seekdeep-ai/seekdeep-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/extensions/tool-cordis/src/index.ts)）
+- `@seekdeep-ai/seekdeep-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/tool-subagent-control/src/index.ts)）
+- `@seekdeep-ai/seekdeep-user-questions`（[`packages/interaction/user-questions/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/interaction/user-questions/src/index.ts)）
+- `@seekdeep-ai/seekdeep-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/workspace/workspace/src/index.ts)）
 
 ## Seam 包（不可直接加载）
 
 抽象服务类——部署时应改为加载具体的实现包（参见[能力 seam](../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md)）。
 
-- `@seekdeep-ai/seekdeep-attachment` — 抽象 `AttachmentStore`（[`packages/attachment/attachment/src/index.ts`](../packages/attachment/attachment/src/index.ts)）
-- `@seekdeep-ai/seekdeep-code-runtime` — 抽象 `CodeRuntime`（[`packages/code-runtime/code-runtime/src/index.ts`](../packages/code-runtime/code-runtime/src/index.ts)）
-- `@seekdeep-ai/seekdeep-compaction` — 抽象 `CompactionEngine`（[`packages/compaction/compaction/src/index.ts`](../packages/compaction/compaction/src/index.ts)）
-- `@seekdeep-ai/seekdeep-credentials` — 抽象 `Credentials`（[`packages/credentials/credentials/src/index.ts`](../packages/credentials/credentials/src/index.ts)）
-- `@seekdeep-ai/seekdeep-fs` — 抽象 `FileSystem`（[`packages/fs/fs/src/index.ts`](../packages/fs/fs/src/index.ts)）
-- `@seekdeep-ai/seekdeep-host-directory-picker` — 抽象 `DirectoryPicker`（[`packages/host/directory-picker/src/index.ts`](../packages/host/directory-picker/src/index.ts)）
-- `@seekdeep-ai/seekdeep-jobs` — 抽象 `JobRegistry`（[`packages/jobs/jobs/src/index.ts`](../packages/jobs/jobs/src/index.ts)）
-- `@seekdeep-ai/seekdeep-sandbox` — 抽象 `SandboxProvider`（[`packages/sandbox/sandbox/src/index.ts`](../packages/sandbox/sandbox/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-persistence` — 抽象 `SessionPersistence`（[`packages/session/session-persistence/src/index.ts`](../packages/session/session-persistence/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-query` — 抽象 `SessionQueryEngine`（[`packages/session-query/session-query/src/index.ts`](../packages/session-query/session-query/src/index.ts)）
-- `@seekdeep-ai/seekdeep-settings` — 抽象 `Settings`（[`packages/settings/settings/src/index.ts`](../packages/settings/settings/src/index.ts)）
-- `@seekdeep-ai/seekdeep-shell` — 抽象 `ShellExecutor`（[`packages/shell/shell/src/index.ts`](../packages/shell/shell/src/index.ts)）
-- `@seekdeep-ai/seekdeep-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
-- `@seekdeep-ai/seekdeep-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
-- `@seekdeep-ai/seekdeep-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
+- `@seekdeep-ai/seekdeep-attachment` — 抽象 `AttachmentStore`（[`packages/attachment/attachment/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/attachment/attachment/src/index.ts)）
+- `@seekdeep-ai/seekdeep-code-runtime` — 抽象 `CodeRuntime`（[`packages/code-runtime/code-runtime/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/code-runtime/code-runtime/src/index.ts)）
+- `@seekdeep-ai/seekdeep-compaction` — 抽象 `CompactionEngine`（[`packages/compaction/compaction/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/compaction/compaction/src/index.ts)）
+- `@seekdeep-ai/seekdeep-credentials` — 抽象 `Credentials`（[`packages/credentials/credentials/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/credentials/credentials/src/index.ts)）
+- `@seekdeep-ai/seekdeep-fs` — 抽象 `FileSystem`（[`packages/fs/fs/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/fs/fs/src/index.ts)）
+- `@seekdeep-ai/seekdeep-host-directory-picker` — 抽象 `DirectoryPicker`（[`packages/host/directory-picker/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/directory-picker/src/index.ts)）
+- `@seekdeep-ai/seekdeep-jobs` — 抽象 `JobRegistry`（[`packages/jobs/jobs/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/jobs/src/index.ts)）
+- `@seekdeep-ai/seekdeep-sandbox` — 抽象 `SandboxProvider`（[`packages/sandbox/sandbox/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sandbox/sandbox/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-persistence` — 抽象 `SessionPersistence`（[`packages/session/session-persistence/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-persistence/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-query` — 抽象 `SessionQueryEngine`（[`packages/session-query/session-query/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/session-query/src/index.ts)）
+- `@seekdeep-ai/seekdeep-settings` — 抽象 `Settings`（[`packages/settings/settings/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/settings/settings/src/index.ts)）
+- `@seekdeep-ai/seekdeep-shell` — 抽象 `ShellExecutor`（[`packages/shell/shell/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/shell/shell/src/index.ts)）
+- `@seekdeep-ai/seekdeep-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/spill/spill/src/index.ts)）
+- `@seekdeep-ai/seekdeep-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subprocess/subprocess/src/index.ts)）
+- `@seekdeep-ai/seekdeep-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/workflow/workflow/src/index.ts)）
 ## 库包（无插件入口）
 
 由其他包作为库导入；`cordis.yml` 无法加载它们。
 
-- `@seekdeep-ai/seekdeep-acp-snapshot`（[`packages/test-support/acp-snapshot/src/index.ts`](../packages/test-support/acp-snapshot/src/index.ts)）
-- `@seekdeep-ai/seekdeep-agent-loop-testkit`（[`packages/test-support/agent-loop-testkit/src/index.ts`](../packages/test-support/agent-loop-testkit/src/index.ts)）
-- `@seekdeep-ai/seekdeep-anonymous-user-id`（[`packages/identity/anonymous-user-id/src/index.ts`](../packages/identity/anonymous-user-id/src/index.ts)）
-- `@seekdeep-ai/seekdeep-app-boot`（[`packages/boot/app-boot/src/index.ts`](../packages/boot/app-boot/src/index.ts)）
-- `@seekdeep-ai/seekdeep-atomic-write`（[`packages/util/atomic-write/src/index.ts`](../packages/util/atomic-write/src/index.ts)）
-- `@seekdeep-ai/seekdeep-base`（[`packages/bundle/base/src/index.ts`](../packages/bundle/base/src/index.ts)）
-- `@seekdeep-ai/seekdeep-brand`（[`packages/util/brand/src/index.ts`](../packages/util/brand/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-schema-form`（[`packages/client/schema-form/src/index.ts`](../packages/client/schema-form/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-test-runtime`（[`packages/test-support/client-runtime/src/index.ts`](../packages/test-support/client-runtime/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-attachment`（[`packages/client/ui-attachment/src/index.ts`](../packages/client/ui-attachment/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-primitives`（[`packages/client/ui-primitives/src/index.ts`](../packages/client/ui-primitives/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-ui-slots`（[`packages/client/ui-slots/src/index.ts`](../packages/client/ui-slots/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-web`（[`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts)）
-- `@seekdeep-ai/seekdeep-client-web-react`（[`packages/client/web-react/src/index.ts`](../packages/client/web-react/src/index.ts)）
-- `@seekdeep-ai/seekdeep-cmdline`（[`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts)）
-- `@seekdeep-ai/seekdeep-home-paths`（[`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts)）
-- `@seekdeep-ai/seekdeep-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts)）
-- `@seekdeep-ai/seekdeep-launch-environment`（[`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts)）
-- `@seekdeep-ai/seekdeep-llm-mock-server`（[`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts)）
-- `@seekdeep-ai/seekdeep-loader-smoke`（[`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts)）
-- `@seekdeep-ai/seekdeep-native-command`（[`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts)）
-- `@seekdeep-ai/seekdeep-output-retention`（[`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts)）
-- `@seekdeep-ai/seekdeep-sandbox-windows-acl`（[`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts)）
-- `@seekdeep-ai/seekdeep-scope`（[`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts)）
-- `@seekdeep-ai/seekdeep-sdk-client`（[`packages/sdk/client/src/index.ts`](../packages/sdk/client/src/index.ts)）
-- `@seekdeep-ai/seekdeep-sdk-jsonrpc-demo`（[`packages/examples/jsonrpc-demo/src/index.ts`](../packages/examples/jsonrpc-demo/src/index.ts)）
-- `@seekdeep-ai/seekdeep-sdk-protocol`（[`packages/sdk/protocol/src/index.ts`](../packages/sdk/protocol/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-telemetry`（[`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts)）
-- `@seekdeep-ai/seekdeep-session-title-llm`（[`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts)）
-- `@seekdeep-ai/seekdeep-subagent-in-process-driver`（[`packages/subagent/subagent-in-process-driver/src/index.ts`](../packages/subagent/subagent-in-process-driver/src/index.ts)）
-- `@seekdeep-ai/seekdeep-timeout`（[`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts)）
-- `@seekdeep-ai/seekdeep-typert-generator`（[`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts)）
-- `@seekdeep-ai/seekdeep-typert-protocol`（[`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts)）
-- `@seekdeep-ai/seekdeep-typert-registry`（[`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts)）
+- `@seekdeep-ai/seekdeep-acp-snapshot`（[`packages/test-support/acp-snapshot/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/acp-snapshot/src/index.ts)）
+- `@seekdeep-ai/seekdeep-agent-loop-testkit`（[`packages/test-support/agent-loop-testkit/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/agent-loop-testkit/src/index.ts)）
+- `@seekdeep-ai/seekdeep-anonymous-user-id`（[`packages/identity/anonymous-user-id/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/identity/anonymous-user-id/src/index.ts)）
+- `@seekdeep-ai/seekdeep-app-boot`（[`packages/boot/app-boot/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/boot/app-boot/src/index.ts)）
+- `@seekdeep-ai/seekdeep-atomic-write`（[`packages/util/atomic-write/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/atomic-write/src/index.ts)）
+- `@seekdeep-ai/seekdeep-base`（[`packages/bundle/base/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/bundle/base/src/index.ts)）
+- `@seekdeep-ai/seekdeep-brand`（[`packages/util/brand/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/brand/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-schema-form`（[`packages/client/schema-form/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/schema-form/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-test-runtime`（[`packages/test-support/client-runtime/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/client-runtime/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-attachment`（[`packages/client/ui-attachment/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-attachment/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-primitives`（[`packages/client/ui-primitives/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-primitives/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-ui-slots`（[`packages/client/ui-slots/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-slots/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-web`（[`packages/client/web/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/web/src/index.ts)）
+- `@seekdeep-ai/seekdeep-client-web-react`（[`packages/client/web-react/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/web-react/src/index.ts)）
+- `@seekdeep-ai/seekdeep-cmdline`（[`packages/boot/cmdline/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/boot/cmdline/src/index.ts)）
+- `@seekdeep-ai/seekdeep-home-paths`（[`packages/util/home-paths/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/home-paths/src/index.ts)）
+- `@seekdeep-ai/seekdeep-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/hooks/hook-protocol/src/index.ts)）
+- `@seekdeep-ai/seekdeep-launch-environment`（[`packages/util/launch-environment/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/launch-environment/src/index.ts)）
+- `@seekdeep-ai/seekdeep-llm-mock-server`（[`packages/test-support/llm-mock-server/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/llm-mock-server/src/index.ts)）
+- `@seekdeep-ai/seekdeep-loader-smoke`（[`packages/test-support/loader-smoke/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/test-support/loader-smoke/src/index.ts)）
+- `@seekdeep-ai/seekdeep-native-command`（[`packages/util/native-command/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/native-command/src/index.ts)）
+- `@seekdeep-ai/seekdeep-output-retention`（[`packages/util/output-retention/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/output-retention/src/index.ts)）
+- `@seekdeep-ai/seekdeep-sandbox-windows-acl`（[`packages/sandbox/sandbox-windows-acl/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sandbox/sandbox-windows-acl/src/index.ts)）
+- `@seekdeep-ai/seekdeep-scope`（[`packages/core/scope/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/scope/src/index.ts)）
+- `@seekdeep-ai/seekdeep-sdk-client`（[`packages/sdk/client/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sdk/client/src/index.ts)）
+- `@seekdeep-ai/seekdeep-sdk-jsonrpc-demo`（[`packages/examples/jsonrpc-demo/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/examples/jsonrpc-demo/src/index.ts)）
+- `@seekdeep-ai/seekdeep-sdk-protocol`（[`packages/sdk/protocol/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sdk/protocol/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-telemetry`（[`packages/session/session-telemetry/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-telemetry/src/index.ts)）
+- `@seekdeep-ai/seekdeep-session-title-llm`（[`packages/session/session-title-llm/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session/session-title-llm/src/index.ts)）
+- `@seekdeep-ai/seekdeep-subagent-in-process-driver`（[`packages/subagent/subagent-in-process-driver/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent-in-process-driver/src/index.ts)）
+- `@seekdeep-ai/seekdeep-timeout`（[`packages/util/timeout/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/util/timeout/src/index.ts)）
+- `@seekdeep-ai/seekdeep-typert-generator`（[`packages/typert/generator/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/typert/generator/src/index.ts)）
+- `@seekdeep-ai/seekdeep-typert-protocol`（[`packages/typert/protocol/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/typert/protocol/src/index.ts)）
+- `@seekdeep-ai/seekdeep-typert-registry`（[`packages/typert/registry/src/index.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/typert/registry/src/index.ts)）

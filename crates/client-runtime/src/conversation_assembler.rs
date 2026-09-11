@@ -2,8 +2,8 @@
 
 use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 
+use crate::ConversationValue as Value;
 use indexmap::{IndexMap, IndexSet};
-use serde_json::Value;
 
 use crate::{
     ConversationEventInput, ConversationLocation, ConversationLocationData,
@@ -252,6 +252,40 @@ pub trait AssemblerEventDefinitions {
         let _ = events;
         Ok(None)
     }
+    /// Whether `update_many` can fold a run of update Matches of one Context for this
+    /// Definition in one call.
+    fn batches_updates(&self, definition: &Rc<AssemblerNodeDefinition>) -> bool {
+        let _ = definition;
+        false
+    }
+    /// Folds consecutive update Matches of one started Context in one call.
+    ///
+    /// `context` carries the Match collection with `batch` already appended; the Definition
+    /// must see each Match against the state and the Match collection as they were before
+    /// it, exactly as separate `update` calls would, and returns the final state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Definition failure, or that the Definition does not fold batches.
+    fn update_many(
+        &self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        context: &ConversationNodeContext,
+        batch: &[Rc<ConversationMatch>],
+    ) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+        let _ = (context, batch);
+        Err(ConversationAssemblerError::new(format!(
+            "conversation Definition \"{}\" does not fold update batches",
+            definition.kind
+        )))
+    }
+}
+
+/// A run of update Matches of one started Context, folded in one Definition call.
+struct UpdateBatch {
+    definition: Rc<AssemblerNodeDefinition>,
+    context: Rc<RefCell<InternalContext>>,
+    matches: Vec<Rc<ConversationMatch>>,
 }
 
 /// Match results for a whole window, by Definition and event sequence.
@@ -373,6 +407,8 @@ struct ViewState {
     snapshot: Rc<Value>,
 }
 
+type AdmittedMatch = (String, Rc<RefCell<InternalContext>>, Rc<ConversationMatch>);
+
 /// Fail-loud Definition, lifecycle, dependency, Location, or builder error.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
@@ -470,9 +506,7 @@ impl ConversationNodeAssembler {
             .map(|entry| entry.event.clone())
             .collect::<Vec<_>>();
         self.prematched = self.event_definitions.prematch(&events)?;
-        let matched = sorted
-            .iter()
-            .try_for_each(|entry| self.match_input(entry).map(|_| ()));
+        let matched = self.match_window(&sorted);
         self.prematched = None;
         matched?;
         self.replay_dependencies()?;
@@ -796,6 +830,86 @@ impl ConversationNodeAssembler {
         Ok(publication)
     }
 
+    /// Matches a whole window in order, folding runs of update Matches per Context in one
+    /// Definition call where the registry can. A start Match may read other Contexts'
+    /// states, so every pending run folds before it; the publication cadence is not
+    /// observed during a replacement, so it is not asked for.
+    fn match_window(
+        &mut self,
+        sorted: &[ConversationEventInput],
+    ) -> Result<(), ConversationAssemblerError> {
+        let mut batches = IndexMap::<String, UpdateBatch>::new();
+        for input in sorted {
+            for (definition, result) in self.matching_definitions(input)? {
+                if result.role == ConversationMatchRole::Start {
+                    self.fold_update_batches(&mut batches)?;
+                    self.accept_match(&definition, result.id, result.role, input)?;
+                    continue;
+                }
+                let (key, context, accepted) =
+                    self.admit_match(&definition, result.id, result.role, input)?;
+                if context.borrow().state.is_some() {
+                    if self.event_definitions.batches_updates(&definition) {
+                        batches
+                            .entry(key.clone())
+                            .or_insert_with(|| UpdateBatch {
+                                definition: definition.clone(),
+                                context: context.clone(),
+                                matches: Vec::new(),
+                            })
+                            .matches
+                            .push(accepted);
+                    } else {
+                        self.fold_update(&definition, &key, &context, &accepted)?;
+                    }
+                }
+                self.dirty.insert(key);
+            }
+        }
+        self.fold_update_batches(&mut batches)
+    }
+
+    fn fold_update_batches(
+        &mut self,
+        batches: &mut IndexMap<String, UpdateBatch>,
+    ) -> Result<(), ConversationAssemblerError> {
+        for (key, batch) in batches.drain(..) {
+            let snapshot = context_snapshot(&batch.context);
+            let next =
+                self.event_definitions
+                    .update_many(&batch.definition, &snapshot, &batch.matches)?;
+            self.commit_state(&batch.definition, &key, &batch.context, next)?;
+        }
+        Ok(())
+    }
+
+    /// Runs one update Match through the Definition against the Context as it stands.
+    fn fold_update(
+        &mut self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        key: &str,
+        context: &Rc<RefCell<InternalContext>>,
+        accepted: &Rc<ConversationMatch>,
+    ) -> Result<(), ConversationAssemblerError> {
+        let snapshot = context_snapshot(context);
+        let next = (definition.update)(&snapshot, accepted)?;
+        self.commit_state(definition, key, context, next)
+    }
+
+    fn commit_state(
+        &mut self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        key: &str,
+        context: &Rc<RefCell<InternalContext>>,
+        next: Option<Rc<Value>>,
+    ) -> Result<(), ConversationAssemblerError> {
+        context.borrow_mut().state = Some(require_state(definition, "update", next)?);
+        let revision = context.borrow().revision.wrapping_add(1);
+        context.borrow_mut().revision = revision;
+        self.revised.insert(key.to_owned());
+        Ok(())
+    }
+
     fn collect_input(
         &self,
         input: &ConversationEventInput,
@@ -827,6 +941,25 @@ impl ConversationNodeAssembler {
         role: ConversationMatchRole,
         input: &ConversationEventInput,
     ) -> Result<ConversationPublication, ConversationAssemblerError> {
+        let (key, context, accepted) = self.admit_match(definition, id, role, input)?;
+        if role == ConversationMatchRole::Start {
+            self.replay_context(&key)?;
+        } else if context.borrow().state.is_some() {
+            self.fold_update(definition, &key, &context, &accepted)?;
+        }
+        self.dirty.insert(key);
+        publication_for(definition, &accepted)
+    }
+
+    /// Admits one Match into its Context: the lifecycle checks, the Match collection, the
+    /// start bookkeeping and the sequence index, without running the Definition.
+    fn admit_match(
+        &mut self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        id: String,
+        role: ConversationMatchRole,
+        input: &ConversationEventInput,
+    ) -> Result<AdmittedMatch, ConversationAssemblerError> {
         let key = conversation_context_key(&definition.kind, &id);
         if role == ConversationMatchRole::Start
             && self
@@ -883,19 +1016,7 @@ impl ConversationNodeAssembler {
             .entry(input.event.seq)
             .or_default()
             .insert(key.clone());
-
-        if role == ConversationMatchRole::Start {
-            self.replay_context(&key)?;
-        } else if context.borrow().state.is_some() {
-            let snapshot = context_snapshot(&context);
-            let next = (definition.update)(&snapshot, &accepted)?;
-            context.borrow_mut().state = Some(require_state(definition, "update", next)?);
-            let revision = context.borrow().revision.wrapping_add(1);
-            context.borrow_mut().revision = revision;
-            self.revised.insert(key.clone());
-        }
-        self.dirty.insert(key);
-        publication_for(definition, &accepted)
+        Ok((key, context, accepted))
     }
 
     fn apply_pending_matches(

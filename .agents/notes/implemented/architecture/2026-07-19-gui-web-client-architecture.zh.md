@@ -90,6 +90,8 @@ Fiber 启动、即时 effect setup、迭代器执行，以及由所有者发起�
 
 默认浏览器 logger 是由 Rust 实现的可调用服务，提供可修改的调色板和 formatter、可注入的时钟边界、作用域名称与级别、可识别 shadow 的 Fiber 引用，以及源实现的消息身份语义。其 buffer 与 exporter 清理保留源实现的计数器和零上限行为。启动、清理和可用性检查失败会携带原始 JavaScript 错误对象到达对应 Context 的 logger。原生 logger 名称使用共享的 `param_case` 工具函数处理缩写、分隔符和非 ASCII 文本。Gateway 夹具通过真实 logger 上的 exporter 记录 warning；Chromium 将安装、格式化、作用域及启动错误身份与 Remote 调用一起验证。
 
+Logger 的 exporter 和尾部参数迭代在回调失败时立即关闭，并保留原始异常。元数据展开创建自有数据属性，包括 `__proto__`，且不改变消息对象的原型。经过 tracing 的可调用服务重新读取当前 invoke 成员，并遵循其自定义 `apply` 方法。Descriptor 查找保留 `Reflect` 对原始类型的拒绝，`DisposableList` 保留源实现的原型顺序。源实现比较与 Chromium 验证这些 API 边界。
+
 浏览器统一导出入口已暴露固定源实现的全部 runtime 导出，但浏览器 Cordis 仍未完成。其余构造边界和公开 API 审计仍需源实现比较。原生与浏览器 logger 的证据仍分开记录。即使公开导出和集成 Remote 调用通过，parity manifest 仍保留未完成的实现条目。
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。

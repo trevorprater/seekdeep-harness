@@ -12,6 +12,7 @@ use base64::Engine as _;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod client_build;
 mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
 mod remote_contracts;
@@ -43,6 +44,20 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Build every declared Client plugin with the Rust build pipeline.
+    BuildClient,
+    /// Rebuild Client plugins when their dependency inputs change.
+    DevWeb {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Generate or verify the source-faithful dependency and event graphs.
+    DocGraphs {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        #[arg(long)]
+        check: bool,
+    },
     /// Build the actual Web frontend with the isolated, pinned browser dependencies.
     WebBuild,
     /// Verify the source workspace-management workflow through the built Web app and Rust Host.
@@ -384,6 +399,18 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Parity { source, scope } => parity(&source, scope),
         Command::WebBuild => web_assembled::build(),
+        Command::BuildClient => client_build::build(),
+        Command::DevWeb { args } => client_build::dev(&args),
+        Command::DocGraphs { source, check } => {
+            if !xtask::doc_graphs::run(
+                &Path::new(env!("CARGO_MANIFEST_DIR")).join(".."),
+                &source,
+                check,
+            )? {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
         Command::WebAssembled { source, export } => web_assembled::run(&source, export),
         Command::WebWorkspaces { source } => web_workspaces::run(&source),
         Command::WebSettings { source } => web_settings::run(&source),
@@ -867,6 +894,8 @@ fn wasm_package_once(
     let status = ProcessCommand::new("cargo")
         .env("CARGO_BUILD_JOBS", "2")
         .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
+        .env("CARGO_PROFILE_RELEASE_STRIP", "none")
         .args([
             "build",
             "-p",
@@ -936,6 +965,7 @@ fn wasm_classic_package(
     std::fs::create_dir_all(&staging)?;
     let global = wasm_package_global(artifact, module_id);
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args([
             "--target",
             "no-modules",
@@ -949,18 +979,25 @@ fn wasm_classic_package(
         .arg(wasm)
         .status()?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for {module_id}");
+    seekdeep_repository_tools::client_bundle::sourcemaps::write_wasm_source_map(
+        &staging.join("client_bg.wasm"),
+        &metadata.workspace_root,
+    )?;
     let bindings = std::fs::read_to_string(staging.join("client.js"))?;
     let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
     let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
     let web_bundle = classic_web_bundle(&bindings, &global, module_id)?;
-    let (bundle, web_bundle) = if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
-        (
-            remote_contracts::bundle_zod(&metadata.workspace_root, &bundle)?,
-            remote_contracts::bundle_zod(&metadata.workspace_root, &web_bundle)?,
+    let compile = |script| {
+        prepare_classic_script(
+            &metadata.workspace_root,
+            &bindings,
+            script,
+            artifact,
+            module_id,
         )
-    } else {
-        (bundle, web_bundle)
     };
+    let bundle = compile(&bundle)?;
+    let web_bundle = compile(&web_bundle)?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
@@ -970,8 +1007,18 @@ fn wasm_classic_package(
     // The browser pair lands before the self-contained bundle so a Host that notices the
     // bundle change already finds the sidecar its new revision covers.
     std::fs::write(out_dir.join("client_bg.wasm"), &bytes)?;
-    std::fs::write(out_dir.join("client.web.js"), web_bundle)?;
-    std::fs::write(out_dir.join("client.js"), bundle)?;
+    std::fs::copy(
+        staging.join("client_bg.wasm.map"),
+        out_dir.join("client_bg.wasm.map"),
+    )?;
+    seekdeep_repository_tools::client_bundle::sourcemaps::write_binding_artifact(
+        &out_dir.join("client.web.js"),
+        &web_bundle,
+    )?;
+    seekdeep_repository_tools::client_bundle::sourcemaps::write_binding_artifact(
+        &out_dir.join("client.js"),
+        &bundle,
+    )?;
     let type_dir = out_dir.join("types/client");
     std::fs::create_dir_all(&type_dir)?;
     let mut declarations = std::fs::read_to_string(staging.join("client.d.ts"))?
@@ -986,6 +1033,27 @@ fn wasm_classic_package(
         out_dir.join("client.js").display()
     );
     Ok(())
+}
+
+fn prepare_classic_script(
+    root: &Path,
+    bindings: &str,
+    script: &str,
+    artifact: &str,
+    module_id: &str,
+) -> anyhow::Result<String> {
+    let script = seekdeep_repository_tools::client_bundle::sourcemaps::annotate_binding_script(
+        bindings,
+        script,
+        &format!("wasm-bindgen://{artifact}/{module_id}/client.js"),
+    )?;
+    match module_id {
+        "@seekdeep-ai/seekdeep-api-remotes" => remote_contracts::bundle_zod(root, &script),
+        "@seekdeep-ai/seekdeep-client-runtime" | "@seekdeep-ai/seekdeep-client-ui-conversation" => {
+            client_build::inline_store_dependency(root, &script)
+        }
+        _ => Ok(script),
+    }
 }
 
 fn wasm_cordis_package(
@@ -1003,18 +1071,26 @@ fn wasm_cordis_package(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
         .status()?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for browser Cordis");
+    write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+    for name in [
+        "client.js",
+        "client.js.map",
+        "client.d.ts",
+        "client_bg.wasm",
+        "client_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::write(out_dir.join("index.js"), cordis_esm_wrapper())?;
@@ -1051,18 +1127,26 @@ fn wasm_client_loader_package(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
         .status()?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for browser Loader");
+    write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+    for name in [
+        "client.js",
+        "client.js.map",
+        "client.d.ts",
+        "client_bg.wasm",
+        "client_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::write(out_dir.join("index.js"), client_loader_esm_wrapper())?;
@@ -1091,7 +1175,13 @@ fn wasm_client_modules_package(
     let staging = wasm_bindgen_web_staging(metadata, artifact, wasm, "client modules")?;
     let out_dir = workspace_output_dir(metadata, out_dir);
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["wasm.js", "wasm.d.ts", "wasm_bg.wasm"] {
+    for name in [
+        "wasm.js",
+        "wasm.js.map",
+        "wasm.d.ts",
+        "wasm_bg.wasm",
+        "wasm_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::write(out_dir.join("client.js"), client_modules_esm_wrapper())?;
@@ -1128,7 +1218,13 @@ fn wasm_foundation_esm_package(
     let staging = wasm_bindgen_web_staging(metadata, artifact, wasm, module_id)?;
     let out_dir = workspace_output_dir(metadata, out_dir);
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["wasm.js", "wasm.d.ts", "wasm_bg.wasm"] {
+    for name in [
+        "wasm.js",
+        "wasm.js.map",
+        "wasm.d.ts",
+        "wasm_bg.wasm",
+        "wasm_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     let (wrapper, declarations, invariant) = match module_id {
@@ -1696,12 +1792,37 @@ fn wasm_bindgen_web_staging(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "wasm", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
         .status()?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for {label}");
+    write_staged_source_maps(metadata, artifact, &staging, "wasm")?;
     Ok(staging)
+}
+
+fn write_staged_source_maps(
+    metadata: &CargoMetadata,
+    artifact: &str,
+    staging: &Path,
+    name: &str,
+) -> anyhow::Result<()> {
+    use seekdeep_repository_tools::client_bundle::sourcemaps::{
+        annotate_binding_script, write_binding_artifact, write_wasm_source_map,
+    };
+    write_wasm_source_map(
+        &staging.join(format!("{name}_bg.wasm")),
+        &metadata.workspace_root,
+    )?;
+    let path = staging.join(format!("{name}.js"));
+    let bindings = std::fs::read_to_string(&path)?;
+    let script = annotate_binding_script(
+        &bindings,
+        &bindings,
+        &format!("wasm-bindgen://{artifact}/{name}.js"),
+    )?;
+    write_binding_artifact(&path, &script)
 }
 
 fn workspace_output_dir(metadata: &CargoMetadata, out_dir: &Path) -> PathBuf {
@@ -1972,7 +2093,12 @@ export const getTraceable = wasm.getTraceable;
 export const withProps = wasm.withProps;
 export const createCallable = wasm.createCallable;
 export const resolveConfig = wasm.resolveConfig;
-export const FiberState = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
+export const FiberState = wasm.fiberStates();
+export const TEST_INVARIANT_READY_SERVICE = wasm.testInvariantReadyService();
+export const installTestInvariantHost = wasm.installTestInvariantHost;
+export const usesManualInvariantTree = wasm.usesManualInvariantTree;
+export const testInvariantCompanionPaths = wasm.testInvariantCompanionPaths;
+export const createTestInvariantAttachmentStore = wasm.createTestInvariantAttachmentStore;
 export const symbols = SYMBOLS;
 export class Service {
   static init = SYMBOLS.init;
@@ -1999,8 +2125,18 @@ Inject.resolve = wasm.resolveInject;
 ".replace("__SEEKDEEP_CONTEXT_BINDING__", cordis_context_binding())
 }
 
-fn cordis_esm_declarations() -> &'static str {
-    r"import type { StandardSchemaV1 } from '@standard-schema/spec';
+fn cordis_test_invariant_declarations() -> &'static str {
+    r"
+export declare const TEST_INVARIANT_READY_SERVICE: 'testInvariantReady';
+export const installTestInvariantHost: typeof import('../client.js').installTestInvariantHost;
+export const usesManualInvariantTree: typeof import('../client.js').usesManualInvariantTree;
+export const testInvariantCompanionPaths: typeof import('../client.js').testInvariantCompanionPaths;
+export const createTestInvariantAttachmentStore: typeof import('../client.js').createTestInvariantAttachmentStore;
+"
+}
+
+fn cordis_esm_declarations() -> String {
+    let source = r"import type { StandardSchemaV1 } from '@standard-schema/spec';
 export type Awaitable<T> = T | PromiseLike<T>;
 export type Disposable = () => Awaitable<void>;
 export type Inject = readonly string[] | Readonly<Record<string, unknown>>;
@@ -2075,7 +2211,7 @@ export declare class Context {
   intercept(name: string, config: unknown): Context;
   mixin(source: string, members: readonly string[]): Disposable;
 }
-export declare const FiberState: Readonly<{ PENDING: 0; LOADING: 1; ACTIVE: 2; FAILED: 3; DISPOSED: 4; UNLOADING: 5 }>;
+export declare enum FiberState { PENDING, LOADING, ACTIVE, FAILED, DISPOSED, UNLOADING }
 export declare const symbols: Readonly<{ filter: symbol; effect: symbol; isolate: symbol; intercept: symbol }>;
 export declare class Service {
   static readonly config: symbol;
@@ -2088,7 +2224,8 @@ export declare class Service {
 }
 export declare class CordisError extends Error { readonly code: string; constructor(code: string, message?: string) }
 export declare function Inject(name?: string, config?: unknown): <T>(value: T) => T;
-"
+";
+    format!("{source}{}", cordis_test_invariant_declarations())
 }
 
 fn wasm_web_shell_package(
@@ -2106,18 +2243,26 @@ fn wasm_web_shell_package(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
         .status()?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for client web shell");
+    write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+    for name in [
+        "client.js",
+        "client.js.map",
+        "client.d.ts",
+        "client_bg.wasm",
+        "client_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::copy(
@@ -2143,7 +2288,6 @@ import * as React from 'react';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 import * as ReactDom from 'react-dom';
 import * as ReactDomClient from 'react-dom/client';
-import * as Immer from 'immer';
 import * as Cordis from '@seekdeep-ai/cordis';
 import Loader from '@seekdeep-ai/cordis-plugin-loader';
 import * as ClientModules from '@seekdeep-ai/seekdeep-client-modules/client';
@@ -2161,7 +2305,6 @@ const staticModules = {
   'react/jsx-runtime': ReactJsxRuntime,
   'react-dom': ReactDom,
   'react-dom/client': ReactDomClient,
-  'immer': Immer,
   '@seekdeep-ai/cordis': Cordis,
   '@seekdeep-ai/seekdeep-client-ui-slots': UiSlots,
   '@seekdeep-ai/seekdeep-client-web-react': WebReact,
@@ -2222,6 +2365,7 @@ fn wasm_ui_primitives_package(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
@@ -2230,13 +2374,20 @@ fn wasm_ui_primitives_package(
         status.success(),
         "wasm-bindgen failed for client UI primitives"
     );
+    write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+    for name in [
+        "client.js",
+        "client.js.map",
+        "client.d.ts",
+        "client_bg.wasm",
+        "client_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::write(
@@ -2294,6 +2445,7 @@ fn wasm_ui_attachment_package(
     }
     std::fs::create_dir_all(&staging)?;
     let status = ProcessCommand::new("wasm-bindgen")
+        .arg("--keep-debug")
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
@@ -2302,13 +2454,19 @@ fn wasm_ui_attachment_package(
         status.success(),
         "wasm-bindgen failed for client UI attachment"
     );
+    write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
-    for name in ["client.js", "client_bg.wasm"] {
+    for name in [
+        "client.js",
+        "client.js.map",
+        "client_bg.wasm",
+        "client_bg.wasm.map",
+    ] {
         std::fs::copy(staging.join(name), out_dir.join(name))?;
     }
     std::fs::write(out_dir.join("index.js"), ui_attachment_esm_wrapper())?;
@@ -2978,7 +3136,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
     }
     if module_id == "@seekdeep-ai/seekdeep-client-runtime" {
         return format!(
-            "require => {{ {global}.installStoreProduce(require('immer').produce); return {global}; }}"
+            "() => {{ {global}.installStoreProduce(__seekdeepStoreProduce); return {global}; }}"
         );
     }
     if module_id == "@seekdeep-ai/seekdeep-client-hmr" {
@@ -3203,7 +3361,7 @@ fn session_log_export_module_factory(global: &str) -> String {
 fn ui_conversation_module_factory(global: &str) -> String {
     r"require => {
   const g = __GLOBAL__;
-  g.installStoreProduce(require('immer').produce);
+  g.installStoreProduce(__seekdeepStoreProduce);
   const React = require('react');
   const primitives = require('@seekdeep-ai/seekdeep-client-ui-primitives');
   const attachment = require('@seekdeep-ai/seekdeep-client-ui-attachment');
@@ -5088,7 +5246,7 @@ mod tests {
         let ready = bundle.find("const ready =").unwrap();
         let compatibility = bundle.find("applyClientRuntime").unwrap();
         let handoff = bundle
-            .find("window.__ModuleLoader__.load({ id: \"@seekdeep-ai/seekdeep-client-runtime\", factory: require => { __seekdeep_probe_wasm.installStoreProduce(require('immer').produce); return __seekdeep_probe_wasm; }, ready })")
+            .find("window.__ModuleLoader__.load({ id: \"@seekdeep-ai/seekdeep-client-runtime\", factory: () => { __seekdeep_probe_wasm.installStoreProduce(__seekdeepStoreProduce); return __seekdeep_probe_wasm; }, ready })")
             .unwrap();
         assert!(ready < compatibility && compatibility < handoff);
     }
@@ -5735,7 +5893,7 @@ mod tests {
         )
         .unwrap();
         for expected in [
-            "g.installStoreProduce(require('immer').produce)",
+            "g.installStoreProduce(__seekdeepStoreProduce)",
             "configureClientUiConversationReasoning(React, primitives)",
             "configureClientUiConversationMessageItem(React, primitives, attachment",
             "configureClientUiConversationApply(",
@@ -6410,13 +6568,7 @@ mod tests {
             assert!(modules.contains(expected), "missing Modules {expected:?}");
         }
         let shell = client_web_esm_wrapper();
-        for expected in [
-            "import * as Immer from 'immer'",
-            "'immer': Immer",
-            "export const AppWebEntry = wasm.AppWebEntry",
-        ] {
-            assert!(shell.contains(expected), "missing shell {expected:?}");
-        }
+        assert!(shell.contains("export const AppWebEntry = wasm.AppWebEntry"));
         let runtime = compatibility_prelude(
             "__seekdeep_client_runtime_wasm",
             "@seekdeep-ai/seekdeep-client-runtime",
@@ -6427,7 +6579,9 @@ mod tests {
             "__seekdeep_client_runtime_wasm",
             "@seekdeep-ai/seekdeep-client-runtime",
         );
-        assert!(runtime_factory.contains("installStoreProduce(require('immer').produce)"));
+        assert!(runtime_factory.contains("installStoreProduce(__seekdeepStoreProduce)"));
+        assert!(!runtime_factory.contains("require('immer')"));
+        assert!(!shell.contains("'immer'"));
         for (module_id, expected) in [
             (
                 "@seekdeep-ai/seekdeep-client-connection",

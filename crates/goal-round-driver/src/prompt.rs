@@ -21,6 +21,6 @@ Continue working toward the objective in this same session. Treat the current wo
             serde_json::to_string(&goal.objective).expect("objective serializes"),
             round,
             goal.max_goal_rounds,
-        ),
+        ).into(),
     }]
 }

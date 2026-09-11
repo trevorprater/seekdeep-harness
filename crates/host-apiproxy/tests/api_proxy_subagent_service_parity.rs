@@ -186,7 +186,7 @@ impl Harness {
                 "user/message",
                 serde_json::to_value(UserMessage::new(
                     vec![ContentBlock::Text {
-                        text: "work".to_owned(),
+                        text: "work".into(),
                     }],
                     MessageSource::user(),
                 ))

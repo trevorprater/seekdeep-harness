@@ -221,3 +221,91 @@ fn public_conversation_assembler_and_location_index_constructors_drive_rust_core
         Some("turn")
     );
 }
+
+#[wasm_bindgen_test]
+fn public_chat_assembly_retains_lossless_event_views_and_reuses_unchanged_data() {
+    let events = WasmConversationEventRegistry::new();
+    let views = WasmConversationViewRegistry::new();
+    let view = Function::new_no_args(
+        r"
+        const snapshot = nodes => ({
+            encoding: 'seekdeep-chat-v1', order: nodes.map(node => node.key), nodes,
+            timeline: { turnOrder: [], turns: [] }, locations: { turns: [], steps: [] },
+            legacy: { nodes: [], turnTimings: [], turnEnds: [], partial: null, runningCalls: [] }
+        });
+        return { target: 'chat', create: () => ({
+            empty: snapshot([]), replace: ({nodes}) => snapshot(nodes),
+            apply: ({upserts}) => snapshot(upserts)
+        }) };
+    ",
+    )
+    .call0(&JsValue::UNDEFINED)
+    .unwrap();
+    let _remove_view = views.register(view).unwrap();
+    let definition = Function::new_no_args(r"
+        return {
+            kind: 'lossless', target: 'chat',
+            match: event => ({ id: 'one', role: event.seq === 1 ? 'start' : 'update' }),
+            start: (_, match) => ({ event: match.event.data, view: match.view, extra: match.event.extra }),
+            update: (context, match) => ({ ...context.state, event: match.event.data, view: match.view }),
+            buildViewNode: context => ({
+                key: context.key, kind: context.kind, id: context.id, target: 'chat',
+                anchorSeq: 1, visibility: 'visible', location: {kind: 'session'}, data: context.state
+            })
+        };
+    ").call0(&JsValue::UNDEFINED).unwrap();
+    let _remove_definition = events.register(definition).unwrap();
+    let input = js_sys::JSON::parse(
+        r#"{"event":{"seq":1,"time":1,"type":"lossless","extra":"\ud800","data":{"text":"\ud800","keep":{"\udfff":"\ud800"}}},"view":{"\ud800":"\udfff"}}"#,
+    ).unwrap();
+    let entries = Array::new();
+    entries.push(&input);
+    let mut assembler = WasmConversationNodeAssembler::new(&events, &views);
+    assembler.replace_window(entries, false).unwrap();
+    assembler.flush().unwrap();
+    let first = assembler.get("chat").unwrap();
+    let first_nodes = get(&first, "nodes");
+    let values = get(&first_nodes, "values").dyn_into::<Function>().unwrap();
+    let first_node = Array::from(&values.call0(&first_nodes).unwrap()).get(0);
+    let first_data = get(&first_node, "data");
+    assert_eq!(
+        js_sys::JSON::stringify(&get(&first_data, "event"))
+            .unwrap()
+            .as_string(),
+        js_sys::JSON::stringify(&get(&get(&input, "event"), "data"))
+            .unwrap()
+            .as_string()
+    );
+    assert_eq!(
+        js_sys::JSON::stringify(&get(&first_data, "view"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#"{"\ud800":"\udfff"}"#
+    );
+    assert_eq!(
+        js_sys::JSON::stringify(&get(&first_data, "extra"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#""\ud800""#
+    );
+    let next_input = js_sys::JSON::parse(
+        r#"{"event":{"seq":2,"time":2,"type":"lossless","data":{"text":"\ud800\udc00","keep":{"\udfff":"\ud800"}}},"view":{"\ud800":"\udfff"}}"#,
+    ).unwrap();
+    assembler.append(next_input).unwrap();
+    assembler.flush().unwrap();
+    let next = assembler.get("chat").unwrap();
+    let next_nodes = get(&next, "nodes");
+    let next_node = Array::from(&values.call0(&next_nodes).unwrap()).get(0);
+    let next_data = get(&next_node, "data");
+    assert!(Object::is(
+        &get(&first_data, "view"),
+        &get(&next_data, "view")
+    ));
+    assert!(Object::is(
+        &get(&get(&first_data, "event"), "keep"),
+        &get(&get(&next_data, "event"), "keep")
+    ));
+    assert!(Object::is(&next, &assembler.get("chat").unwrap()));
+}

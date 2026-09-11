@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 /// Client projection of one Assistant content block.
 #[derive(Clone, Debug, PartialEq)]
@@ -10,12 +10,12 @@ pub enum AssistantBlock {
     /// Visible text.
     Text {
         /// Complete accumulated text.
-        text: String,
+        text: JsonString,
     },
     /// Visible reasoning.
     Reasoning {
         /// Complete accumulated reasoning text.
-        text: String,
+        text: JsonString,
     },
     /// Image attachment reference.
     Image {
@@ -25,11 +25,11 @@ pub enum AssistantBlock {
     /// Model Tool call.
     ToolCall {
         /// First non-empty streamed Tool call identity.
-        call_id: String,
+        call_id: JsonString,
         /// Latest supplied Tool name.
-        name: String,
+        name: JsonString,
         /// Concatenated raw argument JSON.
-        args_raw: String,
+        args_raw: JsonString,
     },
     /// Merge-extensible unknown content block.
     Other {
@@ -64,25 +64,25 @@ pub enum PartialChunk {
         /// Sparse wire block index.
         index: usize,
         /// Appended text.
-        text: String,
+        text: JsonString,
     },
     /// Appended reasoning delta.
     ReasoningDelta {
         /// Sparse wire block index.
         index: usize,
         /// Appended reasoning text.
-        text: String,
+        text: JsonString,
     },
     /// Appended Tool call delta.
     ToolCallDelta {
         /// Sparse wire block index.
         index: usize,
         /// Candidate Tool call identity.
-        id: String,
+        id: JsonString,
         /// Optional late Tool name.
-        name: Option<String>,
+        name: Option<JsonString>,
         /// Appended argument JSON.
-        arguments_delta: String,
+        arguments_delta: JsonString,
     },
     /// Final materialized block replacement.
     BlockEnd {
@@ -139,26 +139,26 @@ impl PartialAccumulator {
             PartialChunk::TextDelta { index, text } => {
                 let prior = self.get(*index);
                 let prefix = match prior.as_deref() {
-                    Some(AssistantBlock::Text { text }) => text.as_str(),
-                    _ => "",
+                    Some(AssistantBlock::Text { text }) => text.clone(),
+                    _ => JsonString::default(),
                 };
                 self.set(
                     *index,
                     Rc::new(AssistantBlock::Text {
-                        text: format!("{prefix}{text}"),
+                        text: JsonString::concat(&[&prefix, text]),
                     }),
                 );
             }
             PartialChunk::ReasoningDelta { index, text } => {
                 let prior = self.get(*index);
                 let prefix = match prior.as_deref() {
-                    Some(AssistantBlock::Reasoning { text }) => text.as_str(),
-                    _ => "",
+                    Some(AssistantBlock::Reasoning { text }) => text.clone(),
+                    _ => JsonString::default(),
                 };
                 self.set(
                     *index,
                     Rc::new(AssistantBlock::Reasoning {
-                        text: format!("{prefix}{text}"),
+                        text: JsonString::concat(&[&prefix, text]),
                     }),
                 );
             }
@@ -174,8 +174,8 @@ impl PartialAccumulator {
                         call_id,
                         name,
                         args_raw,
-                    }) => (call_id.as_str(), name.as_str(), args_raw.as_str()),
-                    _ => ("", "", ""),
+                    }) => (call_id.clone(), name.clone(), args_raw.clone()),
+                    _ => (JsonString::default(), JsonString::default(), JsonString::default()),
                 };
                 self.set(
                     *index,
@@ -183,10 +183,10 @@ impl PartialAccumulator {
                         call_id: if call_id.is_empty() {
                             id.clone()
                         } else {
-                            call_id.to_owned()
+                            call_id
                         },
-                        name: name.as_deref().unwrap_or(prior_name).to_owned(),
-                        args_raw: format!("{args_raw}{arguments_delta}"),
+                        name: name.clone().unwrap_or(prior_name),
+                        args_raw: JsonString::concat(&[&args_raw, arguments_delta]),
                     }),
                 );
             }
@@ -230,57 +230,52 @@ impl PartialAccumulator {
 pub fn empty_assistant_block(block_type: &str) -> AssistantBlock {
     match block_type {
         "text" => AssistantBlock::Text {
-            text: String::new(),
+            text: JsonString::new(),
         },
         "reasoning" => AssistantBlock::Reasoning {
-            text: String::new(),
+            text: JsonString::new(),
         },
         "tool-call" => AssistantBlock::ToolCall {
-            call_id: String::new(),
-            name: String::new(),
-            args_raw: String::new(),
+            call_id: JsonString::new(),
+            name: JsonString::new(),
+            args_raw: JsonString::new(),
         },
-        _ => AssistantBlock::Other { block: Value::Null },
+        _ => AssistantBlock::Other { block: serde_json::Value::Null.into() },
     }
 }
 
 /// Classifies one complete provider-neutral content block for Client rendering.
 #[must_use]
 pub fn to_assistant_block(block: &Value) -> AssistantBlock {
-    match block.get("type").and_then(Value::as_str) {
+    match block.get_value("type").and_then(Value::as_str) {
         Some("text") => AssistantBlock::Text {
             text: block
-                .get("text")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
+                .get_value("text")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_default(),
         },
         Some("reasoning") => AssistantBlock::Reasoning {
             text: block
-                .get("text")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
+                .get_value("text")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_default(),
         },
         Some("image") => AssistantBlock::Image {
-            attachment: block.get("attachment").cloned().unwrap_or(Value::Null),
+            attachment: block.get_value("attachment").cloned().unwrap_or_else(|| serde_json::Value::Null.into()),
         },
         Some("tool-call") => AssistantBlock::ToolCall {
             call_id: block
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
+                .get_value("id")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_default(),
             name: block
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
+                .get_value("name")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_default(),
             args_raw: block
-                .get("arguments")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned(),
+                .get_value("arguments")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_default(),
         },
         Some(_) | None => AssistantBlock::Other {
             block: block.clone(),

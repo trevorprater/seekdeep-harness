@@ -293,7 +293,7 @@ fn append_completed_turn(session: &Session, turn: u64) {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: format!("prompt {turn}"),
+                    text: format!("prompt {turn}").into(),
                 }],
                 MessageSource::user(),
             ))
@@ -701,7 +701,7 @@ async fn fork_uses_last_completed_turn_only_for_omitted_or_past_end_anchors() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "open".to_owned(),
+                    text: "open".into(),
                 }],
                 MessageSource::user(),
             ))

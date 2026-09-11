@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use seekdeep_agent::{Agent, AgentOptions, AgentRegistry, Inbox, NoopInboxNotifications};
 use seekdeep_cordis::Context;
-use seekdeep_core::session::{Session, SessionId};
+use seekdeep_core::session::{JsonValue, Session, SessionEvent, SessionId};
 use seekdeep_llm::AbortSignal;
 use seekdeep_scope::ScopeKey;
 use seekdeep_system_prompt::{SystemPrompt, SystemPromptConfig};
@@ -112,6 +112,49 @@ async fn successful_call_writes_the_todo_write_event_and_counts() {
         .find(|event| event.event_type == "todo/write")
         .expect("todo/write");
     assert_eq!(write.data["todos"], list);
+}
+
+#[tokio::test]
+async fn surrogate_todo_content_survives_execution_event_replay_and_projection() {
+    let (context, tools, _effect) = setup(true);
+    let owner = agent("raw-todo");
+    let arguments = JsonValue::parse(
+        r#"{"todos":[{"content":"\ufeff\ud800 work \udfff\u00a0","status":"pending"},{"content":"\\ud800","status":"in_progress"}]}"#.to_owned(),
+    )
+    .unwrap();
+    let definition = tools.get(TOOL_NAME, None).unwrap();
+    let view = definition.present_call.as_ref().unwrap()(&arguments).unwrap();
+    let encoded_view = JsonValue::from_serialize(&view).unwrap();
+    assert_eq!(encoded_view["rawInput"], arguments["todos"]);
+    let mut input = ToolExecutionInput::new(
+        seekdeep_llm::CallId::new("raw-todo-call"),
+        TOOL_NAME,
+        arguments,
+        AbortSignal::default(),
+    );
+    input.agent = Some(owner.clone());
+    input.agent_session = Some(owner.session().clone());
+    let result = tools.execute(input).await;
+    assert!(!result.is_error(), "error: {:?}", result.error());
+    let expected = JsonValue::parse(
+        r#"[{"content":"\ud800 work \udfff","status":"pending"},{"content":"\\ud800","status":"in_progress"}]"#.to_owned(),
+    )
+    .unwrap();
+    assert_eq!(result.json_value().unwrap()["todos"], expected);
+    let events = owner.session().events();
+    let encoded = JsonValue::from_serialize(&events).unwrap();
+    let restored: Vec<SessionEvent> = encoded.deserialize().unwrap();
+    let replay = Session::create(&SessionId::new("raw-todo-replay"), Some(restored), None).unwrap();
+    let projections =
+        seekdeep_session_projection::SessionProjectionRegistry::install(&context).unwrap();
+    let _projection = projections
+        .register(&context, seekdeep_tool_todo::todos_projection())
+        .unwrap();
+    assert_eq!(
+        projections.snapshot(&replay).unwrap().values["todos"],
+        expected
+    );
+    context.fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]

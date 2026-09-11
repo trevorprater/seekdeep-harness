@@ -4,6 +4,7 @@ use std::sync::{Arc, Weak};
 
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use serde_json::{Map, Value, json};
 
@@ -56,7 +57,7 @@ impl AcpClient {
             observer: Mutex::new(None),
         });
         let weak: Weak<Self> = Arc::downgrade(&client);
-        transport.on_notification(Arc::new(move |method, params| {
+        transport.on_notification_json(Arc::new(move |method, params| {
             if method != client_methods::SESSION_UPDATE {
                 return;
             }
@@ -163,21 +164,36 @@ impl AcpClient {
         session_id: &AcpSessionId,
         prompt: Vec<Value>,
     ) -> anyhow::Result<AcpStopReason> {
+        self.prompt_json(session_id, prompt.into_iter().map(Into::into).collect())
+            .await
+    }
+
+    /// Runs one prompt while preserving exact JSON text content.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, remote prompt, or malformed-response failures.
+    pub async fn prompt_json(
+        &self,
+        session_id: &AcpSessionId,
+        prompt: Vec<JsonValue>,
+    ) -> anyhow::Result<AcpStopReason> {
         let value = self
             .transport
-            .request(
+            .request_json(
                 agent_methods::SESSION_PROMPT,
-                Map::from_iter([
+                JsonValue::object([
                     (
-                        "sessionId".to_owned(),
-                        Value::String(session_id.as_str().to_owned()),
+                        "sessionId",
+                        Value::String(session_id.as_str().to_owned()).into(),
                     ),
-                    ("prompt".to_owned(), Value::Array(prompt)),
+                    ("prompt", JsonValue::array(&prompt)),
                 ]),
                 None,
             )
             .await?;
         value
+            .try_into_serde_json()?
             .get("stopReason")
             .and_then(Value::as_str)
             .map(AcpStopReason::parse)
@@ -215,11 +231,17 @@ impl AcpClient {
         self.transport.shutdown_output().await
     }
 
-    fn observe_update(&self, params: &Map<String, Value>) {
-        let Some(session_id) = params.get("sessionId").and_then(Value::as_str) else {
+    fn observe_update(&self, params: &JsonValue) {
+        let Some(session_id) = params
+            .get("sessionId")
+            .and_then(|value| value.deserialize::<String>().ok())
+        else {
             return;
         };
-        let update = params.get("update").cloned().unwrap_or(Value::Null);
+        let update = params
+            .get("update")
+            .map(|update| update.to_owned())
+            .unwrap_or_else(|| Value::Null.into());
         if let Some(observer) = self.observer.lock().clone() {
             observer(&AcpSessionUpdate {
                 session_id: AcpSessionId::new(session_id),

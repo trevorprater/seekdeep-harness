@@ -96,7 +96,7 @@ async fn contribute_fixture_registers_config_named_tool_and_prompt_section_in_th
                             Arc::new(move |_: Value, _| {
                                 let value = fixture_name.clone();
                                 Box::pin(async move {
-                                    Ok(vec![seekdeep_llm::ContentBlock::Text { text: value }])
+                                    Ok(vec![seekdeep_llm::ContentBlock::text(value)])
                                 })
                             }),
                         );

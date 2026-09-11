@@ -164,7 +164,7 @@ mod tests {
         }
     }
 
-    fn event_data(session: &Session, event_type: &str) -> Value {
+    fn event_data(session: &Session, event_type: &str) -> seekdeep_lossless_json::JsonValue {
         session
             .events()
             .into_iter()

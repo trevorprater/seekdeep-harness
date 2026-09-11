@@ -159,7 +159,7 @@ mod tests {
 
         fn read(&self, id: &JobId, caller: Option<&Arc<Agent>>) -> anyhow::Result<JobRead> {
             Ok(JobRead {
-                text: String::new(),
+                text: "".into(),
                 snapshot: self.get(id, caller)?,
             })
         }

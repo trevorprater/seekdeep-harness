@@ -27,7 +27,9 @@ use seekdeep_attachment::ATTACHMENTS;
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
-    session::{Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp},
+    session::{
+        JsonValue, Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp,
+    },
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_jobs::{JOBS, JobRegistryService};
@@ -51,6 +53,7 @@ use seekdeep_session_query::{
 use seekdeep_subagent::{SUBAGENTS, SubagentRuntime};
 use seekdeep_tools::{TOOLS, ToolResult, ToolRuntime};
 use seekdeep_workspace::WORKSPACE_REGISTRY;
+use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 
 use crate::{
@@ -245,6 +248,7 @@ impl std::fmt::Debug for SessionApiProxyServices {
 }
 
 /// Session-domain decorator over the remaining API Proxy domains.
+#[derive(Clone)]
 pub struct SessionApiProxyRuntime {
     context: Context,
     sessions: Arc<SessionStore>,
@@ -806,7 +810,10 @@ impl SessionApiProxyRuntime {
         }
     }
 
-    async fn history(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+    async fn history<T: DeserializeOwned>(
+        &self,
+        request: RpcRequest<Value>,
+    ) -> anyhow::Result<RpcResponse<T>> {
         let payload: SessionHistoryRequest = serde_json::from_value(request.payload.clone())?;
         let source = match self.history_source(&payload.session_id).await {
             Ok(source) => source,
@@ -859,16 +866,17 @@ impl SessionApiProxyRuntime {
             .iter()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
-                    event: serde_json::from_value(serde_json::to_value(event)?)?,
+                    event: JsonValue::from_serialize(event)?.deserialize()?,
                     view: self.history_view(event, &events, scope),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        let value = serde_json::to_value(SessionHistoryValue {
+        let value = JsonValue::from_serialize(&SessionHistoryValue {
             events: entries,
             has_more,
             projections,
-        })?;
+        })?
+        .deserialize()?;
         Ok(RpcResponse::new(
             request.rpc_id,
             RpcResult::Success { value: Some(value) },
@@ -923,11 +931,11 @@ impl SessionApiProxyRuntime {
     }
 
     #[allow(clippy::too_many_lines)] // Catalog authorization and the exact history cut form one read transaction.
-    async fn subagent_history(
+    async fn subagent_history<T: DeserializeOwned>(
         &self,
         request: RpcRequest<Value>,
         signal: AbortSignal,
-    ) -> anyhow::Result<RpcResponse<Value>> {
+    ) -> anyhow::Result<RpcResponse<T>> {
         let payload: SubagentHistoryRequest = serde_json::from_value(request.payload.clone())?;
         let Some(subagents) = &self.subagents else {
             return Ok(subagent_internal(request, "subagent history read failed"));
@@ -1068,16 +1076,17 @@ impl SessionApiProxyRuntime {
             .iter()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
-                    event: serde_json::from_value(serde_json::to_value(event)?)?,
+                    event: JsonValue::from_serialize(event)?.deserialize()?,
                     view: self.history_view(event, &events, scope),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        let value = serde_json::to_value(SessionHistoryValue {
+        let value = JsonValue::from_serialize(&SessionHistoryValue {
             events: entries,
             has_more,
             projections,
-        })?;
+        })?
+        .deserialize()?;
         Ok(RpcResponse::new(
             request.rpc_id,
             RpcResult::Success { value: Some(value) },
@@ -1194,7 +1203,7 @@ impl SessionApiProxyRuntime {
                         .get(session.id())
                         .map(|agent| agent.scope_key());
                     let view = runtime.history_view(&event, &session.events_shared(), scope);
-                    let Ok(wire_event) = serde_json::from_value(serde_json::to_value(&*event)?)
+                    let Ok(wire_event) = JsonValue::from_serialize(&*event)?.deserialize()
                     else {
                         tracing::warn!(session = %session.id(), "API Proxy could not encode a committed Session event");
                         return Ok(EventReply::Undefined);
@@ -1620,23 +1629,31 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
-        let runtime = Arc::new(Self {
-            context: self.context.clone(),
-            sessions: self.sessions.clone(),
-            agents: self.agents.clone(),
-            persistence: self.persistence.clone(),
-            query: self.query.clone(),
-            projections: self.projections.clone(),
-            projection_registry: self.projection_registry.clone(),
-            tools: self.tools.clone(),
-            jobs: self.jobs.clone(),
-            subagents: self.subagents.clone(),
-            artifact_metadata: self.artifact_metadata.clone(),
-            options: self.options.clone(),
-            creation_locks: self.creation_locks.clone(),
-            domains: self.domains.clone(),
-        });
+        let runtime = Arc::new(self.clone());
         async move { runtime.session_unary(method, request, signal).await }.boxed()
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        let runtime = Arc::new(self.clone());
+        async move {
+            match method {
+                RpcMethod::SessionHistory => runtime.history(request).await,
+                RpcMethod::SubagentHistory => runtime.subagent_history(request, signal).await,
+                RpcMethod::SessionCreate
+                | RpcMethod::SessionList
+                | RpcMethod::SessionSearch
+                | RpcMethod::SubagentList => crate::handler::response_json(
+                    runtime.session_unary(method, request, signal).await?,
+                ),
+                _ => runtime.domains.unary_json(method, request, signal).await,
+            }
+        }
+        .boxed()
     }
 
     fn respond(
@@ -1648,22 +1665,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
     }
 
     fn mux(&self, request: RpcRequest<Value>, signal: AbortSignal) -> ApiDownlinkStream<MuxFrame> {
-        let runtime = Arc::new(Self {
-            context: self.context.clone(),
-            sessions: self.sessions.clone(),
-            agents: self.agents.clone(),
-            persistence: self.persistence.clone(),
-            query: self.query.clone(),
-            projections: self.projections.clone(),
-            projection_registry: self.projection_registry.clone(),
-            tools: self.tools.clone(),
-            jobs: self.jobs.clone(),
-            subagents: self.subagents.clone(),
-            artifact_metadata: self.artifact_metadata.clone(),
-            options: self.options.clone(),
-            creation_locks: self.creation_locks.clone(),
-            domains: self.domains.clone(),
-        });
+        let runtime = Arc::new(self.clone());
         let domains = self.domains.mux(request, signal.clone());
         runtime.mux_stream(&signal, domains)
     }
@@ -2160,12 +2162,12 @@ fn backscan_call(page: &[SessionEvent], call_id: &str) -> Option<(String, Value)
     })
 }
 
-fn session_failure(
+fn session_failure<T>(
     request: RpcRequest<Value>,
     code: impl Into<String>,
     message: impl Into<String>,
     details: Map<String, Value>,
-) -> RpcResponse<Value> {
+) -> RpcResponse<T> {
     RpcResponse::new(
         request.rpc_id,
         RpcResult::Failure {
@@ -2374,11 +2376,11 @@ fn subagent_error_code(error: &anyhow::Error) -> Option<&str> {
         .map(|error| error.code.as_str())
 }
 
-fn subagent_internal(request: RpcRequest<Value>, message: &str) -> RpcResponse<Value> {
+fn subagent_internal<T>(request: RpcRequest<Value>, message: &str) -> RpcResponse<T> {
     session_failure(request, "internal", message, Map::new())
 }
 
-fn subagent_projections_unavailable(request: RpcRequest<Value>) -> RpcResponse<Value> {
+fn subagent_projections_unavailable<T>(request: RpcRequest<Value>) -> RpcResponse<T> {
     session_failure(
         request,
         "internal",

@@ -84,7 +84,7 @@ pub fn apply_write_tool(ctx: &Context, sandbox: &Arc<FsSandboxController>) -> an
         }),
         Arc::new(|_args: &WriteArgsRaw, value: &WriteOutcome| {
             Ok(vec![ContentBlock::Text {
-                text: format_write_output(&value.path, value.operation),
+                text: format_write_output(&value.path, value.operation).into(),
             }])
         }),
     )

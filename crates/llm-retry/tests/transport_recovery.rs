@@ -295,8 +295,12 @@ impl Harness {
             .events()
             .iter()
             .filter(|event| event.event_type == "llm/retry")
-            .filter_map(|event| event.data.pointer("/failure/code").and_then(Value::as_str))
-            .map(str::to_owned)
+            .filter_map(|event| {
+                event
+                    .data
+                    .pointer("/failure/code")
+                    .and_then(|value| value.deserialize::<String>().ok())
+            })
             .collect()
     }
 
@@ -307,7 +311,9 @@ impl Harness {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str()),
+                    ContentBlock::Text { text } => {
+                        Some(text.as_str().expect("fixture uses scalar text"))
+                    }
                     _ => None,
                 })
                 .collect(),
@@ -324,7 +330,7 @@ impl Harness {
 fn user() -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: "recover through the provider boundary".to_owned(),
+            text: "recover through the provider boundary".into(),
         }],
         MessageSource::user(),
     )
@@ -415,7 +421,8 @@ async fn clean_partial_eof_is_stream_closed_and_not_default_retryable() {
     assert_eq!(
         end.data
             .pointer("/reason/error/code")
-            .and_then(Value::as_str),
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref(),
         Some("STREAM_CLOSED")
     );
     harness.close().await;
@@ -460,7 +467,8 @@ async fn transport_budget_exhaustion_stops_after_initial_plus_two_retries() {
     assert_eq!(
         end.data
             .pointer("/reason/error/code")
-            .and_then(Value::as_str),
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref(),
         Some("TRANSPORT")
     );
     harness.close().await;

@@ -1,6 +1,7 @@
 //! Target-portable trajectory contribution contract.
 
-use serde_json::{Value, json};
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::TrajectoryRequestHeaderState;
 
@@ -61,23 +62,23 @@ impl TrajectoryContribution {
     ///
     /// Returns a missing, unknown, or malformed variant diagnostic.
     pub fn from_value(value: &Value) -> Result<Self, String> {
-        match value.get("kind").and_then(Value::as_str) {
+        match value.get_value("kind").and_then(Value::as_str) {
             Some("node") => Ok(Self::Node {
                 node: required(value, "node")?.clone(),
             }),
             Some("assistant") => Ok(Self::Assistant {
-                node: value.get("node").cloned(),
+                node: value.get_value("node").cloned(),
                 partial: value
-                    .get("partial")
+                    .get_value("partial")
                     .filter(|value| !value.is_null())
                     .cloned(),
-                request: value.get("request").cloned(),
+                request: value.get_value("request").cloned(),
             }),
             Some("tool") => Ok(Self::Tool {
                 root: required(value, "root")?.clone(),
             }),
             Some("request-header") => Ok(Self::RequestHeader {
-                header: serde_json::from_value(required(value, "header")?.clone())
+                header: crate::json_value::decode(required(value, "header")?.clone())
                     .map_err(|error| error.to_string())?,
             }),
             Some("compaction") => Ok(Self::Compaction {
@@ -99,7 +100,7 @@ impl TrajectoryContribution {
                     .as_i64()
                     .ok_or_else(|| "trajectory turn-end time must be an i64".to_owned())?,
                 error: value
-                    .get("error")
+                    .get_value("error")
                     .map(|error| {
                         error
                             .as_str()
@@ -123,9 +124,9 @@ impl TrajectoryContribution {
                 partial,
                 request,
             } => {
-                let mut value = serde_json::Map::from_iter([
+                let mut value = indexmap::IndexMap::from_iter([
                     ("kind".to_owned(), json!("assistant")),
-                    ("partial".to_owned(), partial.clone().unwrap_or(Value::Null)),
+                    ("partial".to_owned(), partial.clone().unwrap_or(null().clone())),
                 ]);
                 if let Some(node) = node {
                     value.insert("node".to_owned(), node.clone());
@@ -133,7 +134,7 @@ impl TrajectoryContribution {
                 if let Some(request) = request {
                     value.insert("request".to_owned(), request.clone());
                 }
-                Value::Object(value)
+                Value::object(value)
             }
             Self::Tool { root } => json!({"kind": "tool", "root": root}),
             Self::RequestHeader { header } => {
@@ -146,7 +147,7 @@ impl TrajectoryContribution {
                 json!({"kind": "session-end", "seq": seq, "time": time})
             }
             Self::TurnEnd { turn, time, error } => {
-                let mut value = serde_json::Map::from_iter([
+                let mut value = indexmap::IndexMap::from_iter([
                     ("kind".to_owned(), json!("turn-end")),
                     ("turn".to_owned(), json!(turn)),
                     ("time".to_owned(), json!(time)),
@@ -154,7 +155,7 @@ impl TrajectoryContribution {
                 if let Some(error) = error {
                     value.insert("error".to_owned(), json!(error));
                 }
-                Value::Object(value)
+                Value::object(value)
             }
         }
     }

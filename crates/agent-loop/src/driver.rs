@@ -11,7 +11,7 @@ use seekdeep_agent::{
 };
 use seekdeep_core::{
     request_header::{AdapterDefaults, EpochHeader, canonical_header, header_equals},
-    session::{AppendOptions, RequestContext, Session, SurfaceOp},
+    session::{AppendOptions, JsonValue, RequestContext, Session, SurfaceOp},
 };
 use seekdeep_llm::{
     AbortSignal, BlockAssembler, FinishReason, GenerateOptions, LlmCallConfig, LlmError,
@@ -318,9 +318,9 @@ impl DefaultAgentDriver {
             controller.set_position(turn, step)?;
             let step_result = async {
                 for message in prepared.messages {
-                    session.append(
+                    session.append_json(
                         "user/message",
-                        serde_json::to_value(message)?,
+                        JsonValue::from_serialize(&message)?,
                         AppendOptions {
                             surface_op: Some(SurfaceOp::append()),
                             ..AppendOptions::default()
@@ -408,9 +408,13 @@ impl DefaultAgentDriver {
             while let Some(chunk) = stream.next().await {
                 ensure_not_aborted(&signal)?;
                 let chunk = chunk?;
-                let event = agent.session().append(
+                let event = agent.session().append_json(
                     "assistant/chunk",
-                    json!({"turn": turn, "step": step, "chunk": chunk}),
+                    JsonValue::object([
+                        ("turn", Value::from(turn).into()),
+                        ("step", Value::from(step).into()),
+                        ("chunk", JsonValue::from_serialize(&chunk)?),
+                    ]),
                     AppendOptions::default(),
                 )?;
                 chunk_seqs.push(event.seq);
@@ -462,16 +466,17 @@ impl DefaultAgentDriver {
                 assembler.blocks()?,
                 source,
             );
-            let mut data = serde_json::Map::new();
-            data.insert("turn".to_owned(), Value::from(turn));
-            data.insert("step".to_owned(), Value::from(step));
-            data.insert("message".to_owned(), serde_json::to_value(&message)?);
+            let mut data = JsonValue::object([
+                ("turn", Value::from(turn).into()),
+                ("step", Value::from(step).into()),
+                ("message", JsonValue::from_serialize(&message)?),
+            ]);
             if let Some(usage) = assembler.usage() {
-                data.insert("usage".to_owned(), serde_json::to_value(usage)?);
+                data.insert("usage", JsonValue::from_serialize(usage)?)?;
             }
-            agent.session().append(
+            agent.session().append_json(
                 "assistant/message",
-                Value::Object(data),
+                data,
                 AppendOptions {
                     surface_op: Some(SurfaceOp::append()),
                     source_event_seqs: Some(chunk_seqs),
@@ -858,9 +863,7 @@ mod tests {
 
     fn user(text: &str) -> UserMessage {
         UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         )
     }
@@ -1017,7 +1020,7 @@ mod tests {
             Arc::new(assert_supported_json_schema(json!({"type": "string"})).expect("schema")),
             Arc::new(|_, value| {
                 Ok(vec![ContentBlock::Text {
-                    text: value.as_str().unwrap_or_default().to_owned(),
+                    text: value.as_str().unwrap_or_default().into(),
                 }])
             }),
         );

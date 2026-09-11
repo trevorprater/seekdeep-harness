@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::SecondsFormat;
 use seekdeep_core::session::{SessionEvent, SessionId};
+use seekdeep_llm::JsonString;
 use seekdeep_session_query::{
     SessionEventSearchHit, SessionEventTraceObservation, SessionEventWindow, SessionLineageTrace,
     SessionRecord, SessionSearchHit, extract_session_event_text,
@@ -234,17 +235,18 @@ pub fn format_event_read(
     session_id: &SessionId,
     title: &TitleView,
     window: &SessionEventWindow,
-) -> anyhow::Result<String> {
-    let mut lines = vec![
+) -> anyhow::Result<JsonString> {
+    let lines = vec![
         format!(
             "Session {session_id} — {}",
             workspace_access::title_text(Some(title))
         ),
         format!("Target event seq {}:", window.target.seq),
         "```json".to_owned(),
-        serde_json::to_string_pretty(&window.target)?,
+        seekdeep_core::session::JsonValue::from_serialize(&window.target)?.to_pretty_string(),
         "```".to_owned(),
     ];
+    let mut text = JsonString::from(lines.join("\n"));
     let before = window
         .events
         .iter()
@@ -256,29 +258,42 @@ pub fn format_event_read(
         .filter(|event| event.seq > window.target.seq)
         .collect::<Vec<_>>();
     if !before.is_empty() {
-        lines.extend([String::new(), "Before:".to_owned()]);
-        lines.extend(before.into_iter().map(format_neighbor));
+        text.push_str("\n\nBefore:");
+        for event in before {
+            text.push_str("\n");
+            text.push_utf16(format_neighbor(event).utf16_units());
+        }
     }
     if !after.is_empty() {
-        lines.extend([String::new(), "After:".to_owned()]);
-        lines.extend(after.into_iter().map(format_neighbor));
+        text.push_str("\n\nAfter:");
+        for event in after {
+            text.push_str("\n");
+            text.push_utf16(format_neighbor(event).utf16_units());
+        }
     }
-    Ok(lines.join("\n"))
+    Ok(text)
 }
 
-fn format_neighbor(event: &SessionEvent) -> String {
+fn format_neighbor(event: &SessionEvent) -> JsonString {
     let text = extract_session_event_text(event);
-    format!(
-        "- seq {} | {} | {}{}",
+    let mut output = JsonString::from(format!(
+        "- seq {} | {} | {}",
         event.seq,
         event.event_type,
         format_time(event.time),
-        if text.is_empty() {
-            " | (no semantic text)".to_owned()
-        } else {
-            format!("\n  {}", text.replace('\n', "\n  "))
+    ));
+    if text.is_empty() {
+        output.push_str(" | (no semantic text)");
+    } else {
+        output.push_str("\n  ");
+        for unit in text.utf16_units() {
+            output.push_utf16(&[*unit]);
+            if *unit == u16::from(b'\n') {
+                output.push_str("  ");
+            }
         }
-    )
+    }
+    output
 }
 
 fn availability_text(record: &SessionRecord) -> String {
@@ -379,9 +394,9 @@ fn generic(
     raw_input: Option<serde_json::Value>,
 ) -> GenericCallView {
     GenericCallView {
-        title: title.to_owned(),
+        title: title.into(),
         kind: Some(kind),
-        raw_input,
+        raw_input: raw_input.map(Into::into),
         content: None,
         locations: None,
     }

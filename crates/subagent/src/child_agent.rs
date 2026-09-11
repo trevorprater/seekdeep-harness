@@ -93,10 +93,9 @@ pub fn child_session_meta(
                     event
                         .data
                         .get("agentPreset")
-                        .and_then(serde_json::Value::as_str)
+                        .and_then(|preset| preset.deserialize::<String>().ok())
                 })
                 .flatten()
-                .map(str::to_owned)
         })
         .or_else(|| parent_header.agent_preset.clone());
     CreateAgentMeta {

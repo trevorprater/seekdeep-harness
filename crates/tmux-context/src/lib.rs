@@ -238,7 +238,7 @@ fn reading(text: String) -> UserMessage {
         }])
         .expect("snapshot section serializes"),
     );
-    UserMessage::new(vec![ContentBlock::Text { text }], source)
+    UserMessage::new(vec![ContentBlock::text(text)], source)
 }
 
 fn system_now_millis() -> i64 {

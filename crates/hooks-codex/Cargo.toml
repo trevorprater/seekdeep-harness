@@ -14,6 +14,7 @@ seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-hook-protocol = { path = "../hook-protocol" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-shell = { path = "../shell" }

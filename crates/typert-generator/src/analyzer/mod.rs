@@ -9,7 +9,7 @@ pub use merge::merge_workspace_models;
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::{
     AnalysisMode, Compiler, DiscoveredTypertPackage, WorkspaceAnalyzer, WorkspaceAnalyzerOptions,
-    WorkspaceCaches, locate_library, run_with_stack,
+    WorkspaceCaches, locate_library, repository, repository_graphs, run_with_stack,
 };
 pub use package::{
     ModuleIdentity, client_export_subpaths, external_module_identity_for_file,

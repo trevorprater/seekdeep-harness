@@ -211,7 +211,7 @@ fn pending_presentation_is_the_exact_generic_search_card() {
     assert_eq!(
         present_lsp_call(&args("findReferences", "a.ts", 3.0, 7.0)),
         ToolCallView::Generic(GenericCallView {
-            title: "LSP findReferences a.ts:3:7".to_owned(),
+            title: "LSP findReferences a.ts:3:7".into(),
             kind: Some(ToolCallKind::Search),
             raw_input: None,
             content: None,

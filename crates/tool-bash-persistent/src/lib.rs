@@ -606,7 +606,7 @@ fn definition(
             DefineToolOutput::new(
                 serde_json::json!({ "type": "string" }),
                 Arc::new(|_args: &BashArgs, value: &String| {
-                    Ok(vec![ContentBlock::Text { text: value.clone() }])
+                    Ok(vec![ContentBlock::Text { text: value.clone().into() }])
                 }),
             ),
             Arc::new(move |args: BashArgs, run| {

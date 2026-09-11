@@ -13,6 +13,8 @@ use serde_json::Value;
 
 pub mod executable;
 pub mod hook;
+/// Verified compiled Node runtime and official executable distributions.
+pub mod node_runtime;
 pub mod staging;
 pub mod wheel;
 

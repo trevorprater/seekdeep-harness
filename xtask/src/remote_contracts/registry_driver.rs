@@ -33,6 +33,55 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r#"
+it('preserves browser Service property-descriptor primitive rejection', () => {
+  for (const value of [1, true, 'text', Symbol('value'), 1n]) expect(() => getPropertyDescriptor(value, 'length')).toThrow(TypeError)
+  for (const value of [null, undefined, false, 0, '', NaN]) expect(getPropertyDescriptor(value, 'length')).toBeUndefined()
+  const prototype = { inherited: 7 }, value = Object.create(prototype)
+  expect(getPropertyDescriptor(value, 'inherited')).toEqual(Object.getOwnPropertyDescriptor(prototype, 'inherited'))
+})
+
+it('preserves browser logger trailing-argument streaming and iterator closure', () => {
+  const original = new Error('object formatter failed'), trace = [], args = ['message']
+  args[Symbol.iterator] = function* () { try { trace.push('first'); yield {}; trace.push('second'); yield {} } finally { trace.push('closed') } }
+  const message = { args: { slice() { return args } } }
+  expect(() => Logger.format({ formatters: { o() { throw original } } }, message)).toThrow(original)
+  expect(trace).toEqual(['first', 'closed'])
+})
+
+it('preserves browser Service traced invoke getters and custom apply methods', () => {
+  const ctx = {}, target = () => 'ordinary'
+  target[symbols.tracker] = { property: 'ctx', noShadow: true }
+  let reads = 0
+  Object.defineProperty(target, symbols.invoke, { get() { reads++; return { apply(receiver, args) { return [reads, receiver.ctx === ctx, receiver[symbols.original] === target, args] } } } })
+  const traced = getTraceable(ctx, target)
+  expect(traced(7)).toEqual([2, true, true, [7]])
+})
+
+it('preserves browser logger iterator closure and metadata data properties', () => {
+  const original = new Error('export failed'), trace = [], closed = { values() { return { [Symbol.iterator]() { return this }, next() { return { done: false, value: { export() { trace.push('export'); throw original } } } }, return() { trace.push('close'); throw new Error('close failed') } } } }
+  const logger = new Logger({ name: 'test' }, { _snMessage: 0, exporters: closed })
+  expect(() => logger.info('message')).toThrow(original)
+  expect(trace).toEqual(['export', 'close'])
+  const key = Symbol('metadata'), prototype = { injected: true }, messages = []
+  const metadata = { ['__proto__']: prototype, [key]: 7, args: ['replaced'] }
+  Object.defineProperty(metadata, 'hidden', { value: 9 })
+  const service = { _snMessage: 0, exporters: new Map([[1, { export(message) { messages.push(message) } }]]) }
+  new Logger({ name: 'metadata', meta: metadata }, service).info('original')
+  const message = messages[0]
+  expect(Object.getPrototypeOf(message)).toBe(Object.prototype)
+  expect(Object.getOwnPropertyDescriptor(message, '__proto__')).toEqual({ value: prototype, enumerable: true, configurable: true, writable: true })
+  expect(message[key]).toBe(7)
+  expect('hidden' in message).toBe(false)
+  expect(message.args).toEqual(['original'])
+})
+
+it('preserves browser Fiber DisposableList prototype order and getter metadata', () => {
+  expect(Object.getOwnPropertyNames(DisposableList.prototype)).toEqual(['constructor', 'length', 'push', 'delete', 'clear'])
+  const descriptor = Object.getOwnPropertyDescriptor(DisposableList.prototype, 'length')
+  expect(descriptor.get.name).toBe('get length')
+  expect([descriptor.get.length, descriptor.enumerable, descriptor.configurable]).toEqual([0, false, true])
+})
+
 it('preserves browser Fiber default runner stack capture', async () => {
   const runner = { epoch: true, execute() { throw 'runner failure' }, collect() {} }
   let failure

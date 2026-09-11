@@ -91,7 +91,7 @@ impl LlmAdapter for CliMockAdapter {
                     content
                         .iter()
                         .filter_map(|block| match block {
-                            ContentBlock::Text { text } => Some(text.as_str()),
+                            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
                             _ => None,
                         })
                         .collect::<String>(),
@@ -112,7 +112,7 @@ impl LlmAdapter for CliMockAdapter {
                 }),
                 Ok(StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text { text: reply },
+                    block: ContentBlock::text(reply),
                 }),
                 Ok(StreamChunk::Usage {
                     usage: TokenUsage {

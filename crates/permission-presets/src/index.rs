@@ -122,8 +122,8 @@ pub fn effective_permission_preset(events: &[SessionEvent]) -> Option<String> {
         .iter()
         .rev()
         .find(|event| event.event_type == "permission/preset")
-        .and_then(|event| event.data.get("preset").and_then(Value::as_str))
-        .map(str::to_owned)
+        .and_then(|event| event.data.get("preset"))
+        .and_then(|preset| preset.deserialize().ok())
 }
 
 /// One-event knob transition for the projection unit.
@@ -134,24 +134,21 @@ pub fn apply_knob_event(state: &KnobState, event: &SessionEvent) -> ProjectionTr
             preset: event
                 .data
                 .get("preset")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+                .and_then(|preset| preset.deserialize().ok()),
             ..state.clone()
         },
         "sandbox/mode" => KnobState {
             sandbox: event
                 .data
                 .get("mode")
-                .and_then(Value::as_str)
-                .and_then(|mode| serde_json::from_value(json!(mode)).ok()),
+                .and_then(|mode| mode.deserialize().ok()),
             ..state.clone()
         },
         "approval/policy" => KnobState {
             approval: event
                 .data
                 .get("policy")
-                .and_then(Value::as_str)
-                .and_then(|policy| serde_json::from_value(json!(policy)).ok()),
+                .and_then(|policy| policy.deserialize().ok()),
             ..state.clone()
         },
         _ => return ProjectionTransition::Unchanged,
@@ -167,7 +164,7 @@ fn fold_knobs(events: &[SessionEvent]) -> KnobState {
     let mut state = KnobState::default();
     for event in events {
         if let ProjectionTransition::Changed(next) = apply_knob_event(&state, event)
-            && let Ok(next) = serde_json::from_value(next)
+            && let Ok(next) = next.deserialize()
         {
             state = next;
         }

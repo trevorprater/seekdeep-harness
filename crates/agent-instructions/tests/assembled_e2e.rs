@@ -44,10 +44,12 @@ impl InstructionAwareAdapter {
             .iter()
             .flat_map(seekdeep_llm::Message::content)
             .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text.as_str()),
+                ContentBlock::Text { text } => {
+                    Some(text.as_str().expect("fixture uses scalar text"))
+                }
                 ContentBlock::ToolResult { content, .. } => content.iter().find_map(|block| {
                     if let ContentBlock::Text { text } = block {
-                        Some(text.as_str())
+                        Some(text.as_str().expect("fixture uses scalar text"))
                     } else {
                         None
                     }
@@ -74,7 +76,9 @@ impl InstructionAwareAdapter {
                     .content()
                     .iter()
                     .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Text { text } => {
+                            Some(text.as_str().expect("fixture uses scalar text"))
+                        }
                         _ => None,
                     })
                     .collect::<String>()
@@ -101,9 +105,7 @@ impl InstructionAwareAdapter {
                 },
                 StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text {
-                        text: text.to_owned(),
-                    },
+                    block: ContentBlock::Text { text: text.into() },
                 },
                 StreamChunk::Finish {
                     reason: FinishReason::Stop,
@@ -271,9 +273,7 @@ impl Harness {
         self.agent
             .agent
             .followup(UserMessage::new(
-                vec![ContentBlock::Text {
-                    text: text.to_owned(),
-                }],
+                vec![ContentBlock::Text { text: text.into() }],
                 MessageSource::user(),
             ))
             .unwrap();
@@ -288,14 +288,21 @@ impl Harness {
             .into_iter()
             .rev()
             .find(|event| event.event_type == "assistant/message")
-            .and_then(|event| event.data.get("message").cloned())
-            .and_then(|message| serde_json::from_value::<seekdeep_llm::Message>(message).ok())
+            .and_then(|event| {
+                event
+                    .data
+                    .get("message")?
+                    .deserialize::<seekdeep_llm::Message>()
+                    .ok()
+            })
             .map(|message| {
                 message
                     .content()
                     .iter()
                     .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Text { text } => {
+                            Some(text.as_str().expect("fixture uses scalar text"))
+                        }
                         _ => None,
                     })
                     .collect::<String>()
@@ -313,7 +320,7 @@ fn seed_event(event_type: &str, seq: u64, data: Value, surface: bool) -> Session
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).unwrap() + 10,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: surface.then(SurfaceOp::append),
         ignorable: None,
@@ -365,7 +372,7 @@ fn visible_baseline_seed(
     source_fields.insert("changes".to_owned(), json!(changes));
     let baseline = UserMessage::new(
         vec![ContentBlock::Text {
-            text: rendered.text,
+            text: rendered.text.into(),
         }],
         MessageSource {
             kind: AGENT_INSTRUCTIONS_KIND.to_owned(),
@@ -379,7 +386,7 @@ fn visible_baseline_seed(
             1,
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "Remember the workspace instruction.".to_owned(),
+                    text: "Remember the workspace instruction.".into(),
                 }],
                 MessageSource::user(),
             ))
@@ -487,12 +494,12 @@ async fn real_file_touch_appends_changed_baseline_without_rewriting_prefix() {
         update.data["source"]["changes"][0]["scope"],
         seekdeep_agent_instructions::candidate_scope_key(".", "AGENTS.md")
     );
-    let message: seekdeep_llm::Message = serde_json::from_value(update.data.clone()).unwrap();
+    let message: seekdeep_llm::Message = update.data.deserialize().unwrap();
     let text = message
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<String>();

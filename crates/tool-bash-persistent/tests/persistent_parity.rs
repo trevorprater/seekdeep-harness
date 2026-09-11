@@ -321,7 +321,7 @@ fn text(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -338,7 +338,7 @@ async fn one_owner_reuses_shell_state_nonzero_status_and_disposal_closes_it() {
     let schema = harness.dependencies.tools.get("bash", None).unwrap();
     assert_eq!(schema.description, "persistent stub");
     assert!(matches!(
-        schema.present_call.as_ref().unwrap()(&json!({ "command": "pwd" })),
+        schema.present_call.as_ref().unwrap()(&json!({ "command": "pwd" }).into()),
         Some(seekdeep_tools::ToolCallView::Terminal(_))
     ));
     assert_eq!(text(&harness.call("export FOO=bar").await), "");

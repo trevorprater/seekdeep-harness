@@ -164,6 +164,7 @@ export function toolText(root) {
   visit(root)
   return parts.join('')
 }
+export function toolTextJson(root) { return JSON.stringify(toolText(root)) }
 export function toolProp(value, key) { return value?.props?.[key] }
 export function toolProperty(value, key) { return value?.[key] }
 export function toolClick(value) { value.props.onClick({ stopPropagation() { this.stopped = true } }) }
@@ -233,6 +234,7 @@ extern "C" {
     fn toolFindKind(root: &JsValue, kind: &str) -> JsValue;
     fn toolCount(root: &JsValue, key: &str) -> u32;
     fn toolText(root: &JsValue) -> String;
+    fn toolTextJson(root: &JsValue) -> String;
     fn toolProp(value: &JsValue, key: &str) -> JsValue;
     fn toolProperty(value: &JsValue, key: &str) -> JsValue;
     fn toolClick(value: &JsValue);
@@ -724,6 +726,72 @@ fn compiled_details_selects_structured_cards_and_generic_fallbacks() {
     let pre = toolFindKind(&failed_tree, "pre");
     assert_eq!(toolProp(&pre, "data-error"), JsValue::TRUE);
     assert_eq!(toolText(&failed_tree), "boom");
+}
+
+#[wasm_bindgen_test]
+fn compiled_rows_and_details_preserve_exact_utf16_payloads() {
+    let bench = configure();
+    let generic = generic_tool_card_component().unwrap();
+    let call = running(
+        "run_code",
+        r#"{"description":"inspect \ud800","code":"return '\udfff'"}"#,
+        r#"{"card":"generic","title":"inspect \ud800","rawInput":{"\udfff":"\ud800"}}"#,
+    );
+    let props = makeGenericProps(&bench, &call, &JsValue::UNDEFINED);
+    let tree = toolRender(&bench, &generic, &props);
+    assert!(toolTextJson(&tree).contains(r"inspect \ud800"));
+    toolClick(&toolFind(&tree, "data-expandable", &JsValue::TRUE));
+    let expanded = toolRender(&bench, &generic, &props);
+    let code = toolFind(&expanded, "data-code", &JsValue::TRUE);
+    assert_eq!(
+        JSON::stringify(&toolProp(&code, "code"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#""return '\udfff'""#,
+    );
+
+    toolReset(&bench);
+    let completed = settled(Some("echo"), "{}", "", true, "", "", None);
+    Reflect::set(
+        &completed,
+        &JsValue::from_str("content"),
+        &parse(r#"[{"type":"text","text":"\ud800\nsecond"},{"type":"custom","\udfff":"\udc00"}]"#),
+    )
+    .unwrap();
+    let props = makeGenericProps(&bench, &completed, &JsValue::UNDEFINED);
+    let tree = toolRender(&bench, &generic, &props);
+    assert!(toolTextJson(&tree).contains(r"\ud800"));
+    let details = toolRender(&bench, &tool_details_component().unwrap(), &props);
+    assert_eq!(
+        toolTextJson(&details),
+        r#""\ud800\nsecond\n{\n  \"type\": \"custom\",\n  \"\\udfff\": \"\\udc00\"\n}""#,
+    );
+
+    toolReset(&bench);
+    let call = running(
+        "todo_write",
+        r#"{"todos":[{"content":"\udfff","status":"in_progress"},{"content":"second","status":"in_progress"}]}"#,
+        "",
+    );
+    let props = makeGenericProps(&bench, &call, &JsValue::UNDEFINED);
+    let tree = toolRender(&bench, &todo_row_component().unwrap(), &props);
+    assert!(toolTextJson(&tree).contains(r"0/2 completed · \udfff"));
+    assert!(toolText(&tree).contains("+1"));
+
+    toolReset(&bench);
+    let call = running("read", r#"{"path":"/work/\ud800"}"#, "");
+    let props = makeGenericProps(&bench, &call, &JsValue::from_str("/work"));
+    let tree = toolRender(&bench, &generic, &props);
+    let link = toolFindKind(&tree, "button");
+    toolClick(&link);
+    assert_eq!(
+        JSON::stringify(&property(&props, "opened"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#"["/work/\ud800"]"#,
+    );
 }
 
 #[wasm_bindgen_test]

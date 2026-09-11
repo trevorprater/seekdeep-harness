@@ -15,8 +15,8 @@ use parking_lot::Mutex;
 use regex::Regex;
 use seekdeep_cordis::{Context, CordisError, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
+use seekdeep_lossless_json::JsonValue;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use thiserror::Error;
 
 /// Allowed unit and table name format.
@@ -165,9 +165,9 @@ impl KvUnitDescriptor {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct KvSnapshot {
     /// Every declared table's records.
-    pub tables: IndexMap<String, Map<String, Value>>,
+    pub tables: IndexMap<String, IndexMap<String, JsonValue>>,
     /// Global singleton, null when never written or undeclared.
-    pub global: Value,
+    pub global: JsonValue,
 }
 
 /// One opened KV unit.
@@ -180,14 +180,14 @@ pub trait KvUnit: Send + Sync + 'static {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>>;
 
     /// Atomically and durably deletes one record; a miss is a no-op.
     fn delete_record(&self, table: String, key: String) -> BoxFuture<'static, anyhow::Result<()>>;
 
     /// Atomically and durably writes the global singleton.
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>>;
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>>;
 
     /// Drains writes and idempotently releases this unit.
     fn close(&self) -> BoxFuture<'static, Result<(), StorageError>>;

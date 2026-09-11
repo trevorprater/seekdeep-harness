@@ -10,6 +10,7 @@ use std::{
 use serde_json::{Value, json};
 
 use super::{Arch, BuildOptions, Host, Platform, Target};
+use crate::node_runtime::{self, AcquiredNode, CurlFetcher};
 
 /// Source-compatible development entry path below the Node carrier root.
 pub const ENTRY_BIN: &str =
@@ -18,6 +19,7 @@ pub const ENTRY_BIN: &str =
 pub const RUNTIME_DIRECTORY: &str = "python/sdk-runtime/src/deepseek_harness_runtime/runtime";
 const RUNTIME_BIN: &str = "seekdeep-jsonrpc-agent-packaged";
 const HELPER_BIN: &str = "seekdeep-pty-spawn-helper";
+const NODE_PACKAGER: &str = "package-code-runtime-node";
 
 /// Products selected by one successful or dry-run build request.
 #[derive(Clone, Debug)]
@@ -28,6 +30,8 @@ pub struct BuildReport {
     pub binding_libraries: Vec<PathBuf>,
     /// The generated dev-only carrier directory.
     pub node_carrier: PathBuf,
+    /// Complete target-specific compiled Node closures, including their official executables.
+    pub runtime_assets: Vec<PathBuf>,
 }
 
 struct Artifacts {
@@ -51,15 +55,7 @@ pub fn build_executables(
 ) -> anyhow::Result<BuildReport> {
     options.validate()?;
     let root = root.canonicalize()?;
-    let manifest: Value =
-        serde_json::from_slice(&fs::read(root.join("python/sdk-runtime/package.json"))?)?;
-    anyhow::ensure!(
-        manifest["name"] == "seekdeep-jsonrpc-agent-pkg"
-            && manifest["dependencies"]
-                .as_object()
-                .is_some_and(|value| !value.is_empty()),
-        "build-exe-for-python-sdk: runtime manifest must declare the named non-empty runtime closure"
-    );
+    let manifest = load_runtime_manifest(&root)?;
     let runtime_directory = root.join(RUNTIME_DIRECTORY);
     let node_carrier = runtime_directory.join("node");
     let output = root.join("dist-exe");
@@ -68,6 +64,15 @@ pub fn build_executables(
         .targets
         .iter()
         .map(|target| output.join(target.binding_basename()))
+        .collect::<Vec<_>>();
+    let runtime_assets = options
+        .targets
+        .iter()
+        .map(|target| {
+            output
+                .join(node_runtime::DIRECTORY)
+                .join(target.platform_arch())
+        })
         .collect::<Vec<_>>();
     println!(
         "build-exe-for-python-sdk: targets: {}",
@@ -88,12 +93,25 @@ pub fn build_executables(
             products,
             binding_libraries,
             node_carrier,
+            runtime_assets,
         });
     }
     let host_target = host.target()?;
     validate_host_targets(&host_target, &options.targets)?;
     let target_directory = cargo_target_directory(&root)?;
+    let nodes = acquire_nodes(&target_directory, &host_target, &options.targets)?;
+    let host_node = nodes
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("host Node distribution is absent"))?;
+    verify_host_node(host_node)?;
     let host_artifacts = compile(&root, &target_directory, &host_target, options.skip_build)?;
+    let compiled_node = compile_node_runtime(
+        &root,
+        &target_directory,
+        &host_target,
+        host_node,
+        options.skip_build,
+    )?;
     validate_manifest(
         &host_artifacts.runtime,
         &manifest,
@@ -102,6 +120,12 @@ pub fn build_executables(
     ensure_owned_directory(&root, &runtime_directory)?;
     stage_python_bindings(&root, &runtime_directory, &host_target, &host_artifacts)?;
     stage_node_carrier(&root, &node_carrier, &host_target, &host_artifacts)?;
+    stage_node_assets(
+        &root,
+        &compiled_node,
+        host_node,
+        &node_carrier.join("native").join(node_runtime::DIRECTORY),
+    )?;
     ensure_owned_directory(&root, &output)?;
     for target in &options.targets {
         let artifacts = if same_target(target, &host_target) {
@@ -109,15 +133,106 @@ pub fn build_executables(
         } else {
             &compile(&root, &target_directory, target, options.skip_build)?
         };
-        let product = output.join(target.basename());
-        copy_executable(&artifacts.runtime, &product)?;
-        if let Some(helper) = &artifacts.helper {
-            copy_executable(helper, &helper_path(&product))?;
-        }
-        copy_executable(&artifacts.binding, &output.join(target.binding_basename()))?;
+        stage_product(
+            &root,
+            &output,
+            &runtime_directory,
+            target,
+            artifacts,
+            &compiled_node,
+            &nodes,
+        )?;
     }
+    report_and_sync(&products, &binding_libraries, &runtime_directory)?;
+    Ok(BuildReport {
+        products,
+        binding_libraries,
+        node_carrier,
+        runtime_assets,
+    })
+}
+
+fn stage_product(
+    root: &Path,
+    output: &Path,
+    runtime_directory: &Path,
+    target: &Target,
+    artifacts: &Artifacts,
+    compiled_node: &Path,
+    nodes: &[AcquiredNode],
+) -> anyhow::Result<()> {
+    let product = output.join(target.basename());
+    copy_executable(&artifacts.runtime, &product)?;
+    if let Some(helper) = &artifacts.helper {
+        copy_executable(helper, &helper_path(&product))?;
+    }
+    copy_executable(&artifacts.binding, &output.join(target.binding_basename()))?;
+    let node = nodes
+        .iter()
+        .find(|node| node.distribution.target == *target)
+        .ok_or_else(|| {
+            anyhow::anyhow!("Node distribution for {} was not acquired", target.spec())
+        })?;
+    let assets = output
+        .join(node_runtime::DIRECTORY)
+        .join(target.platform_arch());
+    stage_node_assets(root, compiled_node, node, &assets)?;
+    replace_node_assets(
+        root,
+        &assets,
+        &runtime_directory
+            .join(node_runtime::DIRECTORY)
+            .join(target.platform_arch()),
+        target,
+    )?;
+    Ok(())
+}
+
+fn load_runtime_manifest(root: &Path) -> anyhow::Result<Value> {
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(root.join("python/sdk-runtime/package.json"))?)?;
+    anyhow::ensure!(
+        manifest["name"] == "seekdeep-jsonrpc-agent-pkg"
+            && manifest["dependencies"]
+                .as_object()
+                .is_some_and(|value| !value.is_empty()),
+        "build-exe-for-python-sdk: runtime manifest must declare the named non-empty runtime closure"
+    );
+    Ok(manifest)
+}
+
+fn acquire_nodes(
+    target_directory: &Path,
+    host: &Target,
+    targets: &[Target],
+) -> anyhow::Result<Vec<AcquiredNode>> {
+    let node_targets = node_targets(host, targets)?;
+    let node_cache = std::env::var_os("SEEKDEEP_NODE_DIST_CACHE").map_or_else(
+        || target_directory.join("node-distributions"),
+        PathBuf::from,
+    );
+    let node_pin = match std::env::var("SEEKDEEP_NODE_VERSION") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("SEEKDEEP_NODE_VERSION must be UTF-8")
+        }
+    };
+    node_runtime::acquire_distributions(
+        &node_targets,
+        &node_cache,
+        node_pin.as_deref(),
+        &CurlFetcher,
+    )
+}
+
+fn report_and_sync(
+    products: &[PathBuf],
+    binding_libraries: &[PathBuf],
+    runtime_directory: &Path,
+) -> anyhow::Result<()> {
     println!("build-exe-for-python-sdk: products:");
-    for product in &products {
+    for product in products {
         let tenths = (u128::from(fs::metadata(product)?.len()) * 10 + 524_288) / 1_048_576;
         println!(
             "  {}  ({}.{:01} MB)",
@@ -126,7 +241,7 @@ pub fn build_executables(
             tenths % 10
         );
     }
-    for product in products.iter().chain(&binding_libraries) {
+    for product in products.iter().chain(binding_libraries) {
         let destination = runtime_directory.join(
             product
                 .file_name()
@@ -135,11 +250,179 @@ pub fn build_executables(
         copy_executable(product, &destination)?;
         println!("build-exe-for-python-sdk: synced {}", destination.display());
     }
-    Ok(BuildReport {
-        products,
-        binding_libraries,
-        node_carrier,
-    })
+    Ok(())
+}
+
+fn node_targets(host: &Target, targets: &[Target]) -> anyhow::Result<Vec<Target>> {
+    let native = if let Some(target) = targets.iter().find(|target| same_target(target, host)) {
+        target.clone()
+    } else {
+        let spec = targets
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("no Node target requested"))?
+            .spec();
+        let range = spec
+            .split('-')
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Node range is absent"))?;
+        Target::parse(&format!("{range}-{}", host.platform_arch()))?
+    };
+    let mut result = vec![native];
+    for target in targets {
+        if !result.contains(target) {
+            result.push(target.clone());
+        }
+    }
+    Ok(result)
+}
+
+fn verify_host_node(node: &AcquiredNode) -> anyhow::Result<()> {
+    let output = Command::new(node.directory().join("bin/node"))
+        .arg("--version")
+        .env_clear()
+        .output()?;
+    anyhow::ensure!(
+        output.status.success()
+            && String::from_utf8_lossy(&output.stdout).trim() == node.distribution.version,
+        "official host Node executable does not report {}: {}",
+        node.distribution.version,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+fn compile_node_runtime(
+    root: &Path,
+    target_directory: &Path,
+    host: &Target,
+    node: &AcquiredNode,
+    skip: bool,
+) -> anyhow::Result<PathBuf> {
+    if !skip {
+        for arguments in [
+            vec![
+                "build",
+                "--locked",
+                "--release",
+                "--target",
+                "wasm32-unknown-unknown",
+                "-p",
+                "seekdeep-code-runtime-node",
+                "--lib",
+            ],
+            vec![
+                "build",
+                "--locked",
+                "--release",
+                "--target",
+                host.rust_target(),
+                "-p",
+                "seekdeep-code-runtime-worker-thread",
+                "--bin",
+                NODE_PACKAGER,
+            ],
+        ] {
+            let status = Command::new("cargo")
+                .args(&arguments)
+                .current_dir(root)
+                .env("CI", "true")
+                .env("CARGO_INCREMENTAL", "0")
+                .status()?;
+            anyhow::ensure!(
+                status.success(),
+                "build-exe-for-python-sdk: compiled Node runtime build failed: {}",
+                arguments.join(" ")
+            );
+        }
+    }
+    let packager = target_directory
+        .join(host.rust_target())
+        .join("release")
+        .join(NODE_PACKAGER);
+    let wasm =
+        target_directory.join("wasm32-unknown-unknown/release/seekdeep_code_runtime_node.wasm");
+    anyhow::ensure!(
+        packager.is_file() && wasm.is_file(),
+        "build-exe-for-python-sdk: compiled Node packager or WASM is absent; run without --skip-build"
+    );
+    let output = target_directory.join("node-runtime-release-base");
+    let status = Command::new(&packager)
+        .arg(wasm)
+        .arg(&output)
+        .current_dir(root)
+        .env("SEEKDEEP_NODE_BINARY", node.directory().join("bin/node"))
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "build-exe-for-python-sdk: compiled Node runtime packaging failed"
+    );
+    Ok(output)
+}
+
+fn stage_node_assets(
+    root: &Path,
+    compiled: &Path,
+    node: &AcquiredNode,
+    destination: &Path,
+) -> anyhow::Result<()> {
+    let parent = prepare_node_asset_destination(root, destination)?;
+    let temporary = tempfile::tempdir_in(parent)?;
+    let staged = temporary.path().join("closure");
+    node_runtime::stage_distribution(
+        compiled,
+        &node.distribution,
+        node.directory(),
+        &node.archive_sha256,
+        &staged,
+    )?;
+    install_node_assets(&staged, destination)?;
+    println!(
+        "build-exe-for-python-sdk: staged Node {} for {} at {}",
+        node.distribution.version,
+        node.distribution.target.platform_arch(),
+        destination.display()
+    );
+    Ok(())
+}
+
+fn replace_node_assets(
+    root: &Path,
+    source: &Path,
+    destination: &Path,
+    target: &Target,
+) -> anyhow::Result<()> {
+    let parent = prepare_node_asset_destination(root, destination)?;
+    let temporary = tempfile::tempdir_in(parent)?;
+    let staged = temporary.path().join("closure");
+    node_runtime::copy_directory(source, &staged, target)?;
+    install_node_assets(&staged, destination)
+}
+
+fn prepare_node_asset_destination<'a>(
+    root: &Path,
+    destination: &'a Path,
+) -> anyhow::Result<&'a Path> {
+    validate_output_ancestors(root, destination)?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Node runtime output has no parent"))?;
+    ensure_owned_directory(root, parent)?;
+    if destination.exists() {
+        anyhow::ensure!(
+            destination.join("assets-manifest.json").is_file(),
+            "refusing to replace an unrecognized Node runtime directory: {}",
+            destination.display()
+        );
+    }
+    Ok(parent)
+}
+
+fn install_node_assets(staged: &Path, destination: &Path) -> anyhow::Result<()> {
+    if destination.exists() {
+        fs::remove_dir_all(destination)?;
+    }
+    fs::rename(staged, destination)?;
+    Ok(())
 }
 
 fn same_target(left: &Target, right: &Target) -> bool {
@@ -186,6 +469,9 @@ fn print_dry_run(
     products: &[PathBuf],
 ) {
     println!(
+        "build-exe-for-python-sdk: [dry-run] resolve official Node versions and verify per-target archive SHA256 before extraction"
+    );
+    println!(
         "build-exe-for-python-sdk: [dry-run] cargo metadata --locked --format-version 1 --no-deps"
     );
     if options.skip_build {
@@ -209,12 +495,19 @@ fn print_dry_run(
     }
     println!("build-exe-for-python-sdk: [dry-run] verify compiled runtime manifest");
     println!(
+        "build-exe-for-python-sdk: [dry-run] package Rust/WASM Node runtime with Chokidar dependencies, bundled bin/node, upstream license, and asset hashes"
+    );
+    println!(
         "build-exe-for-python-sdk: [dry-run] generate Python runtime declarations and native hook binding"
     );
     for target in &options.targets {
         println!(
             "build-exe-for-python-sdk: [dry-run] stage {}",
             target.binding_basename()
+        );
+        println!(
+            "build-exe-for-python-sdk: [dry-run] stage code-runtime-node/{}",
+            target.platform_arch()
         );
     }
     println!(

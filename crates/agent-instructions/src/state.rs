@@ -100,7 +100,7 @@ fn workspace_context_hook(text: &str, changes: &[AgentInstructionChange]) -> Use
     );
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource {
             kind: AGENT_INSTRUCTIONS_KIND.to_owned(),
@@ -114,7 +114,7 @@ fn workspace_context_hook(text: &str, changes: &[AgentInstructionChange]) -> Use
 pub fn workspace_context_message(text: &str) -> Message {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::plugin(NAME),
     )

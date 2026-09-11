@@ -48,19 +48,18 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
             .data
             .get("header")
             .ok_or_else(|| anyhow::anyhow!("request/header lacks header"))?;
-        (next.system_tokens, next.tools_tokens) =
-            match serde_json::from_value::<EpochHeader>(recorded.clone()) {
-                Ok(header) => {
-                    let header = canonical_header(header);
-                    (
-                        estimate_system_tokens(Some(&header)),
-                        estimate_tools_tokens(Some(&header)),
-                    )
-                }
-                // Scrubbed recordings carry placeholder strings where the typed header expects
-                // a system prompt and a schema list; the source prices them by length.
-                Err(_) => estimate_recorded_header(recorded),
-            };
+        (next.system_tokens, next.tools_tokens) = match recorded.deserialize::<EpochHeader>() {
+            Ok(header) => {
+                let header = canonical_header(header);
+                (
+                    estimate_system_tokens(Some(&header)),
+                    estimate_tools_tokens(Some(&header)),
+                )
+            }
+            // Scrubbed recordings carry placeholder strings where the typed header expects
+            // a system prompt and a schema list; the source prices them by length.
+            Err(_) => estimate_recorded_header(&recorded.to_owned()),
+        };
     }
     next.message_tokens = next
         .message_tokens

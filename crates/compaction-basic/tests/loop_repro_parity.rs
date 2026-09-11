@@ -34,7 +34,7 @@ use serde_json::{Map, Value, json};
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -53,7 +53,7 @@ fn text_success(text: &str, reason: FinishReason) -> Vec<StreamChunk> {
         StreamChunk::BlockEnd {
             index: 0,
             block: ContentBlock::Text {
-                text: text.to_owned(),
+                text: text.into(),
             },
         },
         StreamChunk::Finish {
@@ -116,7 +116,7 @@ impl LlmAdapter for StepwiseToolAdapter {
                 StreamChunk::BlockEnd {
                     index: 0,
                     block: ContentBlock::Text {
-                        text: format!("step {call}"),
+                        text: format!("step {call}").into(),
                     },
                 },
                 StreamChunk::BlockStart {
@@ -173,7 +173,7 @@ impl LoopHarness {
         let summarize: RegionSummarize = Arc::new(|_, _, _, _| {
             async {
                 let summary = vec![ContentBlock::Text {
-                    text: "CHECKPOINT SUMMARY".to_owned(),
+                    text: "CHECKPOINT SUMMARY".into(),
                 }];
                 Ok(SummaryResult {
                     summary: summary.clone(),
@@ -241,7 +241,7 @@ fn register_work_tool(context: &Context, tools: &Arc<ToolRuntime>) {
                     Arc::new(assert_supported_json_schema(json!({"type": "string"})).unwrap()),
                     Arc::new(|_, value| {
                         Ok(vec![ContentBlock::Text {
-                            text: value.as_str().unwrap_or_default().to_owned(),
+                            text: value.as_str().unwrap_or_default().into(),
                         }])
                     }),
                 ),
@@ -527,7 +527,7 @@ fn overflow_seed() -> Vec<SessionEvent> {
                 "user/message",
                 serde_json::to_value(Message::user(
                     vec![ContentBlock::Text {
-                        text: format!("{sentinel} {}", "old context ".repeat(200)),
+                        text: format!("{sentinel} {}", "old context ".repeat(200)).into(),
                     }],
                     MessageSource::user(),
                 ))
@@ -553,7 +553,7 @@ fn overflow_seed() -> Vec<SessionEvent> {
                     "step": 1,
                     "message": Message::assistant(
                         vec![ContentBlock::Text {
-                            text: format!("historical response {turn} {}", "detail ".repeat(200)),
+                            text: format!("historical response {turn} {}", "detail ".repeat(200)).into(),
                         }],
                         "mock",
                         "mock",
@@ -676,7 +676,7 @@ fn messages_text(messages: &[Message]) -> String {
         .iter()
         .flat_map(Message::content)
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()

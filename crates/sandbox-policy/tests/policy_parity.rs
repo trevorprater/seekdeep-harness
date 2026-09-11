@@ -186,7 +186,7 @@ fn malformed_durable_mode_fails_resolution_instead_of_silently_using_a_default()
         event_type: "sandbox/mode".into(),
         seq: 0,
         time: 0,
-        data: serde_json::json!({"mode": "host-root"}),
+        data: serde_json::json!({"mode": "host-root"}).into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,

@@ -302,7 +302,7 @@ fn arbitrary_chunk() -> impl Strategy<Value = StreamChunk> {
             },
             6 => StreamChunk::BlockEnd {
                 index,
-                block: ContentBlock::Text { text: first },
+                block: ContentBlock::text(first),
             },
             7 => StreamChunk::BlockEnd {
                 index,

@@ -135,7 +135,7 @@ impl PiProtocolExecutor for Executor {
             }),
             Ok(PiAssistantEvent::TextEnd {
                 content_index: 0,
-                content: "hello".to_owned(),
+                content: "hello".into(),
                 partial,
             }),
             Ok(PiAssistantEvent::Done {
@@ -159,7 +159,7 @@ fn usage(input: u64, output: u64) -> PiUsage {
 
 fn text(value: &str) -> PiAssistantBlock {
     PiAssistantBlock::Text {
-        text: value.to_owned(),
+        text: value.into(),
         text_signature: None,
     }
 }

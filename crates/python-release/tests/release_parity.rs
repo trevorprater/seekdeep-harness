@@ -13,6 +13,9 @@ use seekdeep_python_release::{
 use serde_json::json;
 use zip::write::SimpleFileOptions;
 
+#[path = "common/node_fixture.rs"]
+mod node_fixture;
+
 fn fixture() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
     fs::write(
@@ -71,6 +74,7 @@ fn executable(path: &Path) {
             library_header(&target),
         )
         .unwrap();
+        node_fixture::make_assets(&path.parent().unwrap().join("code-runtime-node"), &target);
     }
     #[cfg(unix)]
     {
@@ -370,6 +374,10 @@ fn wheel_file(
                 )
                 .unwrap();
             archive.write_all(&library_header(&target)).unwrap();
+            let assets = tempfile::tempdir().unwrap();
+            let directory = assets.path().join("code-runtime-node");
+            node_fixture::make_assets(&directory, &target);
+            node_fixture::zip_assets(&mut archive, &directory);
         }
     }
     archive.finish().unwrap();

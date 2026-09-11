@@ -14,6 +14,7 @@ mod browser_view;
 mod compaction_definitions;
 mod contract;
 mod duration_store;
+mod json_value;
 mod layout;
 mod message_definitions;
 mod preview;

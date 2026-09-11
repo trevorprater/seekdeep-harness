@@ -6,7 +6,9 @@ use std::{
 };
 
 use indexmap::IndexSet;
-use serde_json::{Map, Value};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{
     TrajectoryRecordState, TrajectoryRequestNumber, TrajectoryRequestPurpose,
@@ -118,29 +120,29 @@ pub fn trajectory_timeline_partial(partial: Option<&Value>) -> Result<Option<Val
         return Ok(None);
     };
     let blocks = partial
-        .get("blocks")
+        .get_value("blocks")
         .and_then(Value::as_array)
         .ok_or_else(|| "trajectory partial omitted blocks".to_owned())?;
     let blocks = blocks
         .iter()
         .map(timeline_block)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(Value::Object(Map::from_iter([
+    Ok(Some(Value::object(Map::from_iter([
         (
             "turn".to_owned(),
             partial
-                .get("turn")
+                .get_value("turn")
                 .cloned()
                 .ok_or_else(|| "trajectory partial omitted turn".to_owned())?,
         ),
         (
             "step".to_owned(),
             partial
-                .get("step")
+                .get_value("step")
                 .cloned()
                 .ok_or_else(|| "trajectory partial omitted step".to_owned())?,
         ),
-        ("blocks".to_owned(), Value::Array(blocks)),
+        ("blocks".to_owned(), Value::array(&blocks)),
     ]))))
 }
 
@@ -154,7 +156,7 @@ pub fn trajectory_partial_structure_signature(partial: Option<&Value>) -> Result
         return Ok(String::new());
     };
     let blocks = partial
-        .get("blocks")
+        .get_value("blocks")
         .and_then(Value::as_array)
         .ok_or_else(|| "trajectory partial omitted blocks".to_owned())?;
     blocks
@@ -215,7 +217,7 @@ pub fn derive_trajectory_request_numbers(
 ) -> Result<Vec<TrajectoryRequestNumber>, String> {
     let mut assistants_by_step = BTreeMap::<String, &Value>::new();
     for node in nodes {
-        if node.get("kind").and_then(Value::as_str) != Some("assistant") {
+        if node.get_value("kind").and_then(Value::as_str) != Some("assistant") {
             continue;
         }
         let step = required_u64(node, "step")?;
@@ -227,7 +229,7 @@ pub fn derive_trajectory_request_numbers(
     }
     let requests_by_step = requests
         .iter()
-        .filter(|request| request.get("purpose").and_then(Value::as_str) == Some("assistant"))
+        .filter(|request| request.get_value("purpose").and_then(Value::as_str) == Some("assistant"))
         .map(|request| {
             Ok((
                 format!(
@@ -278,36 +280,36 @@ pub fn derive_trajectory_request_numbers(
     for (index, entry) in ordered.into_iter().enumerate() {
         let usage_source = entry
             .request
-            .and_then(|request| request.get("usage"))
+            .and_then(|request| request.get_value("usage"))
             .filter(|usage| !usage.is_null())
-            .or_else(|| entry.node.and_then(|node| node.get("usage")));
+            .or_else(|| entry.node.and_then(|node| node.get_value("usage")));
         let usage = trajectory_request_usage(usage_source);
         cumulative = add_trajectory_usage(cumulative, usage);
         let purpose = entry
             .request
-            .and_then(|request| request.get("purpose"))
+            .and_then(|request| request.get_value("purpose"))
             .and_then(Value::as_str);
         let number = u64::try_from(index + 1).map_err(|error| error.to_string())?;
         if purpose != Some("compaction") {
             let turn = entry
                 .request
-                .and_then(|request| request.get("turn"))
+                .and_then(|request| request.get_value("turn"))
                 .and_then(Value::as_u64)
                 .or_else(|| {
                     entry
                         .node
-                        .and_then(|node| node.get("turn"))
+                        .and_then(|node| node.get_value("turn"))
                         .and_then(Value::as_u64)
                 })
                 .ok_or_else(|| "assistant request omitted turn".to_owned())?;
             let step = entry
                 .request
-                .and_then(|request| request.get("step"))
+                .and_then(|request| request.get_value("step"))
                 .and_then(Value::as_u64)
                 .or_else(|| {
                     entry
                         .node
-                        .and_then(|node| node.get("step"))
+                        .and_then(|node| node.get_value("step"))
                         .and_then(Value::as_u64)
                 })
                 .ok_or_else(|| "assistant request omitted step".to_owned())?;
@@ -324,23 +326,23 @@ pub fn derive_trajectory_request_numbers(
                     .and_then(|value| finite_member(value, "completedAt")),
                 error: entry
                     .request
-                    .and_then(|value| value.get("error"))
+                    .and_then(|value| value.get_value("error"))
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned),
                 retry: entry
                     .request
-                    .and_then(|value| value.get("retry"))
+                    .and_then(|value| value.get_value("retry"))
                     .and_then(Value::as_u64),
                 max_retries: entry
                     .request
-                    .and_then(|value| value.get("maxRetries"))
+                    .and_then(|value| value.get_value("maxRetries"))
                     .and_then(Value::as_u64),
                 retry_delay_ms: entry
                     .request
                     .and_then(|value| finite_member(value, "retryDelayMs")),
                 result_seq: entry
                     .request
-                    .and_then(|value| value.get("resultSeq"))
+                    .and_then(|value| value.get_value("resultSeq"))
                     .and_then(Value::as_u64),
                 provider: provenance_member(entry.request, entry.node, "provider"),
                 model: provenance_member(entry.request, entry.node, "model"),
@@ -364,7 +366,7 @@ pub fn derive_trajectory_request_numbers(
             started_at: finite_member(request, "startedAt"),
             completed_at: finite_member(request, "completedAt"),
             error: request
-                .get("error")
+                .get_value("error")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned),
             retry: None,
@@ -373,11 +375,11 @@ pub fn derive_trajectory_request_numbers(
             result_seq: Some(entry.seq),
             provider: provenance_member(Some(request), None, "provider"),
             model: provenance_member(Some(request), None, "model"),
-            request_config: request.get("requestConfig").cloned(),
+            request_config: request.get_value("requestConfig").cloned(),
             usage,
             cumulative_usage: cumulative,
             purpose: TrajectoryRequestPurpose::Compaction,
-            turn: request.get("turn").and_then(Value::as_u64),
+            turn: request.get_value("turn").and_then(Value::as_u64),
             step: 0,
         });
     }
@@ -453,23 +455,23 @@ pub fn all_trajectory_folds_selected<T: Ord>(available: &[T], selected: &BTreeSe
 fn timeline_block(block: &Value) -> Result<Value, String> {
     let kind = required_string(block, "kind")?;
     match kind {
-        "text" => Ok(serde_json::json!({"kind": "text", "text": ""})),
-        "reasoning" => Ok(serde_json::json!({"kind": "reasoning", "text": ""})),
+        "text" => Ok(json!({"kind": "text", "text": ""})),
+        "reasoning" => Ok(json!({"kind": "reasoning", "text": ""})),
         "image" => Ok(block.clone()),
-        "tool-call" => Ok(serde_json::json!({
+        "tool-call" => Ok(json!({
             "kind": "tool-call",
             "callId": required_string(block, "callId")?,
             "name": required_string(block, "name")?,
             "argsRaw": "",
         })),
-        "other" => Ok(serde_json::json!({"kind": "other", "block": null})),
+        "other" => Ok(json!({"kind": "other", "block": null})),
         _ => Err(format!("unknown Assistant block kind {kind:?}")),
     }
 }
 
 fn request_status(request: &Value) -> Option<Result<TrajectoryRecordState, String>> {
     request
-        .get("status")
+        .get_value("status")
         .and_then(Value::as_str)
         .map(|status| match status {
             "complete" => Ok(TrajectoryRecordState::Complete),
@@ -481,11 +483,11 @@ fn request_status(request: &Value) -> Option<Result<TrajectoryRecordState, Strin
 
 fn provenance_member(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<String> {
     request
-        .and_then(|value| value.get("provenance"))
+        .and_then(|value| value.get_value("provenance"))
         .and_then(|value| value.get(key))
         .and_then(Value::as_str)
         .or_else(|| {
-            node.and_then(|value| value.get("provenance"))
+            node.and_then(|value| value.get_value("provenance"))
                 .and_then(|value| value.get(key))
                 .and_then(Value::as_str)
         })

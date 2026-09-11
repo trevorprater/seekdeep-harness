@@ -3,10 +3,12 @@
 mod transport;
 mod types;
 
+pub use seekdeep_lossless_json::{JsonString, JsonValue};
 pub use transport::{
-    BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport, JsonRpcNotificationHandler,
-    JsonRpcRequestHandler, JsonRpcResponseError, JsonRpcResponseWrittenHandler,
-    JsonRpcTransportFailureHandler,
+    BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcJsonNotificationHandler,
+    JsonRpcJsonRequestHandler, JsonRpcLineTransport, JsonRpcNotificationHandler,
+    JsonRpcRawResponseError, JsonRpcRequestHandler, JsonRpcResponseError,
+    JsonRpcResponseWrittenHandler, JsonRpcTransportFailureHandler,
 };
 pub use types::{
     HarnessSdkNotification, HarnessSdkRequest, InitializeParams, InitializeResult, SdkRunStatus,

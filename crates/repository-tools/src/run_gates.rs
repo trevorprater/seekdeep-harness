@@ -817,12 +817,15 @@ fn coverage_worker_args(
 
 fn coverage_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
     let (instrumented, exempt_workers) = coverage_worker_args(environment)?;
-    let mut coverage_args = vec![
-        "vitest".to_owned(),
-        "run".to_owned(),
-        "--coverage".to_owned(),
-    ];
-    coverage_args.extend(instrumented);
+    let mut coverage = pnpm_script(environment, "coverage", "test:coverage");
+    coverage
+        .args
+        .extend(instrumented.iter().map(OsString::from));
+    if !instrumented.is_empty() {
+        coverage.display_command.push(' ');
+        coverage.display_command.push_str(&instrumented.join(" "));
+    }
+    coverage.environment = environment_map(&[(COVERAGE_EXEMPT_ENV, Some("1"))]);
     let mut exempt_args = vec!["vitest".to_owned(), "run".to_owned()];
     exempt_args.extend(
         COVERAGE_EXEMPT_HEAVY_SUITES
@@ -831,14 +834,7 @@ fn coverage_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
     );
     exempt_args.extend(exempt_workers);
     Ok(vec![
-        pnpm_exec_owned(
-            environment,
-            "coverage",
-            coverage_args,
-            Some("test:coverage"),
-            &[],
-            environment_map(&[(COVERAGE_EXEMPT_ENV, Some("1"))]),
-        ),
+        coverage,
         pnpm_exec_owned(
             environment,
             "coverage-exempt-heavy",

@@ -3,8 +3,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_shell::{ShellExecRequest, ShellExecutor, ShellRunResult};
-use serde_json::Value;
 
 use crate::codec::parse_hook_output;
 use crate::types::{CommandHook, HookOutput};
@@ -16,7 +16,7 @@ pub const DEFAULT_HOOK_TIMEOUT_MS: u64 = 600_000;
 #[derive(Clone, Debug)]
 pub struct RunHookOptions {
     /// The JSON payload object written to the hook's stdin.
-    pub payload: Value,
+    pub payload: JsonValue,
     /// Extra env vars for the hook process.
     pub env: Option<BTreeMap<String, String>>,
     /// Working directory for the hook.
@@ -54,7 +54,8 @@ pub async fn run_hook(
     let timeout_ms = hook
         .timeout_sec
         .map_or(options.default_timeout_ms, |sec| sec * 1000.0);
-    let stdin = options.payload.to_string() + if options.trailing_newline { "\n" } else { "" };
+    let stdin =
+        options.payload.as_raw().to_owned() + if options.trailing_newline { "\n" } else { "" };
 
     let mut request = ShellExecRequest::new(hook.command.clone());
     request.timeout_ms = Some(timeout_ms);
@@ -95,7 +96,7 @@ mod tests {
 
     use parking_lot::Mutex;
     use seekdeep_shell::{CollectedOutput, ProcessSignal, ShellExecSpec, ShellProcessHandle};
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -192,7 +193,7 @@ mod tests {
 
     fn options() -> RunHookOptions {
         RunHookOptions {
-            payload: Value::Null,
+            payload: Value::Null.into(),
             env: None,
             cwd: None,
             signal: AbortSignal::default(),
@@ -214,7 +215,7 @@ mod tests {
     async fn serializes_payload_to_stdin_with_trailing_newline() {
         let bash = RecordingBash::ok(default_result());
         let mut options = options();
-        options.payload = json!({"hook_event_name": "PreToolUse", "tool_name": "Bash"});
+        options.payload = json!({"hook_event_name": "PreToolUse", "tool_name": "Bash"}).into();
         run_hook(&bash, &hook("my-hook.sh"), &options, clock()).await;
         let specs = bash.specs();
         assert_eq!(
@@ -228,10 +229,25 @@ mod tests {
     async fn omits_trailing_newline_when_requested() {
         let bash = RecordingBash::ok(default_result());
         let mut options = options();
-        options.payload = json!({"a": 1});
+        options.payload = json!({"a": 1}).into();
         options.trailing_newline = false;
         run_hook(&bash, &hook("h"), &options, clock()).await;
         assert_eq!(bash.specs()[0].stdin.as_deref(), Some("{\"a\":1}"));
+    }
+
+    #[tokio::test]
+    async fn hook_stdin_keeps_raw_text_and_keys_with_unpaired_surrogates() {
+        let bash = RecordingBash::ok(default_result());
+        let mut options = options();
+        options.payload = JsonValue::parse(
+            r#"{"tool_response":"\ud800","tool_input":{"\udfff":"\\ud800"}}"#.into(),
+        )
+        .unwrap();
+        run_hook(&bash, &hook("capture"), &options, clock()).await;
+        assert_eq!(
+            bash.specs()[0].stdin.as_deref(),
+            Some("{\"tool_response\":\"\\ud800\",\"tool_input\":{\"\\udfff\":\"\\\\ud800\"}}\n"),
+        );
     }
 
     #[tokio::test]

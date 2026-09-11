@@ -151,9 +151,9 @@ fn notice_source(summary: &str) -> MessageSource {
 
 fn present(title: &str, kind: ToolCallKind, raw_input: Option<Value>) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        title: title.to_owned(),
+        title: title.into(),
         kind: Some(kind),
-        raw_input,
+        raw_input: raw_input.map(Into::into),
         content: None,
         locations: None,
     })
@@ -287,7 +287,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                 goal_value_schema(),
                 Arc::new(|_args: &GetGoalArgs, value: &GoalToolValue| {
                     Ok(vec![ContentBlock::Text {
-                        text: serde_json::to_string(value)?,
+                        text: serde_json::to_string(value)?.into(),
                     }])
                 }),
             ),
@@ -322,7 +322,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                 goal_value_schema(),
                 Arc::new(|_args: &CreateGoalArgs, value: &GoalToolValue| {
                     Ok(vec![ContentBlock::Text {
-                        text: serde_json::to_string(value)?,
+                        text: serde_json::to_string(value)?.into(),
                     }])
                 }),
             ),
@@ -372,7 +372,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                 goal_value_schema(),
                 Arc::new(|_args: &UpdateGoalArgs, value: &GoalToolValue| {
                     Ok(vec![ContentBlock::Text {
-                        text: serde_json::to_string(value)?,
+                        text: serde_json::to_string(value)?.into(),
                     }])
                 }),
             ),

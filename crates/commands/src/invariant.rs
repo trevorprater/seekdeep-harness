@@ -8,13 +8,12 @@ use std::{
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent},
+    session::{JsonValue, Session, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use serde_json::Value;
 
 const PACKAGE_NAME: &str = "seekdeep-commands";
 
@@ -176,7 +175,7 @@ fn validate_source(
     };
     let sequence = source.as_u64();
     let valid = sequence.is_some_and(|sequence| {
-        event.data.get("kind").and_then(Value::as_str) == Some("success")
+        event.data["kind"].as_str() == Some("success")
             && sequence < event.seq
             && usize::try_from(sequence)
                 .ok()
@@ -193,25 +192,21 @@ fn validate_source(
         return Err(failure
             .fail(format!(
                 "command/done {command_id:?} has invalid sourceEventSeq {}",
-                display_value(source)
+                display_value(&event.data["sourceEventSeq"])
             ))
             .into());
     }
     Ok(())
 }
 
-fn string(value: &Value, key: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+fn string(value: &JsonValue, key: &str) -> String {
+    value[key].as_str().unwrap_or_default().to_owned()
 }
 
-fn display_value(value: &Value) -> String {
+fn display_value(value: &JsonValue) -> String {
     value
         .as_str()
-        .map_or_else(|| value.to_string(), str::to_owned)
+        .map_or_else(|| value.as_raw().to_owned(), str::to_owned)
 }
 
 fn required_session(args: &EventArgs, event: &str) -> anyhow::Result<Arc<Session>> {

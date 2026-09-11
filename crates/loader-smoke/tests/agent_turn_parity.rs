@@ -109,7 +109,7 @@ impl AgentController for FixtureController {
             1,
             1,
             vec![ContentBlock::Text {
-                text: "final answer".to_owned(),
+                text: "final answer".into(),
             }],
             Some(TokenUsage {
                 input_tokens: 4,

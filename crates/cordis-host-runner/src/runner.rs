@@ -2181,7 +2181,7 @@ fn format_run_failure(failure: &DynamicCordisRunResponse) -> String {
 
 fn cordis_message(text: String) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text { text }],
+        vec![ContentBlock::text(text)],
         MessageSource::plugin("cordis-host-runner"),
     )
 }

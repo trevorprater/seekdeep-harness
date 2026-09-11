@@ -659,7 +659,10 @@ fn fork_seed(
         .find(|event| matches!(event.event_type.as_str(), "turn/start" | "turn/end"))
         .filter(|event| event.event_type == "turn/start")
     {
-        let turn = opening.data.get("turn").unwrap_or(&Value::Null);
+        let turn = opening
+            .data
+            .get("turn")
+            .map_or("null", |value| value.as_raw());
         return Err(fork_error(
             ForkErrorCode::OpenTurn,
             format!("fork boundary {boundary} in session \"{id}\" ends inside open turn {turn}"),
@@ -831,9 +834,7 @@ mod tests {
 
     fn user_message(text: &str) -> Value {
         serde_json::to_value(Message::user(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         ))
         .expect("serialize user message")

@@ -7,7 +7,6 @@ use seekdeep_core::session::SessionEvent;
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use serde_json::Value;
 
 const PACKAGE_NAME: &str = "seekdeep-session-title";
 
@@ -57,17 +56,8 @@ fn validate_event(event: &SessionEvent, failure: &InvariantFailure) -> anyhow::R
     if event.event_type != "session/title" {
         return Ok(());
     }
-    let source_kind = event
-        .data
-        .get("source")
-        .and_then(Value::as_object)
-        .and_then(|source| source.get("kind"))
-        .and_then(Value::as_str);
-    let message_seqs = event
-        .data
-        .get("messageSeqs")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
+    let source_kind = event.data["source"]["kind"].as_str();
+    let message_seqs = event.data["messageSeqs"].as_array().map_or(0, Vec::len);
     let is_user = source_kind == Some("user");
     if (message_seqs == 0) != is_user {
         let requirement = if is_user {

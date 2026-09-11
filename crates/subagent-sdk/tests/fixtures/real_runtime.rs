@@ -32,7 +32,7 @@ impl LlmAdapter for CwdEchoAdapter {
             Ok(StreamChunk::BlockEnd {
                 index: 0,
                 block: ContentBlock::Text {
-                    text: self.answer.clone(),
+                    text: self.answer.clone().into(),
                 },
             }),
             Ok(StreamChunk::Usage {

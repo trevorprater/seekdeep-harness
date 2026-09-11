@@ -4,14 +4,13 @@ use std::sync::Arc;
 
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent},
+    session::{JsonRef, Session, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
 use seekdeep_llm::MAX_TIMER_DELAY_MS;
-use serde_json::Value;
 
 use crate::history::provider_for_open_step;
 
@@ -124,9 +123,9 @@ pub fn validate_event(history: &[SessionEvent], event: &SessionEvent) -> anyhow:
     }
 }
 
-fn validate_failure(value: Option<&Value>) -> anyhow::Result<()> {
+fn validate_failure(value: Option<JsonRef<'_>>) -> anyhow::Result<()> {
     let failure = value
-        .and_then(Value::as_object)
+        .filter(|value| value.is_object())
         .ok_or_else(|| anyhow::anyhow!("llm/retry failure must be an object"))?;
     required_nonempty_string(failure.get("message"), "llm/retry failure.message")?;
     required_nonempty_string(failure.get("code"), "llm/retry failure.code")?;
@@ -154,10 +153,8 @@ fn validate_failure(value: Option<&Value>) -> anyhow::Result<()> {
 }
 
 fn validate_retry(history: &[SessionEvent], event: &SessionEvent) -> anyhow::Result<()> {
-    let data = event
-        .data
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("llm/retry data must be an object"))?;
+    let data = event.data.as_ref();
+    anyhow::ensure!(data.is_object(), "llm/retry data must be an object");
     let retry_id = required_nonempty_string(data.get("retryId"), "llm/retry retryId")?;
     validate_failure(data.get("failure"))?;
     let retry = positive_safe_integer(data.get("retry"), "llm/retry retry")?;
@@ -166,19 +163,24 @@ fn validate_retry(history: &[SessionEvent], event: &SessionEvent) -> anyhow::Res
     validate_mode_and_delay(data, retry)?;
     let turn = required_u64(data.get("turn"), "llm/retry turn")?;
     let step = required_u64(data.get("step"), "llm/retry step")?;
-    validate_open_location(history, turn, step, provider)?;
-    validate_chain(history, turn, step, provider, policy_key, retry_id, retry)
+    validate_open_location(history, turn, step, &provider)?;
+    validate_chain(
+        history,
+        turn,
+        step,
+        &provider,
+        &policy_key,
+        &retry_id,
+        retry,
+    )
 }
 
-fn validate_mode_and_delay(
-    data: &serde_json::Map<String, Value>,
-    retry: u64,
-) -> anyhow::Result<()> {
-    match data.get("mode").and_then(Value::as_str) {
+fn validate_mode_and_delay(data: JsonRef<'_>, retry: u64) -> anyhow::Result<()> {
+    match data.get("mode").and_then(json_string).as_deref() {
         Some("normal") => {
             let maximum = data
                 .get("maxRetries")
-                .and_then(Value::as_u64)
+                .and_then(JsonRef::as_u64)
                 .filter(|maximum| (1..=MAX_SAFE_INTEGER).contains(maximum));
             anyhow::ensure!(
                 maximum.is_some_and(|maximum| retry <= maximum),
@@ -187,7 +189,7 @@ fn validate_mode_and_delay(
             );
         }
         Some("always") => anyhow::ensure!(
-            !data.contains_key("maxRetries"),
+            data.get("maxRetries").is_none(),
             "llm/retry always mode must omit maxRetries"
         ),
         mode => anyhow::bail!(
@@ -195,7 +197,7 @@ fn validate_mode_and_delay(
             mode.map_or_else(|| display_value(data.get("mode")), ToOwned::to_owned)
         ),
     }
-    let delay = data.get("delayMs").and_then(Value::as_f64);
+    let delay = data.get("delayMs").and_then(JsonRef::as_f64);
     anyhow::ensure!(
         delay.is_some_and(|delay| {
             delay.is_finite() && (0.0..=MAX_TIMER_DELAY_MS).contains(&delay)
@@ -222,7 +224,7 @@ fn validate_open_location(
     );
     let open_turn = turn_boundary
         .and_then(|boundary| boundary.data.get("turn"))
-        .and_then(Value::as_u64)
+        .and_then(JsonRef::as_u64)
         .ok_or_else(|| anyhow::anyhow!("open turn has no valid turn number"))?;
     anyhow::ensure!(
         turn == open_turn,
@@ -267,14 +269,14 @@ fn validate_chain(
 ) -> anyhow::Result<()> {
     let prior_policy = history.iter().rev().find(|prior| {
         prior.event_type == "llm/retry"
-            && prior.data.get("turn").and_then(Value::as_u64) == Some(turn)
-            && prior.data.get("step").and_then(Value::as_u64) == Some(step)
-            && prior.data.get("provider").and_then(Value::as_str) == Some(provider)
-            && prior.data.get("policyKey").and_then(Value::as_str) == Some(policy_key)
+            && prior.data.get("turn").and_then(JsonRef::as_u64) == Some(turn)
+            && prior.data.get("step").and_then(JsonRef::as_u64) == Some(step)
+            && prior.data.get("provider").and_then(json_string).as_deref() == Some(provider)
+            && prior.data.get("policyKey").and_then(json_string).as_deref() == Some(policy_key)
     });
     let expected = prior_policy
         .and_then(|prior| prior.data.get("retry"))
-        .and_then(Value::as_u64)
+        .and_then(JsonRef::as_u64)
         .unwrap_or(0)
         + 1;
     anyhow::ensure!(
@@ -283,14 +285,14 @@ fn validate_chain(
     );
     if let Some(prior) = prior_policy {
         anyhow::ensure!(
-            prior.data.get("retryId").and_then(Value::as_str) == Some(retry_id),
+            prior.data.get("retryId").and_then(json_string).as_deref() == Some(retry_id),
             "llm/retry must preserve retryId across one provider-policy chain"
         );
     } else {
         anyhow::ensure!(
             !history.iter().any(|prior| {
                 matches!(prior.event_type.as_str(), "llm/retry" | "llm/retry-started")
-                    && prior.data.get("retryId").and_then(Value::as_str) == Some(retry_id)
+                    && prior.data.get("retryId").and_then(json_string).as_deref() == Some(retry_id)
             }),
             "llm/retry retryId {retry_id:?} is already owned by another chain"
         );
@@ -299,57 +301,60 @@ fn validate_chain(
 }
 
 fn validate_started(history: &[SessionEvent], event: &SessionEvent) -> anyhow::Result<()> {
-    let data = event
-        .data
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("llm/retry-started data must be an object"))?;
+    let data = event.data.as_ref();
+    anyhow::ensure!(data.is_object(), "llm/retry-started data must be an object");
     let retry_id = required_nonempty_string(data.get("retryId"), "llm/retry-started retryId")?;
     let retry = positive_safe_integer(data.get("retry"), "llm/retry-started retry")?;
     let turn = required_u64(data.get("turn"), "llm/retry-started turn")?;
     let step = required_u64(data.get("step"), "llm/retry-started step")?;
     let scheduled = history.iter().rev().find(|prior| {
         prior.event_type == "llm/retry"
-            && prior.data.get("retryId").and_then(Value::as_str) == Some(retry_id)
-            && prior.data.get("retry").and_then(Value::as_u64) == Some(retry)
+            && prior.data.get("retryId").and_then(json_string).as_deref() == Some(retry_id.as_str())
+            && prior.data.get("retry").and_then(JsonRef::as_u64) == Some(retry)
     });
     let scheduled = scheduled
         .ok_or_else(|| anyhow::anyhow!("llm/retry-started pairs no prior scheduled attempt"))?;
     anyhow::ensure!(
-        scheduled.data.get("turn").and_then(Value::as_u64) == Some(turn)
-            && scheduled.data.get("step").and_then(Value::as_u64) == Some(step),
+        scheduled.data.get("turn").and_then(JsonRef::as_u64) == Some(turn)
+            && scheduled.data.get("step").and_then(JsonRef::as_u64) == Some(step),
         "llm/retry-started turn/step must match its scheduled attempt"
     );
     anyhow::ensure!(
         !history.iter().any(|prior| {
             prior.event_type == "llm/retry-started"
-                && prior.data.get("retryId").and_then(Value::as_str) == Some(retry_id)
-                && prior.data.get("retry").and_then(Value::as_u64) == Some(retry)
+                && prior.data.get("retryId").and_then(json_string).as_deref()
+                    == Some(retry_id.as_str())
+                && prior.data.get("retry").and_then(JsonRef::as_u64) == Some(retry)
         }),
         "llm/retry-started repeats one scheduled attempt"
     );
     Ok(())
 }
 
-fn required_nonempty_string<'a>(value: Option<&'a Value>, path: &str) -> anyhow::Result<&'a str> {
+fn json_string(value: JsonRef<'_>) -> Option<String> {
+    value.deserialize().ok()
+}
+
+fn required_nonempty_string(value: Option<JsonRef<'_>>, path: &str) -> anyhow::Result<String> {
     value
-        .and_then(Value::as_str)
+        .and_then(json_string)
         .filter(|value| !value.is_empty())
         .ok_or_else(|| anyhow::anyhow!("{path} must be a non-empty string"))
 }
 
-fn required_u64(value: Option<&Value>, path: &str) -> anyhow::Result<u64> {
+fn required_u64(value: Option<JsonRef<'_>>, path: &str) -> anyhow::Result<u64> {
     value
-        .and_then(Value::as_u64)
+        .and_then(JsonRef::as_u64)
         .ok_or_else(|| anyhow::anyhow!("{path} must be a non-negative integer"))
 }
 
-fn positive_safe_integer(value: Option<&Value>, path: &str) -> anyhow::Result<u64> {
+fn positive_safe_integer(value: Option<JsonRef<'_>>, path: &str) -> anyhow::Result<u64> {
     value
-        .and_then(Value::as_u64)
+        .and_then(JsonRef::as_u64)
         .filter(|value| (1..=MAX_SAFE_INTEGER).contains(value))
         .ok_or_else(|| anyhow::anyhow!("{path} must be a positive safe integer"))
 }
 
-fn display_value(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), Value::to_string)
+fn display_value(value: Option<JsonRef<'_>>) -> String {
+    value.map_or_else(|| "undefined".to_owned(), |value| value.as_raw().to_owned())
 }

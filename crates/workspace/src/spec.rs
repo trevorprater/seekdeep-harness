@@ -4,6 +4,7 @@ use std::fmt;
 
 use indexmap::IndexMap;
 use seekdeep_core::session::SessionId;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage_domain::{
     DomainGlobalSpec, DomainSpec, ValueSchema, define_domain, domain_table,
 };
@@ -83,7 +84,7 @@ pub fn workspace_domain_spec() -> anyhow::Result<DomainSpec> {
         version: 2,
         global: Some(DomainGlobalSpec {
             schema: ValueSchema::serde::<WorkspaceDomainState>(),
-            initial: serde_json::to_value(WorkspaceDomainState {
+            initial: JsonValue::from_serialize(&WorkspaceDomainState {
                 initialized: false,
                 workspace_ids: Vec::new(),
                 archived_session_ids: Vec::new(),

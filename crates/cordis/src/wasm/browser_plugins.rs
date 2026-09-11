@@ -1,7 +1,26 @@
 //! Class plugin construction and initialization use the source's callback classification.
 
-use js_sys::{Array, Function, Reflect, Symbol};
+use std::cell::RefCell;
+
+use js_sys::{Array, Function, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
+
+thread_local! {
+    static GENERATORS: RefCell<Option<Array>> = const { RefCell::new(None) };
+}
+
+pub(super) fn initialize_constructors() -> Result<(), JsValue> {
+    if GENERATORS.with(|slot| slot.borrow().is_some()) {
+        return Ok(());
+    }
+    let constructors = Function::new_no_args(
+        "return [(function*() {}).constructor, (async function*() {}).constructor];",
+    )
+    .call0(&JsValue::UNDEFINED)?
+    .dyn_into::<Array>()?;
+    GENERATORS.with(|slot| *slot.borrow_mut() = Some(constructors));
+    Ok(())
+}
 
 /// Tests the source's plugin constructor rule, including generator exclusions.
 ///
@@ -9,14 +28,13 @@ use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 /// Propagates prototype and instance-check failures.
 #[wasm_bindgen(js_name = isConstructor)]
 pub fn is_constructor(callback: &JsValue) -> Result<bool, JsValue> {
-    if !Reflect::get(callback, &"prototype".into())?.is_truthy() {
+    initialize_constructors()?;
+    if !super::browser_values::get(callback, &"prototype".into())?.is_truthy() {
         return Ok(false);
     }
-    let constructors = Function::new_no_args(
-        "return [(function*() {}).constructor, (async function*() {}).constructor, Function];",
-    )
-    .call0(&JsValue::UNDEFINED)?
-    .dyn_into::<Array>()?;
+    let constructors = GENERATORS
+        .with(|slot| slot.borrow().clone())
+        .ok_or_else(|| js_sys::Error::new("generator constructors are not initialized"))?;
     let instance_of =
         Function::new_with_args("value,constructor", "return value instanceof constructor;");
     if instance_of
@@ -25,7 +43,7 @@ pub fn is_constructor(callback: &JsValue) -> Result<bool, JsValue> {
     {
         return Ok(false);
     }
-    if constructors.get(1) != constructors.get(2)
+    if constructors.get(1) != Reflect::get(&js_sys::global(), &"Function".into())?
         && instance_of
             .call2(&JsValue::UNDEFINED, callback, &constructors.get(1))?
             .is_truthy()
@@ -53,27 +71,11 @@ pub(super) fn invoke(
     let instance = composition.construct(&callback, &Array::of2(context, config))?;
     let hooks = Reflect::get(&instance, &super::browser_symbols::get("initHooks")?)?;
     if !hooks.is_null() && !hooks.is_undefined() {
-        let iterator = Reflect::get(&hooks, &Symbol::iterator())?.dyn_into::<Function>()?;
-        let iterator = Reflect::apply(&iterator, &hooks, &Array::new())?;
-        loop {
-            let result = super::browser_registry::method(&iterator, "next", &Array::new())?;
-            if !result.is_object() && !result.is_function() {
-                return Err(js_sys::TypeError::new("iterator result is not an object").into());
-            }
-            if Reflect::get(&result, &"done".into())?.is_truthy() {
-                break;
-            }
-            let hook = Reflect::get(&result, &"value".into())?;
-            let called = composition.call(&hook, &JsValue::UNDEFINED, &Array::new());
-            if let Err(error) = called {
-                if let Ok(close) = Reflect::get(&iterator, &"return".into())
-                    && let Some(close) = close.dyn_ref::<Function>()
-                {
-                    let _ = Reflect::apply(close, &iterator, &Array::new());
-                }
-                return Err(error);
-            }
-        }
+        super::browser_values::for_each(&hooks, |hook| {
+            composition
+                .call(&hook, &JsValue::UNDEFINED, &Array::new())
+                .map(|_| ())
+        })?;
     }
     let init = Reflect::get(&instance, &super::browser_symbols::get("init")?)?;
     if init.is_null() || init.is_undefined() {

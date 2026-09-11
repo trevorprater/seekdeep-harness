@@ -41,7 +41,7 @@ fn request(parent: Arc<Agent>, signal: AbortSignal) -> SubagentStartRequest {
     SubagentStartRequest {
         label: Some("fixture".to_owned()),
         prompt: vec![ContentBlock::Text {
-            text: "do the task".to_owned(),
+            text: "do the task".into(),
         }],
         parent,
         signal,
@@ -76,7 +76,7 @@ fn text(blocks: &[ContentBlock]) -> String {
     blocks
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -136,7 +136,7 @@ fn names_defaults_and_stop_reason_vocabulary_are_exact() {
         ),
         (None, SubagentStopReason::Error),
     ] {
-        assert_eq!(sdk_stop_reason(reason.as_ref()), expected);
+        assert_eq!(sdk_stop_reason(reason.map(Into::into).as_ref()), expected);
     }
 }
 
@@ -205,6 +205,38 @@ async fn real_child_initializes_runs_preserves_environment_and_disposes_idempote
             && record["maxTokens"] == json!(4_096)
     }));
     context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn real_child_retains_surrogate_messages_and_stream_fallback_with_opaque_metadata() {
+    for mode in ["message", "stream"] {
+        let workspace = tempfile::tempdir().unwrap();
+        let context = Context::new();
+        let expected = ContentBlock::text_utf16(&[0x41, 0xd800, 0x42, 0xdc00]);
+        let mut request = request(
+            agent(
+                &context,
+                Some(&workspace.path().to_string_lossy()),
+                "parent",
+            ),
+            AbortSignal::default(),
+        );
+        request.prompt = vec![expected.clone()];
+        let run = start_sdk_run(
+            request,
+            spec(
+                &workspace.path().to_string_lossy(),
+                [("SEEKDEEP_SDK_FIXTURE_RAW_TEXT", mode.to_owned())],
+            ),
+        )
+        .await
+        .unwrap();
+        let outcome = result(&run).await;
+        assert_eq!(outcome.stop_reason, SubagentStopReason::Completed, "{mode}");
+        assert_eq!(outcome.output, vec![expected], "{mode}");
+        run.dispose().await.unwrap();
+        context.fiber().dispose().await.unwrap();
+    }
 }
 
 #[tokio::test]
@@ -611,7 +643,9 @@ mod complete_runtime_e2e {
                 })
                 .flatten()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str()),
+                    ContentBlock::Text { text } => {
+                        Some(text.as_str().expect("fixture uses scalar text"))
+                    }
                     _ => None,
                 })
                 .collect::<String>();
@@ -669,7 +703,7 @@ mod complete_runtime_e2e {
                 Ok(StreamChunk::BlockEnd {
                     index: 0,
                     block: ContentBlock::Text {
-                        text: reply.clone(),
+                        text: reply.clone().into(),
                     },
                 }),
                 Ok(StreamChunk::Usage {
@@ -824,7 +858,7 @@ mod complete_runtime_e2e {
             .agent
             .followup(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "Delegate once.".to_owned(),
+                    text: "Delegate once.".into(),
                 }],
                 MessageSource {
                     kind: "user".to_owned(),
@@ -856,13 +890,16 @@ mod complete_runtime_e2e {
             result
                 .data
                 .pointer("/message/content/0/content/0/text")
-                .and_then(|value| value.as_str()),
+                .and_then(|value| value.deserialize::<String>().ok())
+                .as_deref(),
             Some(expected.as_str())
         );
         assert!(events.iter().any(|event| {
             event.event_type == "assistant/message"
-                && event.data.pointer("/message/content/0/text")
-                    == Some(&json!(format!("child reported:\n{expected}")))
+                && event
+                    .data
+                    .pointer("/message/content/0/text")
+                    .is_some_and(|value| value == format!("child reported:\n{expected}").as_str())
         }));
 
         parent.dispose().await.unwrap();

@@ -15,6 +15,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
+ "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -1207,6 +1208,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
+name = "const-str"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21077772762a1002bb421c3af42ac1725fa56066bfc53d9a55bb79905df2aaf3"
+dependencies = [
+ "const-str-proc-macro",
+]
+
+[[package]]
+name = "const-str-proc-macro"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e1e0fdd2e5d3041e530e1b21158aeeef8b5d0e306bc5c1e3d6cf0930d10e25a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1307,15 +1337,47 @@ dependencies = [
 
 [[package]]
 name = "cssparser"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be934d936a0fbed5bcdc01042b770de1398bf79d0e192f49fa7faea0e99281e"
+dependencies = [
+ "cssparser-macros 0.6.1",
+ "dtoa-short",
+ "itoa",
+ "phf 0.11.3",
+ "smallvec",
+]
+
+[[package]]
+name = "cssparser"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9cdaae01d5ed7882b04d795e7f752f46ff52d2fa3b50a20d28c464510bba98"
 dependencies = [
- "cssparser-macros",
+ "cssparser-macros 0.7.0",
  "dtoa-short",
  "itoa",
  "phf 0.13.1",
  "smallvec",
+]
+
+[[package]]
+name = "cssparser-color"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556c099a61d85989d7af52b692e35a8d68a57e7df8c6d07563dc0778b3960c9f"
+dependencies = [
+ "cssparser 0.33.0",
+]
+
+[[package]]
+name = "cssparser-macros"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13b588ba4ac1a99f7f2964d24b3d896ddc6bf847ee3855dbd4366f058cfcd331"
+dependencies = [
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2006,6 +2068,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gimli"
+version = "0.32.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+dependencies = [
+ "fallible-iterator",
+ "stable_deref_trait",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2160,6 +2232,8 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2846,6 +2920,15 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
@@ -3100,6 +3183,41 @@ checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
 dependencies = [
  "anyhow",
  "version_check",
+]
+
+[[package]]
+name = "lightningcss"
+version = "1.0.0-alpha.71"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb6314c2f0590ac93c86099b98bb7ba8abcf759bfd89604ffca906472bb54937"
+dependencies = [
+ "ahash",
+ "bitflags 2.13.1",
+ "const-str",
+ "cssparser 0.33.0",
+ "cssparser-color",
+ "data-encoding",
+ "getrandom 0.3.4",
+ "indexmap 2.14.0",
+ "itertools 0.10.5",
+ "lazy_static",
+ "lightningcss-derive",
+ "parcel_selectors",
+ "pastey",
+ "pathdiff",
+ "smallvec",
+]
+
+[[package]]
+name = "lightningcss-derive"
+version = "1.0.0-alpha.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84c12744d1279367caed41739ef094c325d53fb0ffcd4f9b84a368796f870252"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3790,6 +3908,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "parcel_selectors"
+version = "0.28.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54fd03f1ad26cb6b3ec1b7414fa78a3bd639e7dbb421b1a60513c96ce886a196"
+dependencies = [
+ "bitflags 2.13.1",
+ "cssparser 0.33.0",
+ "log",
+ "phf 0.11.3",
+ "phf_codegen 0.11.3",
+ "precomputed-hash",
+ "rustc-hash 2.1.3",
+ "smallvec",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3825,10 +3959,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pastey"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
+
+[[package]]
 name = "path-clean"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
+
+[[package]]
+name = "pathdiff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "percent-encoding"
@@ -3864,6 +4010,16 @@ dependencies = [
  "phf_macros 0.13.1",
  "phf_shared 0.13.1",
  "serde",
+]
+
+[[package]]
+name = "phf_codegen"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aef8048c789fa5e851558d709946d6d79a8ff88c0440c587967f8e94bfb1216a"
+dependencies = [
+ "phf_generator 0.11.3",
+ "phf_shared 0.11.3",
 ]
 
 [[package]]
@@ -4824,7 +4980,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdd0be4d296f048bfb06dd01bbc80ef789ddd2e55583e8d2e6b804942abfabc2"
 dependencies = [
- "cssparser",
+ "cssparser 0.37.0",
  "ego-tree",
  "getopts",
  "html5ever",
@@ -5083,6 +5239,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-sdk-protocol",
  "seekdeep-subagent",
@@ -5804,6 +5961,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-failure-display",
  "seekdeep-identity",
+ "seekdeep-lossless-json",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -6322,6 +6480,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "js-sys",
  "seekdeep-cordis",
+ "seekdeep-lossless-json",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -6338,6 +6497,7 @@ dependencies = [
  "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
  "seekdeep-failure-display",
+ "seekdeep-lossless-json",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -6452,9 +6612,25 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "seekdeep-code-runtime-node"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "js-sys",
+ "regress 0.11.1",
+ "ryu-js",
+ "seekdeep-lossless-json",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -6474,6 +6650,7 @@ dependencies = [
  "seekdeep-llm",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "swc_common",
  "swc_ecma_parser",
  "swc_ts_fast_strip",
@@ -6655,6 +6832,7 @@ dependencies = [
  "indexmap 2.14.0",
  "js-sys",
  "parking_lot",
+ "ryu-js",
  "seekdeep-cosmokit",
  "seekdeep-schemastery",
  "serde",
@@ -6766,6 +6944,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-typert-protocol",
  "seekdeep-typert-registry",
@@ -6831,6 +7010,15 @@ dependencies = [
 [[package]]
 name = "seekdeep-demo-launcher"
 version = "0.1.0-rc.5"
+
+[[package]]
+name = "seekdeep-docs-site-runtime"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "seekdeep-e2b"
@@ -7092,6 +7280,7 @@ dependencies = [
  "futures",
  "notify",
  "parking_lot",
+ "regress 0.11.1",
  "seekdeep-cordis",
  "seekdeep-loader",
  "serde",
@@ -7115,6 +7304,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-shell",
  "serde",
  "serde_json",
@@ -7135,6 +7325,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-hook-protocol",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-schemastery",
  "seekdeep-scope",
  "seekdeep-session-persistence",
@@ -7162,6 +7353,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-hook-protocol",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-schemastery",
  "seekdeep-scope",
  "seekdeep-session-persistence",
@@ -7380,6 +7572,7 @@ dependencies = [
  "parking_lot",
  "regress 0.11.1",
  "seekdeep-cordis",
+ "seekdeep-schemastery",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -7434,6 +7627,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-jobs",
+ "seekdeep-llm",
  "seekdeep-schemastery",
  "seekdeep-scope",
  "seekdeep-util",
@@ -7441,6 +7635,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "seekdeep-landlock-entry-wasm"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "seekdeep-landlock-run",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -7461,6 +7664,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-landlock-tools"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "clap",
+ "nix 0.30.1",
+ "regex",
+ "ryu-js",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "seekdeep-llm"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7476,6 +7695,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-identity",
  "seekdeep-invariants",
+ "seekdeep-lossless-json",
  "seekdeep-schemastery",
  "seekdeep-util",
  "serde",
@@ -7569,6 +7789,7 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-llm-deepseek",
  "seekdeep-loader",
+ "seekdeep-lossless-json",
  "seekdeep-schemastery",
  "seekdeep-settings",
  "seekdeep-settings-file",
@@ -7598,6 +7819,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "serde",
  "serde_json",
  "tempfile",
@@ -7648,6 +7870,8 @@ dependencies = [
  "indexmap 2.14.0",
  "num-traits",
  "parking_lot",
+ "seekdeep-code-runtime",
+ "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",
  "seekdeep-cordis-timer",
  "seekdeep-llm",
@@ -7698,6 +7922,15 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "seekdeep-lossless-json"
+version = "0.1.0-rc.5"
+dependencies = [
+ "ryu-js",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7941,11 +8174,16 @@ dependencies = [
  "indexmap 2.14.0",
  "regex",
  "regress 0.11.1",
+ "seekdeep-code-runtime",
+ "seekdeep-code-runtime-worker-thread",
+ "seekdeep-cordis",
  "seekdeep-python-sdk",
  "serde",
  "serde_json",
  "serde_yml",
+ "sha2 0.10.9",
  "tempfile",
+ "tokio",
  "zip",
 ]
 
@@ -8021,11 +8259,14 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clap",
+ "filedescriptor",
+ "gimli",
  "glob",
  "hex",
  "icu_collator",
  "icu_locale",
  "indexmap 2.14.0",
+ "lightningcss",
  "markdown",
  "nix 0.30.1",
  "num-traits",
@@ -8035,10 +8276,14 @@ dependencies = [
  "oxc_parser",
  "oxc_span",
  "oxc_syntax",
+ "parcel_selectors",
  "path-clean",
  "percent-encoding",
+ "portable-pty",
  "regex",
+ "ryu-js",
  "scraper",
+ "seekdeep-typert-generator",
  "serde",
  "serde_json",
  "serde_yml",
@@ -8046,9 +8291,11 @@ dependencies = [
  "sha2 0.10.9",
  "sys-locale",
  "tempfile",
+ "toml",
  "unicode-normalization",
  "url",
  "walkdir",
+ "wasmparser",
 ]
 
 [[package]]
@@ -8212,6 +8459,7 @@ dependencies = [
  "path-clean",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-sdk-protocol",
  "seekdeep-subprocess",
  "seekdeep-subprocess-local",
@@ -8329,6 +8577,7 @@ dependencies = [
  "parking_lot",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-subagent",
  "serde",
  "serde_json",
@@ -8352,6 +8601,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-llm-deepseek",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-sdk-protocol",
  "seekdeep-subagent",
@@ -8532,6 +8782,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-session-persistence",
  "seekdeep-session-title",
  "seekdeep-util",
@@ -8969,6 +9220,7 @@ dependencies = [
  "regex",
  "seekdeep-cordis",
  "seekdeep-invariants",
+ "seekdeep-lossless-json",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -8986,6 +9238,7 @@ dependencies = [
  "parking_lot",
  "seekdeep-cordis",
  "seekdeep-invariants",
+ "seekdeep-lossless-json",
  "seekdeep-storage",
  "serde",
  "serde_json",
@@ -9006,6 +9259,7 @@ dependencies = [
  "ryu-js",
  "seekdeep-cordis",
  "seekdeep-invariants",
+ "seekdeep-lossless-json",
  "seekdeep-storage",
  "serde",
  "serde_json",
@@ -9025,6 +9279,7 @@ dependencies = [
  "rusqlite",
  "seekdeep-cordis",
  "seekdeep-invariants",
+ "seekdeep-lossless-json",
  "seekdeep-storage",
  "serde",
  "serde_json",
@@ -9048,6 +9303,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-sandbox",
  "seekdeep-sandbox-policy",
  "seekdeep-scope",
@@ -9113,6 +9369,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-loader",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-subagent",
  "seekdeep-subprocess",
@@ -9141,6 +9398,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-loader",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-sdk-protocol",
  "seekdeep-subagent",
@@ -9570,6 +9828,7 @@ dependencies = [
  "seekdeep-fs-sandbox",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-sandbox",
  "seekdeep-sandbox-policy",
  "seekdeep-scope",
@@ -9834,11 +10093,13 @@ dependencies = [
  "seekdeep-agent",
  "seekdeep-agent-loop",
  "seekdeep-agent-loop-testkit",
+ "seekdeep-code-runtime",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-jobs",
  "seekdeep-jobs-local",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-subagent",
  "seekdeep-subagent-spawn-in-process",
@@ -10020,6 +10281,8 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
  "seekdeep-system-prompt",
  "seekdeep-user-approval",
  "serde",
@@ -10404,6 +10667,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-session-persistence",
  "seekdeep-storage",
  "seekdeep-storage-domain",
@@ -10425,12 +10689,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d"
 dependencies = [
  "bitflags 2.13.1",
- "cssparser",
+ "cssparser 0.37.0",
  "derive_more",
  "log",
  "new_debug_unreachable",
  "phf 0.13.1",
- "phf_codegen",
+ "phf_codegen 0.13.1",
  "precomputed-hash",
  "rustc-hash 2.1.3",
  "servo_arc",
@@ -10508,6 +10772,15 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_spanned"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
+dependencies = [
+ "serde_core",
 ]
 
 [[package]]
@@ -11200,6 +11473,17 @@ dependencies = [
 
 [[package]]
 name = "syn"
+version = "1.0.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297"
@@ -11560,6 +11844,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.9.12+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
+dependencies = [
+ "indexmap 2.14.0",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.7.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "1.1.1+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11575,9 +11883,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6975367e4d2ef766d86af01ffad14b622fecc8d4357a998fbc4deb6e9bacaf9b"
 dependencies = [
  "indexmap 2.14.0",
- "toml_datetime",
+ "toml_datetime 1.1.1+spec-1.1.0",
  "toml_parser",
- "winnow",
+ "winnow 1.0.4",
 ]
 
 [[package]]
@@ -11586,8 +11894,14 @@ version = "1.1.3+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
 dependencies = [
- "winnow",
+ "winnow 1.0.4",
 ]
+
+[[package]]
+name = "toml_writer"
+version = "1.1.2+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
 name = "tower"
@@ -12028,6 +12342,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmparser"
+version = "0.245.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f08c9adee0428b7bddf3890fc27e015ac4b761cc608c822667102b8bfd6995e"
+dependencies = [
+ "bitflags 2.13.1",
+ "hashbrown 0.16.1",
+ "indexmap 2.14.0",
+ "semver",
+ "serde",
+]
+
+[[package]]
 name = "web-sys"
 version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12054,7 +12381,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba8b815c1b593dc0baf78dd0f4fc8fdb2de53198fb1163738093e9a311c33fb3"
 dependencies = [
  "phf 0.13.1",
- "phf_codegen",
+ "phf_codegen 0.13.1",
  "string_cache",
  "string_cache_codegen",
 ]
@@ -12358,6 +12685,12 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
+version = "0.7.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+
+[[package]]
+name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
@@ -12429,6 +12762,8 @@ dependencies = [
  "clap",
  "futures",
  "indexmap 2.14.0",
+ "nix 0.30.1",
+ "notify",
  "oxc_allocator",
  "oxc_ast",
  "oxc_codegen",

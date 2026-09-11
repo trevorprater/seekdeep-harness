@@ -8,7 +8,6 @@ use seekdeep_core::session::SessionEvent;
 use seekdeep_goal::{GOAL, GoalView};
 use seekdeep_llm::HarnessError;
 use seekdeep_tools::ToolRunContext;
-use serde_json::Value;
 
 /// Current open turn plus the events accepted after its start boundary.
 #[derive(Clone, Debug)]
@@ -118,7 +117,8 @@ fn has_direct_human_input(ctx: &Context, execution: &GoalToolExecution) -> bool 
                 .data
                 .get("source")
                 .and_then(|source| source.get("kind"))
-                .and_then(Value::as_str)
+                .and_then(|kind| kind.deserialize::<String>().ok())
+                .as_deref()
                 == Some("user")
     })
 }
@@ -131,10 +131,21 @@ fn is_matching_goal_round(execution: &GoalToolExecution, goal: &GoalView) -> boo
         let Some(source) = event.data.get("source") else {
             return false;
         };
-        source.get("kind").and_then(Value::as_str) == Some("goal")
-            && source.get("goalId").and_then(Value::as_str) == Some(goal.id.as_str())
-            && source.get("revision").and_then(Value::as_u64) == Some(goal.revision)
-            && source.get("round").and_then(Value::as_u64) == Some(goal.rounds_started)
+        source
+            .get("kind")
+            .and_then(|kind| kind.deserialize::<String>().ok())
+            .as_deref()
+            == Some("goal")
+            && source
+                .get("goalId")
+                .and_then(|id| id.deserialize::<String>().ok())
+                .as_deref()
+                == Some(goal.id.as_str())
+            && source
+                .get("revision")
+                .and_then(|revision| revision.as_u64())
+                == Some(goal.revision)
+            && source.get("round").and_then(|round| round.as_u64()) == Some(goal.rounds_started)
     })
 }
 

@@ -71,7 +71,7 @@ async fn streams_text_and_defers_ends_usage_and_finish_until_done() {
             StreamChunk::BlockEnd {
                 index: 0,
                 block: ContentBlock::Text {
-                    text: "Hello".to_owned()
+                    text: "Hello".into()
                 }
             },
             StreamChunk::Usage {
@@ -133,7 +133,7 @@ async fn empty_initial_reasoning_is_ignored_but_real_reasoning_precedes_text() {
             StreamChunk::BlockEnd {
                 index: 1,
                 block: ContentBlock::Text {
-                    text: "answer".to_owned()
+                    text: "answer".into()
                 }
             }
         ]

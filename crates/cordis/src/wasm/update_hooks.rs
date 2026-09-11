@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use js_sys::{Array, Function, Map, Object, Reflect, Symbol, WeakMap};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use super::{browser_registry::method, object, set};
+use super::{browser_registry::method, browser_values, object};
 
 thread_local! {
     static PROTOTYPE: RefCell<Option<Object>> = const { RefCell::new(None) };
@@ -28,9 +28,9 @@ pub fn create_disposable_list(prototype: Option<Object>) -> Result<Object, JsVal
         None => disposable_list_prototype()?,
     };
     let list = Object::create(&prototype);
-    set(&list, "sn", &0.into())?;
-    set(&list, "map", &Map::new())?;
-    set(&list, "weak", &WeakMap::new())?;
+    browser_values::define_data(&list, &"sn".into(), &0.into())?;
+    browser_values::define_data(&list, &"map".into(), &Map::new())?;
+    browser_values::define_data(&list, &"weak".into(), &WeakMap::new())?;
     Ok(list)
 }
 
@@ -46,10 +46,10 @@ pub(super) fn disposable_list() -> Result<JsValue, JsValue> {
 pub fn disposable_list_prototype() -> Result<Object, JsValue> {
     let prototype = Object::new();
     for (name, key) in [
+        ("length", "length".into()),
         ("push", "push".into()),
         ("delete", "delete".into()),
         ("clear", "clear".into()),
-        ("length", "length".into()),
         ("iterator", Symbol::iterator().into()),
         ("inspect", Symbol::for_("nodejs.util.inspect.custom").into()),
     ] {

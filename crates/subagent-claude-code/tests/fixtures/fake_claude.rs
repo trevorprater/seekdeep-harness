@@ -2,10 +2,11 @@
 
 use std::io::{BufRead as _, Write as _};
 
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Value, json};
 
 #[allow(clippy::needless_pass_by_value)]
-fn emit(value: Value) -> anyhow::Result<()> {
+fn emit(value: impl serde::Serialize) -> anyhow::Result<()> {
     let mut output = std::io::stdout().lock();
     serde_json::to_writer(&mut output, &value)?;
     output.write_all(b"\n")?;
@@ -35,6 +36,19 @@ fn main() -> anyhow::Result<()> {
         )?;
     }
     match mode.as_str() {
+        "raw-text" => {
+            let prompt = JsonValue::parse(input)?;
+            anyhow::ensure!(
+                prompt["message"]["content"][0]["text"].to_utf16()
+                    == Some(vec![0x41, 0xd800, 0x42, 0xdc00])
+            );
+            emit(JsonValue::parse(
+                r#"{"type":"result","subtype":"success","is_error":false,"result":"A\ud800B\udc00","ignored":{"\ud800":"\udfff","huge":9007199254740993,"tiny":1e-400}}"#.to_owned()
+            )?)?;
+        }
+        "raw-metadata" => emit(JsonValue::parse(
+            r#"{"type":"result","subtype":"success","is_error":false,"result":"scalar answer","ignored":{"\ud800":"\udfff"}}"#.to_owned()
+        )?)?,
         "success" => emit(json!({
             "type":"result","subtype":"success","is_error":false,
             "result":std::env::var("SEEKDEEP_CLAUDE_FIXTURE_ANSWER")

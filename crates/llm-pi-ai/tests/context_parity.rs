@@ -8,7 +8,7 @@ use seekdeep_attachment::{
     SaveImageAttachment, StoredImageAttachment,
 };
 use seekdeep_llm::{
-    AbortSignal, CallId, ContentBlock, GenerateOptions, LlmError, Message, MessageRole,
+    AbortSignal, CallId, ContentBlock, GenerateOptions, JsonString, LlmError, Message, MessageRole,
     MessageSource, ModelId, ProviderId, ToolSchema,
 };
 use seekdeep_llm_pi_ai::context::{to_pi_context, to_pi_context_with_images};
@@ -111,7 +111,7 @@ fn converts_complete_text_history_and_recovers_tool_names() {
         history(
             MessageRole::System,
             vec![ContentBlock::Text {
-                text: "history system".to_owned(),
+                text: "history system".into(),
             }],
         ),
         history(
@@ -124,14 +124,14 @@ fn converts_complete_text_history_and_recovers_tool_names() {
         ),
         user(vec![
             ContentBlock::Text {
-                text: "after tool".to_owned(),
+                text: "after tool".into(),
             },
             ContentBlock::ToolResult {
                 tool_call_id: call_id,
                 content: vec![ContentBlock::ToolResult {
                     tool_call_id: CallId::new("nested"),
                     content: vec![ContentBlock::Text {
-                        text: String::new(),
+                        text: JsonString::default(),
                     }],
                     is_error: None,
                 }],
@@ -188,7 +188,7 @@ async fn resolves_images_flattens_nested_results_and_preserves_fallbacks() {
         user(vec![
             image(),
             ContentBlock::Text {
-                text: "caption".to_owned(),
+                text: "caption".into(),
             },
             ContentBlock::Reasoning {
                 text: "ignored".to_owned(),
@@ -205,7 +205,7 @@ async fn resolves_images_flattens_nested_results_and_preserves_fallbacks() {
                 ContentBlock::ToolResult {
                     tool_call_id: CallId::new("nested"),
                     content: vec![ContentBlock::Text {
-                        text: "before".to_owned(),
+                        text: "before".into(),
                     }],
                     is_error: None,
                 },

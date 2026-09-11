@@ -2,8 +2,8 @@
 //! line-numbered window and a model-facing envelope.
 
 use seekdeep_fs::{FsError, FsErrorCode};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Default maximum characters returned for a single line.
 pub const READ_MAX_LINE_LENGTH: usize = 2000;
@@ -278,40 +278,26 @@ pub struct FsReadMeta {
     pub lang: Option<String>,
 }
 
-fn is_file_text_line(value: &Value) -> bool {
-    let Some(object) = value.as_object() else {
-        return false;
-    };
-    let number = object
-        .get("number")
-        .and_then(Value::as_u64)
-        .is_some_and(|number| number >= 1);
-    let text = object.get("text").is_some_and(Value::is_string);
-    number && text
-}
-
 /// Narrows opaque live or replayed result metadata to a structured read window.
 #[must_use]
-pub fn read_meta_from_meta(meta: &Value) -> Option<FsReadMeta> {
-    let object = meta.as_object()?;
-    let path = object.get("path")?.as_str()?.to_owned();
-    let offset = object.get("offset")?.as_u64()?;
+pub fn read_meta_from_meta(meta: &JsonValue) -> Option<FsReadMeta> {
+    let path = meta.get("path")?.deserialize().ok()?;
+    let offset = json_line_number(meta.get("offset")?)?;
     if offset < 1 {
         return None;
     }
-    let total_lines = object.get("totalLines")?.as_u64()?;
-    let lines = object.get("lines")?.as_array()?;
-    if !lines.iter().all(is_file_text_line) {
-        return None;
-    }
-    let lang = object.get("lang").map_or(Some(None), |value| {
-        value.as_str().map(|s| Some(s.to_owned()))
-    })?;
+    let total_lines = json_line_number(meta.get("totalLines")?)?;
+    let lines = meta.get("lines")?.array_items()?;
+    let lang = meta
+        .get("lang")
+        .map(|value| value.deserialize::<String>())
+        .transpose()
+        .ok()?;
     let mut previous = offset - 1;
     let mut decoded = Vec::with_capacity(lines.len());
     for line in lines {
-        let number = line.get("number")?.as_u64()?;
-        let text = line.get("text")?.as_str()?.to_owned();
+        let number = json_line_number(line.get("number")?)?;
+        let text = line.get("text")?.deserialize().ok()?;
         if number <= previous || number > total_lines {
             return None;
         }
@@ -327,9 +313,34 @@ pub fn read_meta_from_meta(meta: &Value) -> Option<FsReadMeta> {
     })
 }
 
+fn json_line_number(value: JsonRef<'_>) -> Option<u64> {
+    let number = value.as_f64()?;
+    if number.fract() != 0.0 || !(0.0..18_446_744_073_709_551_616.0).contains(&number) {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Some(number as u64)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_meta_ignores_raw_extensions_and_uses_final_properties() {
+        let meta = JsonValue::parse(
+            r#"{"path":"old","path":"a.txt","offset":1e0,"lines":[{"number":1.0,"text":"before","text":"after","\ud800":"\udfff"}],"totalLines":1e0,"\udfff":{"value":"\ud800"}}"#.to_owned(),
+        ).unwrap();
+        let read = read_meta_from_meta(&meta).unwrap();
+        assert_eq!(read.path, "a.txt");
+        assert_eq!(
+            read.lines,
+            vec![FileTextLine {
+                number: 1,
+                text: "after".to_owned()
+            }]
+        );
+    }
 
     fn window(offset: u64, limit: usize) -> ReadWindow {
         ReadWindow {

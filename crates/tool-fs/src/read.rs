@@ -198,7 +198,8 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                         total_lines: value.total_lines,
                         truncated_by_bytes: truncated_by_bytes.then_some(true),
                     },
-                ),
+                )
+                .into(),
             }])
         }),
     )
@@ -284,7 +285,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                 String::new()
             };
             Some(ToolCallView::Generic(GenericCallView {
-                title: format!("Read {}{}", args.file_path, window),
+                title: format!("Read {}{}", args.file_path, window).into(),
                 kind: Some(ToolCallKind::Read),
                 raw_input: None,
                 content: None,
@@ -302,7 +303,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                 let meta = read_meta_from_meta(result.meta.as_ref()?)?;
                 let only = (result.content.len() == 1).then(|| &result.content[0]);
                 let text = match only {
-                    Some(ContentBlock::Text { text }) => Some(text),
+                    Some(ContentBlock::Text { text }) => text.as_str(),
                     _ => None,
                 }?;
                 let body = extract_read_body(text)?;
@@ -321,7 +322,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                     total_lines: meta.total_lines,
                     lang: meta.lang,
                     content: Some(vec![ContentBlock::Text {
-                        text: body.to_owned(),
+                        text: body.into(),
                     }]),
                 }))
             },

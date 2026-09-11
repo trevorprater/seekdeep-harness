@@ -3,13 +3,13 @@
 use std::sync::Arc;
 
 use seekdeep_cordis::{Context, Plugin, ServiceKey};
-use seekdeep_core::session::{AppendOptions, Session, SurfaceOp};
+use seekdeep_core::session::{AppendOptions, JsonValue, Session, SurfaceOp};
 use seekdeep_llm::{ContentBlock, Message};
 use seekdeep_schemastery::Schema;
 use seekdeep_token_meter::TOKEN_METER;
 use serde_json::{Value, json};
 
-use crate::config::{DEFAULTS, PRUNE_MARKER, code_point_length, resolve_config};
+use crate::config::{DEFAULTS, PRUNE_MARKER, resolve_config};
 use crate::types::{PruneResult, PrunedEntry, ResolvedConfig, ToolResultPruneConfig};
 
 /// Cordis plugin name.
@@ -78,7 +78,7 @@ impl ToolResultPruner {
     #[must_use]
     pub fn measure_content(&self, blocks: &[ContentBlock]) -> usize {
         blocks.iter().fold(0, |chars, block| match block {
-            ContentBlock::Text { text } => chars + code_point_length(text),
+            ContentBlock::Text { text } => chars + text.code_point_len(),
             _ => chars,
         })
     }
@@ -107,7 +107,7 @@ impl ToolResultPruner {
                 pruned.push(block.clone());
                 continue;
             };
-            let points: Vec<char> = text.chars().collect();
+            let points = text.code_points().collect::<Vec<_>>();
             let block_start = consumed;
             let block_end = block_start + points.len();
             let head_end = points.len().min(removed_start.saturating_sub(block_start));
@@ -121,14 +121,14 @@ impl ToolResultPruner {
             if !marker.is_empty() {
                 marker_inserted = true;
             }
-            let text = format!(
-                "{}{}{}",
-                points[..head_end].iter().collect::<String>(),
-                marker,
-                points[tail_start..].iter().collect::<String>()
-            );
+            let mut text = seekdeep_llm::JsonString::from_code_points(&points[..head_end])
+                .expect("string code points are within the Unicode range");
+            text.push_str(marker);
+            let tail = seekdeep_llm::JsonString::from_code_points(&points[tail_start..])
+                .expect("string code points are within the Unicode range");
+            text.push_utf16(tail.utf16_units());
             if !text.is_empty() {
-                pruned.push(ContentBlock::Text { text });
+                pruned.push(ContentBlock::text(text));
             }
             consumed = block_end;
         }
@@ -167,13 +167,11 @@ impl ToolResultPruner {
         let mut pruned = Vec::new();
         let mut chars_removed = 0;
         for (seq, event) in candidates {
-            let message: Message = serde_json::from_value(
-                event
-                    .data
-                    .get("message")
-                    .cloned()
-                    .ok_or_else(|| anyhow::anyhow!("tool/result lacks its message"))?,
-            )?;
+            let message: Message = event
+                .data
+                .get("message")
+                .ok_or_else(|| anyhow::anyhow!("tool/result lacks its message"))?
+                .deserialize()?;
             let Some(ContentBlock::ToolResult {
                 tool_call_id,
                 content: result_content,
@@ -217,8 +215,8 @@ impl ToolResultPruner {
             )?;
 
             let mut data = event.data.clone();
-            data["message"] = serde_json::to_value(new_message)?;
-            let replacement = session.append(
+            data.insert("message", JsonValue::from_serialize(&new_message)?)?;
+            let replacement = session.append_json(
                 "tool/result",
                 data,
                 AppendOptions {

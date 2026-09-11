@@ -207,7 +207,7 @@ fn tool(calls: Arc<AtomicUsize>) -> seekdeep_tools::ToolDefinition {
             calls.fetch_add(1, Ordering::AcqRel);
             Box::pin(async move {
                 Ok(vec![ContentBlock::Text {
-                    text: format!("{}:{}", args.command, args.extra),
+                    text: format!("{}:{}", args.command, args.extra).into(),
                 }])
             })
         }),
@@ -344,7 +344,7 @@ async fn post_context_is_attached_after_the_tool_result() {
     assert_eq!(
         outcome.additional_contexts()[0].content(),
         [ContentBlock::Text {
-            text: "post context".to_owned()
+            text: "post context".into()
         }]
     );
 }
@@ -524,7 +524,7 @@ async fn session_start_prompt_and_stop_map_to_inject_reject_and_steer() {
 
     let prompt = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "prompt".to_owned(),
+            text: "prompt".into(),
         }],
         seekdeep_llm::MessageSource::user(),
     );
@@ -564,7 +564,7 @@ async fn session_start_prompt_and_stop_map_to_inject_reject_and_steer() {
     assert_eq!(
         messages[1].0.content(),
         [ContentBlock::Text {
-            text: "continue work".to_owned()
+            text: "continue work".into()
         }]
     );
     assert_eq!(shell.specs().len(), 3);

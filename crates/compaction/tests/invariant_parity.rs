@@ -6,7 +6,7 @@ use seekdeep_commands::CommandId;
 use seekdeep_compaction::{CompactionId, compact_checkpoint_source};
 use seekdeep_cordis::{Context, EventArgs};
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionEvent, SessionId, SurfaceOp},
+    session::{AppendOptions, JsonValue, Session, SessionEvent, SessionId, SurfaceOp},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
@@ -177,6 +177,72 @@ async fn accepts_numbered_and_standalone_success_failure_and_late_registration()
 }
 
 #[tokio::test]
+async fn raw_summary_and_checkpoint_metadata_do_not_hide_transaction_validation() {
+    let (context, sessions) = setup().await;
+    let session = create(&context, &sessions, "raw-compaction-metadata");
+    let original = session
+        .append(
+            "user/message",
+            serde_json::to_value(Message::user(
+                vec![ContentBlock::Text {
+                    text: "original".into(),
+                }],
+                MessageSource::user(),
+            ))
+            .unwrap(),
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                ..AppendOptions::default()
+            },
+        )
+        .unwrap();
+    let mut checkpoint = JsonValue::from_serialize(&Message::user(
+        vec![ContentBlock::Text {
+            text: "checkpoint".into(),
+        }],
+        compact_checkpoint_source(&CompactionId::new(ID), None),
+    ))
+    .unwrap();
+    let mut source = checkpoint["source"].clone();
+    source
+        .insert("opaque", JsonValue::from_utf16(&[0xd800]))
+        .unwrap();
+    checkpoint.insert("source", source).unwrap();
+    let options = AppendOptions {
+        surface_op: Some(SurfaceOp::replace(original.seq, original.seq)),
+        ..AppendOptions::default()
+    };
+    assert!(
+        session
+            .append_json("user/message", checkpoint.clone(), options.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("has no matching compaction/start")
+    );
+    start(&session, ID, None, None).unwrap();
+    let mut summary = JsonValue::from(summary([]));
+    summary
+        .insert(
+            "opaque",
+            JsonValue::parse(r#"{"\ud800":"\udfff","n":1.2500}"#.to_owned()).unwrap(),
+        )
+        .unwrap();
+    session
+        .append_json(
+            "compaction/summary",
+            summary.clone(),
+            AppendOptions::default(),
+        )
+        .unwrap();
+    let replacement = session
+        .append_json("user/message", checkpoint.clone(), options)
+        .unwrap();
+    assert_eq!(replacement.data.as_raw(), checkpoint.as_raw());
+    assert_eq!(session.events()[2].data.as_raw(), summary.as_raw());
+    end(&session, ID, None, None, None).unwrap();
+}
+
+#[tokio::test]
 async fn end_seed_clears_inherited_orphans_but_rejects_closed_cross_turn_brackets() {
     let context = Context::new();
     let sessions = SessionStore::install(&context).unwrap();
@@ -315,7 +381,7 @@ async fn adopts_a_bare_session_and_ignores_unrelated_committed_events() {
             event_type: "turn/start".to_owned(),
             seq: 0,
             time: 0,
-            data: json!({"turn": 1}),
+            data: json!({"turn": 1}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -324,7 +390,7 @@ async fn adopts_a_bare_session_and_ignores_unrelated_committed_events() {
             event_type: "step/start".to_owned(),
             seq: 1,
             time: 1,
-            data: json!({"turn": 1, "step": 1}),
+            data: json!({"turn": 1, "step": 1}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -333,7 +399,7 @@ async fn adopts_a_bare_session_and_ignores_unrelated_committed_events() {
             event_type: "compaction/start".to_owned(),
             seq: 2,
             time: 2,
-            data: json!({"compactionId": ID, "turn": 1}),
+            data: json!({"compactionId": ID, "turn": 1}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -378,12 +444,7 @@ async fn rejects_wrong_owners_nested_brackets_and_crossing_turn_boundaries() {
 }
 
 fn append_user(session: &Session, text: &str, source: MessageSource) -> u64 {
-    let message = Message::user(
-        vec![ContentBlock::Text {
-            text: text.to_owned(),
-        }],
-        source,
-    );
+    let message = Message::user(vec![ContentBlock::Text { text: text.into() }], source);
     session
         .append(
             "user/message",
@@ -407,7 +468,7 @@ async fn checkpoint_requires_matching_open_transaction_and_nonempty_command_iden
     append_summary(&session, summary([])).unwrap();
     let checkpoint = Message::user(
         vec![ContentBlock::Text {
-            text: "checkpoint".to_owned(),
+            text: "checkpoint".into(),
         }],
         compact_checkpoint_source(&CompactionId::new(NEXT_ID), None),
     );
@@ -432,7 +493,7 @@ async fn checkpoint_requires_matching_open_transaction_and_nonempty_command_iden
     let original = append_user(&without, "original", MessageSource::user());
     let checkpoint = Message::user(
         vec![ContentBlock::Text {
-            text: "checkpoint".to_owned(),
+            text: "checkpoint".into(),
         }],
         compact_checkpoint_source(&CompactionId::new(ID), None),
     );
@@ -455,7 +516,7 @@ async fn checkpoint_requires_matching_open_transaction_and_nonempty_command_iden
     start(&empty, ID, Some(1), None).unwrap();
     let checkpoint = Message::user(
         vec![ContentBlock::Text {
-            text: "checkpoint".to_owned(),
+            text: "checkpoint".into(),
         }],
         compact_checkpoint_source(&CompactionId::new(ID), Some(&CommandId::new(""))),
     );

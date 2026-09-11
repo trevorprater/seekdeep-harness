@@ -1,11 +1,13 @@
 //! Harness request-history conversion into pi-ai context values.
 
+mod deserialize;
+
 use std::collections::HashMap;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use seekdeep_attachment::AttachmentStore;
 use seekdeep_llm::{
-    CallId, ContentBlock, GenerateOptions, LlmError, Message, MessageRole, ToolSchema,
+    CallId, ContentBlock, GenerateOptions, JsonString, LlmError, Message, MessageRole, ToolSchema,
     content_has_image,
 };
 use serde::{Deserialize, Serialize};
@@ -14,14 +16,14 @@ use serde_json::{Map, Value};
 use crate::replay::{PiAssistantBlock, PiAssistantMessage, to_pi_assistant};
 
 /// Native pi-ai text or inline image content.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "type")]
 pub enum PiUserContentBlock {
     /// Text content.
     #[serde(rename = "text")]
     Text {
         /// Exact text.
-        text: String,
+        text: JsonString,
     },
     /// Base64-encoded image bytes.
     #[serde(rename = "image")]
@@ -35,11 +37,11 @@ pub enum PiUserContentBlock {
 }
 
 /// Native user content is compact text until an image requires block form.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum PiUserContent {
     /// Text-only content.
-    Text(String),
+    Text(JsonString),
     /// Mixed text and image content.
     Blocks(Vec<PiUserContentBlock>),
 }
@@ -99,7 +101,7 @@ pub struct PiToolResultMessage {
 }
 
 /// One native pi-ai history item.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum PiMessage {
     /// User or folded system input.
@@ -246,23 +248,25 @@ fn tool_of(tool: &ToolSchema) -> PiTool {
     }
 }
 
-fn flatten_text(message: &Message) -> String {
-    message
+fn flatten_text(message: &Message) -> JsonString {
+    let text = message
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text),
             _ => None,
         })
-        .collect()
+        .collect::<Vec<_>>();
+    JsonString::concat(&text)
 }
 
-fn tool_result_text(blocks: &[ContentBlock]) -> String {
-    let mut output = String::new();
-    for block in blocks {
+fn tool_result_text(blocks: &[ContentBlock]) -> JsonString {
+    let mut output = JsonString::default();
+    let mut pending = blocks.iter().rev().collect::<Vec<_>>();
+    while let Some(block) = pending.pop() {
         match block {
-            ContentBlock::Text { text } => output.push_str(text),
-            ContentBlock::ToolResult { content, .. } => output.push_str(&tool_result_text(content)),
+            ContentBlock::Text { text } => output.push_utf16(text.utf16_units()),
+            ContentBlock::ToolResult { content, .. } => pending.extend(content.iter().rev()),
             ContentBlock::Reasoning { .. }
             | ContentBlock::Image { .. }
             | ContentBlock::ToolCall { .. }
@@ -279,7 +283,7 @@ fn top_level_results(content: &[ContentBlock]) -> Vec<&ContentBlock> {
         .collect()
 }
 
-fn user_message(text: String) -> PiMessage {
+fn user_message(text: JsonString) -> PiMessage {
     PiMessage::User(PiUserMessage {
         role: PiUserRole::User,
         content: PiUserContent::Text(text),
@@ -317,7 +321,7 @@ fn text_tool_result(
             .unwrap_or_else(|| "unknown".to_owned()),
         content: vec![PiUserContentBlock::Text {
             text: if text.is_empty() {
-                "(no output)".to_owned()
+                "(no output)".into()
             } else {
                 text
             },
@@ -344,7 +348,7 @@ async fn image_tool_result(
     let content = match resolved {
         PiUserContent::Text(text) => vec![PiUserContentBlock::Text {
             text: if text.is_empty() {
-                "(no output)".to_owned()
+                "(no output)".into()
             } else {
                 text
             },
@@ -368,47 +372,76 @@ async fn user_content<'a>(
     blocks: impl IntoIterator<Item = &'a ContentBlock>,
     attachments: &AttachmentStore,
 ) -> anyhow::Result<PiUserContent> {
+    // Nested text-only results collapse before an enclosing image list is formed.
+    struct Frame<'a> {
+        pending: Vec<&'a ContentBlock>,
+        content: Vec<PiUserContentBlock>,
+    }
     let mut pending = blocks.into_iter().collect::<Vec<_>>();
     pending.reverse();
-    let mut content = Vec::new();
-    let mut has_image = false;
-    while let Some(block) = pending.pop() {
-        match block {
-            ContentBlock::Text { text } if !text.is_empty() => {
-                content.push(PiUserContentBlock::Text { text: text.clone() });
+    let mut frames = vec![Frame {
+        pending,
+        content: Vec::new(),
+    }];
+    loop {
+        if let Some(block) = frames.last_mut().and_then(|frame| frame.pending.pop()) {
+            match block {
+                ContentBlock::Text { text } if !text.is_empty() => {
+                    frames
+                        .last_mut()
+                        .unwrap()
+                        .content
+                        .push(PiUserContentBlock::Text { text: text.clone() });
+                }
+                ContentBlock::Image { attachment } => {
+                    let stored = attachments.read_image(attachment, None).await?;
+                    frames
+                        .last_mut()
+                        .unwrap()
+                        .content
+                        .push(PiUserContentBlock::Image {
+                            data: STANDARD.encode(stored.data),
+                            mime_type: stored.reference.media_type.to_string(),
+                        });
+                }
+                ContentBlock::ToolResult { content, .. } => frames.push(Frame {
+                    pending: content.iter().rev().collect(),
+                    content: Vec::new(),
+                }),
+                ContentBlock::Text { .. }
+                | ContentBlock::Reasoning { .. }
+                | ContentBlock::ToolCall { .. }
+                | ContentBlock::Unknown { .. } => {}
             }
-            ContentBlock::Image { attachment } => {
-                let stored = attachments.read_image(attachment, None).await?;
-                has_image = true;
-                content.push(PiUserContentBlock::Image {
-                    data: STANDARD.encode(stored.data),
-                    mime_type: stored.reference.media_type.to_string(),
-                });
+            continue;
+        }
+        let content = compact_content(frames.pop().unwrap().content);
+        let Some(parent) = frames.last_mut() else {
+            return Ok(content);
+        };
+        match content {
+            PiUserContent::Text(text) if !text.is_empty() => {
+                parent.content.push(PiUserContentBlock::Text { text });
             }
-            ContentBlock::ToolResult {
-                content: nested, ..
-            } => {
-                pending.extend(nested.iter().rev());
-            }
-            ContentBlock::Text { .. }
-            | ContentBlock::Reasoning { .. }
-            | ContentBlock::ToolCall { .. }
-            | ContentBlock::Unknown { .. } => {}
+            PiUserContent::Text(_) => {}
+            PiUserContent::Blocks(blocks) => parent.content.extend(blocks),
         }
     }
-    if has_image {
-        Ok(PiUserContent::Blocks(content))
-    } else {
-        Ok(PiUserContent::Text(
-            content
-                .into_iter()
-                .map(|block| match block {
-                    PiUserContentBlock::Text { text } => text,
-                    PiUserContentBlock::Image { .. } => {
-                        unreachable!("has_image is false")
-                    }
-                })
-                .collect(),
-        ))
+}
+
+fn compact_content(content: Vec<PiUserContentBlock>) -> PiUserContent {
+    if content
+        .iter()
+        .any(|block| matches!(block, PiUserContentBlock::Image { .. }))
+    {
+        return PiUserContent::Blocks(content);
     }
+    let text = content
+        .into_iter()
+        .map(|block| match block {
+            PiUserContentBlock::Text { text } => text,
+            PiUserContentBlock::Image { .. } => unreachable!("image content was returned above"),
+        })
+        .collect::<Vec<_>>();
+    PiUserContent::Text(JsonString::join(&text, ""))
 }

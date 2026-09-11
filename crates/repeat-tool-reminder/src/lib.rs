@@ -246,7 +246,7 @@ fn reminder(tool_name: &str, count: f64, text: String) -> UserMessage {
         "summary".to_owned(),
         Value::String(format!("{tool_name} × {}", render_number(count))),
     );
-    UserMessage::new(vec![ContentBlock::Text { text }], source)
+    UserMessage::new(vec![ContentBlock::text(text)], source)
 }
 
 fn detailed_reminder(tool_name: &str, count: f64, arguments: &str) -> String {

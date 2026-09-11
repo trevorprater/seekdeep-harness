@@ -193,13 +193,11 @@ pub fn fold_subagent_descriptor(
     let version = event
         .data
         .get("version")
-        .and_then(serde_json::Value::as_u64);
+        .and_then(|version| version.as_u64());
     if version != Some(u64::from(SUBAGENT_DESCRIPTOR_VERSION)) {
         return Ok(None);
     }
-    Ok(Some(serde_json::from_value::<SubagentDescriptorData>(
-        event.data.clone(),
-    )?))
+    Ok(Some(event.data.deserialize::<SubagentDescriptorData>()?))
 }
 
 #[cfg(test)]
@@ -224,7 +222,7 @@ mod tests {
             event_type: "subagent/descriptor".to_owned(),
             seq: 0,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

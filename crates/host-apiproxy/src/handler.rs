@@ -11,6 +11,7 @@ use seekdeep_client_connection::{
     ConnectionApiProxy, ConnectionFallback, DownlinkApi, DownlinkStream, EventFrame, HttpMethod,
     HttpRequest, HttpResponse, RpcError, RpcId, RpcResult, ServerResponse,
 };
+use seekdeep_core::session::JsonValue;
 use seekdeep_llm::AbortSignal;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -91,6 +92,18 @@ pub trait ApiProxyRuntime: Send + Sync + 'static {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>>;
+
+    /// Invokes a unary method without projecting arbitrary response data through a UTF-8 value tree.
+    /// The default adapts control-only implementations of [`Self::unary`].
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        let response = self.unary(method, request, signal);
+        async move { response_json(response.await?) }.boxed()
+    }
 
     /// Delivers one structurally valid Client response.
     fn respond(
@@ -218,8 +231,9 @@ impl ApiProxyHandler {
         };
         let signal = request.signal;
         let narrow = RpcRequest::new(message.rpc_id, payload);
-        let future = match catch_unwind(AssertUnwindSafe(|| self.api.unary(method, narrow, signal)))
-        {
+        let future = match catch_unwind(AssertUnwindSafe(|| {
+            self.api.unary_json(method, narrow, signal)
+        })) {
             Ok(future) => future,
             Err(panic) => return handler_panic(&*panic),
         };
@@ -325,7 +339,7 @@ fn typed_downlink<F: Serialize + Send + 'static>(frames: ApiDownlinkStream<F>) -
             let frame = frame?;
             Ok(EventFrame {
                 rpc_id: frame.rpc_id,
-                payload: serde_json::to_value(frame.payload)?,
+                payload: JsonValue::from_serialize(&frame.payload)?,
             })
         })
         .boxed()
@@ -369,14 +383,24 @@ where
 }
 
 fn full_sse_frame<F: Serialize>(narrow: RpcRequest<F>) -> anyhow::Result<Vec<u8>> {
-    let payload = serde_json::to_value(narrow.payload)?;
-    let method = payload
-        .as_object()
-        .and_then(|object| object.get("type"))
-        .and_then(Value::as_str)
+    let payload = JsonValue::from_serialize(&narrow.payload)?;
+    let method = payload["type"]
+        .as_str()
         .ok_or_else(|| anyhow::anyhow!("stream payload has no string type"))?;
     let full = ServerRequest::new(narrow.rpc_id, method, payload.clone());
     Ok(format!("data: {}\n\n", serde_json::to_string(&full)?).into_bytes())
+}
+
+pub(crate) fn response_json(
+    response: RpcResponse<Value>,
+) -> anyhow::Result<RpcResponse<JsonValue>> {
+    let result = match response.result {
+        RpcResult::Success { value } => RpcResult::Success {
+            value: value.as_ref().map(JsonValue::from_serialize).transpose()?,
+        },
+        RpcResult::Failure { error } => RpcResult::Failure { error },
+    };
+    Ok(RpcResponse::new(response.rpc_id, result))
 }
 
 fn stream_error_frame(error: &anyhow::Error) -> Vec<u8> {

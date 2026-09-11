@@ -1,6 +1,6 @@
 //! Defensive diff, read, Web, search, and terminal card narrowing.
 
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 use crate::{ToolCallBlock, relativize_to_cwd};
 
@@ -25,13 +25,10 @@ pub struct DiffCardModel {
     pub diffs: Vec<DiffHunk>,
 }
 
-fn card<'a>(
-    value: Option<&'a Value>,
-    expected: &str,
-) -> Option<&'a serde_json::Map<String, Value>> {
+fn card<'a>(value: Option<&'a Value>, expected: &str) -> Option<&'a Value> {
     value
-        .and_then(Value::as_object)
-        .filter(|view| view.get("card").and_then(Value::as_str) == Some(expected))
+        .filter(|view| view.is_object())
+        .filter(|view| view.get_value("card").and_then(Value::as_str) == Some(expected))
 }
 
 fn narrow_diffs(value: Option<&Value>) -> Option<Vec<DiffHunk>> {
@@ -42,15 +39,17 @@ fn narrow_diffs(value: Option<&Value>) -> Option<Vec<DiffHunk>> {
     values
         .iter()
         .map(|value| {
-            let value = value.as_object()?;
+            if !value.is_object() {
+                return None;
+            }
             Some(DiffHunk {
-                path: value.get("path")?.as_str()?.to_owned(),
-                old_text: match value.get("oldText")? {
-                    Value::Null => None,
-                    Value::String(text) => Some(text.clone()),
-                    _ => return None,
+                path: value.get_value("path")?.as_str()?.to_owned(),
+                old_text: if value.get_value("oldText")?.is_null() {
+                    None
+                } else {
+                    Some(value.get_value("oldText")?.as_str()?.to_owned())
                 },
-                new_text: value.get("newText")?.as_str()?.to_owned(),
+                new_text: value.get_value("newText")?.as_str()?.to_owned(),
             })
         })
         .collect()
@@ -66,7 +65,7 @@ pub fn diff_card_model(block: &ToolCallBlock) -> Option<DiffCardModel> {
     };
     let view = card(view, "diff")?;
     Some(DiffCardModel {
-        diffs: narrow_diffs(view.get("diffs"))?,
+        diffs: narrow_diffs(view.get_value("diffs"))?,
     })
 }
 
@@ -99,28 +98,30 @@ pub fn read_card_model(block: &ToolCallBlock, cwd: Option<&str>) -> Option<ReadC
         return None;
     }
     let view = card(block.result_view(), "read")?;
-    let path = view.get("path")?.as_str()?;
+    let path = view.get_value("path")?.as_str()?;
     let lines = view
-        .get("lines")?
+        .get_value("lines")?
         .as_array()?
         .iter()
         .map(|line| {
-            let line = line.as_object()?;
+            if !line.is_object() {
+                return None;
+            }
             Some(ReadLine {
-                number: line.get("number")?.as_u64()?,
-                text: line.get("text")?.as_str()?.to_owned(),
+                number: line.get_value("number")?.as_u64()?,
+                text: line.get_value("text")?.as_str()?.to_owned(),
             })
         })
         .collect::<Option<Vec<_>>>()?;
     Some(ReadCardModel {
         label: view
-            .get("title")
+            .get_value("title")
             .and_then(Value::as_str)
             .map_or_else(|| relativize_to_cwd(path, cwd), ToOwned::to_owned),
         lines,
-        total_lines: view.get("totalLines")?.as_u64()?,
+        total_lines: view.get_value("totalLines")?.as_u64()?,
         lang: view
-            .get("lang")
+            .get_value("lang")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
     })
@@ -170,29 +171,31 @@ pub fn web_card_model(block: &ToolCallBlock) -> Option<WebCardModel> {
     }
     let view = card(block.result_view(), "web")?;
     let truncated = view
-        .get("truncated")
+        .get_value("truncated")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    match view.get("kind")?.as_str()? {
+    match view.get_value("kind")?.as_str()? {
         "search" => {
             let sources = view
-                .get("sources")?
+                .get_value("sources")?
                 .as_array()?
                 .iter()
                 .map(|source| {
-                    let source = source.as_object()?;
+                    if !source.is_object() {
+                        return None;
+                    }
                     Some(WebSource {
-                        url: source.get("url")?.as_str()?.to_owned(),
+                        url: source.get_value("url")?.as_str()?.to_owned(),
                         title: source
-                            .get("title")
+                            .get_value("title")
                             .and_then(Value::as_str)
                             .map(ToOwned::to_owned),
                         snippet: source
-                            .get("snippet")
+                            .get_value("snippet")
                             .and_then(Value::as_str)
                             .map(ToOwned::to_owned),
                         published_at: source
-                            .get("publishedAt")
+                            .get_value("publishedAt")
                             .and_then(Value::as_str)
                             .map(ToOwned::to_owned),
                     })
@@ -200,7 +203,7 @@ pub fn web_card_model(block: &ToolCallBlock) -> Option<WebCardModel> {
                 .collect::<Option<Vec<_>>>()?;
             Some(WebCardModel::Search {
                 answer: view
-                    .get("answer")
+                    .get_value("answer")
                     .and_then(Value::as_str)
                     .map(ToOwned::to_owned),
                 sources,
@@ -208,8 +211,8 @@ pub fn web_card_model(block: &ToolCallBlock) -> Option<WebCardModel> {
             })
         }
         "fetch" => Some(WebCardModel::Fetch {
-            url: view.get("url")?.as_str()?.to_owned(),
-            status_code: u16::try_from(view.get("statusCode")?.as_u64()?).ok()?,
+            url: view.get_value("url")?.as_str()?.to_owned(),
+            status_code: u16::try_from(view.get_value("statusCode")?.as_u64()?).ok()?,
             truncated,
         }),
         _ => None,
@@ -263,7 +266,7 @@ pub struct SearchCardModel {
     /// Result-time replacement title.
     pub title: Option<String>,
     /// Raw recovery locator retained only for capped results.
-    pub recovery: Option<String>,
+    pub recovery: Option<JsonString>,
     /// Structured card body.
     pub card: SearchCard,
 }
@@ -275,16 +278,16 @@ fn settled_content(block: &ToolCallBlock) -> Option<&[Value]> {
     Some(content)
 }
 
-fn flattened_text_content(content: &[Value]) -> Option<String> {
-    let text = content
+fn flattened_text_content(content: &[Value]) -> Option<JsonString> {
+    let parts = content
         .iter()
         .filter_map(|block| {
-            (block.get("type").and_then(Value::as_str) == Some("text"))
-                .then(|| block.get("text").and_then(Value::as_str))
+            (block.get_value("type").and_then(Value::as_str) == Some("text"))
+                .then(|| block.get_value("text").and_then(crate::model::json_string))
                 .flatten()
         })
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect::<Vec<_>>();
+    let text = JsonString::join(&parts, "\n");
     (!text.is_empty()).then_some(text)
 }
 
@@ -293,21 +296,25 @@ fn narrow_search_files(value: &Value) -> Option<Vec<SearchFileGroup>> {
         .as_array()?
         .iter()
         .map(|file| {
-            let file = file.as_object()?;
+            if !file.is_object() {
+                return None;
+            }
             let matches = file
-                .get("matches")?
+                .get_value("matches")?
                 .as_array()?
                 .iter()
                 .map(|matched| {
-                    let matched = matched.as_object()?;
+                    if !matched.is_object() {
+                        return None;
+                    }
                     Some(SearchMatch {
-                        line_number: matched.get("lineNumber")?.as_number()?.clone(),
-                        line: matched.get("line")?.as_str()?.to_owned(),
+                        line_number: matched.get_value("lineNumber")?.deserialize().ok()?,
+                        line: matched.get_value("line")?.as_str()?.to_owned(),
                     })
                 })
                 .collect::<Option<Vec<_>>>()?;
             Some(SearchFileGroup {
-                path: file.get("path")?.as_str()?.to_owned(),
+                path: file.get_value("path")?.as_str()?.to_owned(),
                 matches,
             })
         })
@@ -321,20 +328,20 @@ pub fn search_card_model(block: &ToolCallBlock) -> Option<SearchCardModel> {
         return None;
     }
     let view = card(block.result_view(), "search")?;
-    let truncated = view.get("truncated")?.as_bool()?;
-    let total = view.get("total")?.as_number()?.clone();
+    let truncated = view.get_value("truncated")?.as_bool()?;
+    let total = view.get_value("total")?.deserialize().ok()?;
     let recovery = truncated
         .then(|| settled_content(block).and_then(flattened_text_content))
         .flatten();
-    let card = match view.get("shape")?.as_str()? {
+    let card = match view.get_value("shape")?.as_str()? {
         "matches" => SearchCard::Matches {
-            files: narrow_search_files(view.get("files")?)?,
+            files: narrow_search_files(view.get_value("files")?)?,
             truncated,
             total,
         },
         "paths" => SearchCard::Paths {
             paths: view
-                .get("paths")?
+                .get_value("paths")?
                 .as_array()?
                 .iter()
                 .map(|path| path.as_str().map(ToOwned::to_owned))
@@ -346,7 +353,7 @@ pub fn search_card_model(block: &ToolCallBlock) -> Option<SearchCardModel> {
     };
     Some(SearchCardModel {
         title: view
-            .get("title")
+            .get_value("title")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
         recovery,
@@ -528,12 +535,15 @@ pub fn terminal_card_model(
         let call = call?;
         return Some(TerminalCardModel {
             description: call
-                .get("description")
+                .get_value("description")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned),
             card: TerminalCard {
-                command: call.get("title")?.as_str()?.to_owned(),
-                cwd: resolve_terminal_cwd(call.get("cwd").and_then(Value::as_str), session_cwd),
+                command: call.get_value("title")?.as_str()?.to_owned(),
+                cwd: resolve_terminal_cwd(
+                    call.get_value("cwd").and_then(Value::as_str),
+                    session_cwd,
+                ),
                 output: None,
                 exit_code: None,
                 signal: None,
@@ -543,28 +553,30 @@ pub fn terminal_card_model(
     }
     let result = card(block.result_view(), "terminal")?;
     let command = result
-        .get("title")
+        .get_value("title")
         .and_then(Value::as_str)
-        .or_else(|| call.and_then(|call| call.get("title").and_then(Value::as_str)))
+        .or_else(|| call.and_then(|call| call.get_value("title").and_then(Value::as_str)))
         .unwrap_or_default()
         .to_owned();
     Some(TerminalCardModel {
         description: call
-            .and_then(|call| call.get("description"))
+            .and_then(|call| call.get_value("description"))
             .and_then(Value::as_str)
             .map(ToOwned::to_owned),
         card: TerminalCard {
             command,
             cwd: call.and_then(|call| {
-                resolve_terminal_cwd(call.get("cwd").and_then(Value::as_str), session_cwd)
+                resolve_terminal_cwd(call.get_value("cwd").and_then(Value::as_str), session_cwd)
             }),
             output: result
-                .get("output")
+                .get_value("output")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned),
-            exit_code: result.get("exitCode").and_then(Value::as_number).cloned(),
+            exit_code: result
+                .get_value("exitCode")
+                .and_then(|value| value.deserialize().ok()),
             signal: result
-                .get("signal")
+                .get_value("signal")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned),
             running: false,

@@ -44,6 +44,16 @@ impl Default for BrowserServices {
 }
 
 impl BrowserServices {
+    pub(crate) fn scope_matches(&self, context: &Context, name: &str, label: &JsValue) -> bool {
+        label.is_null()
+            || label.is_undefined()
+            || self
+                .symbols
+                .lock()
+                .get(&context.slot(name))
+                .is_some_and(|cached| cached == label)
+    }
+
     pub(crate) fn key(&self, slot: &ServiceSlot) -> Result<JsValue, JsValue> {
         if let Some(key) = self.symbols.lock().get(slot).cloned() {
             return Ok(key);

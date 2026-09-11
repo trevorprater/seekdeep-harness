@@ -14,15 +14,15 @@ Status: implemented
 
 ## 决定
 
-[website/docs.ts](../../../../website/docs.ts) 拥有分区位置。`sections` 按 locale 声明各分组，`sectionSpec(locale, label)` 返回分组的位置与折叠行为，当某 locale 未为该 label 声明位置时抛错。未出现在声明中的分组现在会让构建失败，而不是静默排到最前。位置按 locale 声明，是因为两侧侧边栏各自命名分组，而两侧共用的标签 `SDK` 无法同时相对 `入门` 和相对 `Guide` 取同一位次。
+[website/docs.json](../../../../website/docs.json) 拥有分区位置。`sections` 按 locale 声明各分组，`section_spec(locale, label)` 返回分组的位置与折叠行为，当某 locale 未为该 label 声明位置时抛错。未出现在声明中的分组现在会让构建失败，而不是静默排到最前。位置按 locale 声明，是因为两侧侧边栏各自命名分组，而两侧共用的标签 `SDK` 无法同时相对 `入门` 和相对 `Guide` 取同一位次。
 
-子系统页按关注点分组——总览、内核与作用域、会话与持久化、模型与上下文、执行与工具、策略与交互、平台与接入——其中六个主题组保持折叠，直到某一组包含正在阅读的页面。这些分组排在参考侧边栏的最后：展开时它们的数量超过其余所有分组之和，因此排在它们之后的任何内容都只能靠滚过整个列表才能到达。页面 `order` 由数组位置推导，不再手写数字。
+子系统页按关注点分组——总览、内核与作用域、会话与持久化、模型与上下文、执行与工具、策略与交互、平台与接入——其中六个主题组保持折叠，直到某一组包含正在阅读的页面。这些分组排在参考侧边栏的最后：展开时它们的数量超过其余所有分组之和，因此排在它们之后的任何内容都只能靠滚过整个列表才能到达。每个页面声明其在分区内的数字 `order`；发布测试拒绝重复位置。
 
-`landingLink(locale, collection)` 依据 `orderedPages`——即侧边栏所用的同一套排序——推导每个导航项的目标，因此导航项始终打开该分区已发布的首个页面。
+`landing_link(locale, collection)` 依据 `ordered_pages`——即侧边栏所用的同一套排序——推导每个导航项的目标，因此导航项始终打开该分区已发布的首个页面。
 
-[scripts/project-doc-site.ts](../../../../scripts/project-doc-site.ts) 中的 `projectedPageContent` 会丢弃语言切换行和仓库徽章。切换行的匹配被限制在前八行内，因此展示该约定的教程仍能渲染出它的示例。
+[Rust 投影器](../../../../crates/repository-tools/src/doc_site.rs) 中的 `projected_page_content` 会丢弃语言切换行和仓库徽章。切换行的匹配被限制在前八行内，因此展示该约定的教程仍能渲染出它的示例。
 
-导航栏标题是内联进 `siteTitle` 的 DeepSeek 字标，VitePress 会将其按 HTML 渲染。内联正是让字标的 `currentColor` 填充跟随当前主题的原因；`themeConfig.logo` 渲染为 `<img>`，会把字标固定为文件声明的颜色，并且需要为每套主题各准备一份资源。侧边栏滚动条平时不可见，滚动时出现，通过 `data-` 属性而非 class 标记，因为 Vue 在 patch 该元素时会整体重写 `class`。
+导航栏标题是内联进 `siteTitle` 的 SeekDeep 字标，VitePress 会将其按 HTML 渲染。内联正是让字标的 `currentColor` 填充跟随当前主题的原因；`themeConfig.logo` 渲染为 `<img>`，会把字标固定为文件声明的颜色，并且需要为每套主题各准备一份资源。侧边栏滚动条平时不可见，滚动时出现，通过 `data-` 属性而非 class 标记，因为 Vue 在 patch 该元素时会整体重写 `class`。
 
 ## 考虑过的替代方案
 
@@ -30,12 +30,12 @@ Status: implemented
 
 **把子系统分组直接放在 `概念` 之后。** 已否决：这样能让架构页回到顶部，但生成参考、Cordis API 和开发手册仍处在 43 行之下。
 
-**在投影时重写文件名链接文字。** 子系统索引表写的是 `[core.md](core.md)`，在站点上读起来像仓库文件索引。`scripts/project-doc-site.spec.ts` 断言了该行的确切格式，因此这些文件名是刻意的约定而非疏漏；要改变站点显示的内容，就要连同该约定及其门禁一起改，而不是在投影器里绕开它们。
+**在投影时重写文件名链接文字。** 子系统索引表写的是 `[core.md](core.md)`，在站点上读起来像仓库文件索引。`crates/repository-tools/tests/doc_site_projection_parity.rs` 断言了该行的确切格式，因此这些文件名是刻意的约定而非疏漏；要改变站点显示的内容，就要连同该约定及其门禁一起改，而不是在投影器里绕开它们。
 
 ## 影响
 
-在所有子系统分组折叠时，参考侧边栏高度为 1452px，此前为 2478px，且架构页是它的第一个条目。分区位置与折叠行为声明在同一份 manifest 中，不再分散于 manifest 与配置之间；`scripts/project-doc-site.spec.ts` 固定了三条不变式：每个拥有侧边栏的页面都能解析到位置、未声明的分区会被拒绝、同一分区内没有两个页面共用 `order`。
+架构页是参考侧边栏的第一个条目。分区位置与折叠行为声明在同一份 manifest 中，不再分散于 manifest 与配置之间；`crates/repository-tools/tests/doc_site_projection_parity.rs` 固定了三条不变式：每个拥有侧边栏的页面都能解析到位置、未声明的分区会被拒绝、同一分区内没有两个页面共用 `order`。
 
 剥离 chrome 不改动规范 Markdown——切换行与徽章仍服务于 GitHub 读者。代价是投影器现在知晓源语料的两项呈现约定，而采用不同切换行措辞的页面将不会被匹配到。
 
-字标是同一图形的第二份副本，另两份位于 `apps/web/public/favicon.svg` 和 `packages/client/ui-primitives/src/FishLogo.tsx`，各自承载自己的呈现方式。DeepSeek 字标的变更只有通过更新这份副本才能到达文档站。
+[站点字标](../../../../website/public/wordmark.svg)显示 SeekDeep，并继承当前文字颜色。[Rust/WASM 滚动条控制器](../../../../crates/docs-site-runtime/src/wasm.rs)拥有捕获阶段监听器和共享的 800 ms 空闲定时器；释放控制器会注销监听器并取消定时器。

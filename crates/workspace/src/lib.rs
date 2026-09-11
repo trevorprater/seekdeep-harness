@@ -785,7 +785,7 @@ impl WorkspaceRegistry {
                             let mut record = parse_record(raw.clone())?;
                             record.session_ids = session_ids;
                             record.updated_at = now_iso();
-                            Ok(serde_json::to_value(record)?)
+                            Ok(seekdeep_lossless_json::JsonValue::from_serialize(&record)?)
                         })
                         .await?;
                 }
@@ -1020,12 +1020,12 @@ fn workspace_entries(table: &KvTable) -> anyhow::Result<Vec<(WorkspaceId, Worksp
         .collect()
 }
 
-fn parse_record(value: serde_json::Value) -> anyhow::Result<WorkspaceRecord> {
-    Ok(serde_json::from_value(value)?)
+fn parse_record(value: seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceRecord> {
+    Ok(value.deserialize()?)
 }
 
-fn parse_state(value: serde_json::Value) -> anyhow::Result<WorkspaceDomainState> {
-    Ok(serde_json::from_value(value)?)
+fn parse_state(value: seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceDomainState> {
+    Ok(value.deserialize()?)
 }
 
 fn eager<T>(

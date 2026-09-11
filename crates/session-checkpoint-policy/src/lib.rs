@@ -171,7 +171,7 @@ fn aborted_before_dispatch_result() -> ToolExecutionResult {
     let message = "tool call aborted before dispatch".to_owned();
     ToolExecutionResult::Failure(ToolExecutionFailure {
         content: vec![ContentBlock::Text {
-            text: format!("Error: {message}"),
+            text: format!("Error: {message}").into(),
         }],
         error: ToolFailure {
             message,
@@ -463,7 +463,7 @@ mod tests {
         assert_eq!(
             result.content(),
             [ContentBlock::Text {
-                text: "Error: disk unavailable".to_owned(),
+                text: "Error: disk unavailable".into(),
             }]
         );
     }

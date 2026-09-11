@@ -39,6 +39,22 @@ export function readerWith(previous) {
 export function previousContext(state) {
   return { key: 'fixture:1', kind: 'fixture', id: '1', startSeq: 1, state, matches: [] }
 }
+export function chunkMatches(count) {
+  const matches = [];
+  for (let seq = 2; seq < 2 + count; seq++) {
+    matches.push({ event: { seq, time: seq, type: 'fixture/chunk', data: {} }, role: 'update', location: { kind: 'session' } });
+  }
+  return matches;
+}
+export function contextWith(state, matches) {
+  return { key: 'fixture:1', kind: 'fixture', id: '1', matches, start: matches[0], state, current: new Map() };
+}
+export function withStart(matches) {
+  return [{ event: { seq: 1, time: 1, type: 'fixture/start', data: {} }, role: 'start', location: { kind: 'session' } }, ...matches];
+}
+export function reversed(matches) {
+  return [...matches].reverse();
+}
 "#)]
 extern "C" {
     fn nativeDefinitionContext() -> JsValue;
@@ -46,6 +62,10 @@ extern "C" {
     fn followerContext(state: &JsValue) -> JsValue;
     fn readerWith(previous: &JsValue) -> JsValue;
     fn previousContext(state: &JsValue) -> JsValue;
+    fn chunkMatches(count: u32) -> JsValue;
+    fn contextWith(state: &JsValue, matches: &JsValue) -> JsValue;
+    fn withStart(matches: &JsValue) -> JsValue;
+    fn reversed(matches: &JsValue) -> JsValue;
 }
 
 fn definition() -> AssemblerNodeDefinition {
@@ -61,13 +81,13 @@ fn definition() -> AssemblerNodeDefinition {
                 ConversationLocationDataScope::Turn => ConversationLocationData::Turn {
                     turn: 7,
                     key: "turn-fixture".to_owned(),
-                    value: Rc::new(json!({ "value": "turn" })),
+                    value: Rc::new(json!({ "value": "turn" }).into()),
                 },
                 ConversationLocationDataScope::Step => ConversationLocationData::Step {
                     turn: 7,
                     step: Some(9),
                     key: "step-fixture".to_owned(),
-                    value: Rc::new(json!({ "value": "step" })),
+                    value: Rc::new(json!({ "value": "step" }).into()),
                 },
             };
             Ok(Some(Rc::new(data)))
@@ -140,10 +160,10 @@ fn stateful_definition(kind: &str, from_previous: Option<&'static str>) -> Assem
         start: Rc::new(move |_, _, reader| {
             Ok(Some(match from_previous {
                 Some(previous_kind) => reader.previous(previous_kind).map_or_else(
-                    || Rc::new(json!({ "phase": "orphan" })),
+                    || Rc::new(json!({ "phase": "orphan" }).into()),
                     |previous| previous.state.clone(),
                 ),
-                None => Rc::new(json!({ "phase": "started", "n": 1 })),
+                None => Rc::new(json!({ "phase": "started", "n": 1 }).into()),
             }))
         }),
         update: Rc::new(|context, _| Ok(context.state.clone())),
@@ -159,7 +179,7 @@ fn stateful_definition(kind: &str, from_previous: Option<&'static str>) -> Assem
                     data: context
                         .state
                         .clone()
-                        .unwrap_or_else(|| Rc::new(Value::Null)),
+                        .unwrap_or_else(|| Rc::new(Value::Null.into())),
                     placement: None,
                     chat: None,
                 },
@@ -250,5 +270,102 @@ fn native_state_handles_resolve_for_the_owner_and_for_a_predecessor_reader() {
         property(&error, "message")
             .as_string()
             .is_some_and(|message| message.contains("did not register"))
+    );
+}
+
+/// A Definition that counts its updates and records the Match collection length each saw.
+fn counting_definition() -> AssemblerNodeDefinition {
+    AssemblerNodeDefinition {
+        kind: "fixture".to_owned(),
+        target: Some("chat".to_owned()),
+        match_event: Rc::new(|_| Ok(None)),
+        start: Rc::new(|_, _, _| Ok(Some(Rc::new(json!({ "count": 0, "seen": [] }).into())))),
+        update: Rc::new(|context, _| {
+            let mut state = context
+                .state
+                .as_deref()
+                .cloned()
+                .unwrap_or(Value::Null.into());
+            state
+                .insert(
+                    "count",
+                    json!(state["count"].as_u64().unwrap_or(0) + 1).into(),
+                )
+                .unwrap();
+            let mut seen = state["seen"].clone();
+            seen.push(json!(context.matches.borrow().len()).into())
+                .unwrap();
+            state.insert("seen", seen).unwrap();
+            Ok(Some(Rc::new(state)))
+        }),
+        publication: None,
+        build_location_data: None,
+        build_view_node: Some(Rc::new(|context| {
+            Ok(Some(Rc::new(
+                seekdeep_client_runtime::ConversationViewNode {
+                    key: context.key.clone(),
+                    kind: context.kind.clone(),
+                    id: context.id.clone(),
+                    target: "chat".to_owned(),
+                    data: context
+                        .state
+                        .clone()
+                        .unwrap_or_else(|| Rc::new(Value::Null.into())),
+                    placement: None,
+                    chat: None,
+                },
+            )))
+        })),
+    }
+}
+
+#[wasm_bindgen_test]
+fn update_many_folds_each_match_against_the_collection_prefix_before_it() {
+    let wrapped = native_conversation_node_definition_to_js(counting_definition()).unwrap();
+    let chunks = chunkMatches(3);
+    let matches = withStart(&chunks);
+    let started = method(&wrapped, "start")
+        .call3(
+            &JsValue::UNDEFINED,
+            &contextWith(&JsValue::NULL, &matches),
+            &nativeMatch(),
+            &readerWith(&JsValue::UNDEFINED),
+        )
+        .unwrap();
+    let folded = method(&wrapped, "updateMany")
+        .call2(
+            &JsValue::UNDEFINED,
+            &contextWith(&started, &matches),
+            &chunks,
+        )
+        .unwrap();
+    let node = method(&wrapped, "buildViewNode")
+        .call1(&JsValue::UNDEFINED, &contextWith(&folded, &matches))
+        .unwrap();
+    let data = property(&node, "data");
+    assert_eq!(property(&data, "count").as_f64(), Some(3.0));
+    assert_eq!(
+        js_sys::JSON::stringify(&property(&data, "seen"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("[2,3,4]"),
+        "each step saw the collection as it stood before it"
+    );
+    // A run that is not the collection's tail is refused before any step folds (the Context
+    // carries the latest handle, as the assembler always does).
+    let error = method(&wrapped, "updateMany")
+        .call2(
+            &JsValue::UNDEFINED,
+            &contextWith(&folded, &matches),
+            &reversed(&chunks),
+        )
+        .unwrap_err();
+    let message = property(&error, "message")
+        .as_string()
+        .unwrap_or_else(|| format!("{error:?}"));
+    assert!(
+        message.contains("must end the Match collection"),
+        "unexpected refusal: {message}"
     );
 }

@@ -72,7 +72,7 @@ fn file_path_from_execution(exec: &ToolExecution) -> Option<String> {
     if !FILE_TOUCH_TOOL_NAMES.contains(&exec.name.as_str()) {
         return None;
     }
-    let path = exec.arguments.get("file_path")?.as_str()?.trim();
+    let path = exec.arguments.get_value("file_path")?.as_str()?.trim();
     if path.is_empty() {
         None
     } else {

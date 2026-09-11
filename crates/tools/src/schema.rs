@@ -2,13 +2,14 @@
 
 use std::{fmt, future::Future, pin::Pin, sync::Arc};
 
+use seekdeep_code_runtime::{CodeJsonString, CodeJsonValue};
 use seekdeep_llm::ContentBlock;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
 use crate::json_schema::{
     JsonSchemaError, JsonSchemaNode, UNSUPPORTED_SCHEMA, assert_supported_json_schema,
-    validate_json_schema_value_at,
+    validate_code_json_schema_value_at, validate_json_schema_value_at,
 };
 use crate::runtime::ToolContentFinalizer;
 use crate::{
@@ -26,27 +27,38 @@ pub struct ToolArgsError {
     /// Stable machine-readable failure code.
     pub code: &'static str,
     /// Individual violations in schema-walk order.
-    pub violations: Vec<String>,
+    pub violations: Vec<CodeJsonString>,
 }
 
 impl ToolArgsError {
     /// Creates a structured invalid-arguments failure.
     #[must_use]
     pub fn new(violations: Vec<String>) -> Self {
+        Self::new_lossless(violations.into_iter().map(CodeJsonString::from).collect())
+    }
+
+    /// Creates an invalid-arguments failure retaining exact string code units.
+    #[must_use]
+    pub fn new_lossless(violations: Vec<CodeJsonString>) -> Self {
         Self {
             code: INVALID_ARGS,
             violations,
         }
     }
+
+    /// Complete model-visible invalid-arguments message.
+    #[must_use]
+    pub fn message(&self) -> CodeJsonString {
+        let mut message = CodeJsonString::from("invalid arguments: ");
+        message.push_utf16(CodeJsonString::join(&self.violations, "; ").utf16_units());
+        message
+    }
 }
 
 impl fmt::Display for ToolArgsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "invalid arguments: {}",
-            self.violations.join("; ")
-        )
+        let message = self.message();
+        formatter.write_str(message.as_str().unwrap_or_else(|| message.as_raw()))
     }
 }
 
@@ -63,6 +75,9 @@ pub type DefineToolRender<A, O> =
 /// Typed replayable presentation-metadata projector.
 pub type DefineToolPresentationMeta<A, O> =
     Arc<dyn Fn(&A, &O) -> anyhow::Result<Value> + Send + Sync + 'static>;
+/// Typed replayable metadata projector retaining complete JSON values.
+pub type DefineToolJsonPresentationMeta<A, O> =
+    Arc<dyn Fn(&A, &O) -> anyhow::Result<CodeJsonValue> + Send + Sync + 'static>;
 /// Typed fail-closed overlap classifier.
 pub type DefineToolConcurrencyClassifier<A> = Arc<dyn Fn(&A) -> bool + Send + Sync + 'static>;
 /// Typed pending-call presenter.
@@ -79,7 +94,7 @@ pub struct DefineToolOutput<A, O> {
     /// Pure Native/model renderer.
     pub render: DefineToolRender<A, O>,
     /// Optional replayable presentation metadata.
-    pub presentation_meta: Option<DefineToolPresentationMeta<A, O>>,
+    pub presentation_meta: Option<DefineToolJsonPresentationMeta<A, O>>,
 }
 
 impl<A, O> DefineToolOutput<A, O> {
@@ -95,7 +110,23 @@ impl<A, O> DefineToolOutput<A, O> {
 
     /// Adds presentation metadata.
     #[must_use]
-    pub fn presentation_meta(mut self, projector: DefineToolPresentationMeta<A, O>) -> Self {
+    pub fn presentation_meta(mut self, projector: DefineToolPresentationMeta<A, O>) -> Self
+    where
+        A: 'static,
+        O: 'static,
+    {
+        self.presentation_meta = Some(Arc::new(move |arguments, value| {
+            projector(arguments, value).map(CodeJsonValue::from)
+        }));
+        self
+    }
+
+    /// Adds metadata whose strings and keys may contain any UTF-16 code unit.
+    #[must_use]
+    pub fn presentation_meta_lossless(
+        mut self,
+        projector: DefineToolJsonPresentationMeta<A, O>,
+    ) -> Self {
         self.presentation_meta = Some(projector);
         self
     }
@@ -342,73 +373,77 @@ where
     let output_schema = Arc::new(value_schema_spec_to_json_schema(output.schema)?);
 
     let render = output.render;
-    let render_projection = Arc::new(move |arguments: &Value, value: &Value| {
-        let arguments = decode_typed::<A>(arguments, "arguments for output.render")?;
-        let value = decode_typed::<O>(value, "value for output.render")?;
+    let render_projection = Arc::new(move |arguments: &CodeJsonValue, value: &CodeJsonValue| {
+        let arguments = decode_typed_json::<A>(arguments, "arguments for output.render")?;
+        let value = decode_typed_json::<O>(value, "value for output.render")?;
         render(&arguments, &value)
     });
-    let mut output_definition = ToolOutputDefinition::new(output_schema, render_projection);
+    let mut output_definition =
+        ToolOutputDefinition::new_lossless(output_schema, render_projection);
     if let Some(projector) = output.presentation_meta {
-        output_definition = output_definition.presentation_meta(Arc::new(
-            move |arguments: &Value, value: &Value| {
+        output_definition = output_definition.presentation_meta_lossless(Arc::new(
+            move |arguments: &CodeJsonValue, value: &CodeJsonValue| {
                 let arguments =
-                    decode_typed::<A>(arguments, "arguments for output.presentationMeta")?;
-                let value = decode_typed::<O>(value, "value for output.presentationMeta")?;
+                    decode_typed_json::<A>(arguments, "arguments for output.presentationMeta")?;
+                let value = decode_typed_json::<O>(value, "value for output.presentationMeta")?;
                 projector(&arguments, &value)
             },
         ));
     }
 
     let execute_schema = parameters.clone();
-    let body = Arc::new(move |arguments: Value, execution: ToolRunContext| {
-        let violations = validate_json_schema_value_at(&execute_schema, &arguments, "");
+    let body = Arc::new(move |arguments: CodeJsonValue, execution: ToolRunContext| {
+        let violations = validate_code_json_schema_value_at(&execute_schema, &arguments, "");
         if !violations.is_empty() {
-            return Box::pin(async move { Err(anyhow::Error::new(ToolArgsError::new(violations))) })
-                as crate::runtime::ToolExecuteFuture;
+            return Box::pin(async move {
+                Err(anyhow::Error::new(ToolArgsError::new_lossless(violations)))
+            }) as crate::runtime::ToolJsonExecuteFuture;
         }
-        let parsed = decode_typed::<A>(&arguments, "arguments for execute");
+        let parsed = decode_typed_json::<A>(&arguments, "arguments for execute");
         let execute = execute.clone();
         Box::pin(async move {
             let value = execute(parsed?, execution).await?;
-            serde_json::to_value(value)
+            serde_json::to_string(&value)
+                .and_then(CodeJsonValue::parse)
                 .map_err(|error| anyhow::anyhow!("tool output is not lossless JSON: {error}"))
-        }) as crate::runtime::ToolExecuteFuture
+        }) as crate::runtime::ToolJsonExecuteFuture
     });
 
     let Value::Object(parameter_map) = parameters.as_value().clone() else {
         unreachable!("parameter compiler always returns an object root")
     };
     let mut definition =
-        ToolDefinition::new(name, description, parameter_map, output_definition, body);
+        ToolDefinition::new_lossless(name, description, parameter_map, output_definition, body);
     definition.finalize_content = finalize_content;
     definition.timeout_ms = timeout_ms;
     if let Some(classifier) = is_concurrency_safe {
         let schema = parameters.clone();
         definition.is_concurrency_safe = Some(Arc::new(move |arguments| {
-            if !validate_json_schema_value_at(&schema, arguments, "").is_empty() {
+            if !validate_code_json_schema_value_at(&schema, arguments, "").is_empty() {
                 return false;
             }
-            decode_typed::<A>(arguments, "arguments for isConcurrencySafe")
+            decode_typed_json::<A>(arguments, "arguments for isConcurrencySafe")
                 .is_ok_and(|arguments| classifier(&arguments))
         }));
     }
     if let Some(presenter) = present_call {
         let schema = parameters.clone();
         definition.present_call = Some(Arc::new(move |arguments| {
-            if !validate_json_schema_value_at(&schema, arguments, "").is_empty() {
+            if !validate_code_json_schema_value_at(&schema, arguments, "").is_empty() {
                 return None;
             }
-            let arguments = decode_typed::<A>(arguments, "arguments for presentCall").ok()?;
+            let arguments = decode_typed_json::<A>(arguments, "arguments for presentCall").ok()?;
             presenter(&arguments)
         }));
     }
     if let Some(presenter) = present_result {
         let schema = parameters;
         definition.present_result = Some(Arc::new(move |arguments, result| {
-            if !validate_json_schema_value_at(&schema, arguments, "").is_empty() {
+            if !validate_code_json_schema_value_at(&schema, arguments, "").is_empty() {
                 return None;
             }
-            let arguments = decode_typed::<A>(arguments, "arguments for presentResult").ok()?;
+            let arguments =
+                decode_typed_json::<A>(arguments, "arguments for presentResult").ok()?;
             presenter(&arguments, result)
         }));
     }
@@ -417,6 +452,14 @@ where
 
 fn decode_typed<T: DeserializeOwned>(value: &Value, boundary: &str) -> anyhow::Result<T> {
     serde_json::from_value(value.clone())
+        .map_err(|error| anyhow::anyhow!("{boundary} does not match its Rust type: {error}"))
+}
+
+fn decode_typed_json<T: DeserializeOwned>(
+    value: &CodeJsonValue,
+    boundary: &str,
+) -> anyhow::Result<T> {
+    serde_json::from_str(value.as_raw())
         .map_err(|error| anyhow::anyhow!("{boundary} does not match its Rust type: {error}"))
 }
 
@@ -823,7 +866,7 @@ mod tests {
             json!({"type": "string"}),
             Arc::new(|_, value| {
                 Ok(vec![ContentBlock::Text {
-                    text: value.clone(),
+                    text: value.clone().into(),
                 }])
             }),
         )
@@ -1132,9 +1175,9 @@ mod tests {
         )
         .present_call(Arc::new(|args| {
             Some(ToolCallView::Generic(GenericCallView {
-                title: format!("Open {}", args.text),
+                title: format!("Open {}", args.text).into(),
                 kind: Some(ToolCallKind::Read),
-                raw_input: Some(json!(args.text)),
+                raw_input: Some(json!(args.text).into()),
                 content: None,
                 locations: None,
             }))
@@ -1173,7 +1216,7 @@ mod tests {
         assert_eq!(
             result.content(),
             [ContentBlock::Text {
-                text: "HELLO".to_owned(),
+                text: "HELLO".into(),
             }]
         );
 
@@ -1186,7 +1229,7 @@ mod tests {
             ))
             .await;
         assert_eq!(
-            invalid.error().map(|error| error.message.as_str()),
+            invalid.error().and_then(|error| error.message.as_str()),
             Some("invalid arguments: missing required property \"text\"")
         );
         assert_eq!(

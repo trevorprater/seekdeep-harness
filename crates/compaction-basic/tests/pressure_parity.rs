@@ -100,7 +100,7 @@ impl Default for SummaryState {
             calls: Mutex::new(Vec::new()),
             signals: Mutex::new(Vec::new()),
             summary: Mutex::new(vec![ContentBlock::Text {
-                text: "small checkpoint".to_owned(),
+                text: "small checkpoint".into(),
             }]),
             raw_output: Mutex::new(None),
             usage: Mutex::new(None),
@@ -225,7 +225,7 @@ fn conversation(turns: u64, text: &str) -> Arc<Session> {
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: format!("{} user {turn}", text.trim()),
+                    text: format!("{} user {turn}", text.trim()).into(),
                 }],
                 MessageSource::user(),
             ))
@@ -249,7 +249,7 @@ fn conversation(turns: u64, text: &str) -> Arc<Session> {
                 "step": 1,
                 "message": Message::assistant(
                     vec![ContentBlock::Text {
-                        text: format!("{} assistant {turn}", text.trim()),
+                        text: format!("{} assistant {turn}", text.trim()).into(),
                     }],
                     MODEL,
                     MODEL,
@@ -291,7 +291,7 @@ fn append_tool_exchange(session: &Session, turn: u64, call: &str, repeat: usize)
             "step": 1,
             "message": Message::assistant(
                 vec![
-                    ContentBlock::Text { text: format!("calling {turn} ").repeat(repeat) },
+                    ContentBlock::Text { text: format!("calling {turn} ").repeat(repeat).into() },
                     ContentBlock::ToolCall {
                         id: call_id.clone(),
                         name: "read".to_owned(),
@@ -325,7 +325,7 @@ fn append_tool_exchange(session: &Session, turn: u64, call: &str, repeat: usize)
             "message": Message::tool_result(
                 &call_id,
                 vec![ContentBlock::Text {
-                    text: format!("result {turn} ").repeat(repeat),
+                    text: format!("result {turn} ").repeat(repeat).into(),
                 }],
                 false,
             )
@@ -348,7 +348,7 @@ fn tool_conversation(turns: u64, repeat: usize) -> Arc<Session> {
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: format!("request {turn} ").repeat(repeat),
+                    text: format!("request {turn} ").repeat(repeat).into(),
                 }],
                 MessageSource::user(),
             ))
@@ -430,7 +430,7 @@ fn oversized_tool_result(chars: usize, compactable_prompt: bool) -> Arc<Session>
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: "older history ".repeat(200),
+                    text: "older history ".repeat(200).into(),
                 }],
                 MessageSource::user(),
             ))
@@ -484,7 +484,7 @@ fn oversized_tool_result(chars: usize, compactable_prompt: bool) -> Arc<Session>
             "step": 1,
             "message": Message::tool_result(
                 &call_id,
-                vec![ContentBlock::Text { text: "X".repeat(chars) }],
+                vec![ContentBlock::Text { text: "X".repeat(chars).into() }],
                 false,
             ),
             "meta": {"presentation": "preserved"}
@@ -514,7 +514,7 @@ fn summarized_text(input: &SummarizationInput) -> String {
     fn blocks(input: &[ContentBlock], output: &mut Vec<String>) {
         for block in input {
             match block {
-                ContentBlock::Text { text } => output.push(text.clone()),
+                ContentBlock::Text { text } => output.push(text.as_str().expect("fixture uses scalar text").to_owned()),
                 ContentBlock::ToolResult { content, .. } => blocks(content, output),
                 _ => {}
             }
@@ -968,7 +968,7 @@ async fn bounded_retry_reports_checkpoint_still_above_threshold() {
     );
     *harness.summary.summary.lock() = (0..7)
         .map(|index| ContentBlock::Text {
-            text: format!("summary {index}"),
+            text: format!("summary {index}").into(),
         })
         .collect();
     let error = harness
@@ -1186,11 +1186,8 @@ async fn absent_pruner_preserves_original_tool_result_behavior() {
         .collect::<Vec<_>>();
     assert_eq!(tool_results.len(), 1);
     assert_eq!(
-        tool_results[0]
-            .data
-            .pointer("/message/content/0/content/0/text")
-            .and_then(serde_json::Value::as_str),
-        Some("X".repeat(3000).as_str())
+        tool_results[0].data["message"]["content"][0]["content"][0]["text"],
+        "X".repeat(3000)
     );
     assert!(matches!(
         tool_results[0].surface_op,
@@ -1217,7 +1214,7 @@ async fn region_lands_framed_replayable_checkpoint_with_exact_provenance() {
             text: "private compact thought".to_owned(),
         },
         ContentBlock::Text {
-            text: "small checkpoint".to_owned(),
+            text: "small checkpoint".into(),
         },
     ];
     *harness.summary.raw_output.lock() = Some(raw_output.clone());
@@ -1275,7 +1272,7 @@ async fn region_lands_framed_replayable_checkpoint_with_exact_provenance() {
     assert_eq!(
         derived[0].content().last(),
         Some(&ContentBlock::Text {
-            text: "</compacted-summary>".to_owned()
+            text: "</compacted-summary>".into()
         })
     );
     let replay = Session::create(&SessionId::new("replay"), Some(session.events()), None).unwrap();
@@ -1420,7 +1417,7 @@ async fn region_rejects_session_with_no_turn_boundary() {
         "user/message",
         serde_json::to_value(Message::user(
             vec![ContentBlock::Text {
-                text: "orphan".to_owned(),
+                text: "orphan".into(),
             }],
             MessageSource::user(),
         ))
@@ -1499,7 +1496,7 @@ async fn region_tolerates_log_only_mutation_but_rejects_surface_mutation() {
             "user/message",
             serde_json::to_value(Message::user(
                 vec![ContentBlock::Text {
-                    text: "concurrent surface mutation".to_owned(),
+                    text: "concurrent surface mutation".into(),
                 }],
                 MessageSource::plugin("test"),
             ))
@@ -1532,7 +1529,7 @@ async fn region_rejects_non_shrinking_framed_summary() {
     let harness = region_harness();
     *harness.summary.summary.lock() = (0..100)
         .map(|index| ContentBlock::Text {
-            text: format!("verbose {index}"),
+            text: format!("verbose {index}").into(),
         })
         .collect();
     let session = conversation(2, &"fixture ".repeat(40));
@@ -1569,7 +1566,7 @@ async fn custom_summarizer_compacts_without_conversation_model() {
         "user/message",
         serde_json::to_value(Message::user(
             vec![ContentBlock::Text {
-                text: "history ".repeat(100),
+                text: "history ".repeat(100).into(),
             }],
             MessageSource::user(),
         ))
@@ -1589,7 +1586,7 @@ async fn custom_summarizer_compacts_without_conversation_model() {
             "turn": 1,
             "step": 1,
             "message": Message::assistant(
-                vec![ContentBlock::Text { text: "answer ".repeat(100) }],
+                vec![ContentBlock::Text { text: "answer ".repeat(100).into() }],
                 "historical",
                 "historical",
             )

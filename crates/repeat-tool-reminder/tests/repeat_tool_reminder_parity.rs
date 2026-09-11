@@ -49,7 +49,7 @@ impl Harness {
                         Arc::new(|_, _| {
                             Box::pin(async {
                                 Ok(vec![ContentBlock::Text {
-                                    text: "ok".to_owned(),
+                                    text: "ok".into(),
                                 }])
                             })
                         }),
@@ -124,7 +124,7 @@ impl Harness {
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -133,7 +133,7 @@ fn user(text: &str) -> UserMessage {
 fn plugin_context(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::plugin("test"),
     )
@@ -456,7 +456,7 @@ async fn reminder_folds_onto_downstream_block_and_preserves_feedback() {
             |_, _, _| async {
                 Ok(PostToolDecision::Block {
                     feedback: vec![ContentBlock::Text {
-                        text: "nope".to_owned(),
+                        text: "nope".into(),
                     }],
                     additional_contexts: vec![plugin_context("downstream-ctx")],
                 })
@@ -487,7 +487,7 @@ async fn reminder_folds_onto_downstream_block_and_preserves_feedback() {
     assert_eq!(
         second.content(),
         &[ContentBlock::Text {
-            text: "nope".to_owned()
+            text: "nope".into()
         }]
     );
 }
@@ -515,7 +515,7 @@ async fn reminder_preserves_downstream_canonical_value_replacement() {
     assert_eq!(
         first.content(),
         &[ContentBlock::Text {
-            text: "replaced".to_owned()
+            text: "replaced".into()
         }]
     );
     let second = harness
@@ -525,7 +525,7 @@ async fn reminder_preserves_downstream_canonical_value_replacement() {
     assert_eq!(
         second.content(),
         &[ContentBlock::Text {
-            text: "replaced".to_owned()
+            text: "replaced".into()
         }]
     );
 }

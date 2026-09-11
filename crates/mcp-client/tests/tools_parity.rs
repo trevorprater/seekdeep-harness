@@ -272,7 +272,7 @@ async fn execution_preserves_wire_identity_canonical_blocks_and_native_placehold
     assert_eq!(
         result.content(),
         [ContentBlock::Text {
-            text: "before\n[image: image/png, content discarded]\n[audio: unknown, content discarded]\n[resource: content discarded]\n[unsupported content type: video]".to_owned()
+            text: "before\n[image: image/png, content discarded]\n[audio: unknown, content discarded]\n[resource: content discarded]\n[unsupported content type: video]".into()
         }]
     );
     assert_eq!(
@@ -296,7 +296,7 @@ async fn execution_preserves_wire_identity_canonical_blocks_and_native_placehold
     assert_eq!(
         primitive.content()[0],
         ContentBlock::Text {
-            text: "[unsupported content type: unknown]\n[unsupported content type: unknown]\n[unsupported content type: unknown]".to_owned()
+            text: "[unsupported content type: unknown]\n[unsupported content type: unknown]\n[unsupported content type: unknown]".into()
         }
     );
     assert!(client.calls.lock()[1].1.is_empty());
@@ -358,7 +358,7 @@ async fn structured_legacy_error_task_and_cancellation_boundaries_are_fail_close
     assert_eq!(
         legacy.content()[0],
         ContentBlock::Text {
-            text: "{\"key\":\"value\"}".to_owned()
+            text: "{\"key\":\"value\"}".into()
         }
     );
     let failed = tools

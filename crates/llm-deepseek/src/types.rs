@@ -1,5 +1,6 @@
 //! DeepSeek OpenAI-compatible chat-completions wire vocabulary.
 
+use seekdeep_llm::JsonString;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -76,17 +77,17 @@ pub enum WireMessage {
     /// System instruction.
     System {
         /// Flattened text.
-        content: String,
+        content: JsonString,
     },
     /// User input.
     User {
         /// Flattened text.
-        content: String,
+        content: JsonString,
     },
     /// Assistant history.
     Assistant {
         /// Visible text; always a string for replay compatibility.
-        content: String,
+        content: JsonString,
         /// Thinking passback on tool-call turns only.
         #[serde(skip_serializing_if = "Option::is_none")]
         reasoning_content: Option<String>,
@@ -99,7 +100,7 @@ pub enum WireMessage {
         /// Provider call identity.
         tool_call_id: String,
         /// Flattened result text.
-        content: String,
+        content: JsonString,
     },
 }
 

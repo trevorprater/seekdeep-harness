@@ -62,7 +62,7 @@ impl ScheduleMessageFactory for FailOnceMessageFactory {
             anyhow::bail!("message failed");
         }
         Ok(UserMessage::new(
-            vec![ContentBlock::Text { text }],
+            vec![ContentBlock::text(text)],
             seekdeep_llm::MessageSource::plugin("schedule"),
         ))
     }
@@ -340,7 +340,7 @@ fn text(message: &UserMessage) -> &str {
     let ContentBlock::Text { text } = &message.content()[0] else {
         panic!("reminder must be text")
     };
-    text
+    text.as_str().expect("fixture uses scalar text")
 }
 
 #[tokio::test(start_paused = true)]

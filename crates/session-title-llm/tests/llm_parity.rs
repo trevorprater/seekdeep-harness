@@ -264,7 +264,7 @@ async fn uses_the_exact_logged_route_targets_full_input_and_output_cap() {
     assert!(system.contains("5 words"));
     assert!(system.contains("10 CJK characters"));
     let prompt = match &options.messages[0].content()[0] {
-        ContentBlock::Text { text } => text.as_str(),
+        ContentBlock::Text { text } => text.as_str().expect("fixture uses scalar text"),
         other => panic!("expected text block, got {other:?}"),
     };
     assert!(prompt.contains("first prompt"));

@@ -640,8 +640,7 @@ async fn bootstrap_reuses_partial_records_and_durable_preinitialized_order() {
         .await
         .is_err()
     );
-    let state: WorkspaceDomainState =
-        serde_json::from_value(pool.media.lock()["workspace"].global.clone()).unwrap();
+    let state: WorkspaceDomainState = pool.media.lock()["workspace"].global.deserialize().unwrap();
     assert!(!state.initialized);
     assert_eq!(state.workspace_ids.len(), 1);
     let retried = boot(pool.clone(), MemoryBackend::new(pool), headers)
@@ -860,8 +859,10 @@ async fn delete_failure_rolls_back_or_keeps_recoverable_unpublished_direction() 
         .unwrap_err();
     assert!(error.downcast_ref::<WorkspaceAggregateError>().is_some());
     assert!(harness.registry.get(workspace.id()).is_none());
-    let state: WorkspaceDomainState =
-        serde_json::from_value(harness.pool.media.lock()["workspace"].global.clone()).unwrap();
+    let state: WorkspaceDomainState = harness.pool.media.lock()["workspace"]
+        .global
+        .deserialize()
+        .unwrap();
     assert_eq!(
         state.pending_mutation,
         Some(PendingMutation {
@@ -896,8 +897,10 @@ async fn delete_cleanup_failure_commits_and_next_operation_recovers_marker() {
         .await
         .unwrap();
     assert!(harness.registry.delete(deleted.id().clone()).await.unwrap());
-    let state: WorkspaceDomainState =
-        serde_json::from_value(harness.pool.media.lock()["workspace"].global.clone()).unwrap();
+    let state: WorkspaceDomainState = harness.pool.media.lock()["workspace"]
+        .global
+        .deserialize()
+        .unwrap();
     assert!(state.pending_mutation.is_some());
     let recreated = harness
         .registry
@@ -905,8 +908,10 @@ async fn delete_cleanup_failure_commits_and_next_operation_recovers_marker() {
         .await
         .unwrap();
     assert_ne!(recreated.id(), deleted.id());
-    let state: WorkspaceDomainState =
-        serde_json::from_value(harness.pool.media.lock()["workspace"].global.clone()).unwrap();
+    let state: WorkspaceDomainState = harness.pool.media.lock()["workspace"]
+        .global
+        .deserialize()
+        .unwrap();
     assert!(state.pending_mutation.is_none());
     assert_eq!(state.workspace_ids, vec![recreated.id().clone()]);
 }
@@ -954,21 +959,19 @@ async fn projection_prunes_only_on_mutation_and_membership_race_is_chain_ordered
     let workspace = harness.registry.get(&id).unwrap();
     assert_eq!(workspace.session_ids(), vec![SessionId::new("good")]);
     assert_eq!(
-        serde_json::from_value::<WorkspaceRecord>(
-            pool.media.lock()["workspace"].tables["workspaces"][id.as_str()].clone()
-        )
-        .unwrap()
-        .session_ids
-        .len(),
+        pool.media.lock()["workspace"].tables["workspaces"][id.as_str()]
+            .deserialize::<WorkspaceRecord>()
+            .unwrap()
+            .session_ids
+            .len(),
         3
     );
     workspace.set_title("pruned".to_owned()).await.unwrap();
     assert_eq!(
-        serde_json::from_value::<WorkspaceRecord>(
-            pool.media.lock()["workspace"].tables["workspaces"][id.as_str()].clone()
-        )
-        .unwrap()
-        .session_ids,
+        pool.media.lock()["workspace"].tables["workspaces"][id.as_str()]
+            .deserialize::<WorkspaceRecord>()
+            .unwrap()
+            .session_ids,
         vec![SessionId::new("good")]
     );
     assert_eq!(

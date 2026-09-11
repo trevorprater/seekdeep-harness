@@ -270,14 +270,14 @@ fn followup_request(first: &[StreamChunk], assistant_text: &str, session: &str) 
     let assistant = Message::new(
         MessageRole::Assistant,
         vec![ContentBlock::Text {
-            text: assistant_text.to_owned(),
+            text: assistant_text.into(),
         }],
         source,
     );
     let user = Message::new(
         MessageRole::User,
         vec![ContentBlock::Text {
-            text: "next".to_owned(),
+            text: "next".into(),
         }],
         MessageSource::plugin("test"),
     );

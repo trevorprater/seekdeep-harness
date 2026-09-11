@@ -18,6 +18,8 @@ serde_json.workspace = true
 serde_yml.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-cordis-timer = { path = "../cordis-timer" }
+seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
+seekdeep-code-runtime = { path = "../code-runtime" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }

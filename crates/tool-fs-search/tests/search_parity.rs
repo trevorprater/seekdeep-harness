@@ -132,7 +132,7 @@ impl SpillBackend for MemorySpill {
         self.0.lock().push(input.clone());
         Ok(SpillRef {
             locator: SpillLocator::new("spill://search"),
-            bytes: input.content.len() as u64,
+            bytes: input.content.len_utf8() as u64,
             retrieval_hint: "Use read.".into(),
         })
     }
@@ -223,7 +223,7 @@ fn text(result: &ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -287,7 +287,10 @@ async fn invalid_pattern_is_typed_and_over_cap_direct_results_spill_once() {
         meta: grep.meta().cloned(),
     };
     assert!(matches!(
-        definition.present_result.as_ref().unwrap()(&json!({"pattern":"needle"}), &projected),
+        definition.present_result.as_ref().unwrap()(
+            &json!({"pattern":"needle"}).into(),
+            &projected
+        ),
         Some(ToolResultView::Search(SearchResultView::Matches(_)))
     ));
 }

@@ -14,6 +14,8 @@ use serde_json::{Map, Value};
 
 use crate::{Context, Fiber, fiber::EffectHandle};
 
+mod format;
+
 /// Wall-clock boundary used for structured log timestamps.
 pub trait CordisClock: std::fmt::Debug + Send + Sync {
     /// Current Unix time in milliseconds.
@@ -105,16 +107,16 @@ pub struct LogMessage {
     pub meta: Map<String, Value>,
 }
 
-/// Custom printf-style placeholder formatter.
+/// Custom printf-style placeholder formatter; `None` denotes an absent argument.
 pub type LogFormatter =
-    Arc<dyn Fn(&Value, &LogExporter, &LogMessage) -> String + Send + Sync + 'static>;
+    Arc<dyn Fn(Option<&Value>, &LogExporter, &LogMessage) -> String + Send + Sync + 'static>;
 
 /// Structured log sink and its formatting/threshold options.
 #[derive(Clone)]
 pub struct LogExporter {
     /// ANSI color capability; zero disables colors.
     pub colors: u8,
-    /// Maximum Unicode-scalar count per output line.
+    /// Maximum UTF-16 code-unit count per output line.
     pub max_length: usize,
     /// Per-name and `default` severity thresholds.
     pub levels: BTreeMap<String, i32>,
@@ -263,55 +265,7 @@ impl Logger {
     /// Formats a message through exporter overrides and source defaults.
     #[must_use]
     pub fn format(exporter: &LogExporter, message: &LogMessage) -> String {
-        let mut args = message.args.clone();
-        if args.first().is_none_or(|value| !value.is_string()) {
-            args.insert(0, Value::String("%o".to_owned()));
-        }
-        let format = args
-            .remove(0)
-            .as_str()
-            .map(str::to_owned)
-            .unwrap_or_default();
-        let mut values = args.into_iter();
-        let mut output = String::new();
-        let mut chars = format.chars().peekable();
-        while let Some(character) = chars.next() {
-            if character != '%' {
-                output.push(character);
-                continue;
-            }
-            let Some(code) = chars.next() else {
-                output.push('%');
-                break;
-            };
-            if code == '%' {
-                output.push('%');
-                continue;
-            }
-            let known = exporter.formatters.contains_key(&code)
-                || matches!(code, 's' | 'd' | 'i' | 'f' | 'o' | 'O' | 'c' | 'C');
-            if !known {
-                output.push('%');
-                output.push(code);
-                continue;
-            }
-            let value = values.next().unwrap_or(Value::Null);
-            if let Some(formatter) = exporter.formatters.get(&code) {
-                output.push_str(&formatter(&value, exporter, message));
-            } else {
-                output.push_str(&default_format(code, &value, exporter, message));
-            }
-        }
-        for value in values {
-            output.push(' ');
-            output.push_str(&append_value(&value));
-        }
-        output
-            .split('\n')
-            .map(|line| line.strip_suffix('\r').unwrap_or(line))
-            .map(|line| truncate_line(line, exporter.max_length))
-            .collect::<Vec<_>>()
-            .join("\n")
+        format::format(exporter, message)
     }
 }
 
@@ -340,11 +294,10 @@ impl LoggerService {
         })
     }
 
-    /// Sets the retained record count.
+    /// Sets the limit applied after the next retained record; zero leaves the buffer unbounded.
     pub fn set_buffer_size(&self, size: usize) {
         self.buffer_size
             .store(u64::try_from(size).unwrap_or(u64::MAX), Ordering::Release);
-        trim_buffer(&mut self.buffer.lock(), size);
     }
 
     /// Detached retained records.
@@ -363,20 +316,17 @@ impl LoggerService {
         owner: &Context,
         exporter: LogExporter,
     ) -> Result<EffectHandle, crate::CordisError> {
-        let id = self.exporter_sequence.fetch_add(1, Ordering::AcqRel) + 1;
-        self.exporters.lock().insert(id, exporter);
         let service = self.clone();
         let effect = EffectHandle::synchronous("ctx.logger.exporter()", move || {
-            service.exporters.lock().remove(&id);
+            let mut exporters = service.exporters.lock();
+            exporters.remove(&service.exporter_sequence.load(Ordering::Acquire));
             Ok(())
         });
-        match owner.own(effect.clone()) {
-            Ok(effect) => Ok(effect),
-            Err(error) => {
-                self.exporters.lock().remove(&id);
-                Err(error)
-            }
-        }
+        let mut exporters = self.exporters.lock();
+        let effect = owner.own(effect)?;
+        let id = self.exporter_sequence.fetch_add(1, Ordering::AcqRel) + 1;
+        exporters.insert(id, exporter);
+        Ok(effect)
     }
 
     /// Creates a named logger using context intercepts and fiber defaults.
@@ -392,8 +342,21 @@ impl LoggerService {
             .unwrap_or_else(|| seekdeep_cosmokit::string::param_case(context.fiber().name()));
         let level = config
             .and_then(|config| config.get("level"))
-            .and_then(Value::as_i64)
-            .and_then(|value| i32::try_from(value).ok());
+            .filter(|value| value.is_number())
+            .map(format::number)
+            .map(|value| {
+                if value >= 3.0 {
+                    3
+                } else if value >= 2.0 {
+                    2
+                } else if value >= 1.0 {
+                    1
+                } else if value >= 0.0 {
+                    0
+                } else {
+                    -1
+                }
+            });
         Logger {
             options: LoggerOptions {
                 name,
@@ -431,8 +394,21 @@ impl LoggerService {
                 usize::try_from(self.buffer_size.load(Ordering::Acquire)).unwrap_or(usize::MAX),
             );
         }
-        let exporters = self.exporters.lock().values().cloned().collect::<Vec<_>>();
-        for exporter in exporters {
+        let mut previous = 0;
+        loop {
+            let next = self
+                .exporters
+                .lock()
+                .range((
+                    std::ops::Bound::Excluded(previous),
+                    std::ops::Bound::Unbounded,
+                ))
+                .next()
+                .map(|(serial, exporter)| (*serial, exporter.clone()));
+            let Some((serial, exporter)) = next else {
+                break;
+            };
+            previous = serial;
             if exporter.threshold(&message.name, fallback) >= level as i32 {
                 exporter.export(message.clone());
             }
@@ -441,71 +417,9 @@ impl LoggerService {
 }
 
 fn trim_buffer(buffer: &mut Vec<LogMessage>, size: usize) {
-    if buffer.len() > size {
+    if size != 0 && buffer.len() > size {
         buffer.drain(..buffer.len() - size);
     }
-}
-
-fn default_format(
-    code: char,
-    value: &Value,
-    exporter: &LogExporter,
-    message: &LogMessage,
-) -> String {
-    match code {
-        's' => javascript_string(value),
-        'd' | 'i' => number(value).trunc().to_string(),
-        'f' => number(value).to_string(),
-        'o' | 'O' => serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned()),
-        'c' => String::new(),
-        'C' => Logger::code(&message.name, exporter.colors).map_or_else(
-            || javascript_string(value),
-            |code| Logger::color(exporter, code, &javascript_string(value), ""),
-        ),
-        _ => format!("%{code}"),
-    }
-}
-
-fn number(value: &Value) -> f64 {
-    match value {
-        Value::Number(value) => value.as_f64().unwrap_or(f64::NAN),
-        Value::Bool(value) => i32::from(*value).into(),
-        Value::Null => 0.0,
-        Value::String(value) => value.parse().unwrap_or(f64::NAN),
-        Value::Array(_) | Value::Object(_) => f64::NAN,
-    }
-}
-
-fn javascript_string(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => value.clone(),
-        Value::Array(values) => values
-            .iter()
-            .map(javascript_string)
-            .collect::<Vec<_>>()
-            .join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
-    }
-}
-
-fn append_value(value: &Value) -> String {
-    match value {
-        Value::Array(_) | Value::Object(_) => {
-            serde_json::to_string(value).unwrap_or_else(|_| "null".to_owned())
-        }
-        _ => javascript_string(value),
-    }
-}
-
-fn truncate_line(line: &str, max_length: usize) -> String {
-    let units = line.encode_utf16().collect::<Vec<_>>();
-    if units.len() <= max_length {
-        return line.to_owned();
-    }
-    format!("{}...", String::from_utf16_lossy(&units[..max_length]))
 }
 
 /// ANSI 16-color palette.

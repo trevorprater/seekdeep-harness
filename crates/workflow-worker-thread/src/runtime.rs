@@ -156,14 +156,8 @@ fn to_js_error_in(error: WorkflowError, context: &RefCell<&mut Context>) -> JsEr
 }
 
 /// Flatten a child's final output blocks to text.
-fn output_text(blocks: &[ContentBlock]) -> String {
-    let mut text = String::new();
-    for block in blocks {
-        if let ContentBlock::Text { text: block_text } = block {
-            text.push_str(block_text);
-        }
-    }
-    text
+fn output_text(blocks: &[ContentBlock]) -> seekdeep_llm::JsonString {
+    seekdeep_llm::assistant_text(blocks)
 }
 
 /// A short display label derived from the prompt when the script passes none.
@@ -832,7 +826,7 @@ async fn run_agent(
                 outcome: WorkflowAgentOutcome::Completed,
             });
             let _ = run.dispose().await;
-            JsValue::from(js_string!(output_text(&settled.output)))
+            JsValue::from(boa_engine::JsString::from(output_text(&settled.output).utf16_units()))
         }
     } else if shared.cancel.is_aborted() {
         shared.observer.agent_end(&WorkflowAgentEndInfo {

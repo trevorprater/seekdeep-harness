@@ -621,7 +621,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         }),
         Arc::new(move |_args: &RalphCallArgs, value: &RalphToolOutput| {
             Ok(vec![ContentBlock::Text {
-                text: render_run_result(&value.result, max_result_chars),
+                text: render_run_result(&value.result, max_result_chars).into(),
             }])
         }),
     );
@@ -722,9 +722,9 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         )
         .present_call(Arc::new(|args: &RalphCallArgs| {
             Some(ToolCallView::Generic(GenericCallView {
-                title: "ralph".to_owned(),
+                title: "ralph".into(),
                 kind: None,
-                raw_input: Some(json!(args.objective)),
+                raw_input: Some(json!(args.objective).into()),
                 content: None,
                 locations: None,
             }))

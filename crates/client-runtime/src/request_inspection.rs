@@ -2,25 +2,25 @@
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 /// Provider request configuration recorded on an Assistant lifecycle.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AssistantRequestConfig {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: JsonString,
     /// Provider-owned model identity.
-    pub model: String,
+    pub model: JsonString,
     /// Request purpose extension.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub purpose: Option<String>,
+    pub purpose: Option<JsonString>,
     /// Provider-specific thinking mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<String>,
+    pub thinking: Option<JsonString>,
     /// Provider-specific reasoning effort.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<JsonString>,
     /// Sampling temperature.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f64>,
@@ -29,7 +29,7 @@ pub struct AssistantRequestConfig {
     pub max_tokens: Option<u64>,
     /// Provider stop strings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stop: Option<Vec<String>>,
+    pub stop: Option<Vec<JsonString>>,
 }
 
 /// Stable provider/model identity reported for one completed request.
@@ -37,9 +37,9 @@ pub struct AssistantRequestConfig {
 #[serde(deny_unknown_fields)]
 pub struct AssistantProvenanceView {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: JsonString,
     /// Provider-owned model identity.
-    pub model: String,
+    pub model: JsonString,
 }
 
 /// Complete model-visible request header for one ordinary generation.
@@ -49,7 +49,7 @@ pub struct ConversationPromptSnapshot {
     /// Effective provider, model, and sampling configuration.
     pub config: AssistantRequestConfig,
     /// Rendered system prompt, including the empty prompt.
-    pub system: String,
+    pub system: JsonString,
     /// Complete schema catalog sent to the model in stable order.
     pub tools: Vec<Value>,
 }
@@ -146,7 +146,7 @@ pub struct RequestViewBase {
     pub status: RequestStatus,
     /// Stable rendered failure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub error: Option<JsonString>,
     /// Completed provider/model identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provenance: Option<AssistantProvenanceView>,
@@ -162,7 +162,7 @@ pub struct RequestViewBase {
 }
 
 /// One provider request assembled from durable lifecycle events.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "purpose", rename_all = "lowercase")]
 pub enum RequestView {
     /// Ordinary Assistant generation.
@@ -225,6 +225,74 @@ pub enum RequestView {
         #[serde(rename = "rawOutput", default, skip_serializing_if = "Option::is_none")]
         raw_output: Option<Vec<Value>>,
     },
+}
+
+impl<'de> Deserialize<'de> for RequestView {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AssistantFields {
+            turn: u64,
+            step: u64,
+            prompt: Option<Box<ConversationPromptSnapshot>>,
+            prompt_change: Option<Box<RequestPromptChange>>,
+            retry: Option<u64>,
+            max_retries: Option<u64>,
+            retry_delay_ms: Option<u64>,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct CompactionFields {
+            turn: Option<u64>,
+            step: u64,
+            replacement_seq: Option<u64>,
+            summary: Option<Vec<Value>>,
+            raw_output: Option<Vec<Value>>,
+        }
+
+        let value = Value::deserialize(deserializer)?;
+        let purpose = value
+            .get_value("purpose")
+            .and_then(Value::as_str)
+            .ok_or_else(|| serde::de::Error::missing_field("purpose"))?;
+        let base = Box::new(value.deserialize().map_err(serde::de::Error::custom)?);
+        match purpose {
+            "assistant" => {
+                let fields: AssistantFields =
+                    value.deserialize().map_err(serde::de::Error::custom)?;
+                Ok(Self::Assistant {
+                    base,
+                    turn: fields.turn,
+                    step: fields.step,
+                    prompt: fields.prompt,
+                    prompt_change: fields.prompt_change,
+                    retry: fields.retry,
+                    max_retries: fields.max_retries,
+                    retry_delay_ms: fields.retry_delay_ms,
+                })
+            }
+            "compaction" => {
+                let fields: CompactionFields =
+                    value.deserialize().map_err(serde::de::Error::custom)?;
+                Ok(Self::Compaction {
+                    base,
+                    turn: fields.turn,
+                    step: fields.step,
+                    replacement_seq: fields.replacement_seq,
+                    summary: fields.summary,
+                    raw_output: fields.raw_output,
+                })
+            }
+            _ => Err(serde::de::Error::unknown_variant(
+                purpose,
+                &["assistant", "compaction"],
+            )),
+        }
+    }
 }
 
 /// Request data consumed by stage-oriented Trajectory views.

@@ -80,19 +80,18 @@ fn validate_event(event: &SessionEvent, failure: &InvariantFailure) -> anyhow::R
     if event.event_type != "sandbox/mode" {
         return Ok(());
     }
-    let mode = event.data.get("mode").and_then(serde_json::Value::as_str);
-    if mode.is_none_or(|mode| SandboxMode::parse(mode).is_none()) {
+    let mode = event
+        .data
+        .get("mode")
+        .and_then(|value| value.deserialize::<String>().ok());
+    if mode.is_none_or(|mode| SandboxMode::parse(&mode).is_none()) {
         let rendered = event
             .data
             .get("mode")
-            .map_or_else(|| "undefined".to_owned(), javascript_stringify);
+            .map_or_else(|| "undefined".to_owned(), |value| value.as_raw().to_owned());
         return Err(failure
             .fail(format!("sandbox/mode carries unknown mode {rendered}"))
             .into());
     }
     Ok(())
-}
-
-fn javascript_stringify(value: &serde_json::Value) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "undefined".to_owned())
 }

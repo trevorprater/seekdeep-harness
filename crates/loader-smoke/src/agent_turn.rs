@@ -6,10 +6,10 @@ use parking_lot::Mutex;
 use seekdeep_agent::AGENTS;
 use seekdeep_cordis::{Context, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent, SessionId},
+    session::{JsonRef, Session, SessionEvent, SessionId},
     session_store::SESSIONS,
 };
-use seekdeep_llm::{ContentBlock, MessageSource, TokenUsage, UserMessage};
+use seekdeep_llm::{ContentBlock, JsonString, MessageSource, TokenUsage, UserMessage};
 use serde::{Deserialize, Serialize};
 
 /// Canonical-event observer for one fixture-owned Session interval.
@@ -44,7 +44,7 @@ pub struct FixtureTurnResult {
     /// Configured root Session identity.
     pub session_id: SessionId,
     /// Final assistant text observed in the owned interval.
-    pub output: String,
+    pub output: JsonString,
     /// Deduplicated usage accumulated by turn and step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<TokenUsage>,
@@ -61,7 +61,7 @@ pub enum FixtureTurnResultKind {
 #[derive(Default)]
 struct TurnObservation {
     received: bool,
-    output: String,
+    output: JsonString,
     usage_by_step: Vec<((u64, u64), TokenUsage)>,
 }
 
@@ -78,10 +78,13 @@ impl TurnObservation {
                 || !event
                     .data
                     .get("inserted")
-                    .and_then(serde_json::Value::as_array)
+                    .and_then(JsonRef::array_items)
                     .is_some_and(|inserted| {
                         inserted.iter().any(|message| {
-                            message.get("id").and_then(serde_json::Value::as_str)
+                            message
+                                .get("id")
+                                .and_then(|value| value.deserialize::<String>().ok())
+                                .as_deref()
                                 == Some(message_id)
                         })
                     })
@@ -94,13 +97,14 @@ impl TurnObservation {
         if let Some(callback) = callback {
             callback(session_id, event);
         }
-        let turn = event.data.get("turn").and_then(serde_json::Value::as_u64);
-        let step = event.data.get("step").and_then(serde_json::Value::as_u64);
+        let turn = event.data.get("turn").and_then(JsonRef::as_u64);
+        let step = event.data.get("step").and_then(JsonRef::as_u64);
         if event.event_type == "assistant/chunk"
             && event
                 .data
                 .pointer("/chunk/type")
-                .and_then(serde_json::Value::as_str)
+                .and_then(|value| value.deserialize::<String>().ok())
+                .as_deref()
                 == Some("usage")
             && let (Some(turn), Some(step), Some(usage)) = (
                 turn,
@@ -109,7 +113,7 @@ impl TurnObservation {
                     .data
                     .get("chunk")
                     .and_then(|chunk| chunk.get("usage"))
-                    .and_then(|usage| serde_json::from_value(usage.clone()).ok()),
+                    .and_then(|usage| usage.deserialize().ok()),
             )
         {
             self.set_usage((turn, step), usage);
@@ -124,7 +128,7 @@ impl TurnObservation {
                 event
                     .data
                     .get("usage")
-                    .and_then(|usage| serde_json::from_value(usage.clone()).ok()),
+                    .and_then(|usage| usage.deserialize().ok()),
             ) {
                 self.set_usage((turn, step), usage);
             }
@@ -155,17 +159,27 @@ impl TurnObservation {
     }
 }
 
-fn assistant_text(event: &SessionEvent) -> Option<String> {
+fn assistant_text(event: &SessionEvent) -> Option<JsonString> {
     let blocks = event
         .data
         .pointer("/message/content")
-        .and_then(serde_json::Value::as_array)?;
+        .and_then(JsonRef::array_items)?;
     let text = blocks
         .iter()
-        .filter(|block| block.get("type").and_then(serde_json::Value::as_str) == Some("text"))
-        .filter_map(|block| block.get("text").and_then(serde_json::Value::as_str))
+        .filter(|block| {
+            block
+                .get("type")
+                .and_then(|value| value.deserialize::<String>().ok())
+                .as_deref()
+                == Some("text")
+        })
+        .filter_map(|block| {
+            block
+                .get("text")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+        })
         .collect::<Vec<_>>();
-    (!text.is_empty()).then(|| text.concat())
+    (!text.is_empty()).then(|| JsonString::join(&text, ""))
 }
 
 fn add_usage(total: &TokenUsage, step: &TokenUsage) -> TokenUsage {
@@ -204,7 +218,9 @@ pub async fn run_fixture_turn(
     agent.when_idle()?.await?;
 
     let message = UserMessage::new(
-        vec![ContentBlock::Text { text: options.task }],
+        vec![ContentBlock::Text {
+            text: options.task.into(),
+        }],
         MessageSource::user(),
     );
     let message_id = message.id().as_str().to_owned();

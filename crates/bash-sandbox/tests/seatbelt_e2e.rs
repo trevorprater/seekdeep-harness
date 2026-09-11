@@ -238,7 +238,7 @@ async fn model_facing_bash_tool_renders_a_real_seatbelt_denial() {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<String>();

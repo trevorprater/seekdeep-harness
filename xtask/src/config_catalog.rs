@@ -208,7 +208,12 @@ struct World {
 pub fn run(repo_root: &Path, source_root: &Path, check: bool) -> anyhow::Result<()> {
     let entries = collect_config_catalog(source_root)?;
     let count = entries.len();
-    let content = render(&entries);
+    let content = seekdeep_repository_tools::doc_source_links::pin_oracle_source_links(
+        &render(&entries),
+        Path::new(OUTPUT),
+        source_root,
+        &seekdeep_repository_tools::doc_source_links::oracle_revision(repo_root)?,
+    )?;
     let path = repo_root.join(OUTPUT);
     if check {
         let current = std::fs::read_to_string(&path).ok();

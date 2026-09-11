@@ -3,7 +3,6 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    io::Cursor,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
@@ -17,16 +16,13 @@ use std::{
 
 use base64::Engine as _;
 use boa_engine::{
-    Context as JavaScriptContext, JsNativeError, JsObject, JsValue, JsVariant, Module,
-    NativeFunction, Source,
-    builtins::promise::PromiseState,
-    context::ContextBuilder,
-    js_string,
-    module::{IdleModuleLoader, ModuleLoader, Referrer, SimpleModuleLoader},
-    property::PropertyKey,
+    Context as JavaScriptContext, JsNativeError, JsObject, JsValue, JsVariant, NativeFunction,
+    Source, builtins::promise::PromiseState, context::ContextBuilder, js_string,
+    module::IdleModuleLoader, property::PropertyKey,
 };
 use futures::future::BoxFuture;
 use num_traits::ToPrimitive;
+use seekdeep_code_runtime::{CodeBindingFailure, CodeJsonString, CodeJsonValue};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_cordis_timer::TIMER;
 use seekdeep_llm::ContentBlock;
@@ -36,12 +32,13 @@ use seekdeep_tools::{
 };
 use serde_json::Value;
 
+mod json;
+
 use crate::sandbox_service::{
     SANDBOX_SERVICES, SandboxServiceRegistration, SandboxServiceRegistry,
 };
 
 thread_local! {
-    static CJS_DEPENDENCIES: RefCell<BTreeSet<PathBuf>> = const { RefCell::new(BTreeSet::new()) };
     static ACTIVE_DYNAMIC_SERVICES: RefCell<BTreeMap<String, Arc<DynamicJavaScriptService>>> = const { RefCell::new(BTreeMap::new()) };
     static DYNAMIC_CONSOLE_TAG: RefCell<String> = const { RefCell::new(String::new()) };
 }
@@ -134,20 +131,21 @@ enum WorkerCommand {
     InvokeTool {
         activation_id: u64,
         tool_id: usize,
-        args: Value,
-        reply: tokio::sync::oneshot::Sender<Result<(Value, Vec<HostCommand>), String>>,
+        args: CodeJsonValue,
+        reply:
+            tokio::sync::oneshot::Sender<Result<(CodeJsonValue, Vec<HostCommand>), CodeJsonString>>,
     },
     RenderTool {
         tool_id: usize,
-        args: Value,
-        value: Value,
-        reply: mpsc::SyncSender<Result<Value, String>>,
+        args: CodeJsonValue,
+        value: CodeJsonValue,
+        reply: mpsc::SyncSender<Result<CodeJsonValue, CodeJsonString>>,
     },
     PresentTool {
         tool_id: usize,
-        args: Value,
-        value: Value,
-        reply: mpsc::SyncSender<Result<Value, String>>,
+        args: CodeJsonValue,
+        value: CodeJsonValue,
+        reply: mpsc::SyncSender<Result<CodeJsonValue, CodeJsonString>>,
     },
     InvokeService {
         activation_id: u64,
@@ -168,86 +166,6 @@ struct ModuleMetadata {
     name: String,
     inject: Vec<String>,
     handlers: Vec<String>,
-    dependencies: BTreeSet<PathBuf>,
-}
-
-#[derive(Debug)]
-struct RecordingModuleLoader {
-    inner: Rc<SimpleModuleLoader>,
-    dependencies: Rc<RefCell<BTreeSet<PathBuf>>>,
-}
-
-impl ModuleLoader for RecordingModuleLoader {
-    async fn load_imported_module(
-        self: Rc<Self>,
-        referrer: Referrer,
-        specifier: boa_engine::JsString,
-        context: &RefCell<&mut JavaScriptContext>,
-    ) -> boa_engine::JsResult<Module> {
-        let requested = specifier.to_std_string_escaped();
-        if requested.starts_with('.')
-            && let Some(parent) = referrer.path().and_then(Path::parent)
-        {
-            let path = parent.join(&requested).canonicalize().map_err(|error| {
-                boa_engine::JsNativeError::typ()
-                    .with_message(format!("could not resolve module {requested:?}: {error}"))
-            })?;
-            if path.extension().and_then(std::ffi::OsStr::to_str) == Some("cjs") {
-                if let Some(module) = self.inner.get(&path) {
-                    return Ok(module);
-                }
-                let module = parse_file_module(&path, &mut context.borrow_mut())?;
-                self.inner.insert(path.clone(), module.clone());
-                self.dependencies.borrow_mut().insert(path);
-                return Ok(module);
-            }
-        }
-        let module = self
-            .inner
-            .clone()
-            .load_imported_module(referrer, specifier, context)
-            .await?;
-        if let Some(path) = module.path() {
-            self.dependencies.borrow_mut().insert(path.to_path_buf());
-        }
-        Ok(module)
-    }
-}
-
-fn parse_file_module(
-    path: &Path,
-    javascript: &mut JavaScriptContext,
-) -> boa_engine::JsResult<Module> {
-    if path.extension().and_then(std::ffi::OsStr::to_str) != Some("cjs") {
-        let source = Source::from_filepath(path).map_err(|error| {
-            boa_engine::JsNativeError::typ()
-                .with_message(format!("failed to read module {}: {error}", path.display()))
-        })?;
-        return Module::parse(source, None, javascript);
-    }
-    let source = std::fs::read_to_string(path).map_err(|error| {
-        boa_engine::JsNativeError::typ()
-            .with_message(format!("failed to read module {}: {error}", path.display()))
-    })?;
-    let filename = serde_json::to_string(&path.to_string_lossy())
-        .map_err(|error| boa_engine::JsNativeError::typ().with_message(error.to_string()))?;
-    let directory = serde_json::to_string(
-        &path
-            .parent()
-            .unwrap_or_else(|| Path::new(""))
-            .to_string_lossy(),
-    )
-    .map_err(|error| boa_engine::JsNativeError::typ().with_message(error.to_string()))?;
-    let body = serde_json::to_string(&source)
-        .map_err(|error| boa_engine::JsNativeError::typ().with_message(error.to_string()))?;
-    let wrapped = format!(
-        "const module = {{ exports: {{}} }};\nlet exports = module.exports;\nconst execute = Function('module', 'exports', 'require', '__filename', '__dirname', {body});\nexecute(module, exports, specifier => globalThis.__seekdeep_require__(specifier, {filename}), {filename}, {directory});\nexport default module.exports;\nexport const apply = module.exports.apply;\nexport const inject = module.exports.inject;\nexport const name = module.exports.name;\n"
-    );
-    Module::parse(
-        Source::from_reader(Cursor::new(wrapped), Some(path)),
-        None,
-        javascript,
-    )
 }
 
 struct ModuleWorker {
@@ -353,36 +271,6 @@ impl std::fmt::Debug for ModuleWorker {
 }
 
 impl ModuleWorker {
-    fn start(path: &Path, process: Value) -> anyhow::Result<(Arc<Self>, ModuleMetadata)> {
-        let path = path.to_path_buf();
-        let label = path.to_string_lossy().into_owned();
-        let worker_path = path.clone();
-        let (commands, receiver) = mpsc::channel();
-        let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
-        let join = thread::Builder::new()
-            .name("seekdeep-loader-js".to_owned())
-            .spawn(move || worker_main(&worker_path, process, &receiver, ready_sender))?;
-        let metadata = ready_receiver
-            .recv()
-            .map_err(|_| anyhow::anyhow!("JavaScript module worker exited during import"))?
-            .map_err(anyhow::Error::msg)?;
-        Ok((
-            Arc::new(Self {
-                sender: commands,
-                join: Mutex::new(Some(join)),
-                next_activation: AtomicU64::new(1),
-                declared: metadata.inject.clone(),
-                handlers: metadata.handlers.clone(),
-                label,
-                contexts: parking_lot::Mutex::new(HashMap::new()),
-                command_effects: parking_lot::Mutex::new(HashMap::new()),
-                command_tasks: parking_lot::Mutex::new(HashMap::new()),
-                sandboxed: false,
-            }),
-            metadata,
-        ))
-    }
-
     fn start_body(
         body: String,
         timeout_ms: u64,
@@ -665,20 +553,23 @@ impl ModuleWorker {
         let execute = Arc::new(move |args, _execution| {
             let worker = Arc::clone(&execute_worker);
             Box::pin(async move { worker.invoke_tool(activation_id, tool_id, args).await })
-                as seekdeep_tools::runtime::ToolExecuteFuture
+                as seekdeep_tools::runtime::ToolJsonExecuteFuture
         });
         let render_worker = Arc::clone(self);
-        let render = Arc::new(move |args: &Value, value: &Value| {
+        let render = Arc::new(move |args: &CodeJsonValue, value: &CodeJsonValue| {
             render_worker.render_tool(tool_id, args.clone(), value.clone())
         });
-        let mut output = ToolOutputDefinition::new(output_schema, render);
+        let mut output = ToolOutputDefinition::new_lossless(output_schema, render);
         if has_presentation_meta {
             let presentation_worker = Arc::clone(self);
-            output = output.presentation_meta(Arc::new(move |args: &Value, value: &Value| {
-                presentation_worker.present_tool(tool_id, args.clone(), value.clone())
-            }));
+            output = output.presentation_meta_lossless(Arc::new(
+                move |args: &CodeJsonValue, value: &CodeJsonValue| {
+                    presentation_worker.present_tool(tool_id, args.clone(), value.clone())
+                },
+            ));
         }
-        let mut definition = ToolDefinition::new(name, description, parameters, output, execute);
+        let mut definition =
+            ToolDefinition::new_lossless(name, description, parameters, output, execute);
         definition.timeout_ms = timeout_ms;
         tools.register(context, definition)
     }
@@ -746,8 +637,8 @@ impl ModuleWorker {
         self: &Arc<Self>,
         activation_id: u64,
         tool_id: usize,
-        args: Value,
-    ) -> anyhow::Result<Value> {
+        args: CodeJsonValue,
+    ) -> anyhow::Result<CodeJsonValue> {
         let context = self
             .contexts
             .lock()
@@ -766,7 +657,7 @@ impl ModuleWorker {
         let (value, commands) = outcome
             .await
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during Tool execution"))?
-            .map_err(anyhow::Error::msg)?;
+            .map_err(tool_binding_failure)?;
         self.apply_commands(&context, activation_id, commands)
             .await?;
         Ok(value)
@@ -775,8 +666,8 @@ impl ModuleWorker {
     fn render_tool(
         &self,
         tool_id: usize,
-        args: Value,
-        value: Value,
+        args: CodeJsonValue,
+        value: CodeJsonValue,
     ) -> anyhow::Result<Vec<ContentBlock>> {
         let (reply, outcome) = mpsc::sync_channel(1);
         self.sender
@@ -790,11 +681,16 @@ impl ModuleWorker {
         let rendered = outcome
             .recv()
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during Tool rendering"))?
-            .map_err(anyhow::Error::msg)?;
+            .map_err(tool_binding_failure)?;
         decode_rendered_content(&rendered)
     }
 
-    fn present_tool(&self, tool_id: usize, args: Value, value: Value) -> anyhow::Result<Value> {
+    fn present_tool(
+        &self,
+        tool_id: usize,
+        args: CodeJsonValue,
+        value: CodeJsonValue,
+    ) -> anyhow::Result<CodeJsonValue> {
         let (reply, outcome) = mpsc::sync_channel(1);
         self.sender
             .send(WorkerCommand::PresentTool {
@@ -807,7 +703,7 @@ impl ModuleWorker {
         outcome
             .recv()
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during Tool presentation"))?
-            .map_err(anyhow::Error::msg)
+            .map_err(tool_binding_failure)
     }
 
     async fn invoke_callback(
@@ -841,34 +737,46 @@ pub struct DynamicHostGuardFailure {
     pub message: String,
 }
 
-fn describe_return(value: &Value) -> String {
+fn tool_binding_failure(message: CodeJsonString) -> anyhow::Error {
+    CodeBindingFailure { message }.into()
+}
+
+fn describe_return(value: &CodeJsonValue) -> String {
     const LIMIT: usize = 120;
-    let json = serde_json::to_string(value).unwrap_or_else(|_| value.to_string());
+    let json = value.as_raw();
     if json.chars().count() <= LIMIT {
-        json
+        json.to_owned()
     } else {
         format!("{}…", json.chars().take(LIMIT).collect::<String>())
     }
 }
 
-fn decode_rendered_content(rendered: &Value) -> anyhow::Result<Vec<ContentBlock>> {
+pub(crate) fn decode_rendered_content(
+    rendered: &CodeJsonValue,
+) -> anyhow::Result<Vec<ContentBlock>> {
     let invalid = || {
         anyhow::anyhow!(
             "output.render returned {} — it must return an ARRAY of content blocks:\n  ✓ return [{{ type: 'text', text: String(value) }}]",
             describe_return(rendered)
         )
     };
-    let values = rendered.as_array().ok_or_else(invalid)?;
+    let values = rendered.array_items().ok_or_else(invalid)?;
     values
-        .iter()
+        .into_iter()
         .map(|value| -> anyhow::Result<ContentBlock> {
-            let mut fields = value.as_object().cloned().ok_or_else(invalid)?;
-            let block_type = fields
-                .remove("type")
-                .and_then(|value| value.as_str().map(str::to_owned))
+            let block_type = value
+                .get("type")
+                .and_then(|value| value.deserialize::<String>().ok())
                 .ok_or_else(invalid)?;
-            Ok(serde_json::from_value(value.clone())
-                .unwrap_or(ContentBlock::Unknown { block_type, fields }))
+            if let Ok(block) = value.deserialize() {
+                Ok(block)
+            } else {
+                let Value::Object(mut fields) = value.to_owned().try_into_serde_json()? else {
+                    return Err(invalid());
+                };
+                fields.remove("type");
+                Ok(ContentBlock::Unknown { block_type, fields })
+            }
         })
         .collect()
 }
@@ -934,18 +842,6 @@ pub(crate) struct LoadedPlugin {
     pub(crate) dependencies: BTreeSet<PathBuf>,
 }
 
-pub(crate) fn load(path: &Path, process: Value) -> anyhow::Result<LoadedPlugin> {
-    let (worker, metadata) = ModuleWorker::start(path, process)?;
-    let plugin = Plugin::new(metadata.name, metadata.inject, move |context, config| {
-        let worker = Arc::clone(&worker);
-        Box::pin(async move { worker.activate(&context, config).await })
-    });
-    Ok(LoadedPlugin {
-        plugin,
-        dependencies: metadata.dependencies,
-    })
-}
-
 pub(crate) fn load_body(body: &str, timeout_ms: u64) -> anyhow::Result<Plugin> {
     Ok(load_body_runtime(body, timeout_ms)?.plugin)
 }
@@ -972,18 +868,6 @@ pub(crate) fn load_body_runtime_named(
         Box::pin(async move { worker.activate(&context, config).await })
     });
     Ok(LoadedDynamicHostPlugin { plugin, runtime })
-}
-
-fn worker_main(
-    path: &Path,
-    process: Value,
-    commands: &mpsc::Receiver<WorkerCommand>,
-    ready: mpsc::SyncSender<Result<ModuleMetadata, String>>,
-) {
-    let initialized = initialize_module(path, &process);
-    drop(process);
-    worker_loop(initialized, commands, &ready);
-    drop(ready);
 }
 
 fn worker_main_body(
@@ -1176,63 +1060,6 @@ fn enter_first_activation_services(
         .map(|activation| ActiveDynamicServices::enter(&activation.dynamic_services))
 }
 
-fn initialize_module(
-    path: &Path,
-    process: &Value,
-) -> Result<(JavaScriptContext, JsObject, ModuleMetadata), String> {
-    let directory = path
-        .parent()
-        .ok_or_else(|| format!("plugin path has no directory: {}", path.display()))?;
-    let inner = Rc::new(SimpleModuleLoader::new(directory).map_err(|error| error.to_string())?);
-    let dependencies = Rc::new(RefCell::new(BTreeSet::new()));
-    let loader = Rc::new(RecordingModuleLoader {
-        inner: inner.clone(),
-        dependencies: dependencies.clone(),
-    });
-    let mut javascript = ContextBuilder::new()
-        .module_loader(loader.clone())
-        .build()
-        .map_err(|error| error.to_string())?;
-    install_process_global(&mut javascript, process)?;
-    install_commonjs_require(&mut javascript)?;
-    CJS_DEPENDENCIES.with(|dependencies| dependencies.borrow_mut().clear());
-    javascript
-        .runtime_limits_mut()
-        .set_loop_iteration_limit(1_000_000);
-    let canonical = path
-        .canonicalize()
-        .map_err(|error| format!("failed to resolve plugin {}: {error}", path.display()))?;
-    let module =
-        parse_file_module(&canonical, &mut javascript).map_err(|error| error.to_string())?;
-    dependencies.borrow_mut().insert(canonical.clone());
-    inner.insert(canonical, module.clone());
-    let evaluated = module.load_link_evaluate(&mut javascript);
-    javascript.run_jobs().map_err(|error| error.to_string())?;
-    match evaluated.state() {
-        PromiseState::Fulfilled(_) => {}
-        PromiseState::Rejected(error) => {
-            return Err(format!(
-                "plugin module evaluation failed: {}",
-                render_value(&error, &mut javascript)
-            ));
-        }
-        PromiseState::Pending => return Err("plugin module evaluation did not settle".to_owned()),
-    }
-    let (apply, name, inject) = module_exports(&module, path, &mut javascript)?;
-    CJS_DEPENDENCIES.with(|required| dependencies.borrow_mut().extend(required.borrow().clone()));
-    let dependencies = dependencies.borrow().clone();
-    Ok((
-        javascript,
-        apply,
-        ModuleMetadata {
-            name,
-            inject,
-            handlers: Vec::new(),
-            dependencies,
-        },
-    ))
-}
-
 fn initialize_body(
     body: &str,
     timeout_ms: u64,
@@ -1284,7 +1111,6 @@ fn initialize_body(
             name,
             inject,
             handlers,
-            dependencies: BTreeSet::new(),
         },
     ))
 }
@@ -1700,237 +1526,6 @@ fn dynamic_service_call(
         JsNativeError::error().with_message(format!("dynamic Service {name}.{method}: {error}"))
     })?;
     JsValue::from_json(&value, javascript)
-}
-
-fn module_exports(
-    module: &Module,
-    path: &Path,
-    javascript: &mut JavaScriptContext,
-) -> Result<(JsObject, String, Vec<String>), String> {
-    let namespace = module.namespace(javascript);
-    let default_export = namespace.get(js_string!("default"), javascript).ok();
-    let plugin_object = default_export
-        .as_ref()
-        .and_then(JsValue::as_object)
-        .filter(|object| !object.is_callable());
-    let apply = default_export
-        .filter(|value| value.as_object().is_some_and(|object| object.is_callable()))
-        .or_else(|| {
-            namespace
-                .get(js_string!("apply"), javascript)
-                .ok()
-                .filter(|value| value.as_object().is_some_and(|object| object.is_callable()))
-        })
-        .or_else(|| {
-            plugin_object
-                .as_ref()
-                .and_then(|plugin| plugin.get(js_string!("apply"), javascript).ok())
-        })
-        .and_then(|value| value.as_object())
-        .filter(JsObject::is_callable)
-        .ok_or_else(|| "plugin module must export a function as default or apply".to_owned())?;
-    let inject_value = namespace
-        .get(js_string!("inject"), javascript)
-        .ok()
-        .filter(|value| !value.is_undefined())
-        .or_else(|| {
-            plugin_object
-                .as_ref()
-                .and_then(|plugin| plugin.get(js_string!("inject"), javascript).ok())
-        })
-        .unwrap_or_else(JsValue::undefined);
-    let inject = inject_value
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .map_or_else(Vec::new, |value| match value {
-            Value::Array(values) => values
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect(),
-            Value::Object(values) => values.into_iter().map(|(name, _)| name).collect(),
-            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => Vec::new(),
-        });
-    let name_value = namespace
-        .get(js_string!("name"), javascript)
-        .ok()
-        .filter(|value| !value.is_undefined())
-        .or_else(|| {
-            plugin_object
-                .as_ref()
-                .and_then(|plugin| plugin.get(js_string!("name"), javascript).ok())
-        });
-    let name = name_value
-        .and_then(|value| value.as_string().map(|value| value.to_std_string_escaped()))
-        .or_else(|| {
-            path.file_stem()
-                .and_then(std::ffi::OsStr::to_str)
-                .map(str::to_owned)
-        })
-        .unwrap_or_else(|| "javascript-plugin".to_owned());
-    Ok((apply, name, inject))
-}
-
-fn install_process_global(
-    javascript: &mut JavaScriptContext,
-    process: &Value,
-) -> Result<(), String> {
-    let environment = process
-        .get("env")
-        .cloned()
-        .unwrap_or_else(|| Value::Object(serde_json::Map::default()));
-    let platform = process.get("platform").cloned().unwrap_or(Value::Null);
-    let cwd = process.get("cwd").cloned().unwrap_or(Value::Null);
-    let executable = process.get("execPath").cloned().unwrap_or(Value::Null);
-    let version = process.get("version").cloned().unwrap_or(Value::Null);
-    let source = format!(
-        "globalThis.process = Object.freeze({{ env: Object.freeze({environment}), platform: {platform}, version: {version}, execPath: {executable}, cwd: () => {cwd} }});",
-    );
-    javascript
-        .eval(Source::from_bytes(&source))
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-fn install_commonjs_require(javascript: &mut JavaScriptContext) -> Result<(), String> {
-    javascript
-        .register_global_builtin_callable(
-            js_string!("__seekdeep_require__"),
-            2,
-            NativeFunction::from_fn_ptr(commonjs_require),
-        )
-        .map_err(|error| error.to_string())?;
-    javascript
-        .eval(Source::from_bytes(
-            "globalThis.__seekdeep_cjs_cache__ = Object.create(null);",
-        ))
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-fn commonjs_require(
-    _this: &JsValue,
-    arguments: &[JsValue],
-    javascript: &mut JavaScriptContext,
-) -> boa_engine::JsResult<JsValue> {
-    let specifier = arguments
-        .first()
-        .ok_or_else(|| JsNativeError::typ().with_message("require specifier is missing"))?
-        .to_string(javascript)?
-        .to_std_string_escaped();
-    let parent = arguments
-        .get(1)
-        .ok_or_else(|| JsNativeError::typ().with_message("require parent is missing"))?
-        .to_string(javascript)?
-        .to_std_string_escaped();
-    let path = resolve_commonjs_path(&specifier, Path::new(&parent)).map_err(|error| {
-        JsNativeError::typ().with_message(format!("cannot require {specifier:?}: {error}"))
-    })?;
-    CJS_DEPENDENCIES.with(|dependencies| {
-        dependencies.borrow_mut().insert(path.clone());
-    });
-    let cache = javascript
-        .global_object()
-        .get(js_string!("__seekdeep_cjs_cache__"), javascript)?
-        .as_object()
-        .ok_or_else(|| JsNativeError::typ().with_message("CommonJS cache is unavailable"))?;
-    let key = path.to_string_lossy().into_owned();
-    let property = boa_engine::JsString::from(key.as_str());
-    let cached = cache.get(property.clone(), javascript)?;
-    if !cached.is_undefined() {
-        return Ok(cached);
-    }
-    let value = if path.extension().and_then(std::ffi::OsStr::to_str) == Some("json") {
-        let source = std::fs::read_to_string(&path).map_err(|error| {
-            JsNativeError::typ().with_message(format!("failed to read {}: {error}", path.display()))
-        })?;
-        let value: Value = serde_json::from_str(&source).map_err(|error| {
-            JsNativeError::syntax()
-                .with_message(format!("failed to parse {}: {error}", path.display()))
-        })?;
-        JsValue::from_json(&value, javascript)?
-    } else {
-        evaluate_commonjs(&path, javascript)?
-    };
-    cache.set(property, value.clone(), true, javascript)?;
-    Ok(value)
-}
-
-fn evaluate_commonjs(
-    path: &Path,
-    javascript: &mut JavaScriptContext,
-) -> boa_engine::JsResult<JsValue> {
-    let source = std::fs::read_to_string(path).map_err(|error| {
-        JsNativeError::typ().with_message(format!(
-            "failed to read CommonJS module {}: {error}",
-            path.display()
-        ))
-    })?;
-    let body = serde_json::to_string(&source)
-        .map_err(|error| JsNativeError::typ().with_message(error.to_string()))?;
-    let filename = serde_json::to_string(&path.to_string_lossy())
-        .map_err(|error| JsNativeError::typ().with_message(error.to_string()))?;
-    let directory = serde_json::to_string(
-        &path
-            .parent()
-            .unwrap_or_else(|| Path::new(""))
-            .to_string_lossy(),
-    )
-    .map_err(|error| JsNativeError::typ().with_message(error.to_string()))?;
-    let program = format!(
-        "(() => {{ const module = {{ exports: {{}} }}; const execute = Function('module', 'exports', 'require', '__filename', '__dirname', {body}); execute(module, module.exports, specifier => globalThis.__seekdeep_require__(specifier, {filename}), {filename}, {directory}); return module.exports; }})()"
-    );
-    javascript.eval(Source::from_bytes(&program))
-}
-
-fn resolve_commonjs_path(specifier: &str, parent: &Path) -> anyhow::Result<PathBuf> {
-    let base = parent
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("require parent has no directory"))?;
-    let candidate = if Path::new(specifier).is_absolute() {
-        PathBuf::from(specifier)
-    } else if specifier.starts_with('.') {
-        base.join(specifier)
-    } else {
-        let mut found = None;
-        for ancestor in base.ancestors() {
-            let package = ancestor.join("node_modules").join(specifier);
-            if package.exists() {
-                found = Some(package);
-                break;
-            }
-        }
-        found.ok_or_else(|| anyhow::anyhow!("package not found"))?
-    };
-    resolve_commonjs_candidate(&candidate)
-}
-
-fn resolve_commonjs_candidate(candidate: &Path) -> anyhow::Result<PathBuf> {
-    if candidate.is_file() {
-        return Ok(candidate.canonicalize()?);
-    }
-    for extension in ["cjs", "js", "json"] {
-        let path = candidate.with_extension(extension);
-        if path.is_file() {
-            return Ok(path.canonicalize()?);
-        }
-    }
-    if candidate.is_dir() {
-        let manifest_path = candidate.join("package.json");
-        if let Ok(source) = std::fs::read_to_string(&manifest_path) {
-            let manifest: Value = serde_json::from_str(&source)?;
-            if let Some(main) = manifest.get("main").and_then(Value::as_str) {
-                return resolve_commonjs_candidate(&candidate.join(main));
-            }
-        }
-        for name in ["index.cjs", "index.js", "index.json"] {
-            let path = candidate.join(name);
-            if path.is_file() {
-                return Ok(path.canonicalize()?);
-            }
-        }
-    }
-    anyhow::bail!("module path does not exist: {}", candidate.display())
 }
 
 fn activate(
@@ -2538,6 +2133,27 @@ fn clone_sandbox_value(
         .map_err(|error| error.to_string())
 }
 
+fn clone_sandbox_value_raw(
+    javascript: &mut JavaScriptContext,
+    value: JsValue,
+    path: &str,
+) -> Result<JsValue, CodeJsonString> {
+    let clone = javascript
+        .global_object()
+        .get(js_string!("__seekdeep_clone_json__"), javascript)
+        .map_err(|error| render_code_error(&error, javascript))?
+        .as_object()
+        .filter(JsObject::is_callable)
+        .ok_or_else(|| "sandbox JSON cloner is unavailable".to_owned())?;
+    clone
+        .call(
+            &JsValue::undefined(),
+            &[value, JsValue::from(boa_engine::JsString::from(path))],
+            javascript,
+        )
+        .map_err(|error| render_code_error(&error, javascript))
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "service invocation needs the worker pump and exact activation identity"
@@ -2617,11 +2233,11 @@ fn invoke_tool_execute(
     effects: &mut HashMap<u64, ActivationEffects>,
     activation_id: u64,
     tool_id: usize,
-    args: &Value,
+    args: &CodeJsonValue,
     apply: &JsObject,
     worker_commands: &mpsc::Receiver<WorkerCommand>,
     deferred: &mut VecDeque<WorkerCommand>,
-) -> Result<(Value, Vec<HostCommand>), String> {
+) -> Result<(CodeJsonValue, Vec<HostCommand>), CodeJsonString> {
     let tool = dynamic_tool(javascript, tool_id)?;
     let execute = tool
         .get(js_string!("execute"), javascript)
@@ -2629,24 +2245,23 @@ fn invoke_tool_execute(
         .as_object()
         .filter(JsObject::is_callable)
         .ok_or_else(|| format!("dynamic Tool {tool_id} has no execute function"))?;
-    let args = JsValue::from_json(args, javascript).map_err(|error| error.to_string())?;
+    let args = json::to_javascript(args, javascript)?;
     let returned = execute
         .call(&tool.clone().into(), &[args], javascript)
-        .map_err(|error| error.to_string())?;
-    let settled = settle_value_pumping(
+        .map_err(|error| render_code_error(&error, javascript))?;
+    let settled = settle_value_pumping_with(
         &returned,
         javascript,
         apply,
         effects,
         worker_commands,
         deferred,
+        render_code_value,
     )?;
-    let settled = clone_sandbox_value(javascript, settled, "harness.defineTool execute result")?;
-    let value = js_value_to_json_iterative(settled, javascript)
+    let settled =
+        clone_sandbox_value_raw(javascript, settled, "harness.defineTool execute result")?;
+    let value = json::from_javascript(settled, javascript)
         .map_err(|_| "dynamic Tool execute result must be lossless JSON".to_owned())?;
-    if !is_lossless_json(&value) {
-        return Err("dynamic Tool execute result must be lossless JSON".to_owned());
-    }
     flush_commands(
         javascript,
         effects
@@ -2659,9 +2274,9 @@ fn invoke_tool_execute(
 fn invoke_tool_render(
     javascript: &mut JavaScriptContext,
     tool_id: usize,
-    args: &Value,
-    value: &Value,
-) -> Result<Value, String> {
+    args: &CodeJsonValue,
+    value: &CodeJsonValue,
+) -> Result<CodeJsonValue, CodeJsonString> {
     let tool = dynamic_tool(javascript, tool_id)?;
     let output = tool
         .get(js_string!("output"), javascript)
@@ -2674,27 +2289,27 @@ fn invoke_tool_render(
         .as_object()
         .filter(JsObject::is_callable)
         .ok_or_else(|| format!("dynamic Tool {tool_id} has no output.render function"))?;
-    let args = JsValue::from_json(args, javascript).map_err(|error| error.to_string())?;
-    let value = JsValue::from_json(value, javascript).map_err(|error| error.to_string())?;
+    let args = json::to_javascript(args, javascript)?;
+    let value = json::to_javascript(value, javascript)?;
     let returned = render
         .call(&output.into(), &[args, value], javascript)
-        .map_err(|error| error.to_string())?;
-    let settled = settle_value(&returned, javascript)?;
-    let settled = clone_sandbox_value(
+        .map_err(|error| render_code_error(&error, javascript))?;
+    let settled = settle_value_with(&returned, javascript, render_code_value)?;
+    let settled = clone_sandbox_value_raw(
         javascript,
         settled,
         "harness.defineTool output.render result",
     )?;
-    js_value_to_json_iterative(settled, javascript)
-        .map_err(|_| "dynamic Tool output.render result must be lossless JSON".to_owned())
+    json::from_javascript(settled, javascript)
+        .map_err(|_| "dynamic Tool output.render result must be lossless JSON".into())
 }
 
 fn invoke_tool_presentation(
     javascript: &mut JavaScriptContext,
     tool_id: usize,
-    args: &Value,
-    value: &Value,
-) -> Result<Value, String> {
+    args: &CodeJsonValue,
+    value: &CodeJsonValue,
+) -> Result<CodeJsonValue, CodeJsonString> {
     let tool = dynamic_tool(javascript, tool_id)?;
     let output = tool
         .get(js_string!("output"), javascript)
@@ -2707,19 +2322,19 @@ fn invoke_tool_presentation(
         .as_object()
         .filter(JsObject::is_callable)
         .ok_or_else(|| format!("dynamic Tool {tool_id} has no output.presentationMeta function"))?;
-    let args = JsValue::from_json(args, javascript).map_err(|error| error.to_string())?;
-    let value = JsValue::from_json(value, javascript).map_err(|error| error.to_string())?;
+    let args = json::to_javascript(args, javascript)?;
+    let value = json::to_javascript(value, javascript)?;
     let returned = projector
         .call(&output.into(), &[args, value], javascript)
-        .map_err(|error| error.to_string())?;
-    let settled = settle_value(&returned, javascript)?;
-    let settled = clone_sandbox_value(
+        .map_err(|error| render_code_error(&error, javascript))?;
+    let settled = settle_value_with(&returned, javascript, render_code_value)?;
+    let settled = clone_sandbox_value_raw(
         javascript,
         settled,
         "harness.defineTool output.presentationMeta result",
     )?;
-    js_value_to_json_iterative(settled, javascript)
-        .map_err(|_| "dynamic Tool output.presentationMeta result must be lossless JSON".to_owned())
+    json::from_javascript(settled, javascript)
+        .map_err(|_| "dynamic Tool output.presentationMeta result must be lossless JSON".into())
 }
 
 #[allow(
@@ -2806,6 +2421,26 @@ fn settle_value_pumping(
     commands: &mpsc::Receiver<WorkerCommand>,
     deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<JsValue, String> {
+    settle_value_pumping_with(
+        value,
+        javascript,
+        apply,
+        effects,
+        commands,
+        deferred,
+        render_value,
+    )
+}
+
+fn settle_value_pumping_with<E: From<String>>(
+    value: &JsValue,
+    javascript: &mut JavaScriptContext,
+    apply: &JsObject,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
+    render_error: fn(&JsValue, &mut JavaScriptContext) -> E,
+) -> Result<JsValue, E> {
     let Some(object) = value.as_object() else {
         return Ok(value.clone());
     };
@@ -2813,10 +2448,13 @@ fn settle_value_pumping(
         return Ok(value.clone());
     };
     loop {
-        javascript.run_jobs().map_err(|error| error.to_string())?;
+        javascript.run_jobs().map_err(|error| {
+            let value = error.to_opaque(javascript);
+            render_error(&value, javascript)
+        })?;
         match promise.state() {
             PromiseState::Fulfilled(value) => return Ok(value),
-            PromiseState::Rejected(error) => return Err(render_value(&error, javascript)),
+            PromiseState::Rejected(error) => return Err(render_error(&error, javascript)),
             PromiseState::Pending => {}
         }
         for activation in effects.values_mut() {
@@ -2837,7 +2475,9 @@ fn settle_value_pumping(
                 continue;
             }
             if !process_worker_command(javascript, apply, effects, commands, deferred, command) {
-                return Err("JavaScript worker shut down while async work was pending".to_owned());
+                return Err("JavaScript worker shut down while async work was pending"
+                    .to_owned()
+                    .into());
             }
             break;
         }
@@ -2845,17 +2485,28 @@ fn settle_value_pumping(
 }
 
 fn settle_value(value: &JsValue, javascript: &mut JavaScriptContext) -> Result<JsValue, String> {
+    settle_value_with(value, javascript, render_value)
+}
+
+fn settle_value_with<E: From<String>>(
+    value: &JsValue,
+    javascript: &mut JavaScriptContext,
+    render_error: fn(&JsValue, &mut JavaScriptContext) -> E,
+) -> Result<JsValue, E> {
     let Some(object) = value.as_object() else {
         return Ok(value.clone());
     };
     let Ok(promise) = boa_engine::object::builtins::JsPromise::from_object(object) else {
         return Ok(value.clone());
     };
-    javascript.run_jobs().map_err(|error| error.to_string())?;
+    javascript.run_jobs().map_err(|error| {
+        let value = error.to_opaque(javascript);
+        render_error(&value, javascript)
+    })?;
     match promise.state() {
         PromiseState::Fulfilled(value) => Ok(value),
-        PromiseState::Rejected(error) => Err(render_value(&error, javascript)),
-        PromiseState::Pending => Err("JavaScript plugin apply did not settle".to_owned()),
+        PromiseState::Rejected(error) => Err(render_error(&error, javascript)),
+        PromiseState::Pending => Err("JavaScript plugin apply did not settle".to_owned().into()),
     }
 }
 
@@ -3054,4 +2705,19 @@ fn render_value(value: &JsValue, javascript: &mut JavaScriptContext) -> String {
         |_| "JavaScript exception".to_owned(),
         |value| value.to_std_string_escaped(),
     )
+}
+
+fn render_code_value(value: &JsValue, javascript: &mut JavaScriptContext) -> CodeJsonString {
+    value.to_string(javascript).map_or_else(
+        |_| "JavaScript exception".into(),
+        |value| CodeJsonString::from_utf16(&value.to_vec()),
+    )
+}
+
+fn render_code_error(
+    error: &boa_engine::JsError,
+    javascript: &mut JavaScriptContext,
+) -> CodeJsonString {
+    let value = error.to_opaque(javascript);
+    render_code_value(&value, javascript)
 }

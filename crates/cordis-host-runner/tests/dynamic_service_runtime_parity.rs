@@ -104,7 +104,7 @@ async fn consumer_calls_provider_method_and_tracks_provider_stop_and_restart() {
         result,
         ToolExecutionResult::Success(ref success)
             if success.value == json!("hi harness")
-                && success.content == [ContentBlock::Text { text: "hi harness".to_owned() }]
+                && success.content == [ContentBlock::Text { text: "hi harness".into() }]
     ));
 
     runner.stop(&session, &provider.plugin_id).await;

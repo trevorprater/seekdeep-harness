@@ -191,7 +191,7 @@ struct SystemScheduleMessageFactory;
 impl ScheduleMessageFactory for SystemScheduleMessageFactory {
     fn reminder(&self, text: String) -> anyhow::Result<UserMessage> {
         Ok(UserMessage::new(
-            vec![ContentBlock::Text { text }],
+            vec![ContentBlock::text(text)],
             MessageSource::plugin("schedule"),
         ))
     }

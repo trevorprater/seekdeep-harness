@@ -1,6 +1,6 @@
 //! Source service tracing and callback binding over JavaScript object identities.
 
-use js_sys::{Array, Function, Object, Proxy, Reflect, Symbol};
+use js_sys::{Array, Function, Object, Proxy, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use super::{browser_values, get_with_receiver, object};
@@ -27,38 +27,6 @@ impl Tracer {
             return Ok(value.clone());
         }
         self.tracked(value, &tracker)
-    }
-
-    pub(super) fn bind(&self, callback: &JsValue) -> Result<JsValue, JsValue> {
-        let handler = Object::new();
-        let tracer = self.clone();
-        let apply = Closure::wrap(Box::new(
-            move |target: Function, receiver: JsValue, args: Array| {
-                Reflect::apply(
-                    &target,
-                    &tracer.trace(&receiver)?,
-                    &tracer.arguments(&args)?,
-                )
-            },
-        )
-            as Box<dyn Fn(Function, JsValue, Array) -> Result<JsValue, JsValue>>)
-        .into_js_value();
-        let tracer = self.clone();
-        let construct = Closure::wrap(Box::new(
-            move |target: Function, args: Array, new_target: Function| {
-                Reflect::construct_with_new_target(&target, &tracer.arguments(&args)?, &new_target)
-            },
-        )
-            as Box<dyn Fn(Function, Array, Function) -> Result<JsValue, JsValue>>)
-        .into_js_value();
-        Reflect::set(&handler, &"apply".into(), &apply)?;
-        Reflect::set(&handler, &"construct".into(), &construct)?;
-        let proxy = Reflect::get(&js_sys::global(), &"Proxy".into())?.dyn_into::<Function>()?;
-        Reflect::construct(&proxy, &Array::of2(callback, &handler))
-    }
-
-    fn arguments(&self, args: &Array) -> Result<Array, JsValue> {
-        args.iter().map(|value| self.trace(&value)).collect()
     }
 
     #[allow(clippy::too_many_lines)] // One Proxy keeps the source get/set/apply rules together.
@@ -174,9 +142,13 @@ impl Tracer {
             move |proxy: JsValue, target: JsValue, receiver: JsValue, args: Array| {
                 let invoke = Reflect::get(&target, &symbol("invoke")?)?;
                 if invoke.is_truthy() {
-                    invoke.dyn_into::<Function>()?.apply(&proxy, &args)
+                    super::browser_registry::method(
+                        &Reflect::get(&target, &symbol("invoke")?)?,
+                        "apply",
+                        &Array::of2(&proxy, &args),
+                    )
                 } else {
-                    target.dyn_into::<Function>()?.apply(&receiver, &args)
+                    Reflect::apply(&target.dyn_into::<Function>()?, &receiver, &args)
                 }
             },
         )
@@ -273,14 +245,7 @@ fn tracker(value: &JsValue) -> Result<JsValue, JsValue> {
     if !is_object(value) {
         return Ok(JsValue::UNDEFINED);
     }
-    let canonical = Reflect::get(value, &symbol("tracker")?)?;
-    if canonical.is_truthy() {
-        return Ok(canonical);
-    }
-    if Reflect::get(value, &Symbol::for_("cordis.service.tracker"))?.as_bool() == Some(true) {
-        return object(&[("property", JsValue::from_str("ctx"))]).map(Into::into);
-    }
-    Ok(JsValue::UNDEFINED)
+    Reflect::get(value, &symbol("tracker")?)
 }
 
 fn own_descriptor(value: &JsValue, key: &JsValue) -> Result<JsValue, JsValue> {

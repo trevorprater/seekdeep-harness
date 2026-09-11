@@ -10,7 +10,7 @@ use seekdeep_cordis::{
     fiber::{DisposeFuture, EffectHandle},
 };
 use seekdeep_core::{
-    session::{Session, SessionEvent, SessionHeader, SessionId},
+    session::{JsonValue, Session, SessionEvent, SessionHeader, SessionId},
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
@@ -281,7 +281,7 @@ impl SessionProjectionCache {
         let record = self
             .table
             .get(id.as_str())?
-            .and_then(|value| serde_json::from_value::<CheckpointRecord>(value).ok());
+            .and_then(|value| value.deserialize::<CheckpointRecord>().ok());
         let cached: ProjectionCheckpoint = record
             .as_ref()
             .map_or_else(IndexMap::new, |r| r.rows.clone());
@@ -458,7 +458,7 @@ impl SessionProjectionCache {
     ) -> anyhow::Result<()> {
         let record = CheckpointRecord { identity, rows };
         self.table
-            .put(id.as_str().to_owned(), serde_json::to_value(record)?)
+            .put(id.as_str().to_owned(), JsonValue::from_serialize(&record)?)
             .await
     }
 
@@ -484,7 +484,7 @@ impl SessionProjectionCache {
             .get(id.as_str())
             .ok()
             .flatten()
-            .and_then(|value| serde_json::from_value(value).ok())?;
+            .and_then(|value| value.deserialize().ok())?;
         identity_matches(&record.identity, expected).then_some(record)
     }
 }

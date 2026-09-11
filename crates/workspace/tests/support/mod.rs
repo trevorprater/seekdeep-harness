@@ -14,19 +14,20 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId};
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_session_persistence::{
     SessionInspection, SessionLocation, SessionPersistence, SessionPersistenceSnapshot,
 };
 use seekdeep_storage::{
     KvFacet, KvSnapshot, KvUnit, KvUnitDescriptor, StorageBackend, StorageError, StorageErrorCode,
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Medium {
     pub(crate) version: u64,
-    pub(crate) tables: IndexMap<String, Map<String, Value>>,
-    pub(crate) global: Value,
+    pub(crate) tables: IndexMap<String, IndexMap<String, JsonValue>>,
+    pub(crate) global: JsonValue,
 }
 
 #[derive(Debug, Default)]
@@ -114,9 +115,9 @@ impl KvFacet for MemoryFacet {
                         tables: descriptor
                             .tables
                             .iter()
-                            .map(|name| (name.clone(), Map::new()))
+                            .map(|name| (name.clone(), IndexMap::new()))
                             .collect(),
-                        global: Value::Null,
+                        global: Value::Null.into(),
                     },
                 );
             }
@@ -161,7 +162,7 @@ impl KvUnit for MemoryUnit {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
         let backend = self.backend.clone();
         let name = self.name.clone();
@@ -190,13 +191,13 @@ impl KvUnit for MemoryUnit {
                 )
                 .into());
             }
-            backend.pool.media.lock().get_mut(&name).unwrap().tables[&table].remove(&key);
+            backend.pool.media.lock().get_mut(&name).unwrap().tables[&table].shift_remove(&key);
             Ok(())
         }
         .boxed()
     }
 
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>> {
         let backend = self.backend.clone();
         let name = self.name.clone();
         async move {
@@ -302,8 +303,14 @@ pub(crate) fn stored_workspace(pool: &Arc<Pool>, entries: Vec<(String, Value)>, 
         "workspace".to_owned(),
         Medium {
             version: 2,
-            tables: IndexMap::from([("workspaces".to_owned(), entries.into_iter().collect())]),
-            global,
+            tables: IndexMap::from([(
+                "workspaces".to_owned(),
+                entries
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into()))
+                    .collect(),
+            )]),
+            global: global.into(),
         },
     );
 }

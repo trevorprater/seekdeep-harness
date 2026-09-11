@@ -51,8 +51,8 @@ async fn missing_unit_is_empty_and_materializes_only_on_first_write() {
     let backend = JsonStorageBackend::new(root.path());
     let unit = kv(&backend).open(descriptor()).await.unwrap();
     let snapshot = unit.load_all().await.unwrap();
-    assert_eq!(snapshot.tables["alpha"], serde_json::Map::new());
-    assert_eq!(snapshot.tables["beta"], serde_json::Map::new());
+    assert!(snapshot.tables["alpha"].is_empty());
+    assert!(snapshot.tables["beta"].is_empty());
     assert!(snapshot.global.is_null());
     assert!(
         tokio::fs::metadata(root.path().join("contract_unit.json"))
@@ -67,20 +67,30 @@ async fn records_and_global_round_trip_across_a_fresh_backend() {
     let root = TempDir::new().unwrap();
     let backend = JsonStorageBackend::new(root.path());
     let unit = kv(&backend).open(descriptor()).await.unwrap();
-    unit.put_record("alpha".to_owned(), "k1".to_owned(), json!({ "n": 1 }))
-        .await
-        .unwrap();
-    unit.put_record("alpha".to_owned(), "k2".to_owned(), json!({ "n": 2 }))
-        .await
-        .unwrap();
     unit.put_record(
-        "beta".to_owned(),
-        "weird key / with:stuff".to_owned(),
-        json!({ "ok": true }),
+        "alpha".to_owned(),
+        "k1".to_owned(),
+        json!({ "n": 1 }).into(),
     )
     .await
     .unwrap();
-    unit.set_global(json!({ "counter": 7 })).await.unwrap();
+    unit.put_record(
+        "alpha".to_owned(),
+        "k2".to_owned(),
+        json!({ "n": 2 }).into(),
+    )
+    .await
+    .unwrap();
+    unit.put_record(
+        "beta".to_owned(),
+        "weird key / with:stuff".to_owned(),
+        json!({ "ok": true }).into(),
+    )
+    .await
+    .unwrap();
+    unit.set_global(json!({ "counter": 7 }).into())
+        .await
+        .unwrap();
     backend.close().await.unwrap();
 
     let reopened = JsonStorageBackend::new(root.path());
@@ -88,9 +98,15 @@ async fn records_and_global_round_trip_across_a_fresh_backend() {
     let snapshot = unit.load_all().await.unwrap();
     assert_eq!(
         snapshot.tables["alpha"],
-        serde_json::Map::from_iter([
-            ("k1".to_owned(), json!({ "n": 1 })),
-            ("k2".to_owned(), json!({ "n": 2 })),
+        indexmap::IndexMap::<String, seekdeep_lossless_json::JsonValue>::from_iter([
+            (
+                "k1".to_owned(),
+                seekdeep_lossless_json::JsonValue::from(json!({ "n": 1 }))
+            ),
+            (
+                "k2".to_owned(),
+                seekdeep_lossless_json::JsonValue::from(json!({ "n": 2 }))
+            ),
         ])
     );
     assert_eq!(
@@ -106,12 +122,20 @@ async fn overwrite_delete_close_and_version_contract_is_exact() {
     let root = TempDir::new().unwrap();
     let backend = JsonStorageBackend::new(root.path());
     let unit = kv(&backend).open(descriptor()).await.unwrap();
-    unit.put_record("alpha".to_owned(), "k".to_owned(), json!({ "v": "old" }))
-        .await
-        .unwrap();
-    unit.put_record("alpha".to_owned(), "k".to_owned(), json!({ "v": "new" }))
-        .await
-        .unwrap();
+    unit.put_record(
+        "alpha".to_owned(),
+        "k".to_owned(),
+        json!({ "v": "old" }).into(),
+    )
+    .await
+    .unwrap();
+    unit.put_record(
+        "alpha".to_owned(),
+        "k".to_owned(),
+        json!({ "v": "new" }).into(),
+    )
+    .await
+    .unwrap();
     unit.delete_record("alpha".to_owned(), "k".to_owned())
         .await
         .unwrap();
@@ -119,7 +143,7 @@ async fn overwrite_delete_close_and_version_contract_is_exact() {
         .await
         .unwrap();
     assert!(unit.load_all().await.unwrap().tables["alpha"].is_empty());
-    unit.put_record("alpha".to_owned(), "kept".to_owned(), json!(1))
+    unit.put_record("alpha".to_owned(), "kept".to_owned(), json!(1).into())
         .await
         .unwrap();
     backend.close().await.unwrap();
@@ -151,7 +175,7 @@ async fn pretty_file_matches_javascript_stringify_including_numbers() {
     unit.put_record(
         "t".to_owned(),
         "k".to_owned(),
-        json!({ "hello": "world", "wholeFloat": 1.0, "negativeZero": -0.0, "tiny": 1e-7 }),
+        json!({ "hello": "world", "wholeFloat": 1.0, "negativeZero": -0.0, "tiny": 1e-7 }).into(),
     )
     .await
     .unwrap();
@@ -293,21 +317,21 @@ async fn undeclared_slots_are_plain_errors_and_closed_takes_precedence() {
     descriptor.has_global = false;
     let unit = kv(&backend).open(descriptor).await.unwrap();
     assert!(
-        unit.put_record("undeclared".to_owned(), "k".to_owned(), json!({}))
+        unit.put_record("undeclared".to_owned(), "k".to_owned(), json!({}).into())
             .await
             .unwrap_err()
             .to_string()
             .contains("does not declare table")
     );
     assert!(
-        unit.set_global(json!({}))
+        unit.set_global(json!({}).into())
             .await
             .unwrap_err()
             .to_string()
             .contains("does not declare a global slot")
     );
     unit.close().await.unwrap();
-    let error = unit.set_global(json!({})).await.unwrap_err();
+    let error = unit.set_global(json!({}).into()).await.unwrap_err();
     assert_eq!(storage_error(&error).code, StorageErrorCode::Closed);
 }
 
@@ -316,39 +340,61 @@ async fn failed_publish_rolls_memory_back_and_never_rides_the_next_write() {
     let root = TempDir::new().unwrap();
     let backend = JsonStorageBackend::new(root.path());
     let unit = kv(&backend).open(shape()).await.unwrap();
-    unit.put_record("t".to_owned(), "k".to_owned(), json!({ "v": "committed" }))
+    unit.put_record(
+        "t".to_owned(),
+        "k".to_owned(),
+        json!({ "v": "committed" }).into(),
+    )
+    .await
+    .unwrap();
+    unit.set_global(json!({ "g": "committed" }).into())
         .await
         .unwrap();
-    unit.set_global(json!({ "g": "committed" })).await.unwrap();
     let path = root.path().join("shape.json");
     let backup = root.path().join("shape.committed.json");
     tokio::fs::rename(&path, &backup).await.unwrap();
     tokio::fs::create_dir(&path).await.unwrap();
     assert!(
-        unit.put_record("t".to_owned(), "k".to_owned(), json!({ "v": "rejected" }))
-            .await
-            .is_err()
+        unit.put_record(
+            "t".to_owned(),
+            "k".to_owned(),
+            json!({ "v": "rejected" }).into()
+        )
+        .await
+        .is_err()
     );
     assert!(
-        unit.put_record("t".to_owned(), "k2".to_owned(), json!({ "v": "rejected" }))
-            .await
-            .is_err()
+        unit.put_record(
+            "t".to_owned(),
+            "k2".to_owned(),
+            json!({ "v": "rejected" }).into()
+        )
+        .await
+        .is_err()
     );
     assert!(
         unit.delete_record("t".to_owned(), "k".to_owned())
             .await
             .is_err()
     );
-    assert!(unit.set_global(json!({ "g": "rejected" })).await.is_err());
+    assert!(
+        unit.set_global(json!({ "g": "rejected" }).into())
+            .await
+            .is_err()
+    );
     tokio::fs::remove_dir(&path).await.unwrap();
     tokio::fs::rename(&backup, &path).await.unwrap();
     let snapshot = unit.load_all().await.unwrap();
     assert_eq!(snapshot.tables["t"]["k"], json!({ "v": "committed" }));
     assert!(!snapshot.tables["t"].contains_key("k2"));
     assert_eq!(snapshot.global, json!({ "g": "committed" }));
-    unit.put_record("t".to_owned(), "k3".to_owned(), json!({ "v": "later" }))
-        .await
-        .unwrap();
+    unit.put_record(
+        "t".to_owned(),
+        "k3".to_owned(),
+        json!({ "v": "later" }).into(),
+    )
+    .await
+    .unwrap();
     let text = tokio::fs::read_to_string(path).await.unwrap();
     assert!(!text.contains("rejected"));
     backend.close().await.unwrap();
@@ -375,7 +421,7 @@ async fn close_drains_inflight_write_and_blocks_inflight_open() {
     let write = unit.put_record(
         "t".to_owned(),
         "big".to_owned(),
-        json!({ "blob": "x".repeat(4 * 1024 * 1024) }),
+        json!({ "blob": "x".repeat(4 * 1024 * 1024) }).into(),
     );
     unit.close().await.unwrap();
     write.await.unwrap();
@@ -409,7 +455,7 @@ async fn mount_registers_service_closes_and_invariant_reservation_is_reversible(
             .is_some()
     );
     let unit = backend.kv().unwrap().open(shape()).await.unwrap();
-    unit.put_record("t".to_owned(), "k".to_owned(), json!(1))
+    unit.put_record("t".to_owned(), "k".to_owned(), json!(1).into())
         .await
         .unwrap();
     mounted.dispose().await.unwrap();
@@ -447,7 +493,7 @@ async fn plugin_owns_registration_service_and_backend_teardown() {
         .get_named::<JsonStorageBackend>(&storage_backend_service_key("json"))
         .unwrap();
     let unit = kv(&backend).open(shape()).await.unwrap();
-    unit.put_record("t".to_owned(), "k".to_owned(), json!(1))
+    unit.put_record("t".to_owned(), "k".to_owned(), json!(1).into())
         .await
         .unwrap();
     mounted.dispose().await.unwrap();

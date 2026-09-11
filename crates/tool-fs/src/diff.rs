@@ -1,7 +1,7 @@
 //! Result-time contextual diff presentation for write and edit.
 
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_tools::FileDiff;
-use serde_json::Value;
 
 /// Context lines shown on each side of an applied hunk.
 pub const DIFF_CONTEXT: usize = 3;
@@ -190,28 +190,24 @@ fn build_diff(path: &str, old_lines: &[&str], new_lines: &[&str], hunk: Hunk) ->
     }
 }
 
-/// Whether a value is a valid diff.
-fn is_file_diff(value: &Value) -> bool {
-    let Some(object) = value.as_object() else {
-        return false;
-    };
-    let path = object.get("path").is_some_and(Value::is_string);
-    let old_text = object
-        .get("oldText")
-        .is_none_or(|value| value.is_null() || value.is_string());
-    let new_text = object.get("newText").is_some_and(Value::is_string);
-    path && old_text && new_text
-}
-
 /// Narrows opaque live or replayed result metadata to non-empty file diffs.
 #[must_use]
-pub fn diffs_from_meta(meta: &Value) -> Option<Vec<FileDiff>> {
-    let object = meta.as_object()?;
-    let diffs = object.get("diffs")?.as_array()?;
-    if diffs.is_empty() || !diffs.iter().all(is_file_diff) {
+pub fn diffs_from_meta(meta: &JsonValue) -> Option<Vec<FileDiff>> {
+    let diffs = meta.get("diffs")?;
+    let items = diffs.array_items()?;
+    if items.is_empty() {
         return None;
     }
-    serde_json::from_value(Value::Array(diffs.clone())).ok()
+    items
+        .into_iter()
+        .map(|item| {
+            Some(FileDiff {
+                path: item.get("path")?.deserialize().ok()?,
+                old_text: item.get("oldText")?.deserialize().ok()?,
+                new_text: item.get("newText")?.deserialize().ok()?,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -248,10 +244,27 @@ mod tests {
             "newText": "two"
         });
         let valid = serde_json::json!({"diffs": [diff]});
-        assert!(diffs_from_meta(&valid).is_some());
+        assert!(diffs_from_meta(&valid.into()).is_some());
         let invalid = serde_json::json!({"diffs": [{"path": 1}]});
-        assert!(diffs_from_meta(&invalid).is_none());
+        assert!(diffs_from_meta(&invalid.into()).is_none());
         let absent = serde_json::json!({"other": true});
-        assert!(diffs_from_meta(&absent).is_none());
+        assert!(diffs_from_meta(&absent.into()).is_none());
+        let missing_old_text = serde_json::json!({"diffs": [{"path": "a.txt", "newText": "two"}]});
+        assert!(diffs_from_meta(&missing_old_text.into()).is_none());
+    }
+
+    #[test]
+    fn diffs_from_raw_meta_selects_final_fields_without_narrowing_opaque_values() {
+        let meta = JsonValue::parse(
+            r#"{"diffs":[{"path":"discarded","path":"a.txt","oldText":"one","newText":"two","\ud800":"\udfff"}],"\udfff":{"value":"\ud800"}}"#.to_owned(),
+        ).unwrap();
+        assert_eq!(
+            diffs_from_meta(&meta),
+            Some(vec![FileDiff {
+                path: "a.txt".to_owned(),
+                old_text: Some("one".to_owned()),
+                new_text: "two".to_owned(),
+            }])
+        );
     }
 }

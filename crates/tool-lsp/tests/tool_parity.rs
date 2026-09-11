@@ -420,16 +420,19 @@ async fn workspace_unavailable_and_invalid_arguments_keep_structured_error_codes
 fn pending_call_projection_is_replay_safe_and_exact() {
     let harness = mount(None, Config::default());
     let definition = harness.tools.get("lsp", None).unwrap();
-    let view = definition.present_call.as_ref().unwrap()(&json!({
-        "operation": "hover",
-        "file_path": "a.ts",
-        "line": 2,
-        "character": 3
-    }));
+    let view = definition.present_call.as_ref().unwrap()(
+        &json!({
+            "operation": "hover",
+            "file_path": "a.ts",
+            "line": 2,
+            "character": 3
+        })
+        .into(),
+    );
     assert_eq!(
         view,
         Some(ToolCallView::Generic(GenericCallView {
-            title: "LSP hover a.ts:2:3".to_owned(),
+            title: "LSP hover a.ts:2:3".into(),
             kind: Some(ToolCallKind::Search),
             raw_input: None,
             content: None,

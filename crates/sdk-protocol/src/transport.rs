@@ -13,13 +13,18 @@ use std::{
 use futures::future::BoxFuture;
 use parking_lot::{Mutex, RwLock};
 use seekdeep_llm::AbortSignal;
-use serde_json::{Map, Value, json};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
+use serde_json::{Map, Value};
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader},
     sync::{Notify, oneshot},
     task::JoinHandle,
 };
+
+#[path = "wire.rs"]
+mod wire;
+pub use wire::JsonRpcRawResponseError;
 
 /// Erased readable half owned by a line transport.
 pub type BoxedJsonRpcInput = Pin<Box<dyn AsyncRead + Send + Unpin + 'static>>;
@@ -32,12 +37,19 @@ pub type JsonRpcRequestHandler = Arc<
 >;
 /// Synchronous notification observer.
 pub type JsonRpcNotificationHandler = Arc<dyn Fn(String, Map<String, Value>) + Send + Sync>;
+/// Request-handler factory preserving raw JSON strings and object keys.
+pub type JsonRpcJsonRequestHandler =
+    Arc<dyn Fn(String, JsonValue) -> BoxFuture<'static, anyhow::Result<JsonValue>> + Send + Sync>;
+/// Notification observer preserving raw JSON strings and object keys.
+pub type JsonRpcJsonNotificationHandler = Arc<dyn Fn(String, JsonValue) + Send + Sync>;
 /// External input failure observer used by protocol-specific owners.
 pub type JsonRpcTransportFailureHandler = Arc<dyn Fn(anyhow::Error) + Send + Sync>;
 /// Observer invoked after one incoming request response has reached the output stream.
 pub type JsonRpcResponseWrittenHandler = Arc<dyn Fn(String, bool) + Send + Sync>;
 
-type PendingSender = oneshot::Sender<anyhow::Result<Value>>;
+type PendingSender = oneshot::Sender<anyhow::Result<JsonValue>>;
+type IncomingNotificationHandler =
+    Arc<dyn Fn(String, JsonValue) -> anyhow::Result<()> + Send + Sync>;
 
 /// JSON-RPC error response preserving its wire code and data.
 #[derive(Clone, Debug, Error)]
@@ -59,8 +71,8 @@ pub struct JsonRpcLineTransport {
     reader: Mutex<Option<JoinHandle<()>>>,
     next_request: AtomicU64,
     pending: Mutex<HashMap<String, PendingSender>>,
-    request_handler: RwLock<Option<JsonRpcRequestHandler>>,
-    notification_handler: RwLock<Option<JsonRpcNotificationHandler>>,
+    request_handler: RwLock<Option<JsonRpcJsonRequestHandler>>,
+    notification_handler: RwLock<Option<IncomingNotificationHandler>>,
     failure_handler: RwLock<Option<JsonRpcTransportFailureHandler>>,
     response_written_handler: RwLock<Option<JsonRpcResponseWrittenHandler>>,
     incoming_requests: AtomicUsize,
@@ -107,14 +119,43 @@ impl JsonRpcLineTransport {
         })
     }
 
-    /// Installs or replaces the incoming-request handler.
+    /// Installs a checked ordinary-value request handler.
+    /// Unrepresentable parameters produce an error response before the handler runs.
     pub fn on_request(&self, handler: JsonRpcRequestHandler) {
+        self.on_request_json(Arc::new(
+            move |method, params| -> BoxFuture<'static, anyhow::Result<JsonValue>> {
+                let params = match wire::ordinary_params(params) {
+                    Ok(params) => params,
+                    Err(error) => return Box::pin(std::future::ready(Err(error))),
+                };
+                let response = handler(method, params);
+                Box::pin(async move { response.await.map(JsonValue::from) })
+            },
+        ));
+    }
+
+    /// Installs or replaces the lossless incoming-request handler.
+    /// Missing or non-object parameters normalize to an empty object.
+    pub fn on_request_json(&self, handler: JsonRpcJsonRequestHandler) {
         *self.request_handler.write() = Some(handler);
     }
 
-    /// Installs or replaces the notification observer.
+    /// Installs a checked ordinary-value notification observer.
+    /// Unrepresentable parameters reach the input-failure observer instead of the callback.
     pub fn on_notification(&self, handler: JsonRpcNotificationHandler) {
-        *self.notification_handler.write() = Some(handler);
+        *self.notification_handler.write() = Some(Arc::new(move |method, params| {
+            handler(method, wire::ordinary_params(params)?);
+            Ok(())
+        }));
+    }
+
+    /// Installs or replaces the lossless notification observer.
+    /// Missing or non-object parameters normalize to an empty object.
+    pub fn on_notification_json(&self, handler: JsonRpcJsonNotificationHandler) {
+        *self.notification_handler.write() = Some(Arc::new(move |method, params| {
+            handler(method, params);
+            Ok(())
+        }));
     }
 
     /// Installs or replaces the external input-failure observer.
@@ -157,13 +198,30 @@ impl JsonRpcLineTransport {
     /// # Errors
     ///
     /// Returns pre-write cancellation, output I/O, transport closure, peer response,
-    /// or response-channel failures.
+    /// response-channel failures, or a result that ordinary JSON values cannot represent.
     pub async fn request(
         self: &Arc<Self>,
         method: impl Into<String>,
         params: Map<String, Value>,
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<Value> {
+        wire::ordinary_response(
+            self.request_json(method, JsonValue::from(Value::Object(params)), signal)
+                .await,
+        )
+    }
+
+    /// Sends raw JSON parameters and retains the complete result or peer error.
+    ///
+    /// # Errors
+    /// Returns cancellation, I/O, transport closure, response-channel failure, or
+    /// [`JsonRpcRawResponseError`] without converting application values to UTF-8.
+    pub async fn request_json(
+        self: &Arc<Self>,
+        method: impl Into<String>,
+        params: JsonValue,
+        signal: Option<AbortSignal>,
+    ) -> anyhow::Result<JsonValue> {
         self.request_inner(method.into(), params, signal, None)
             .await
     }
@@ -182,6 +240,29 @@ impl JsonRpcLineTransport {
         signal: AbortSignal,
         cancellation_method: impl Into<String>,
     ) -> anyhow::Result<Value> {
+        wire::ordinary_response(
+            self.request_json_with_cancellation(
+                method,
+                JsonValue::from(Value::Object(params)),
+                signal,
+                cancellation_method,
+            )
+            .await,
+        )
+    }
+
+    /// Sends raw JSON and emits a correlated cancellation notification when aborted.
+    ///
+    /// # Errors
+    /// Returns the same failures as [`Self::request_json`]; cancellation-write failures
+    /// remain secondary to the caller's abort outcome.
+    pub async fn request_json_with_cancellation(
+        self: &Arc<Self>,
+        method: impl Into<String>,
+        params: JsonValue,
+        signal: AbortSignal,
+        cancellation_method: impl Into<String>,
+    ) -> anyhow::Result<JsonValue> {
         self.request_inner(
             method.into(),
             params,
@@ -194,10 +275,10 @@ impl JsonRpcLineTransport {
     async fn request_inner(
         self: &Arc<Self>,
         method: String,
-        params: Map<String, Value>,
+        params: JsonValue,
         signal: Option<AbortSignal>,
         cancellation_method: Option<String>,
-    ) -> anyhow::Result<Value> {
+    ) -> anyhow::Result<JsonValue> {
         if let Some(signal) = signal.as_ref()
             && signal.is_aborted()
         {
@@ -209,15 +290,7 @@ impl JsonRpcLineTransport {
         );
         let (sender, receiver) = oneshot::channel();
         self.pending.lock().insert(id.clone(), sender);
-        if let Err(error) = self
-            .write_frame(json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "method": method,
-                "params": params,
-            }))
-            .await
-        {
+        if let Err(error) = self.write_frame(wire::request(&id, &method, params)).await {
             self.pending.lock().remove(&id);
             return Err(error);
         }
@@ -265,12 +338,25 @@ impl JsonRpcLineTransport {
         method: impl Into<String>,
         params: Option<Map<String, Value>>,
     ) -> anyhow::Result<()> {
+        self.notify_json(
+            method,
+            params.map(|params| JsonValue::from(Value::Object(params))),
+        )
+        .await
+    }
+
+    /// Sends a notification whose parameters retain every JSON string and key.
+    /// `None` omits the `params` member; `Some(null)` keeps explicit JSON null.
+    ///
+    /// # Errors
+    /// Returns output serialization or I/O failures.
+    pub async fn notify_json(
+        &self,
+        method: impl Into<String>,
+        params: Option<JsonValue>,
+    ) -> anyhow::Result<()> {
         let method = method.into();
-        let frame = params.map_or_else(
-            || json!({"jsonrpc":"2.0", "method": method}),
-            |params| json!({"jsonrpc":"2.0", "method": method, "params": params}),
-        );
-        self.write_frame(frame).await
+        self.write_frame(wire::notification(&method, params)).await
     }
 
     /// Waits for every earlier frame write to reach the stream.
@@ -343,74 +429,67 @@ impl JsonRpcLineTransport {
     }
 
     fn handle_line(self: &Arc<Self>, line: &str) {
-        let Ok(Value::Object(mut frame)) = serde_json::from_str::<Value>(line) else {
+        let Ok(frame) = JsonValue::parse(line.to_owned()) else {
             return;
         };
-        let id = frame.get("id").filter(|id| valid_id(id)).cloned();
+        if !frame.as_ref().is_object() {
+            return;
+        }
+        let id = frame
+            .get("id")
+            .filter(|id| wire::valid_id(*id))
+            .map(JsonRef::to_owned);
         let method = frame
             .get("method")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+            .filter(|method| method.is_string())
+            .map(JsonRef::deserialize::<String>)
+            .transpose();
+        let method = match method {
+            Ok(method) => method,
+            Err(error) => {
+                self.input_failed(
+                    anyhow::Error::new(error)
+                        .context("JSON-RPC method identifier cannot be represented as UTF-8"),
+                );
+                return;
+            }
+        };
         match (id, method) {
             (Some(id), Some(method)) => {
-                let params = object_params(frame.remove("params"));
+                let params = wire::object_params(frame.get("params"));
                 self.handle_incoming_request(id, method, params);
             }
-            (Some(Value::String(id)), None) => self.handle_incoming_response(&id, &frame),
-            (None, Some(method)) => {
-                if let Some(handler) = self.notification_handler.read().clone() {
-                    handler(method, object_params(frame.remove("params")));
+            (Some(id), None) => {
+                if let Ok(id) = id.deserialize::<String>() {
+                    self.handle_incoming_response(&id, &frame);
                 }
             }
-            (Some(_) | None, None) => {}
+            (None, Some(method)) => {
+                let handler = self.notification_handler.read().clone();
+                if let Some(handler) = handler
+                    && let Err(error) = handler(method, wire::object_params(frame.get("params")))
+                {
+                    self.input_failed(error);
+                }
+            }
+            (None, None) => {}
         }
     }
 
-    fn handle_incoming_request(
-        self: &Arc<Self>,
-        id: Value,
-        method: String,
-        params: Map<String, Value>,
-    ) {
+    fn handle_incoming_request(self: &Arc<Self>, id: JsonValue, method: String, params: JsonValue) {
         let transport = Arc::clone(self);
         let method_for_observer = method.clone();
         self.incoming_requests.fetch_add(1, Ordering::AcqRel);
         let handler = self.request_handler.read().clone();
-        let operation: Pin<Box<dyn Future<Output = anyhow::Result<Value>> + Send>> = match handler {
-            Some(handler) => handler(method, params),
-            None => Box::pin(async move { Err(anyhow::anyhow!("method not found: {method}")) }),
-        };
+        let operation: Pin<Box<dyn Future<Output = anyhow::Result<JsonValue>> + Send>> =
+            match handler {
+                Some(handler) => handler(method, params),
+                None => Box::pin(async move { Err(anyhow::anyhow!("method not found: {method}")) }),
+            };
         tokio::spawn(async move {
             let response = operation.await;
             let succeeded = response.is_ok();
-            let frame = match response {
-                Ok(result) => json!({"jsonrpc":"2.0", "id": id, "result": result}),
-                Err(error) => {
-                    if let Some(response) = error.downcast_ref::<JsonRpcResponseError>() {
-                        let mut wire = Map::from_iter([
-                            (
-                                "code".to_owned(),
-                                Value::from(response.code.unwrap_or(-32603)),
-                            ),
-                            (
-                                "message".to_owned(),
-                                Value::String(response.message.clone()),
-                            ),
-                        ]);
-                        if let Some(data) = &response.data {
-                            wire.insert("data".to_owned(), data.clone());
-                        }
-                        json!({"jsonrpc":"2.0", "id":id, "error":wire})
-                    } else {
-                        let code = if error.to_string().starts_with("method not found: ") {
-                            -32601
-                        } else {
-                            -32603
-                        };
-                        json!({"jsonrpc":"2.0", "id": id, "error": {"code":code, "message":error.to_string()}})
-                    }
-                }
-            };
+            let frame = wire::response(id, response);
             let write = transport.write_frame(frame).await;
             if transport.incoming_requests.fetch_sub(1, Ordering::AcqRel) == 1 {
                 transport.incoming_idle.notify_waiters();
@@ -426,29 +505,14 @@ impl JsonRpcLineTransport {
         });
     }
 
-    fn handle_incoming_response(&self, id: &str, frame: &Map<String, Value>) {
+    fn handle_incoming_response(&self, id: &str, frame: &JsonValue) {
         let Some(pending) = self.pending.lock().remove(id) else {
             return;
         };
-        let result = frame.get("error").and_then(Value::as_object).map_or_else(
-            || Ok(frame.get("result").cloned().unwrap_or(Value::Null)),
-            |error| {
-                Err(JsonRpcResponseError {
-                    code: error.get("code").and_then(Value::as_i64),
-                    message: error
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("JSON-RPC error")
-                        .to_owned(),
-                    data: error.get("data").cloned(),
-                }
-                .into())
-            },
-        );
-        let _ = pending.send(result);
+        let _ = pending.send(wire::decode_response(frame));
     }
 
-    async fn write_frame(&self, frame: Value) -> anyhow::Result<()> {
+    async fn write_frame(&self, frame: JsonValue) -> anyhow::Result<()> {
         let mut bytes = serde_json::to_vec(&frame)?;
         bytes.push(b'\n');
         let mut output = self.output.lock().await;
@@ -473,16 +537,6 @@ impl JsonRpcLineTransport {
             let _ = sender.send(Err(anyhow::anyhow!(message.to_owned())));
         }
     }
-}
-
-fn valid_id(value: &Value) -> bool {
-    value.is_string() || value.is_number()
-}
-
-fn object_params(value: Option<Value>) -> Map<String, Value> {
-    value
-        .and_then(|value| value.as_object().cloned())
-        .unwrap_or_default()
 }
 
 fn abort_error(signal: &AbortSignal) -> anyhow::Error {

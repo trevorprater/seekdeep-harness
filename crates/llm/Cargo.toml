@@ -22,6 +22,7 @@ seekdeep-attachment = { path = "../attachment" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-identity = { path = "../identity" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-util = { path = "../util" }
 thiserror.workspace = true

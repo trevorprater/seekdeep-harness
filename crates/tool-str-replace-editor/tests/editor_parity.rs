@@ -223,7 +223,7 @@ fn text(result: &ToolExecutionResult) -> &str {
     let ContentBlock::Text { text } = &result.content()[0] else {
         panic!("expected text output")
     };
-    text
+    text.as_str().expect("fixture text is Unicode")
 }
 
 fn error_code(result: &ToolExecutionResult) -> Option<&str> {
@@ -252,11 +252,11 @@ async fn registers_schema_description_presenters_and_disposes_every_contribution
     );
     let present = definition.present_call.as_ref().unwrap();
     assert!(matches!(
-        present(&json!({"command":"view","path":"/workspace/a.txt"})),
+        present(&json!({"command":"view","path":"/workspace/a.txt"}).into()),
         Some(ToolCallView::Generic(_))
     ));
     assert!(matches!(
-        present(&json!({"command":"create","path":"/workspace/empty.txt"})),
+        present(&json!({"command":"create","path":"/workspace/empty.txt"}).into()),
         Some(ToolCallView::Diff(_))
     ));
     harness.plugin.dispose().await?;

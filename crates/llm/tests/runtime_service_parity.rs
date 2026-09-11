@@ -748,7 +748,7 @@ async fn middleware_routes_before_resolution_and_replay_filtering_uses_adapter_i
     same.messages.push(Message::new(
         MessageRole::Assistant,
         vec![ContentBlock::Text {
-            text: "old response".to_owned(),
+            text: "old response".into(),
         }],
         model_source("historical", true),
     ));
@@ -777,7 +777,7 @@ async fn middleware_routes_before_resolution_and_replay_filtering_uses_adapter_i
     cross.messages.push(Message::new(
         MessageRole::Assistant,
         vec![ContentBlock::Text {
-            text: "old response".to_owned(),
+            text: "old response".into(),
         }],
         model_source("historical", true),
     ));

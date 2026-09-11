@@ -28,7 +28,7 @@ const BASE: i64 = 1_783_987_200_000;
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -37,7 +37,7 @@ fn user(text: &str) -> UserMessage {
 fn plugin_message(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::plugin("time-context-test"),
     )
@@ -560,7 +560,7 @@ async fn shadowed_reading_survives_resume_for_refresh_but_not_step_baseline() {
             "user/message",
             serde_json::to_value(UserMessage::new(
                 vec![ContentBlock::Text {
-                    text: "compacted history".to_owned(),
+                    text: "compacted history".into(),
                 }],
                 MessageSource::plugin("compaction-basic"),
             ))

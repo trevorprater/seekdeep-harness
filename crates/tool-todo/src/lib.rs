@@ -6,13 +6,13 @@ use seekdeep_cordis::{
     Context, DispatchMode, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle,
 };
 use seekdeep_core::{
-    session::{AppendOptions, SessionEvent},
+    session::{AppendOptions, JsonRef, JsonValue, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use seekdeep_llm::ContentBlock;
+use seekdeep_llm::{ContentBlock, JsonString};
 use seekdeep_schemastery::Schema;
 use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use seekdeep_tools::{
@@ -81,7 +81,7 @@ pub enum TodoStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TodoItem {
     /// Short imperative task line.
-    pub content: String,
+    pub content: JsonString,
     /// Current lifecycle state.
     pub status: TodoStatus,
 }
@@ -94,7 +94,7 @@ struct ToolArgs {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TodoItemRaw {
-    content: String,
+    content: JsonString,
     status: String,
 }
 
@@ -145,7 +145,7 @@ fn to_todo_list(raw: &[TodoItemRaw], allow_parallel: bool) -> anyhow::Result<Vec
         anyhow::ensure!(
             seen.insert(content.to_owned()),
             "invalid todos: duplicate content {}",
-            serde_json::to_string(content)?
+            serde_json::to_string(&content)?
         );
         let status = match item.status.as_str() {
             "pending" => TodoStatus::Pending,
@@ -234,7 +234,8 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
                 text: format!(
                     "Updated todo list: {} pending, {} in progress, {} completed.",
                     value.counts.pending, value.counts.in_progress, value.counts.completed
-                ),
+                )
+                .into(),
             }])
         }),
     );
@@ -249,9 +250,9 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
                 let session = run.session().ok_or_else(|| {
                     anyhow::anyhow!("todo_write requires an owning agent session")
                 })?;
-                session.append(
+                session.append_json(
                     "todo/write",
-                    json!({"todos": todos}),
+                    JsonValue::object([("todos", JsonValue::from_serialize(&todos)?)]),
                     AppendOptions::default(),
                 )?;
                 let count =
@@ -269,9 +270,9 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
     );
     options.present_call = Some(Arc::new(|args: &ToolArgs| {
         Some(ToolCallView::Generic(GenericCallView {
-            title: "Update todo list".to_owned(),
+            title: "Update todo list".into(),
             kind: Some(ToolCallKind::Other),
-            raw_input: Some(json!(args.todos)),
+            raw_input: JsonValue::from_serialize(&args.todos).ok(),
             content: None,
             locations: None,
         }))
@@ -283,15 +284,15 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
 /// next turn/start, null before the first write.
 #[must_use]
 pub fn todos_projection() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::new_json(
         "todos",
         2,
-        || Ok(Value::Null),
+        || Ok(Value::Null.into()),
         |_state, event: &SessionEvent| {
             if event.event_type == "todo/write" {
                 Ok(ProjectionTransition::Changed(event.data["todos"].clone()))
             } else if event.event_type == "turn/start" {
-                Ok(ProjectionTransition::Changed(Value::Null))
+                Ok(ProjectionTransition::Changed(Value::Null.into()))
             } else {
                 Ok(ProjectionTransition::Unchanged)
             }
@@ -380,17 +381,22 @@ fn validate_event(event: &SessionEvent, fail: &InvariantFailure) -> anyhow::Resu
 /// Validates one whole-list todo snapshot before it reaches the durable log. Deliberately silent
 /// on how many items are `in_progress`: that is the tool's per-deployment policy, not a durable
 /// shape rule.
-fn validate_todos(value: Option<&Value>, fail: &InvariantFailure) -> anyhow::Result<()> {
-    let Some(array) = value.and_then(Value::as_array) else {
+fn validate_todos(value: Option<JsonRef<'_>>, fail: &InvariantFailure) -> anyhow::Result<()> {
+    let Some(array) = value.and_then(JsonRef::array_items) else {
         return Err(fail.fail("todo/write todos must be an array").into());
     };
     let mut seen = std::collections::HashSet::new();
     for item in array {
-        let Some(object) = item.as_object() else {
+        if !item.is_object() {
             return Err(fail.fail("todo/write entries must be objects").into());
-        };
-        let content = object.get("content").and_then(Value::as_str);
-        if content.is_none_or(|content| content.is_empty() || content.trim() != content) {
+        }
+        let content = item
+            .get("content")
+            .and_then(|value| value.deserialize::<JsonString>().ok());
+        if content
+            .as_ref()
+            .is_none_or(|content| content.is_empty() || content.trim() != *content)
+        {
             return Err(fail
                 .fail("todo/write content must be non-empty and already trimmed")
                 .into());
@@ -400,15 +406,20 @@ fn validate_todos(value: Option<&Value>, fail: &InvariantFailure) -> anyhow::Res
             return Err(fail
                 .fail(format!(
                     "todo/write repeats content {}",
-                    serde_json::to_string(content).unwrap_or_default()
+                    serde_json::to_string(&content).unwrap_or_default()
                 ))
                 .into());
         }
-        let status = object.get("status").and_then(Value::as_str);
-        if status.is_none_or(|status| !TODO_STATUSES.contains(&status)) {
-            let rendered = object
+        let status = item
+            .get("status")
+            .and_then(|value| value.deserialize::<String>().ok());
+        if status
+            .as_ref()
+            .is_none_or(|status| !TODO_STATUSES.contains(&status.as_str()))
+        {
+            let rendered = item
                 .get("status")
-                .map_or_else(|| "null".to_owned(), ToString::to_string);
+                .map_or_else(|| "null".to_owned(), |value| value.as_raw().to_owned());
             return Err(fail
                 .fail(format!("todo/write carries unknown status {rendered}"))
                 .into());
@@ -434,11 +445,11 @@ mod tests {
     fn to_todo_list_trims_rejects_duplicates_and_enforces_active_count() {
         let raw = vec![
             TodoItemRaw {
-                content: "  one  ".to_owned(),
+                content: "  one  ".into(),
                 status: "pending".to_owned(),
             },
             TodoItemRaw {
-                content: "two".to_owned(),
+                content: "two".into(),
                 status: "in_progress".to_owned(),
             },
         ];
@@ -448,11 +459,11 @@ mod tests {
 
         let two_active = vec![
             TodoItemRaw {
-                content: "a".to_owned(),
+                content: "a".into(),
                 status: "in_progress".to_owned(),
             },
             TodoItemRaw {
-                content: "b".to_owned(),
+                content: "b".into(),
                 status: "in_progress".to_owned(),
             },
         ];
@@ -460,18 +471,18 @@ mod tests {
         assert!(to_todo_list(&two_active, false).is_err());
 
         let empty = vec![TodoItemRaw {
-            content: "   ".to_owned(),
+            content: "   ".into(),
             status: "pending".to_owned(),
         }];
         assert!(to_todo_list(&empty, true).is_err());
 
         let dup = vec![
             TodoItemRaw {
-                content: "same".to_owned(),
+                content: "same".into(),
                 status: "pending".to_owned(),
             },
             TodoItemRaw {
-                content: "same".to_owned(),
+                content: "same".into(),
                 status: "completed".to_owned(),
             },
         ];
@@ -505,7 +516,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq: 0,
             time: 1,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -533,7 +544,7 @@ mod tests {
         let next = projection.apply_event(&state, &first).expect("apply");
         assert_eq!(
             next,
-            ProjectionTransition::Changed(json!([{"content": "a", "status": "pending"}]))
+            ProjectionTransition::Changed(json!([{"content": "a", "status": "pending"}]).into())
         );
         if let ProjectionTransition::Changed(value) = next {
             state = value;
@@ -545,10 +556,13 @@ mod tests {
         );
         assert_eq!(
             projection.apply_event(&state, &second).expect("apply"),
-            ProjectionTransition::Changed(json!([
-                {"content": "a", "status": "completed"},
-                {"content": "b", "status": "in_progress"}
-            ]))
+            ProjectionTransition::Changed(
+                json!([
+                    {"content": "a", "status": "completed"},
+                    {"content": "b", "status": "in_progress"}
+                ])
+                .into()
+            )
         );
 
         // turn/start clears the standing plan; turn/end keeps it.
@@ -556,7 +570,7 @@ mod tests {
             projection
                 .apply_event(&state, &event("turn/start", json!({"turn": 2})))
                 .expect("apply"),
-            ProjectionTransition::Changed(Value::Null)
+            ProjectionTransition::Changed(Value::Null.into())
         );
     }
 
@@ -567,15 +581,15 @@ mod tests {
         })
         .expect("definition");
         let presenter = definition.present_call.as_ref().expect("presenter");
-        let view =
-            presenter(&json!({"todos": [{"content": "a", "status": "pending"}]})).expect("present");
+        let view = presenter(&json!({"todos": [{"content": "a", "status": "pending"}]}).into())
+            .expect("present");
         match view {
             ToolCallView::Generic(view) => {
                 assert_eq!(view.title, "Update todo list");
                 assert_eq!(view.kind, Some(ToolCallKind::Other));
                 assert_eq!(
                     view.raw_input,
-                    Some(json!([{"content": "a", "status": "pending"}]))
+                    Some(json!([{"content": "a", "status": "pending"}]).into())
                 );
             }
             _ => panic!("expected a generic call card"),

@@ -59,3 +59,21 @@ fn known_shapes_map_fields_and_unknown_shape_keeps_raw_object_identity() {
         Some("text")
     );
 }
+
+#[wasm_bindgen_test]
+fn classifier_preserves_lone_surrogate_text_tool_names_ids_and_arguments() {
+    let input = js_sys::JSON::parse(
+        r#"[{"type":"text","text":"\ud800"},{"type":"reasoning","text":"\udfff"},{"type":"tool-call","id":"\ud800","name":"\udfff","arguments":"{\"\ud800\":\"\udfff\"}"}]"#,
+    ).unwrap();
+    let input = Array::from(&input);
+    let output = to_assistant_blocks_js(input.clone()).unwrap();
+    for index in [0, 1] {
+        assert_eq!(
+            get(&output.get(index), "text"),
+            get(&input.get(index), "text")
+        );
+    }
+    for (source, target) in [("id", "callId"), ("name", "name"), ("arguments", "argsRaw")] {
+        assert_eq!(get(&output.get(2), target), get(&input.get(2), source));
+    }
+}

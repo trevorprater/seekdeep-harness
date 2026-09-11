@@ -36,6 +36,8 @@ uuid.workspace = true
 [dev-dependencies]
 proptest.workspace = true
 seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 
 [lints]
 workspace = true

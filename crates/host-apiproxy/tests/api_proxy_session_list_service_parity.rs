@@ -374,7 +374,7 @@ async fn standalone_events_keep_blank_and_the_first_turn_clears_it() {
 
     let message = UserMessage::new(
         vec![ContentBlock::Text {
-            text: "work".to_owned(),
+            text: "work".into(),
         }],
         MessageSource::user(),
     );

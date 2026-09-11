@@ -1,6 +1,8 @@
 //! Durable pi-ai replay metadata and assistant-history reconstruction.
 
-use seekdeep_llm::{CallId, ContentBlock, LlmError, Message, ModelId, ProviderId};
+mod deserialize;
+
+use seekdeep_llm::{CallId, ContentBlock, JsonString, LlmError, Message, ModelId, ProviderId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -84,14 +86,14 @@ pub struct PiUsage {
 }
 
 /// One native pi-ai assistant block.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum PiAssistantBlock {
     /// Visible text.
     #[serde(rename = "text")]
     Text {
         /// Exact text.
-        text: String,
+        text: JsonString,
         /// Provider replay signature.
         #[serde(rename = "textSignature", skip_serializing_if = "Option::is_none")]
         text_signature: Option<String>,

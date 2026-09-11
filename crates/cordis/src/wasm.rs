@@ -35,6 +35,7 @@ mod browser_stack;
 mod browser_symbols;
 mod browser_values;
 mod context_proxy;
+mod test_invariants;
 mod tracing;
 mod update_hooks;
 
@@ -89,6 +90,12 @@ pub use context_proxy::{
     get as context_reflected_get, has as context_has, inspect as context_inspect,
     set as context_reflected_set, special_property as context_special_property,
 };
+pub use test_invariants::{
+    companion_paths as browser_test_invariant_companion_paths,
+    create_attachment_store as create_test_invariant_attachment_store,
+    install as install_test_invariant_host, readiness_service as test_invariant_readiness_service,
+    uses_manual_tree as browser_uses_manual_invariant_tree,
+};
 pub use tracing::{get_traceable, with_props};
 pub use update_hooks::{
     configure_disposable_list_prototype, create_disposable_list, disposable_list_prototype,
@@ -97,6 +104,28 @@ pub use update_hooks::{
 thread_local! {
     static CONTEXT_WRAPPER: RefCell<Option<Function>> = const { RefCell::new(None) };
     static CONTEXT_CORES: WeakMap = WeakMap::new();
+}
+
+/// Creates the mutable numeric lifecycle enum, including number-to-name entries.
+///
+/// # Errors
+/// Propagates property construction failures.
+#[wasm_bindgen(js_name = fiberStates)]
+pub fn fiber_states() -> Result<Object, JsValue> {
+    let states = Object::new();
+    for (name, state) in [
+        ("PENDING", FiberState::Pending),
+        ("LOADING", FiberState::Loading),
+        ("ACTIVE", FiberState::Active),
+        ("FAILED", FiberState::Failed),
+        ("DISPOSED", FiberState::Disposed),
+        ("UNLOADING", FiberState::Unloading),
+    ] {
+        let number = fiber_state_number(state);
+        browser_values::set(&states, &name.into(), &number.into())?;
+        browser_values::set(&states, &number.to_string().into(), &name.into())?;
+    }
+    Ok(states)
 }
 
 /// Resolves the compiled Context backing an exact face or its metadata descendants.
@@ -493,7 +522,7 @@ impl WasmContext {
         let metadata = parent.clone();
         let context_face = empty_face_slot();
         let fiber_face = empty_face_slot();
-        let browser_config = browser_config::BrowserConfig::new(runtime.clone());
+        let browser_config = browser_config::BrowserConfig::new();
         let result_face = empty_face_slot();
         let returned = result_face.clone();
         let root_face = self.root_face.clone();
@@ -509,7 +538,7 @@ impl WasmContext {
             context_face.clone(),
             fiber_face.clone(),
             browser_config.clone(),
-        )?
+        )
         .with_browser_binding(move |native, phase| {
             let bind = || -> Result<(), JsValue> {
                 match phase {
@@ -518,7 +547,6 @@ impl WasmContext {
                             native.clone(),
                             context_face.clone(),
                             fiber_face.clone(),
-                            browser_config.clone(),
                             uid.clone(),
                         )
                         .into();
@@ -1053,11 +1081,42 @@ impl WasmContext {
         self.provide_browser(name, value, check, Some(reflect))
     }
 
-    /// Tests whether a reflection facade addresses this native service table.
+    /// Tests whether reflection registration retains this native table, scope, and owner.
+    ///
+    /// # Errors
+    /// Propagates Context root, isolation-map, and Fiber getter failures.
     #[wasm_bindgen(js_name = reflectionRecordsMatch)]
-    pub fn reflection_records_match(&self, store: &JsValue, props: &JsValue) -> bool {
+    pub fn reflection_records_match(
+        &self,
+        store: &JsValue,
+        props: &JsValue,
+        name: &str,
+        context: &JsValue,
+    ) -> Result<bool, JsValue> {
         let records = self.inner.browser_services();
-        store == records.store.as_ref() as &JsValue && props == records.props.as_ref() as &JsValue
+        if store != records.store.as_ref() as &JsValue
+            || props != records.props.as_ref() as &JsValue
+        {
+            return Ok(false);
+        }
+        let root = browser_values::get(context, &"root".into())?;
+        if root != self.root() {
+            return Ok(false);
+        }
+        let isolate = browser_symbols::get("isolate")?;
+        let root_scopes = browser_values::get(&root, &isolate)?;
+        let scopes = browser_values::get(context, &isolate)?;
+        let label = browser_values::get(&scopes, &name.into())?;
+        if (label.is_null() || label.is_undefined())
+            && scopes != root_scopes
+            && Reflect::has(&scopes, &name.into())?
+        {
+            return Ok(false);
+        }
+        if !records.scope_matches(&self.inner, name, &label) {
+            return Ok(false);
+        }
+        Ok(browser_values::get(context, &"fiber".into())? == self.fiber())
     }
 
     /// Traces a service value to the calling JavaScript Context.
@@ -1142,15 +1201,10 @@ impl WasmContext {
                 .as_string()
                 .unwrap_or_else(|| "anonymous".to_owned());
             return Err(js_sys::Error::new(&format!(
-                "service {name:?} has been registered at <{label}>"
+                "service \"{name}\" has been registered at <{label}>"
             ))
             .into());
         }
-        Reflect::set(
-            &records.props,
-            &name.into(),
-            &object(&[("type", "service".into())])?.into(),
-        )?;
         let fiber = self.fiber();
         let implementation = object(&[
             ("name", name.into()),
@@ -1293,7 +1347,6 @@ pub struct WasmFiber {
     context: FaceSlot,
     entry: FaceSlot,
     face: FaceSlot,
-    browser_config: browser_config::BrowserConfig,
     hooks: Object,
     uid: JsValue,
 }
@@ -1332,19 +1385,12 @@ impl WasmFiber {
 }
 
 impl WasmFiber {
-    fn new(
-        inner: Arc<PluginFiber>,
-        context: FaceSlot,
-        face: FaceSlot,
-        browser_config: browser_config::BrowserConfig,
-        uid: JsValue,
-    ) -> Self {
+    fn new(inner: Arc<PluginFiber>, context: FaceSlot, face: FaceSlot, uid: JsValue) -> Self {
         Self {
             inner,
             context,
             entry: empty_face_slot(),
             face,
-            browser_config,
             hooks: Object::create(&Object::from(JsValue::NULL)),
             uid,
         }
@@ -1418,14 +1464,8 @@ impl WasmFiber {
     /// Returns name or parent getter failures unchanged.
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> Result<JsValue, JsValue> {
-        let name = self.browser_config.runtime_name()?;
-        if name.is_truthy() {
-            return Ok(name);
-        }
         let core = self.face.lock().clone().unwrap_or(JsValue::UNDEFINED);
-        let parent = Reflect::get(&core, &"parent".into())?;
-        let fiber = Reflect::get(&parent, &"fiber".into())?;
-        Reflect::get(&fiber, &"name".into())
+        browser_fiber_api::fiber_name(&core)
     }
 
     /// Monotonic runtime identity; null after disposal.
@@ -1672,18 +1712,16 @@ pub(crate) fn mark_browser_disposed(owner: &JsValue) -> anyhow::Result<()> {
 }
 
 fn plugin_from_js(
-    descriptor: &JsValue,
+    _descriptor: &JsValue,
     inject: Vec<String>,
     metadata: JsValue,
     root_face: FaceSlot,
     context_face: FaceSlot,
     fiber_face: FaceSlot,
     browser_config: browser_config::BrowserConfig,
-) -> Result<Plugin, JsValue> {
-    let name = Reflect::get(descriptor, &"name".into())?
-        .as_string()
-        .unwrap_or_else(|| "anonymous".to_owned());
-    Ok(Plugin::new(name, inject, move |context, _config| {
+) -> Plugin {
+    let name = "anonymous";
+    Plugin::new(name, inject, move |context, _config| {
         let metadata = metadata.clone();
         let root_face = root_face.clone();
         let context_face = context_face.clone();
@@ -1708,7 +1746,7 @@ fn plugin_from_js(
                 ),
             )
             .map_err(|error| js_anyhow(&error))?;
-            Reflect::set(&receiver, &"config".into(), &config)
+            browser_values::set(&receiver, &"config".into(), &config)
                 .map_err(|error| js_anyhow(&error))?;
             let runner = browser_runner::runner(&receiver).map_err(|error| js_anyhow(&error))?;
             let task = browser_registry::method(&receiver, "_execute", &Array::of1(&runner))
@@ -1718,7 +1756,7 @@ fn plugin_from_js(
                 .map_err(|error| js_anyhow(&error))?;
             Ok(())
         })
-    }))
+    })
 }
 
 fn ensure_context_face(
@@ -1918,7 +1956,7 @@ fn empty_face_slot() -> FaceSlot {
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
     let object = Object::new();
     for (key, value) in entries {
-        set(&object, key, value)?;
+        browser_values::define_data(&object, &JsValue::from_str(key), value)?;
     }
     Ok(object)
 }

@@ -9,7 +9,7 @@ overrides:
   '@seekdeep-ai/schemastery': link:vendor/schemastery
 
 patchedDependencies:
-  node-pty@1.1.0: 7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6
+  node-pty@1.1.0: 60b87fc80d9882831dd67fcf24132a8f504de5bdbc63116495d7c3aabacff6a1
 
 importers:
 
@@ -7486,7 +7486,7 @@ importers:
     dependencies:
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6)
+        version: 1.1.0(patch_hash=60b87fc80d9882831dd67fcf24132a8f504de5bdbc63116495d7c3aabacff6a1)
     devDependencies:
       '@seekdeep-ai/cordis':
         specifier: workspace:^
@@ -8779,6 +8779,9 @@ importers:
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
         version: 2.0.17(mermaid@11.16.0)(vitepress@1.6.4(@algolia/client-search@5.55.2)(@types/node@25.9.3)(@types/react@18.3.31)(lightningcss@1.32.0)(postcss@8.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@6.0.3))
+      vue:
+        specifier: 3.5.39
+        version: 3.5.39(typescript@6.0.3)
 
 packages:
 
@@ -18586,7 +18589,7 @@ snapshots:
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
 
-  node-pty@1.1.0(patch_hash=7a0c04f1f49d798a9ffe2f7f414c01064a44ca2489772d0c3e1235ab336755e6):
+  node-pty@1.1.0(patch_hash=60b87fc80d9882831dd67fcf24132a8f504de5bdbc63116495d7c3aabacff6a1):
     dependencies:
       node-addon-api: 7.1.1
 

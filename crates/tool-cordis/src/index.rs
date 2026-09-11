@@ -13,10 +13,11 @@ use seekdeep_cordis_host_runner::{
     DynamicCordisStopFailureReason, DynamicCordisStopResponse, DynamicCordisUndefineReceipt,
 };
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_lossless_json::{JsonString, JsonValue};
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
 use seekdeep_tools::{
     TOOLS, ToolArgsError, ToolOutputDefinition, ToolRunContext, assert_supported_json_schema,
-    validate_json_schema_value_at,
+    validate_code_json_schema_value_at, validate_json_schema_value_at,
 };
 use serde_json::{Value, json};
 
@@ -151,7 +152,7 @@ fn install_reference_injection(
                     source
                         .fields
                         .insert("form".to_owned(), json!("instructions"));
-                    UserMessage::new(vec![ContentBlock::Text { text }], source)
+                    UserMessage::new(vec![ContentBlock::text(text)], source)
                 }));
                 Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
                     messages,
@@ -173,7 +174,7 @@ fn referenced_plugin_ids(messages: &[UserMessage]) -> Vec<String> {
             .content()
             .iter()
             .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text.as_str()),
+                ContentBlock::Text { text } => Some(String::from_utf16_lossy(text.utf16_units())),
                 _ => None,
             })
             .collect::<Vec<_>>()
@@ -255,7 +256,7 @@ fn tool_definition(
         Arc::new(assert_supported_json_schema(output_schema)?),
         Arc::new(move |_args: &Value, value: &Value| {
             Ok(vec![ContentBlock::Text {
-                text: render_value(name, value)?,
+                text: render_value(name, value)?.into(),
             }])
         }),
     );
@@ -300,8 +301,8 @@ fn tool_definition(
         }),
     );
     let presentation_schema = parameter_schema;
-    definition.present_call = Some(Arc::new(move |args: &Value| {
-        validate_json_schema_value_at(&presentation_schema, args, "")
+    definition.present_call = Some(Arc::new(move |args| {
+        validate_code_json_schema_value_at(&presentation_schema, args, "")
             .is_empty()
             .then(|| present_call(name, args))
             .flatten()
@@ -808,7 +809,7 @@ fn render_value(name: &str, value: &Value) -> anyhow::Result<String> {
     }
 }
 
-fn present_call(name: &str, args: &Value) -> Option<seekdeep_tools::ToolCallView> {
+fn present_call(name: &str, args: &JsonValue) -> Option<seekdeep_tools::ToolCallView> {
     match name {
         "cordis_inspect_list" => Some(inspect_list_call()),
         "cordis_inspect_query" => Some(inspect_query_call(
@@ -817,15 +818,15 @@ fn present_call(name: &str, args: &Value) -> Option<seekdeep_tools::ToolCallView
             args["method"].as_str()?,
         )),
         "cordis_inspect_self" => Some(inspect_self_call(
-            args.get("pluginId").and_then(Value::as_str),
-            args.get("packageId").and_then(Value::as_str),
+            args["pluginId"].as_str(),
+            args["packageId"].as_str(),
         )),
         "cordis_define" => Some(define_call(
-            args.pointer("/plugin/pluginId")
-                .and_then(Value::as_str)
-                .unwrap_or("new plugin"),
-            args["name"].as_str()?,
-            args["purpose"].as_str()?,
+            args["plugin"]["pluginId"]
+                .deserialize::<JsonString>()
+                .unwrap_or_else(|_| "new plugin".into()),
+            args["name"].deserialize::<JsonString>().ok()?,
+            args["purpose"].deserialize::<JsonString>().ok()?,
             &args["code"],
         )),
         "cordis_run" => Some(run_call(

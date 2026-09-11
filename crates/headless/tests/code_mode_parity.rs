@@ -276,7 +276,7 @@ impl LoopFixture {
     async fn prompt(&self, text: &str) -> anyhow::Result<()> {
         self.handle.agent.followup(UserMessage::new(
             vec![ContentBlock::Text {
-                text: text.to_owned(),
+                text: text.into(),
             }],
             MessageSource::user(),
         ))?;
@@ -298,7 +298,7 @@ impl LoopFixture {
                     .content()
                     .iter()
                     .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str()),
+                        ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
                         _ => None,
                     })
                     .collect()
@@ -322,7 +322,7 @@ fn value_tool(name: &str, schema: Value, value: Value) -> anyhow::Result<ToolDef
             Arc::new(|_, value| {
                 Ok(value.as_str().map_or_else(Vec::new, |text| {
                     vec![ContentBlock::Text {
-                        text: text.to_owned(),
+                        text: text.into(),
                     }]
                 }))
             }),

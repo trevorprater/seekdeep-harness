@@ -5,14 +5,41 @@ use std::sync::Arc;
 use seekdeep_cordis::Plugin;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
+#[cfg(test)]
 mod engine;
+#[cfg(test)]
 mod modules;
+mod node;
+pub mod node_assets;
+mod outcome;
 mod runtime;
+#[cfg(test)]
 mod snapshot;
+#[cfg(test)]
 mod watchdog;
+#[cfg(test)]
 mod worker_globals;
 
 pub use runtime::{WorkerThreadCodeRuntime, WorkerThreadCodeRuntimeConfig, install};
+pub use seekdeep_code_runtime::{CodeJsonString, CodeJsonValue, json::CodeJsonToken};
+
+/// Locates and validates the compiled Node runtime shipped with this installation.
+///
+/// # Errors
+///
+/// Returns a missing-asset or filesystem error for an incomplete installation.
+pub fn node_runtime_assets() -> anyhow::Result<std::path::PathBuf> {
+    node::assets()
+}
+
+/// Selects the explicit, bundled, or development/npm Node executable.
+///
+/// # Errors
+///
+/// Rejects a missing or non-executable Node binary in a standalone package.
+pub fn node_runtime_executable(directory: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+    node::executable(directory)
+}
 
 /// Loader plugin identity.
 pub const PLUGIN_NAME: &str = "code-runtime-worker-thread";

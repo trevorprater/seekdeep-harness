@@ -1,5 +1,8 @@
 //! React-free Client object layer and browser runtime services.
 
+/// JSON retained by Conversation events, definitions, and projection snapshots.
+pub use seekdeep_lossless_json::JsonValue as ConversationValue;
+
 mod assistant_timing;
 mod context_provenance;
 mod conversation_assembler;

@@ -1,6 +1,7 @@
 //! Shared browser bindings for the compiled Tool presentation package.
 
 use js_sys::{Array, Function, Object, Reflect};
+use seekdeep_lossless_json::JsonString;
 use wasm_bindgen::{JsCast as _, JsValue};
 
 pub(crate) const PACKAGE_ID: &str = "@seekdeep-ai/seekdeep-client-ui-tool";
@@ -49,6 +50,25 @@ pub(crate) fn required_string(value: &JsValue, key: &str, owner: &str) -> Result
     required_property(value, key, owner)?
         .as_string()
         .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
+}
+
+pub(crate) fn required_json_string(
+    value: &JsValue,
+    key: &str,
+    owner: &str,
+) -> Result<JsonString, JsValue> {
+    let value = required_property(value, key, owner)?;
+    if !value.is_string() {
+        return Err(js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into());
+    }
+    let encoded = js_sys::JSON::stringify(&value)?
+        .as_string()
+        .ok_or_else(|| js_sys::TypeError::new("string JSON serialization failed"))?;
+    JsonString::parse(encoded).map_err(|error| js_sys::TypeError::new(&error.to_string()).into())
+}
+
+pub(crate) fn json_text(value: &JsonString) -> JsValue {
+    js_sys::JSON::parse(value.as_raw()).expect("lossless string contains valid JSON")
 }
 
 pub(crate) fn required_bool(value: &JsValue, key: &str, owner: &str) -> Result<bool, JsValue> {

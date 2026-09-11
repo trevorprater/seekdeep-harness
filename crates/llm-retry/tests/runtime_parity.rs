@@ -12,13 +12,13 @@ use seekdeep_agent::{
 };
 use seekdeep_agent_loop::AgentRequestErrorEvent;
 use seekdeep_cordis::{Context, EventOptions};
-use seekdeep_core::session::{AppendOptions, Session, SessionId};
+use seekdeep_core::session::{AppendOptions, JsonValue, Session, SessionId};
 use seekdeep_llm::{
     AbortSignal, LlmFailure, ProviderId, ResolvedRetryPolicy, resolve_retry_policy,
 };
 use seekdeep_llm_retry::{RetryConfig, RetryId, RetryInternals, install_with_internals};
 use seekdeep_scope::ScopeKey;
-use serde_json::{Value, json};
+use serde_json::json;
 
 struct Harness {
     context: Context,
@@ -120,7 +120,7 @@ impl Harness {
             .await
     }
 
-    fn retry_events(&self) -> Vec<Value> {
+    fn retry_events(&self) -> Vec<JsonValue> {
         self.agent
             .session()
             .events()

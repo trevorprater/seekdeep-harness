@@ -114,7 +114,7 @@ fn agent(context: &Context, id: &str, parent_session: Option<SessionId>) -> Arc<
 fn message(kind: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: kind.to_owned(),
+            text: kind.into(),
         }],
         MessageSource {
             kind: kind.to_owned(),

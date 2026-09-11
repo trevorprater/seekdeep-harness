@@ -142,7 +142,7 @@ fn compaction_result() -> CompactionResult {
         summary_seq: 2,
         end_seq: 3,
         summary: vec![ContentBlock::Text {
-            text: "summary".to_owned(),
+            text: "summary".into(),
         }],
         shadowed_range: ShadowedRange { start: 1, end: 7 },
         shadowed_seqs: vec![1, 3, 7],

@@ -196,9 +196,30 @@ fn event_predicate(filter: &SessionEventResultFilter) -> Result<EventPredicate, 
         }
         SessionEventResultFilter::Text { text } => {
             let pattern = compile_session_text_filter(text)?;
-            Ok(Box::new(move |document| pattern.is_match(&document.text)))
+            Ok(Box::new(move |document| {
+                text_matches(&pattern, &document.text)
+            }))
         }
     }
+}
+
+fn text_matches(pattern: &Regex, text: &seekdeep_llm::JsonString) -> bool {
+    if let Some(text) = text.as_str() {
+        return pattern.is_match(text);
+    }
+    let mut segment = String::new();
+    for point in char::decode_utf16(text.utf16_units().iter().copied()) {
+        match point {
+            Ok(point) => segment.push(point),
+            Err(_) => {
+                if pattern.is_match(&segment) {
+                    return true;
+                }
+                segment.clear();
+            }
+        }
+    }
+    pattern.is_match(&segment)
 }
 
 fn validated_range(
@@ -282,7 +303,7 @@ mod tests {
                 time: i64::try_from(seq).expect("seq fits i64"),
                 surface,
             },
-            text: text.to_owned(),
+            text: text.into(),
         }
     }
 
@@ -342,6 +363,44 @@ mod tests {
                 .expect_err("whitespace text")
                 .code
                 == SessionQueryErrorCode::SessionQueryInvalidFilter
+        );
+    }
+
+    #[test]
+    fn scalar_search_preserves_the_exact_document_and_does_not_match_replacement_text() {
+        let mut raw = document(0, "tool/result", "", SessionEventSurface::Current);
+        raw.text = seekdeep_llm::JsonString::parse(r#""before\ud800after""#.into()).unwrap();
+        let replacement = document(
+            1,
+            "tool/result",
+            "before�after",
+            SessionEventSurface::Current,
+        );
+        let documents = [raw.clone(), replacement.clone()];
+        let matches = filter_session_event_documents(
+            &documents,
+            &[SessionEventResultFilter::Text {
+                text: "after".into(),
+            }],
+        )
+        .unwrap();
+        assert_eq!(matches, documents);
+        assert_eq!(matches[0].text.as_raw(), r#""before\ud800after""#);
+        let matches = filter_session_event_documents(
+            &documents,
+            &[SessionEventResultFilter::Text { text: "�".into() }],
+        )
+        .unwrap();
+        assert_eq!(matches, [replacement]);
+        assert!(
+            filter_session_event_documents(
+                &[raw],
+                &[SessionEventResultFilter::Text {
+                    text: "before after".into()
+                }]
+            )
+            .unwrap()
+            .is_empty()
         );
     }
 

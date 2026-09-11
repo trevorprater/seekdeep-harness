@@ -124,7 +124,10 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
     }
     let icon = required_property(props, "icon", "ToolRow props")?;
     let title = required_property(props, "title", "ToolRow props")?;
-    let summary = required_string(props, "summary", "ToolRow props")?;
+    let summary = required_property(props, "summary", "ToolRow props")?;
+    if !summary.is_string() {
+        return Err(js_sys::TypeError::new("ToolRow summary must be a string").into());
+    }
     let body = required_property(props, "body", "ToolRow props")?;
     let output = optional_property(props, "output")?;
     let terminal = optional_property(props, "terminal")?;
@@ -155,16 +158,15 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
         Ok(())
     }) as Box<dyn FnMut() -> Result<(), JsValue>>);
 
-    let error_summary =
-        optional_property(props, "errorSummary")?.and_then(|value| value.as_string());
+    let error_summary = optional_property(props, "errorSummary")?.filter(JsValue::is_string);
     let failure_line = (state == "error").then(|| error_summary.clone()).flatten();
-    let summary_text = failure_line.as_deref().unwrap_or(&summary);
+    let summary_text = failure_line.as_ref().unwrap_or(&summary);
     let suffix = if failure_line.is_none() {
-        optional_property(props, "summarySuffix")?.and_then(|value| value.as_string())
+        optional_property(props, "summarySuffix")?.filter(JsValue::is_string)
     } else {
         None
     };
-    let file_path = optional_property(props, "filePath")?.and_then(|value| value.as_string());
+    let file_path = optional_property(props, "filePath")?.filter(JsValue::is_string);
     let open_file = optional_property(props, "onOpenFile")?
         .map(|value| {
             value
@@ -174,7 +176,7 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
         .transpose()?;
     let file_link = file_path.is_some() && open_file.is_some() && failure_line.is_none();
 
-    let collapsed = if summary_text.is_empty() {
+    let collapsed = if js_sys::JsString::from(summary_text.clone()).length() == 0 {
         JsValue::FALSE
     } else {
         let mut children = vec![tag(
@@ -196,7 +198,7 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
             let click_path = path.clone();
             let click = Closure::wrap(Box::new(move |event: JsValue| -> Result<(), JsValue> {
                 required_function(&event, "stopPropagation", "Mouse event")?.call0(&event)?;
-                opener.call1(&JsValue::UNDEFINED, &JsValue::from_str(&click_path))?;
+                opener.call1(&JsValue::UNDEFINED, &click_path)?;
                 Ok(())
             })
                 as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
@@ -218,7 +220,7 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
                     ("onClick", click.into_js_value()),
                     ("onKeyDown", keydown.into_js_value()),
                 ])?),
-                &[JsValue::from_str(summary_text)],
+                std::slice::from_ref(summary_text),
             )?);
         } else {
             let class_name = if failure_line.is_some() {
@@ -230,7 +232,7 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
                 &modules.react,
                 "span",
                 Some(&class_props(&class_name)?),
-                &[JsValue::from_str(summary_text)],
+                std::slice::from_ref(summary_text),
             )?);
         }
         if let Some(suffix) = suffix {
@@ -238,7 +240,7 @@ fn render_tool_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue,
                 &modules.react,
                 "span",
                 Some(&class_props(SUMMARY_SUFFIX)?),
-                &[JsValue::from_str(&suffix)],
+                &[suffix],
             )?);
         }
         create_element(&modules.react, &modules.fragment, None, &children)?
@@ -429,14 +431,14 @@ fn render_expanded_body(
     }
     let mut children = Vec::new();
     if variant == "code" && !body.is_null() {
-        let code = body
-            .as_string()
-            .ok_or_else(|| js_sys::TypeError::new("ToolRow code body must be a string"))?;
+        if !body.is_string() {
+            return Err(js_sys::TypeError::new("ToolRow code body must be a string").into());
+        }
         let code_block = create_element(
             &modules.react,
             &modules.primitive("CodeBlock")?,
             Some(&object(&[
-                ("code", JsValue::from_str(&code)),
+                ("code", body.clone()),
                 ("lang", JsValue::from_str("typescript")),
                 ("copyLabel", translated(translate, "copy")?),
                 ("copiedLabel", translated(translate, "copied")?),

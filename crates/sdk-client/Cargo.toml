@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
 seekdeep-subprocess = { path = "../subprocess" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }

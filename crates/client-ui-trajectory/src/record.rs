@@ -1,7 +1,8 @@
 //! Shared trajectory record data and formatting contracts.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 /// Closed set of trajectory record kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

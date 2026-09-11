@@ -364,9 +364,10 @@ impl Context {
         head: Option<&Value>,
     ) -> Value {
         shallow_merge(
-            base.into_iter()
+            base.filter(|value| config_is_truthy(value))
+                .into_iter()
                 .chain(self.intercepts.get(name).into_iter().flatten())
-                .chain(head),
+                .chain(head.filter(|value| config_is_truthy(value))),
         )
     }
 
@@ -380,9 +381,10 @@ impl Context {
         merge: impl FnOnce(&[Value]) -> Value,
     ) -> Value {
         let layers = base
+            .filter(|value| config_is_truthy(value))
             .into_iter()
             .chain(self.intercepts.get(name).into_iter().flatten())
-            .chain(head)
+            .chain(head.filter(|value| config_is_truthy(value)))
             .cloned()
             .collect::<Vec<_>>();
         merge(&layers)
@@ -497,6 +499,9 @@ impl Context {
         getter: AccessorGetter,
         setter: Option<AccessorSetter>,
     ) -> Result<EffectHandle, CordisError> {
+        if !self.fiber.can_register_effect() {
+            return Err(CordisError::InactiveEffect);
+        }
         if self.root.services.is_declared(&name) {
             return Err(CordisError::PropertyDeclared {
                 name,
@@ -599,22 +604,21 @@ impl Context {
         source: ServiceKey<T>,
         members: impl IntoIterator<Item = MixinMember<T>>,
     ) -> Result<MixinHandle, CordisError> {
+        if !self.fiber.can_register_effect() {
+            return Err(CordisError::InactiveEffect);
+        }
         let mut effects = Vec::new();
         for member in members {
-            let getter_context = self.clone();
             let getter = member.getter.clone();
-            let setter_context = self.clone();
             let setter = member.setter.clone();
             let result = self.accessor_erased(
                 member.target,
-                Arc::new(move |_| {
-                    Ok(getter_context
-                        .get(source)
-                        .map(|service| getter(service.as_ref())))
+                Arc::new(move |context| {
+                    Ok(context.get(source).map(|service| getter(service.as_ref())))
                 }),
                 setter.map(|setter| {
-                    Arc::new(move |_context: &Context, value: DynamicValue| {
-                        let Some(service) = setter_context.get(source) else {
+                    Arc::new(move |context: &Context, value: DynamicValue| {
+                        let Some(service) = context.get(source) else {
                             return Ok(false);
                         };
                         setter(service.as_ref(), value)
@@ -788,6 +792,9 @@ impl Context {
         expression_projection: Option<Value>,
         browser_notifies: bool,
     ) -> Result<EffectHandle, CordisError> {
+        if !self.fiber.can_register_effect() {
+            return Err(CordisError::InactiveEffect);
+        }
         if self.root.accessors.read().contains_key(name) {
             return Err(CordisError::PropertyDeclared {
                 name: name.to_owned(),
@@ -999,4 +1006,14 @@ fn shallow_merge<'a>(values: impl IntoIterator<Item = &'a Value>) -> Value {
         }
     }
     Value::Object(merged)
+}
+
+fn config_is_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64() != Some(0.0),
+        Value::String(value) => !value.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
+    }
 }

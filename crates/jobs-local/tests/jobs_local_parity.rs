@@ -347,7 +347,7 @@ async fn final_output_jobs_read_idempotently_after_settlement() {
         JobOutcome {
             status: JobTerminalStatus::Completed,
             detail: None,
-            output: Some("final answer".to_owned()),
+            output: Some("final answer".into()),
         },
     );
     tick().await;

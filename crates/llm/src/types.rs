@@ -1,8 +1,11 @@
 //! Provider-neutral content, stream, and request vocabulary.
 
 use seekdeep_attachment::ImageAttachmentRef;
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonValue};
 pub use seekdeep_util::abort::AbortSignal;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeMap as _,
+};
 use serde_json::{Map, Value};
 
 use crate::{
@@ -17,7 +20,7 @@ pub enum ContentBlock {
     /// Plain user-visible text.
     Text {
         /// Exact text.
-        text: String,
+        text: JsonString,
     },
     /// Model reasoning text.
     Reasoning {
@@ -57,6 +60,20 @@ pub enum ContentBlock {
 }
 
 impl ContentBlock {
+    /// Creates visible text from a Rust string or an exact JSON string.
+    #[must_use]
+    pub fn text(text: impl Into<JsonString>) -> Self {
+        Self::Text { text: text.into() }
+    }
+
+    /// Creates visible text while retaining every ECMAScript UTF-16 code unit.
+    #[must_use]
+    pub fn text_utf16(text: &[u16]) -> Self {
+        Self::Text {
+            text: JsonString::from_utf16(text),
+        }
+    }
+
     /// Returns the merge-extensible wire tag.
     #[must_use]
     pub fn block_type(&self) -> &str {
@@ -76,55 +93,47 @@ impl Serialize for ContentBlock {
     where
         S: Serializer,
     {
-        let mut object = Map::new();
-        object.insert(
-            "type".to_owned(),
-            Value::String(self.block_type().to_owned()),
-        );
+        let mut object = serializer.serialize_map(None)?;
+        object.serialize_entry("type", self.block_type())?;
         match self {
-            Self::Text { text } | Self::Reasoning { text } => {
-                object.insert("text".to_owned(), Value::String(text.clone()));
+            Self::Text { text } => {
+                object.serialize_entry("text", text)?;
+            }
+            Self::Reasoning { text } => {
+                object.serialize_entry("text", text)?;
             }
             Self::Image { attachment } => {
-                object.insert(
-                    "attachment".to_owned(),
-                    serde_json::to_value(attachment).map_err(serde::ser::Error::custom)?,
-                );
+                object.serialize_entry("attachment", attachment)?;
             }
             Self::ToolCall {
                 id,
                 name,
                 arguments,
             } => {
-                object.insert("id".to_owned(), Value::String(id.as_str().to_owned()));
-                object.insert("name".to_owned(), Value::String(name.clone()));
-                object.insert("arguments".to_owned(), Value::String(arguments.clone()));
+                object.serialize_entry("id", id)?;
+                object.serialize_entry("name", name)?;
+                object.serialize_entry("arguments", arguments)?;
             }
             Self::ToolResult {
                 tool_call_id,
                 content,
                 is_error,
             } => {
-                object.insert(
-                    "toolCallId".to_owned(),
-                    Value::String(tool_call_id.as_str().to_owned()),
-                );
-                object.insert(
-                    "content".to_owned(),
-                    serde_json::to_value(content).map_err(serde::ser::Error::custom)?,
-                );
+                object.serialize_entry("toolCallId", tool_call_id)?;
+                object.serialize_entry("content", content)?;
                 if let Some(is_error) = is_error {
-                    object.insert("isError".to_owned(), Value::Bool(*is_error));
+                    object.serialize_entry("isError", is_error)?;
                 }
             }
-            Self::Unknown { fields, .. } => object.extend(
-                fields
-                    .iter()
-                    .filter(|(field, _)| field.as_str() != "type")
-                    .map(|(field, value)| (field.clone(), value.clone())),
-            ),
+            Self::Unknown { fields, .. } => {
+                for (field, value) in fields {
+                    if field != "type" {
+                        object.serialize_entry(field, value)?;
+                    }
+                }
+            }
         }
-        Value::Object(object).serialize(serializer)
+        object.end()
     }
 }
 
@@ -133,44 +142,46 @@ impl<'de> Deserialize<'de> for ContentBlock {
     where
         D: Deserializer<'de>,
     {
-        let Value::Object(mut object) = Value::deserialize(deserializer)? else {
+        let object = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if !object.as_ref().is_object() {
             return Err(D::Error::custom("content block must be an object"));
-        };
-        let block_type = take_string::<D::Error>(&mut object, "type")?;
-        Ok(
-            decode_known_content_block(&block_type, &object).unwrap_or(Self::Unknown {
-                block_type,
-                fields: object,
-            }),
-        )
+        }
+        let block_type: String = object
+            .get("type")
+            .ok_or_else(|| D::Error::missing_field("type"))?
+            .deserialize()
+            .map_err(D::Error::custom)?;
+        if let Some(block) = decode_known_content_block(&block_type, object.as_ref()) {
+            return Ok(block);
+        }
+        let mut fields: Map<String, Value> = object.deserialize().map_err(D::Error::custom)?;
+        fields.shift_remove("type");
+        Ok(Self::Unknown { block_type, fields })
     }
 }
 
-fn decode_known_content_block(
-    block_type: &str,
-    object: &Map<String, Value>,
-) -> Option<ContentBlock> {
+fn decode_known_content_block(block_type: &str, object: JsonRef<'_>) -> Option<ContentBlock> {
     match block_type {
         "text" => Some(ContentBlock::Text {
-            text: object.get("text")?.as_str()?.to_owned(),
+            text: object.get("text")?.deserialize().ok()?,
         }),
         "reasoning" => Some(ContentBlock::Reasoning {
-            text: object.get("text")?.as_str()?.to_owned(),
+            text: object.get("text")?.deserialize().ok()?,
         }),
         "image" => Some(ContentBlock::Image {
-            attachment: serde_json::from_value(object.get("attachment")?.clone()).ok()?,
+            attachment: object.get("attachment")?.deserialize().ok()?,
         }),
         "tool-call" => Some(ContentBlock::ToolCall {
-            id: CallId::new(object.get("id")?.as_str()?),
-            name: object.get("name")?.as_str()?.to_owned(),
-            arguments: object.get("arguments")?.as_str()?.to_owned(),
+            id: object.get("id")?.deserialize().ok()?,
+            name: object.get("name")?.deserialize().ok()?,
+            arguments: object.get("arguments")?.deserialize().ok()?,
         }),
         "tool-result" => Some(ContentBlock::ToolResult {
-            tool_call_id: CallId::new(object.get("toolCallId")?.as_str()?),
-            content: serde_json::from_value(object.get("content")?.clone()).ok()?,
+            tool_call_id: object.get("toolCallId")?.deserialize().ok()?,
+            content: object.get("content")?.deserialize().ok()?,
             is_error: object
                 .get("isError")
-                .map(|value| serde_json::from_value(value.clone()))
+                .map(JsonRef::deserialize)
                 .transpose()
                 .ok()?,
         }),
@@ -313,7 +324,7 @@ pub struct TokenUsage {
 }
 
 /// Raw adapter streaming protocol.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum StreamChunk {
     /// Declares an indexed block.
@@ -375,6 +386,81 @@ pub enum StreamChunk {
         )]
         replay_state: Option<Value>,
     },
+}
+
+impl<'de> Deserialize<'de> for StreamChunk {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let object = value.as_ref();
+        let kind: String = chunk_field(object, "type")?;
+        match kind.as_str() {
+            "block-start" => Ok(Self::BlockStart {
+                index: chunk_field(object, "index")?,
+                block_type: chunk_field(object, "blockType")?,
+            }),
+            "text-delta" => Ok(Self::TextDelta {
+                index: chunk_field(object, "index")?,
+                text: chunk_field(object, "text")?,
+            }),
+            "reasoning-delta" => Ok(Self::ReasoningDelta {
+                index: chunk_field(object, "index")?,
+                text: chunk_field(object, "text")?,
+            }),
+            "tool-call-delta" => Ok(Self::ToolCallDelta {
+                index: chunk_field(object, "index")?,
+                id: chunk_field(object, "id")?,
+                name: object
+                    .get("name")
+                    .map(JsonRef::deserialize)
+                    .transpose()
+                    .map_err(D::Error::custom)?
+                    .flatten(),
+                arguments_delta: chunk_field(object, "argumentsDelta")?,
+            }),
+            "block-end" => Ok(Self::BlockEnd {
+                index: chunk_field(object, "index")?,
+                block: chunk_field(object, "block")?,
+            }),
+            "usage" => Ok(Self::Usage {
+                usage: chunk_field(object, "usage")?,
+            }),
+            "finish" => Ok(Self::Finish {
+                reason: chunk_field(object, "reason")?,
+                replay_state: object
+                    .get("replayState")
+                    .map(JsonRef::deserialize)
+                    .transpose()
+                    .map_err(D::Error::custom)?
+                    .flatten(),
+            }),
+            _ => Err(D::Error::unknown_variant(
+                &kind,
+                &[
+                    "block-start",
+                    "text-delta",
+                    "reasoning-delta",
+                    "tool-call-delta",
+                    "block-end",
+                    "usage",
+                    "finish",
+                ],
+            )),
+        }
+    }
+}
+
+fn chunk_field<T: serde::de::DeserializeOwned, E: serde::de::Error>(
+    object: JsonRef<'_>,
+    field: &'static str,
+) -> Result<T, E> {
+    object
+        .get(field)
+        .ok_or_else(|| E::missing_field(field))?
+        .deserialize()
+        .map_err(E::custom)
 }
 
 /// JSON schema sent to the model for one tool.

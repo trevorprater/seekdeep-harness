@@ -1,13 +1,13 @@
 //! Browser Tool-block narrowing and primitive-prop conversion.
 
 use js_sys::{Array, JSON, Object, Reflect};
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 use wasm_bindgen::{JsCast as _, JsValue};
 
 use crate::{
     DiffCardModel, ReadCardModel, SearchCard, SearchCardModel, TerminalCardModel, ToolCallBlock,
     ToolCallHead, ToolErrorInfo, ToolRowState, ToolRowVariant, WebCardModel,
-    browser::{object, required_bool, required_property, required_string},
+    browser::{object, required_bool, required_json_string, required_property, required_string},
 };
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ impl BrowserToolBlock {
             let (call, tool_name) = if call_value.is_null() {
                 (None, String::new())
             } else {
-                let args_raw = required_string(&call_value, "argsRaw", "Tool call head")?;
+                let args_raw = required_json_string(&call_value, "argsRaw", "Tool call head")?;
                 let name = required_string(&call_value, "name", "Tool call head")?;
                 (Some(ToolCallHead { args_raw }), name)
             };
@@ -61,7 +61,7 @@ impl BrowserToolBlock {
             Ok(Self {
                 model: ToolCallBlock::Running {
                     call_id,
-                    args_raw: required_string(raw, "argsRaw", "running Tool call")?,
+                    args_raw: required_json_string(raw, "argsRaw", "running Tool call")?,
                     call_view: optional_json(raw, "callView")?,
                 },
                 tool_name,
@@ -70,12 +70,13 @@ impl BrowserToolBlock {
         }
     }
 
-    pub(crate) fn raw_arguments(&self) -> &str {
+    pub(crate) fn raw_arguments(&self) -> JsonString {
         match &self.model {
-            ToolCallBlock::Running { args_raw, .. } => args_raw,
-            ToolCallBlock::Settled { call, .. } => {
-                call.as_ref().map_or("", |call| call.args_raw.as_str())
-            }
+            ToolCallBlock::Running { args_raw, .. } => args_raw.clone(),
+            ToolCallBlock::Settled { call, .. } => call
+                .as_ref()
+                .map(|call| call.args_raw.clone())
+                .unwrap_or_default(),
         }
     }
 
@@ -86,18 +87,19 @@ impl BrowserToolBlock {
         }
     }
 
-    pub(crate) fn concatenated_text(&self) -> String {
+    pub(crate) fn concatenated_text(&self) -> JsonString {
         let ToolCallBlock::Settled { content, .. } = &self.model else {
-            return String::new();
+            return JsonString::default();
         };
-        content
+        let parts = content
             .iter()
             .filter_map(|block| {
-                (block.get("type").and_then(Value::as_str) == Some("text"))
-                    .then(|| block.get("text").and_then(Value::as_str))
+                (block.get_value("type").and_then(Value::as_str) == Some("text"))
+                    .then(|| block.get_value("text").and_then(crate::model::json_string))
                     .flatten()
             })
-            .collect::<String>()
+            .collect::<Vec<_>>();
+        JsonString::join(&parts, "")
     }
 }
 
@@ -357,7 +359,7 @@ fn json_value(value: &JsValue) -> Result<Value, JsValue> {
     let encoded = JSON::stringify(value)?
         .as_string()
         .ok_or_else(|| js_sys::TypeError::new("Tool wire value is not JSON-compatible"))?;
-    serde_json::from_str(&encoded)
+    Value::parse(encoded)
         .map_err(|error| js_sys::TypeError::new(&format!("invalid Tool wire JSON: {error}")).into())
 }
 

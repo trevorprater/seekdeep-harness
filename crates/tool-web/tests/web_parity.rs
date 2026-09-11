@@ -138,7 +138,7 @@ fn text(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect()
@@ -152,10 +152,10 @@ async fn defaults_register_both_parallel_tools_prompts_timeouts_and_provider_dis
     assert_eq!(search.timeout_ms, Some(DEFAULT_WEB_TOOL_TIMEOUT_MS));
     assert_eq!(fetch.timeout_ms, Some(DEFAULT_WEB_TOOL_TIMEOUT_MS));
     assert!(search.is_concurrency_safe.as_ref().unwrap()(
-        &json!({ "query": "q" })
+        &json!({ "query": "q" }).into()
     ));
     assert!(fetch.is_concurrency_safe.as_ref().unwrap()(
-        &json!({ "url": "https://a" })
+        &json!({ "url": "https://a" }).into()
     ));
     assert_eq!(
         search.parameters["properties"]
@@ -196,7 +196,7 @@ async fn defaults_register_both_parallel_tools_prompts_timeouts_and_provider_dis
     );
     assert!(harness.search.seen.lock()[0].1.is_some());
     let presented = search.present_result.as_ref().unwrap()(
-        &json!({ "query": "rust" }),
+        &json!({ "query": "rust" }).into(),
         &seekdeep_tools::ToolResult {
             content: searched.content().to_vec(),
             is_error: false,
@@ -220,7 +220,7 @@ async fn defaults_register_both_parallel_tools_prompts_timeouts_and_provider_dis
     assert!(harness.fetch.seen.lock()[0].1.is_some());
     assert!(matches!(
         fetch.present_result.as_ref().unwrap()(
-            &json!({ "url": "https://example.test/page" }),
+            &json!({ "url": "https://example.test/page" }).into(),
             &seekdeep_tools::ToolResult {
                 content: fetched.content().to_vec(),
                 is_error: false,
@@ -229,6 +229,32 @@ async fn defaults_register_both_parallel_tools_prompts_timeouts_and_provider_dis
         ),
         Some(ToolResultView::Web(WebResultView::Fetch(_)))
     ));
+}
+
+#[test]
+fn replayed_raw_metadata_uses_final_fields_and_ignores_opaque_extensions() {
+    let harness = Harness::new(Config::default());
+    let search = harness.dependencies.tools.get("web_search", None).unwrap();
+    let result: seekdeep_tools::ToolResult = serde_json::from_str(
+        r#"{"content":[],"isError":false,"meta":{"sources":[],"truncated":false,"answer":"before","answer":"after","\ud800":{"value":"\udfff"}}}"#,
+    ).unwrap();
+    let view = search.present_result.as_ref().unwrap()(&json!({"query":"query"}).into(), &result);
+    let Some(ToolResultView::Web(WebResultView::Search(view))) = view else {
+        panic!("search view");
+    };
+    assert_eq!(view.answer.as_deref(), Some("after"));
+    assert!(view.sources.is_empty());
+    let fetch = harness.dependencies.tools.get("web_fetch", None).unwrap();
+    let result: seekdeep_tools::ToolResult = serde_json::from_str(
+        r#"{"content":[],"isError":false,"meta":{"url":"https://old.test","url":"https://new.test","statusCode":200,"truncated":false,"\ud800":{"value":"\udfff"}}}"#,
+    ).unwrap();
+    let view =
+        fetch.present_result.as_ref().unwrap()(&json!({"url":"https://new.test"}).into(), &result);
+    let Some(ToolResultView::Web(WebResultView::Fetch(view))) = view else {
+        panic!("fetch view");
+    };
+    assert_eq!(view.url, "https://new.test");
+    assert_eq!(view.status_code, 200);
 }
 
 #[tokio::test]

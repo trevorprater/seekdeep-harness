@@ -189,9 +189,7 @@ pub(crate) fn text_response(text: &str) -> Vec<StreamChunk> {
     }));
     chunks.push(StreamChunk::BlockEnd {
         index: 0,
-        block: ContentBlock::Text {
-            text: text.to_owned(),
-        },
+        block: ContentBlock::Text { text: text.into() },
     });
     chunks.push(StreamChunk::Usage {
         usage: usage(text.chars().count() as u64),
@@ -236,9 +234,7 @@ pub(crate) fn tool_call_response(
         });
         chunks.push(StreamChunk::BlockEnd {
             index,
-            block: ContentBlock::Text {
-                text: text.to_owned(),
-            },
+            block: ContentBlock::Text { text: text.into() },
         });
         index += 1;
     }
@@ -324,7 +320,7 @@ pub(crate) fn register_noop_tool(stack: &Stack) {
             Arc::new(|_args: serde_json::Value, _run| {
                 Box::pin(async {
                     Ok(vec![ContentBlock::Text {
-                        text: "noop".to_owned(),
+                        text: "noop".into(),
                     }])
                 })
             }),
@@ -477,9 +473,7 @@ pub(crate) async fn create_agent(
 }
 
 pub(crate) fn message(text: &str) -> Vec<ContentBlock> {
-    vec![ContentBlock::Text {
-        text: text.to_owned(),
-    }]
+    vec![ContentBlock::Text { text: text.into() }]
 }
 
 pub(crate) fn start_spec(
@@ -726,7 +720,11 @@ pub(crate) fn settlement_notices(agent: &Agent) -> Vec<Notice> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.clone()),
+                    ContentBlock::Text { text } => Some(
+                        text.clone()
+                            .try_into_string()
+                            .expect("fixture uses scalar text"),
+                    ),
                     _ => None,
                 })
                 .collect::<Vec<_>>()

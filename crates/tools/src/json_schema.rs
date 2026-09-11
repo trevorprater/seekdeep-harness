@@ -4,6 +4,9 @@ use std::fmt;
 
 use serde_json::{Map, Value};
 
+mod lossless;
+pub use lossless::validate_code_json_schema_value_at;
+
 const SCHEMA_TYPES: [&str; 7] = [
     "object", "array", "string", "number", "integer", "boolean", "null",
 ];

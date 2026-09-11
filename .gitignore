@@ -15,6 +15,10 @@
 /apps/web/dist/
 /apps/web/generated/
 /packages/*/*/lib/
+/native/landlock-run/packages/*/bin/
+/native/landlock-run/packages/*/lib/
+/native/landlock-run/dist/
+/native/landlock-run/.release/
 /vendor/*/lib/
 /.seekdeep/
 *.profraw

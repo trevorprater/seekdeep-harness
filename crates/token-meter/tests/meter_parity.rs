@@ -58,7 +58,7 @@ fn header(model: &str, system: Option<&str>, tools: Option<Vec<ToolSchema>>) -> 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
         vec![ContentBlock::Text {
-            text: text.to_owned(),
+            text: text.into(),
         }],
         MessageSource::user(),
     )
@@ -127,7 +127,7 @@ fn append_successful_call(
             StreamChunk::BlockEnd {
                 index: 0,
                 block: ContentBlock::Text {
-                    text: options.provider_text.to_owned(),
+                    text: options.provider_text.into(),
                 },
             },
         ];
@@ -155,7 +155,7 @@ fn append_successful_call(
         Vec::new()
     } else {
         vec![ContentBlock::Text {
-            text: options.durable_text.to_owned(),
+            text: options.durable_text.into(),
         }]
     };
     let message = Message::new(
@@ -221,7 +221,7 @@ async fn configuration_service_registration_and_fixed_pricing_match_the_source()
     assert_eq!(service.estimate_message(&user("abcd")), 9);
     let blocks = vec![
         ContentBlock::Text {
-            text: "abcd".to_owned(),
+            text: "abcd".into(),
         },
         ContentBlock::Reasoning {
             text: "ab".to_owned(),
@@ -234,7 +234,7 @@ async fn configuration_service_registration_and_fixed_pricing_match_the_source()
         ContentBlock::ToolResult {
             tool_call_id: "c".into(),
             content: vec![ContentBlock::Text {
-                text: "xy".to_owned(),
+                text: "xy".into(),
             }],
             is_error: Some(false),
         },
@@ -635,7 +635,7 @@ async fn malformed_step_history_fails_transactionally_on_every_measurement() {
                 "turn":1,"step":1,
                 "message":Message::new(
                     MessageRole::Assistant,
-                    vec![ContentBlock::Text { text:"bad".to_owned() }],
+                    vec![ContentBlock::Text { text:"bad".into() }],
                     MessageSource::model("mock","model")
                 )
             }),

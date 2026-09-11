@@ -173,7 +173,7 @@ fn assemble(partial: &PartialBlock, index: u64) -> anyhow::Result<ContentBlock> 
     }
     match partial.block_type.as_str() {
         "text" => Ok(ContentBlock::Text {
-            text: partial.text.clone(),
+            text: partial.text.clone().into(),
         }),
         "reasoning" => Ok(ContentBlock::Reasoning {
             text: partial.text.clone(),
@@ -238,7 +238,7 @@ mod tests {
                     text: "thinking…".to_owned()
                 },
                 ContentBlock::Text {
-                    text: "Hello world".to_owned()
+                    text: "Hello world".into()
                 },
                 ContentBlock::ToolCall {
                     id: CallId::new("call-1"),
@@ -261,7 +261,7 @@ mod tests {
         assembler.push(StreamChunk::BlockEnd {
             index: 0,
             block: ContentBlock::Text {
-                text: "second".to_owned(),
+                text: "second".into(),
             },
         });
         assembler.push(StreamChunk::ReasoningDelta {

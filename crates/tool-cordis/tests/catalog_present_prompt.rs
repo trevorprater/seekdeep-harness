@@ -75,7 +75,7 @@ fn presentation_wire_shapes_match_each_source_tool() {
             "new abc-*",
             "Example",
             "Show an example",
-            &json!({"host":"return {}"}),
+            &json!({"host":"return {}"}).into(),
         ))
         .unwrap(),
         json!({

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_llm::CallId;
+use seekdeep_llm::{CallId, JsonString};
 use serde::{Deserialize, Serialize};
 
 seekdeep_util::string_brand!(
@@ -44,8 +44,8 @@ pub struct SaveTextSpill {
     pub source: SpillSource,
     /// Caller-suggested base name; a backend treats it as a hint, never a path.
     pub suggested_name: String,
-    /// Full text to persist verbatim as UTF-8.
-    pub content: String,
+    /// Full source text; native UTF-8 storage replaces lone surrogates when encoding.
+    pub content: JsonString,
 }
 
 /// Saved spill artifact and model-facing retrieval guidance.
@@ -139,7 +139,7 @@ mod tests {
             *self.last.lock() = Some(input.clone());
             Ok(SpillRef {
                 locator: SpillLocator::new(format!("/stub/{}", input.suggested_name)),
-                bytes: input.content.len() as u64,
+                bytes: input.content.len_utf8() as u64,
                 retrieval_hint: "Use the stub reader.".to_owned(),
             })
         }
@@ -156,7 +156,7 @@ mod tests {
                 label: "result".to_owned(),
             },
             suggested_name: "web_fetch.txt".to_owned(),
-            content: content.to_owned(),
+            content: content.into(),
         }
     }
 

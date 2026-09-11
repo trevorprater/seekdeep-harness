@@ -13,14 +13,15 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use regress::Regex;
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
-use seekdeep_core::{chunk_rows::decode_storage_record, session::SessionEvent};
+use seekdeep_core::{chunk_rows::decode_storage_record_json, session::SessionEvent};
 use seekdeep_llm::{
     AbortSignal, AdapterRegistrationHandle, AdapterStream, ContentBlock, GenerateOptions, LLM,
     LlmAdapter, LlmError, LlmModelContext, LlmModelInfo, LlmModelReasoningInfo, LlmProviderInfo,
     LlmReasoningEffortInfo, LlmResolvedModelInfo, LlmStream, ModelId, ModelModality, ProviderId,
     ReasoningEffortId, ResolvedRetryPolicy, StreamChunk, TokenUsage, resolve_retry_policy,
 };
-use serde::{Deserialize, Serialize};
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonToken, JsonValue};
+use serde::{Deserialize, Serialize, de::Error as _};
 use serde_json::Value;
 
 /// Loader plugin name.
@@ -31,7 +32,7 @@ const ANONYMOUS_SESSION: &str = "\0anon\0";
 const FROM_REQUEST_OPEN: &str = "{{fromRequest:";
 
 /// One recorded model call.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub enum ReplayEntry {
     /// A normally yielded stream.
@@ -54,6 +55,67 @@ pub enum ReplayEntry {
         #[serde(rename = "readyFile", default, skip_serializing_if = "Option::is_none")]
         ready_file: Option<PathBuf>,
     },
+}
+
+impl<'de> Deserialize<'de> for ReplayEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Chunks {
+            #[serde(rename = "kind")]
+            _kind: String,
+            chunks: Vec<StreamChunk>,
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Throw {
+            #[serde(rename = "kind")]
+            _kind: String,
+            chunks: Vec<StreamChunk>,
+            message: String,
+            code: String,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Hang {
+            #[serde(rename = "kind")]
+            _kind: String,
+            ready_file: Option<PathBuf>,
+        }
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let kind: String = value
+            .get("kind")
+            .ok_or_else(|| D::Error::missing_field("kind"))?
+            .deserialize()
+            .map_err(D::Error::custom)?;
+        match kind.as_str() {
+            "chunks" => {
+                let Chunks { chunks, .. } = value.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Chunks { chunks })
+            }
+            "throw" => {
+                let Throw {
+                    chunks,
+                    message,
+                    code,
+                    ..
+                } = value.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Throw {
+                    chunks,
+                    message,
+                    code,
+                })
+            }
+            "hang" => {
+                let Hang { ready_file, .. } = value.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Hang { ready_file })
+            }
+            _ => Err(D::Error::unknown_variant(
+                &kind,
+                &["chunks", "throw", "hang"],
+            )),
+        }
+    }
 }
 
 /// One replay-only model catalog row.
@@ -159,11 +221,27 @@ struct ReplayOverridePatches {
     patches: Vec<ReplayOverridePatch>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(untagged)]
+#[derive(Clone, Debug)]
 enum ReplayOverrideDoc {
     Entries(Vec<ReplayEntry>),
     Patches(ReplayOverridePatches),
+}
+
+impl<'de> Deserialize<'de> for ReplayOverrideDoc {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if value.as_ref().is_array() {
+            value
+                .deserialize()
+                .map(Self::Entries)
+                .map_err(D::Error::custom)
+        } else {
+            value
+                .deserialize()
+                .map(Self::Patches)
+                .map_err(D::Error::custom)
+        }
+    }
 }
 
 /// Parses a session JSONL buffer, skipping its header and expanding packed rows.
@@ -176,9 +254,9 @@ pub fn parse_session_log(text: &str) -> anyhow::Result<Vec<SessionEvent>> {
     let _ = lines.next();
     let mut events = Vec::new();
     for line in lines {
-        let record: Value = serde_json::from_str(line)?;
-        for event in decode_storage_record(record)? {
-            events.push(serde_json::from_value(event)?);
+        let record = JsonValue::parse(line.to_owned())?;
+        for event in decode_storage_record_json(record)? {
+            events.push(event.deserialize()?);
         }
     }
     Ok(events)
@@ -223,7 +301,7 @@ pub fn parse_session_header(text: &str) -> anyhow::Result<(String, f64, usize)> 
 pub fn derive_replay_script(events: &[SessionEvent]) -> anyhow::Result<Vec<ReplayEntry>> {
     fn close(
         script: &mut Vec<ReplayEntry>,
-        key: Option<&str>,
+        key: Option<&JsonString>,
         chunks: &mut Vec<StreamChunk>,
     ) -> anyhow::Result<()> {
         if chunks.is_empty() {
@@ -232,7 +310,10 @@ pub fn derive_replay_script(events: &[SessionEvent]) -> anyhow::Result<Vec<Repla
         anyhow::ensure!(
             matches!(chunks.last(), Some(StreamChunk::Finish { .. })),
             "llm-replay: model call {} ended without a finish chunk (a thrown stream); this scenario needs a replay.override.json sidecar",
-            key.unwrap_or("undefined")
+            key.map_or_else(
+                || "undefined".to_owned(),
+                |key| String::from_utf16_lossy(key.utf16_units())
+            )
         );
         script.push(ReplayEntry::Chunks {
             chunks: std::mem::take(chunks),
@@ -241,19 +322,19 @@ pub fn derive_replay_script(events: &[SessionEvent]) -> anyhow::Result<Vec<Repla
     }
 
     let mut script = Vec::new();
-    let mut current_key: Option<String> = None;
+    let mut current_key: Option<JsonString> = None;
     let mut current = Vec::new();
     for event in events {
         if event.event_type == "compaction/summary" {
-            close(&mut script, current_key.as_deref(), &mut current)?;
+            close(&mut script, current_key.as_ref(), &mut current)?;
             current_key = None;
-            if event.data.get("llmStreamCall") == Some(&Value::Bool(true)) {
+            if event.data.get("llmStreamCall").and_then(JsonRef::as_bool) == Some(true) {
                 let output = event.data.get("rawOutput").ok_or_else(|| {
                     anyhow::anyhow!(
                         "llm-replay: compaction/summary marks an LLM stream call without rawOutput"
                     )
                 })?;
-                let output: Vec<ContentBlock> = serde_json::from_value(output.clone())?;
+                let output: Vec<ContentBlock> = output.deserialize()?;
                 let mut chunks = Vec::new();
                 for (index, block) in output.into_iter().enumerate() {
                     let index = u64::try_from(index)?;
@@ -265,7 +346,7 @@ pub fn derive_replay_script(events: &[SessionEvent]) -> anyhow::Result<Vec<Repla
                 }
                 if let Some(usage) = event.data.get("usage") {
                     chunks.push(StreamChunk::Usage {
-                        usage: serde_json::from_value::<TokenUsage>(usage.clone())?,
+                        usage: usage.deserialize::<TokenUsage>()?,
                     });
                 }
                 chunks.push(StreamChunk::Finish {
@@ -281,36 +362,36 @@ pub fn derive_replay_script(events: &[SessionEvent]) -> anyhow::Result<Vec<Repla
         }
         let turn = render_key(event.data.get("turn"));
         let step = render_key(event.data.get("step"));
-        let key = format!("{turn}/{step}");
-        if !current.is_empty() && current_key.as_deref() != Some(&key) {
-            close(&mut script, current_key.as_deref(), &mut current)?;
+        let mut key = turn;
+        key.push_str("/");
+        key.push_utf16(step.utf16_units());
+        if !current.is_empty() && current_key.as_ref() != Some(&key) {
+            close(&mut script, current_key.as_ref(), &mut current)?;
         }
         if current.is_empty() {
             current_key = Some(key);
         }
-        let chunk: StreamChunk = serde_json::from_value(
-            event
-                .data
-                .get("chunk")
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("llm-replay: assistant/chunk has no chunk"))?,
-        )?;
+        let chunk: StreamChunk = event
+            .data
+            .get("chunk")
+            .ok_or_else(|| anyhow::anyhow!("llm-replay: assistant/chunk has no chunk"))?
+            .deserialize()?;
         let finished = matches!(chunk, StreamChunk::Finish { .. });
         current.push(chunk);
         if finished {
-            close(&mut script, current_key.as_deref(), &mut current)?;
+            close(&mut script, current_key.as_ref(), &mut current)?;
             current_key = None;
         }
     }
-    close(&mut script, current_key.as_deref(), &mut current)?;
+    close(&mut script, current_key.as_ref(), &mut current)?;
     Ok(script)
 }
 
-fn render_key(value: Option<&Value>) -> String {
+fn render_key(value: Option<JsonRef<'_>>) -> JsonString {
     match value {
-        Some(Value::String(value)) => value.clone(),
-        Some(value) => value.to_string(),
-        None => "undefined".to_owned(),
+        Some(value) if value.is_string() => value.deserialize().expect("validated JSON string"),
+        Some(value) => value.as_raw().into(),
+        None => "undefined".into(),
     }
 }
 
@@ -471,77 +552,106 @@ pub fn load_session_scripts(config: &ReplayConfig) -> anyhow::Result<Vec<Session
     Ok(scripts)
 }
 
-fn collect_strings(value: &Value, output: &mut Vec<String>) {
-    match value {
-        Value::String(value) => output.push(value.clone()),
-        Value::Array(values) => {
-            for value in values {
-                collect_strings(value, output);
-            }
+fn collect_strings(value: &JsonValue, output: &mut Vec<JsonString>) {
+    for token in value.tokens() {
+        if let JsonToken::Scalar(value) = token
+            && value.is_string()
+        {
+            output.push(value.deserialize().expect("validated JSON string"));
         }
-        Value::Object(values) => {
-            for value in values.values() {
-                collect_strings(value, output);
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
     }
 }
 
-fn resolve_from_request(pattern: &str, corpus: &str) -> anyhow::Result<String> {
-    let regex = Regex::new(pattern).map_err(|error| {
-        anyhow::anyhow!("llm-replay: fromRequest has an invalid pattern {pattern:?}: {error}")
-    })?;
-    let matched = regex.find_iter(corpus).last().ok_or_else(|| {
+fn resolve_from_request(pattern: &JsonString, corpus: &JsonString) -> anyhow::Result<JsonString> {
+    let regex = Regex::from_unicode(
+        pattern.utf16_units().iter().copied().map(u32::from),
+        regress::Flags::default(),
+    )
+    .map_err(|error| {
         anyhow::anyhow!(
-            "llm-replay: fromRequest pattern {pattern:?} matched nothing in the request"
+            "llm-replay: fromRequest has an invalid pattern {}: {error}",
+            pattern.as_raw()
         )
     })?;
+    let matched = regex
+        .find_from_ucs2(corpus.utf16_units(), 0)
+        .last()
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "llm-replay: fromRequest pattern {} matched nothing in the request",
+                pattern.as_raw()
+            )
+        })?;
     let range = matched.group(1).unwrap_or_else(|| matched.range());
-    Ok(corpus[range].to_owned())
+    Ok(JsonString::from_utf16(&corpus.utf16_units()[range]))
 }
 
-fn substitute_string(text: &str, corpus: &str) -> anyhow::Result<String> {
-    let mut result = String::new();
+fn substitute_string(text: &JsonString, corpus: &JsonString) -> anyhow::Result<JsonString> {
+    let mut result = JsonString::default();
+    let units = text.utf16_units();
+    let open_units = FROM_REQUEST_OPEN.encode_utf16().collect::<Vec<_>>();
+    let close_units = [u16::from(b'}'); 2];
     let mut cursor = 0;
     loop {
-        let Some(relative_open) = text[cursor..].find(FROM_REQUEST_OPEN) else {
-            result.push_str(&text[cursor..]);
+        let Some(relative_open) = units[cursor..]
+            .windows(open_units.len())
+            .position(|value| value == open_units)
+        else {
+            result.push_utf16(&units[cursor..]);
             return Ok(result);
         };
         let open = cursor + relative_open;
-        let pattern_start = open + FROM_REQUEST_OPEN.len();
-        let Some(relative_close) = text[pattern_start..].find("}}") else {
-            anyhow::bail!("llm-replay: fromRequest placeholder is unterminated in {text:?}");
+        let pattern_start = open + open_units.len();
+        let Some(relative_close) = units[pattern_start..]
+            .windows(2)
+            .position(|value| value == close_units)
+        else {
+            anyhow::bail!(
+                "llm-replay: fromRequest placeholder is unterminated in {}",
+                text.as_raw()
+            );
         };
         let mut close = pattern_start + relative_close;
-        while text.as_bytes().get(close + 2) == Some(&b'}') {
+        while units.get(close + 2) == Some(&u16::from(b'}')) {
             close += 1;
         }
-        result.push_str(&text[cursor..open]);
-        result.push_str(&resolve_from_request(&text[pattern_start..close], corpus)?);
+        result.push_utf16(&units[cursor..open]);
+        let pattern = JsonString::from_utf16(&units[pattern_start..close]);
+        result.push_utf16(resolve_from_request(&pattern, corpus)?.utf16_units());
         cursor = close + 2;
     }
 }
 
-fn substitute_value(value: &mut Value, corpus: &str) -> anyhow::Result<()> {
-    match value {
-        Value::String(text) if text.contains(FROM_REQUEST_OPEN) => {
-            *text = substitute_string(text, corpus)?;
-        }
-        Value::Array(values) => {
-            for value in values {
-                substitute_value(value, corpus)?;
+fn substitute_value(value: &JsonValue, corpus: &JsonString) -> anyhow::Result<JsonValue> {
+    let source = value.as_raw();
+    let mut output = String::new();
+    let mut copied = 0;
+    let mut searched = 0;
+    for token in value.tokens() {
+        let (token, is_value) = match token {
+            JsonToken::Scalar(value) => (value, true),
+            JsonToken::Key(key) => (key, false),
+            JsonToken::ArrayStart
+            | JsonToken::ArrayEnd
+            | JsonToken::ObjectStart
+            | JsonToken::ObjectEnd => continue,
+        };
+        let start = searched
+            + source[searched..]
+                .find(token.as_raw())
+                .expect("tokens follow source order");
+        searched = start + token.as_raw().len();
+        if is_value && token.is_string() {
+            let text: JsonString = token.deserialize()?;
+            if text.contains(FROM_REQUEST_OPEN) {
+                output.push_str(&source[copied..start]);
+                output.push_str(substitute_string(&text, corpus)?.as_raw());
+                copied = searched;
             }
         }
-        Value::Object(values) => {
-            for value in values.values_mut() {
-                substitute_value(value, corpus)?;
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
     }
-    Ok(())
+    output.push_str(&source[copied..]);
+    Ok(JsonValue::parse(output)?)
 }
 
 /// Resolves request-derived placeholders in a detached scripted entry.
@@ -553,14 +663,14 @@ pub fn resolve_scripted_entry(
     entry: &ReplayEntry,
     messages: &[seekdeep_llm::Message],
 ) -> anyhow::Result<ReplayEntry> {
-    let mut value = serde_json::to_value(entry)?;
-    if !value.to_string().contains(FROM_REQUEST_OPEN) {
+    let value = JsonValue::from_serialize(entry)?;
+    if !value.as_raw().contains(FROM_REQUEST_OPEN) {
         return Ok(entry.clone());
     }
     let mut strings = Vec::new();
-    collect_strings(&serde_json::to_value(messages)?, &mut strings);
-    substitute_value(&mut value, &strings.join("\n"))?;
-    Ok(serde_json::from_value(value)?)
+    collect_strings(&JsonValue::from_serialize(messages)?, &mut strings);
+    let corpus = JsonString::join(&strings, "\n");
+    Ok(substitute_value(&value, &corpus)?.deserialize()?)
 }
 
 #[derive(Clone, Debug)]
@@ -1048,9 +1158,7 @@ mod tests {
             },
             StreamChunk::BlockEnd {
                 index: 0,
-                block: ContentBlock::Text {
-                    text: text.to_owned(),
-                },
+                block: ContentBlock::Text { text: text.into() },
             },
             StreamChunk::Usage {
                 usage: TokenUsage {
@@ -1068,12 +1176,107 @@ mod tests {
         ]
     }
 
+    #[test]
+    fn raw_tool_and_assistant_text_survive_log_parsing_and_script_resolution() {
+        let log = concat!(
+            "{\"id\":\"session\"}\n",
+            "{\"type\":\"tool/result\",\"seq\":0,\"time\":0,\"data\":{\"message\":{\"content\":[{\"type\":\"tool-result\",\"toolCallId\":\"call\",\"content\":[{\"type\":\"text\",\"text\":\"\\ud800\"}]}]}}}\n",
+            "{\"type\":\"assistant/chunk\",\"seq\":1,\"time\":0,\"data\":{\"turn\":1,\"step\":1,\"chunk\":{\"type\":\"block-end\",\"index\":0,\"block\":{\"type\":\"text\",\"text\":\"\\udfff\"}}}}\n",
+            "{\"type\":\"assistant/chunk\",\"seq\":2,\"time\":0,\"data\":{\"turn\":1,\"step\":1,\"chunk\":{\"type\":\"finish\",\"reason\":{\"kind\":\"stop\"}}}}\n",
+        );
+        let events = parse_session_log(log).unwrap();
+        assert_eq!(
+            events[0]
+                .data
+                .get("message")
+                .unwrap()
+                .get("content")
+                .unwrap()
+                .array_items()
+                .unwrap()[0]
+                .get("content")
+                .unwrap()
+                .array_items()
+                .unwrap()[0]
+                .get("text")
+                .unwrap()
+                .to_utf16()
+                .unwrap(),
+            [0xd800]
+        );
+        let script = derive_replay_script(&events).unwrap();
+        let resolved = resolve_scripted_entry(&script[0], &[]).unwrap();
+        assert_eq!(resolved, script[0]);
+        assert!(
+            serde_json::to_string(&resolved)
+                .unwrap()
+                .contains(r#""text":"\udfff""#)
+        );
+    }
+
+    #[test]
+    fn request_placeholders_capture_exact_utf16_and_keep_unrelated_keys() {
+        let entry = ReplayEntry::Chunks {
+            chunks: vec![StreamChunk::BlockEnd {
+                index: 0,
+                block: ContentBlock::text("value={{fromRequest:secret=(.)}}"),
+            }],
+        };
+        let message = Message::tool_result(
+            &seekdeep_llm::CallId::new("call"),
+            vec![ContentBlock::text_utf16(&[
+                0x73, 0x65, 0x63, 0x72, 0x65, 0x74, 0x3d, 0xd800,
+            ])],
+            false,
+        );
+        let resolved = resolve_scripted_entry(&entry, &[message]).unwrap();
+        assert!(
+            serde_json::to_string(&resolved)
+                .unwrap()
+                .contains(r#""text":"value=\ud800""#)
+        );
+        let value = JsonValue::parse(
+            r#"{"{{fromRequest:ignored}}":"{{fromRequest:secret=(.)}}","retained":"\udfff"}"#
+                .into(),
+        )
+        .unwrap();
+        let corpus = JsonString::parse(r#""secret=\ud800""#.into()).unwrap();
+        let replaced = substitute_value(&value, &corpus).unwrap();
+        assert_eq!(
+            replaced.as_raw(),
+            r#"{"{{fromRequest:ignored}}":"\ud800","retained":"\udfff"}"#
+        );
+    }
+
+    #[test]
+    #[ignore = "requires SEEKDEEP_LLM_REPLAY_SOURCE generated by the pinned TypeScript oracle"]
+    fn mounted_source_request_captures_match_exact_code_units() {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Fixture {
+            entry: ReplayEntry,
+            messages: Vec<Message>,
+            expected_json: String,
+        }
+        let path = std::env::var("SEEKDEEP_LLM_REPLAY_SOURCE").expect("source fixture path");
+        let fixtures: Vec<Fixture> =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(fixtures.len(), 3);
+        for fixture in fixtures {
+            let resolved = resolve_scripted_entry(&fixture.entry, &fixture.messages).unwrap();
+            assert_eq!(
+                serde_json::to_string(&resolved).unwrap(),
+                fixture.expected_json
+            );
+        }
+    }
+
     fn event(seq: u64, turn: u64, step: u64, chunk: &StreamChunk) -> SessionEvent {
         SessionEvent {
             event_type: "assistant/chunk".to_owned(),
             seq,
             time: 0,
-            data: json!({"turn":turn,"step":step,"chunk":chunk}),
+            data: json!({"turn":turn,"step":step,"chunk":chunk}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -1157,7 +1360,8 @@ mod tests {
                 "llmStreamCall":true,
                 "rawOutput":[{"type":"text","text":"summary"}],
                 "usage":{"inputTokens":2,"outputTokens":3}
-            }),
+            })
+            .into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

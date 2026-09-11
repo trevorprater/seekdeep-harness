@@ -8,7 +8,7 @@ use chrono::{
 use chrono_tz::Tz;
 use icu_timezone::TimeZoneIdMapper;
 use regex::{Captures, Regex};
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonValue, SessionEvent};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -243,12 +243,17 @@ fn safe_i64(value: u64) -> i64 {
 }
 
 /// Require exactly the named durable object keys.
-fn has_exact_keys(value: &serde_json::Map<String, serde_json::Value>, expected: &[&str]) -> bool {
-    value.len() == expected.len() && expected.iter().all(|key| value.contains_key(*key))
+fn has_exact_keys(value: &JsonValue, expected: &[&str]) -> bool {
+    value.object_entries().is_some_and(|entries| {
+        entries
+            .iter()
+            .all(|(key, _)| expected.iter().any(|expected| key == expected))
+            && expected.iter().all(|key| value.get(key).is_some())
+    })
 }
 
 /// Validate one stable session-local id at the durable boundary.
-fn decode_id(value: &serde_json::Value) -> Result<ScheduleId, ScheduleLogError> {
+fn decode_id(value: &JsonValue) -> Result<ScheduleId, ScheduleLogError> {
     match value.as_str() {
         Some(raw) if !raw.is_empty() && raw.trim() == raw => Ok(ScheduleId::new(raw)),
         _ => Err(schedule_log(
@@ -258,7 +263,7 @@ fn decode_id(value: &serde_json::Value) -> Result<ScheduleId, ScheduleLogError> 
 }
 
 /// Validate one canonical four-digit-year UTC instant.
-fn decode_instant(value: &serde_json::Value) -> Result<String, ScheduleLogError> {
+fn decode_instant(value: &JsonValue) -> Result<String, ScheduleLogError> {
     let raw = value
         .as_str()
         .filter(|raw| utc_instant().is_match(raw) && !raw.starts_with("0000-"))
@@ -463,9 +468,10 @@ fn resolve_local_instant(
     Ok(epoch)
 }
 
-fn decode_after_record(value: &serde_json::Value) -> Result<AfterScheduleRecord, ScheduleLogError> {
+fn decode_after_record(value: &JsonValue) -> Result<AfterScheduleRecord, ScheduleLogError> {
     let object = value
-        .as_object()
+        .is_object()
+        .then_some(value)
         .ok_or_else(|| schedule_log("schedule record must be an object"))?;
     if !has_exact_keys(
         object,
@@ -491,9 +497,10 @@ fn decode_after_record(value: &serde_json::Value) -> Result<AfterScheduleRecord,
     })
 }
 
-fn decode_at_record(value: &serde_json::Value) -> Result<AtScheduleRecord, ScheduleLogError> {
+fn decode_at_record(value: &JsonValue) -> Result<AtScheduleRecord, ScheduleLogError> {
     let object = value
-        .as_object()
+        .is_object()
+        .then_some(value)
         .ok_or_else(|| schedule_log("schedule record must be an object"))?;
     if !has_exact_keys(object, &["id", "kind", "prompt", "scheduledAt"]) {
         return Err(schedule_log(
@@ -511,9 +518,10 @@ fn decode_at_record(value: &serde_json::Value) -> Result<AtScheduleRecord, Sched
     })
 }
 
-fn decode_every_record(value: &serde_json::Value) -> Result<EveryScheduleRecord, ScheduleLogError> {
+fn decode_every_record(value: &JsonValue) -> Result<EveryScheduleRecord, ScheduleLogError> {
     let object = value
-        .as_object()
+        .is_object()
+        .then_some(value)
         .ok_or_else(|| schedule_log("schedule record must be an object"))?;
     if !has_exact_keys(
         object,
@@ -548,11 +556,12 @@ fn decode_every_record(value: &serde_json::Value) -> Result<EveryScheduleRecord,
     })
 }
 
-fn decode_schedule_record(value: &serde_json::Value) -> Result<ScheduleRecord, ScheduleLogError> {
+fn decode_schedule_record(value: &JsonValue) -> Result<ScheduleRecord, ScheduleLogError> {
     let object = value
-        .as_object()
+        .is_object()
+        .then_some(value)
         .ok_or_else(|| schedule_log("schedule record must be an object"))?;
-    match object.get("kind").and_then(serde_json::Value::as_str) {
+    match object.get_value("kind").and_then(JsonValue::as_str) {
         Some("after") => decode_after_record(value).map(ScheduleRecord::After),
         Some("at") => decode_at_record(value).map(ScheduleRecord::At),
         Some("every") => decode_every_record(value).map(ScheduleRecord::Every),
@@ -570,15 +579,20 @@ fn decode_schedule_record(value: &serde_json::Value) -> Result<ScheduleRecord, S
 pub fn decode_schedule_change(
     value: &serde_json::Value,
 ) -> Result<ScheduleChange, ScheduleLogError> {
+    decode_schedule_change_json(&value.clone().into())
+}
+
+fn decode_schedule_change_json(value: &JsonValue) -> Result<ScheduleChange, ScheduleLogError> {
     let object = value
-        .as_object()
+        .is_object()
+        .then_some(value)
         .ok_or_else(|| schedule_log("schedule/change payload must be an object"))?;
-    if object.get("version").and_then(serde_json::Value::as_u64)
+    if object.get_value("version").and_then(JsonValue::as_u64)
         != Some(u64::from(SCHEDULE_CHANGE_VERSION))
     {
         return Err(schedule_log("schedule/change version must be 1"));
     }
-    match object.get("operation").and_then(serde_json::Value::as_str) {
+    match object.get_value("operation").and_then(JsonValue::as_str) {
         Some("create") => {
             if !has_exact_keys(object, &["version", "operation", "schedule"]) {
                 return Err(schedule_log(
@@ -742,7 +756,7 @@ pub fn fold_schedule_events(
         if event.event_type != "schedule/change" {
             continue;
         }
-        let change = decode_schedule_change(&event.data)?;
+        let change = decode_schedule_change_json(&event.data)?;
         match change {
             ScheduleChange::Create(create) => {
                 let id = record_id(&create.schedule).clone();
@@ -983,7 +997,7 @@ mod tests {
             event_type: "schedule/change".to_owned(),
             seq,
             time: 1,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

@@ -146,7 +146,8 @@ fn user_event(seq: u64, time: i64, text: &str) -> SessionEvent {
             "role": "user",
             "source": {"kind": "user"},
             "content": [{"type": "text", "text": text}]
-        }),
+        })
+        .into(),
         source_event_seqs: None,
         surface_op: Some(SurfaceOp::append()),
         ignorable: None,
@@ -158,7 +159,7 @@ fn text(result: &seekdeep_tools::ToolExecutionResult) -> String {
         .content()
         .iter()
         .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -214,7 +215,9 @@ async fn registers_exact_tool_policy() {
     ] {
         let definition = harness.tools.get(name, None).expect("read definition");
         assert!(definition.timeout_ms.is_none());
-        assert!(definition.is_concurrency_safe.as_ref().unwrap()(&arguments));
+        assert!(definition.is_concurrency_safe.as_ref().unwrap()(
+            &arguments.clone().into()
+        ));
     }
 }
 
@@ -256,7 +259,7 @@ async fn searches_live_and_persisted_history() {
         .unwrap();
     caller
         .session()
-        .append(
+        .append_json(
             "user/message",
             user_event(0, 0, "live integration needle").data,
             AppendOptions {

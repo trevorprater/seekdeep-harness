@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId},
+    session::{AppendOptions, JsonValue, Session, SessionEvent, SessionHeader, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::AbortSignal;
@@ -35,13 +35,13 @@ use seekdeep_storage::{
     StorageBackend, StorageError, StorageErrorCode,
 };
 use seekdeep_storage_domain::{DomainConfig, DomainFacility};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 #[derive(Clone, Debug)]
 struct Medium {
     version: u64,
-    tables: IndexMap<String, Map<String, Value>>,
-    global: Value,
+    tables: IndexMap<String, IndexMap<String, JsonValue>>,
+    global: JsonValue,
 }
 
 #[derive(Debug, Default)]
@@ -82,7 +82,7 @@ impl MemoryPool {
             .get("sessions")?
             .get(id.as_str())
             .cloned()
-            .and_then(|value| serde_json::from_value(value).ok())
+            .and_then(|value| value.deserialize().ok())
     }
 
     fn seed(&self, id: &str, record: CheckpointRecord) {
@@ -92,14 +92,17 @@ impl MemoryPool {
             .entry("session_projcache".to_owned())
             .or_insert_with(|| Medium {
                 version: 3,
-                tables: IndexMap::from([("sessions".to_owned(), Map::new())]),
-                global: Value::Null,
+                tables: IndexMap::from([("sessions".to_owned(), IndexMap::new())]),
+                global: Value::Null.into(),
             });
         medium
             .tables
             .get_mut("sessions")
             .expect("sessions table")
-            .insert(id.to_owned(), serde_json::to_value(record).expect("record"));
+            .insert(
+                id.to_owned(),
+                JsonValue::from_serialize(&record).expect("record"),
+            );
     }
 }
 
@@ -169,9 +172,9 @@ impl KvFacet for MemoryFacet {
                         tables: descriptor
                             .tables
                             .iter()
-                            .map(|table| (table.clone(), Map::new()))
+                            .map(|table| (table.clone(), IndexMap::new()))
                             .collect(),
-                        global: Value::Null,
+                        global: Value::Null.into(),
                     },
                 );
             }
@@ -225,7 +228,7 @@ impl KvUnit for MemoryUnit {
         &self,
         table: String,
         key: String,
-        value: Value,
+        value: JsonValue,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
         let checked = self.check();
         let pool = self.pool.clone();
@@ -262,13 +265,13 @@ impl KvUnit for MemoryUnit {
                 .tables
                 .get_mut(&table)
                 .expect("table")
-                .remove(&key);
+                .shift_remove(&key);
             Ok(())
         }
         .boxed()
     }
 
-    fn set_global(&self, value: Value) -> BoxFuture<'static, anyhow::Result<()>> {
+    fn set_global(&self, value: JsonValue) -> BoxFuture<'static, anyhow::Result<()>> {
         let checked = self.check();
         let pool = self.pool.clone();
         let name = self.descriptor.name.clone();
@@ -466,10 +469,10 @@ impl Harness {
 }
 
 fn marks_projection(state_version: u64) -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::new_json(
         "cache-test/marks",
         state_version,
-        || Ok(Value::Null),
+        || Ok(Value::Null.into()),
         |state, event| {
             if event.event_type == "cache-test/mark" {
                 Ok(ProjectionTransition::Changed(event.data.clone()))
@@ -480,7 +483,7 @@ fn marks_projection(state_version: u64) -> ProjectionDefinition {
         },
         |state| {
             Ok(if state.is_null() {
-                json!({"marks": []})
+                json!({"marks": []}).into()
             } else {
                 state.clone()
             })
@@ -537,7 +540,7 @@ fn stored_log(marks: &[&[&str]]) -> Vec<SessionEvent> {
         event_type: "turn/start".to_owned(),
         seq: 0,
         time: 0,
-        data: json!({"turn": 1}),
+        data: json!({"turn": 1}).into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,
@@ -548,7 +551,7 @@ fn stored_log(marks: &[&[&str]]) -> Vec<SessionEvent> {
             event_type: "cache-test/mark".to_owned(),
             seq,
             time: i64::try_from(seq).expect("time"),
-            data: json!({"marks": values}),
+            data: json!({"marks": values}).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -559,7 +562,7 @@ fn stored_log(marks: &[&[&str]]) -> Vec<SessionEvent> {
         event_type: "turn/end".to_owned(),
         seq,
         time: i64::try_from(seq).expect("time"),
-        data: json!({"turn": 1, "reason": {"kind": "completed"}}),
+        data: json!({"turn": 1, "reason": {"kind": "completed"}}).into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,
@@ -584,7 +587,7 @@ fn seed_record(
                 seekdeep_session_projection::ProjectionCheckpointRow {
                     ver: version,
                     seq,
-                    val: value,
+                    val: value.into(),
                 },
             )]),
         },
@@ -655,7 +658,7 @@ async fn mandatory_count_and_direct_writes_land_exact_checkpoint_cuts() -> anyho
         Some(seekdeep_session_projection::ProjectionCheckpointRow {
             ver: 1,
             seq: i64::try_from(end.seq).expect("seq"),
-            val: json!({"marks": ["a"]}),
+            val: json!({"marks": ["a"]}).into(),
         })
     );
 
@@ -678,10 +681,54 @@ async fn mandatory_count_and_direct_writes_land_exact_checkpoint_cuts() -> anyho
         Some(seekdeep_session_projection::ProjectionCheckpointRow {
             ver: 1,
             seq: -1,
-            val: Value::Null,
+            val: Value::Null.into(),
         })
     );
     harness.dispose().await
+}
+
+#[tokio::test]
+async fn raw_projection_cache_survives_schema_validation_and_backend_reopen() -> anyhow::Result<()>
+{
+    let pool = Arc::new(MemoryPool::default());
+    let persistence = Arc::new(FakePersistence::default());
+    let config = Config {
+        write_every_events: 100,
+        write_interval_ms: 60_000,
+    };
+    let harness = Harness::new(pool.clone(), persistence.clone(), config.clone(), Some(1)).await?;
+    let live = session(&harness, "raw-cache");
+    let raw = r#"{"marks":["\ud800","\udfff"],"opaque":{"\ud800":[1.2500,9007199254740993]}}"#;
+    live.append_json(
+        "cache-test/mark",
+        JsonValue::parse(raw.to_owned())?,
+        AppendOptions {
+            ignorable: true,
+            ..AppendOptions::default()
+        },
+    )?;
+    let header = live.header().clone();
+    persistence.logs.lock().insert(
+        live.id().as_str().to_owned(),
+        SessionInspection {
+            meta: header.clone(),
+            events: live.events().to_vec(),
+        },
+    );
+    harness.cache.write(&live).await?;
+    assert_eq!(row(&pool, live.id()).unwrap().val.as_raw(), raw);
+    harness.dispose().await?;
+    let reopened = Harness::new(pool.clone(), persistence, config, Some(1)).await?;
+    assert_eq!(
+        reopened.cache.cached_snapshot(&header).unwrap().values["cache-test/marks"].as_raw(),
+        raw
+    );
+    assert_eq!(
+        reopened.cache.cold_snapshot(&header.id, None).await?.values["cache-test/marks"].as_raw(),
+        raw
+    );
+    assert_eq!(row(&pool, &header.id).unwrap().val.as_raw(), raw);
+    reopened.dispose().await
 }
 
 #[tokio::test(start_paused = true)]
@@ -931,7 +978,10 @@ async fn cached_snapshot_filters_versions_and_identity_and_zero_units_preserve_n
         harness.cache.cached_snapshot(&matching),
         Some(seekdeep_session_projection::ProjectionSnapshot {
             as_of_seq: 4,
-            values: IndexMap::from([("cache-test/marks".to_owned(), json!({"marks": ["t"]}),)]),
+            values: IndexMap::from([(
+                "cache-test/marks".to_owned(),
+                json!({"marks": ["t"]}).into(),
+            )]),
         })
     );
     matching.cwd = Some("/elsewhere".to_owned());

@@ -16,7 +16,11 @@ mod tests {
         function: impl Fn(Value) -> anyhow::Result<Value> + Send + Sync + 'static,
     ) -> CodeBindingFunction {
         Arc::new(move |argument| {
-            let result = function(argument);
+            let result = argument
+                .try_into_serde_json()
+                .map_err(anyhow::Error::from)
+                .and_then(&function)
+                .map(Into::into);
             Box::pin(async move { result })
         })
     }
@@ -24,10 +28,13 @@ mod tests {
     fn tools(functions: IndexMap<String, CodeBindingFunction>) -> Vec<CodeBindingNamespace> {
         vec![CodeBindingNamespace {
             global: "tools".to_owned(),
-            functions,
+            functions: functions
+                .into_iter()
+                .map(|(name, function)| (name.into(), function))
+                .collect(),
             error_class: Some(CodeBindingErrorClass {
                 name: "ToolCallError".to_owned(),
-                member_name_property: "toolName".to_owned(),
+                member_name_property: "toolName".into(),
             }),
         }]
     }
@@ -290,9 +297,10 @@ mod tests {
         )
         .await
         .unwrap();
-        let EngineCompletion::Success(Some(mut value)) = outcome.completion else {
+        let EngineCompletion::Success(Some(value)) = outcome.completion else {
             panic!("deep binding did not complete")
         };
+        let mut value = value.try_into_serde_json().unwrap();
         assert_eq!(
             value["collisions"],
             json!(["proto-ok", "ctor-ok", "undefined"])
@@ -368,7 +376,7 @@ mod tests {
         let slow: CodeBindingFunction = Arc::new(|_| {
             Box::pin(async {
                 tokio::time::sleep(Duration::from_millis(250)).await;
-                Ok(json!("slow-done"))
+                Ok(json!("slow-done").into())
             })
         });
         let waited = evaluate_program(

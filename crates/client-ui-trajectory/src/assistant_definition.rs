@@ -10,7 +10,9 @@ use seekdeep_client_runtime::{
 };
 use seekdeep_failure_display::display_failure_message;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use indexmap::IndexMap as Map;
+use seekdeep_lossless_json::JsonValue as Value;
+use crate::json_value::{json, null};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node_at};
 
@@ -165,29 +167,29 @@ fn trajectory_turn_end_definition() -> AssemblerNodeDefinition {
                     "trajectory-turn-end start requires turn/end",
                 ));
             }
-            let reason = accepted.event.data.get("reason").unwrap_or(&Value::Null);
+            let reason = accepted.event.data.get_value("reason").unwrap_or(null());
             let mut state = Map::from_iter([
                 (
                     "turn".to_owned(),
                     accepted
                         .event
                         .data
-                        .get("turn")
+                        .get_value("turn")
                         .cloned()
-                        .unwrap_or(Value::Null),
+                        .unwrap_or(null().clone()),
                 ),
                 ("seq".to_owned(), json!(accepted.event.seq)),
                 ("time".to_owned(), json!(accepted.event.time)),
             ]);
-            if reason.get("kind").and_then(Value::as_str) == Some("error") {
+            if reason.get_value("kind").and_then(Value::as_str) == Some("error") {
                 state.insert(
                     "error".to_owned(),
                     json!(display_failure_message(
-                        reason.get("error").unwrap_or(&Value::Null)
+                        reason.get_value("error").unwrap_or(null())
                     )),
                 );
             }
-            Ok(Some(Rc::new(Value::Object(state))))
+            Ok(Some(Rc::new(Value::object(state))))
         }),
         update: Rc::new(|context, _accepted| Ok(context.state.clone())),
         publication: None,
@@ -201,18 +203,18 @@ fn trajectory_turn_end_definition() -> AssemblerNodeDefinition {
                 ("kind".to_owned(), json!("turn-end")),
                 (
                     "turn".to_owned(),
-                    state.get("turn").cloned().unwrap_or(Value::Null),
+                    state.get_value("turn").cloned().unwrap_or(null().clone()),
                 ),
                 (
                     "time".to_owned(),
-                    state.get("time").cloned().unwrap_or(Value::Null),
+                    state.get_value("time").cloned().unwrap_or(null().clone()),
                 ),
             ]);
             copy_present(&mut data, state, "error");
             Ok(Some(trajectory_node_at(
                 context,
                 u64_as_f64(seq),
-                Value::Object(data),
+                Value::object(data),
             )))
         })),
     }
@@ -263,9 +265,9 @@ fn update_assistant(
                 state.usage = accepted
                     .event
                     .data
-                    .get("usage")
+                    .get_value("usage")
                     .cloned()
-                    .map(serde_json::from_value)
+                    .map(crate::json_value::decode)
                     .transpose()
                     .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
             }
@@ -285,16 +287,16 @@ fn update_chunk(
     let chunk = accepted
         .event
         .data
-        .get("chunk")
+        .get_value("chunk")
         .ok_or_else(|| ConversationAssemblerError::new("assistant/chunk omitted chunk"))?;
     let chunk_type = chunk
-        .get("type")
+        .get_value("type")
         .and_then(Value::as_str)
         .unwrap_or_default();
     if chunk_type == "usage" {
-        let next: UsageValue = serde_json::from_value(
+        let next: UsageValue = crate::json_value::decode(
             chunk
-                .get("usage")
+                .get_value("usage")
                 .cloned()
                 .ok_or_else(|| ConversationAssemblerError::new("usage chunk omitted usage"))?,
         )
@@ -304,7 +306,7 @@ fn update_chunk(
         return Ok(());
     }
     let index = chunk
-        .get("index")
+        .get_value("index")
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok());
     match chunk_type {
@@ -315,7 +317,7 @@ fn update_chunk(
                     .ok_or_else(|| ConversationAssemblerError::new("block-start omitted index"))?,
                 assistant_block_value(&empty_assistant_block(
                     chunk
-                        .get("blockType")
+                        .get_value("blockType")
                         .and_then(Value::as_str)
                         .unwrap_or_default(),
                 )),
@@ -329,9 +331,9 @@ fn update_chunk(
                 .get(index)
                 .and_then(Option::as_ref)
                 .and_then(|block| {
-                    (block.get("kind").and_then(Value::as_str) == Some("text")).then(|| {
+                    (block.get_value("kind").and_then(Value::as_str) == Some("text")).then(|| {
                         block
-                            .get("text")
+                            .get_value("text")
                             .and_then(Value::as_str)
                             .unwrap_or_default()
                     })
@@ -341,7 +343,7 @@ fn update_chunk(
             set_block(
                 &mut state.blocks,
                 index,
-                json!({"kind": "text", "text": format!("{prefix}{}", chunk.get("text").and_then(Value::as_str).unwrap_or_default())}),
+                json!({"kind": "text", "text": format!("{prefix}{}", chunk.get_value("text").and_then(Value::as_str).unwrap_or_default())}),
             );
         }
         "reasoning-delta" => {
@@ -352,9 +354,9 @@ fn update_chunk(
                 .get(index)
                 .and_then(Option::as_ref)
                 .and_then(|block| {
-                    (block.get("kind").and_then(Value::as_str) == Some("reasoning")).then(|| {
+                    (block.get_value("kind").and_then(Value::as_str) == Some("reasoning")).then(|| {
                         block
-                            .get("text")
+                            .get_value("text")
                             .and_then(Value::as_str)
                             .unwrap_or_default()
                     })
@@ -364,14 +366,14 @@ fn update_chunk(
             set_block(
                 &mut state.blocks,
                 index,
-                json!({"kind": "reasoning", "text": format!("{prefix}{}", chunk.get("text").and_then(Value::as_str).unwrap_or_default())}),
+                json!({"kind": "reasoning", "text": format!("{prefix}{}", chunk.get_value("text").and_then(Value::as_str).unwrap_or_default())}),
             );
         }
         "tool-call-delta" => update_tool_delta(state, chunk, index)?,
         "block-end" => {
             let index =
                 index.ok_or_else(|| ConversationAssemblerError::new("block-end omitted index"))?;
-            let block = chunk.get("block").cloned().unwrap_or(Value::Null);
+            let block = chunk.get_value("block").cloned().unwrap_or(null().clone());
             set_block(
                 &mut state.blocks,
                 index,
@@ -404,39 +406,39 @@ fn update_tool_delta(
         index.ok_or_else(|| ConversationAssemblerError::new("tool-call-delta omitted index"))?;
     let previous = state.blocks.get(index).and_then(Option::as_ref);
     let is_tool = previous
-        .and_then(|block| block.get("kind"))
+        .and_then(|block| block.get_value("kind"))
         .and_then(Value::as_str)
         == Some("tool-call");
     let prior = is_tool.then_some(previous).flatten();
     let prior_id = prior
-        .and_then(|block| block.get("callId"))
+        .and_then(|block| block.get_value("callId"))
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
     let call_id = if prior_id.is_empty() {
         chunk
-            .get("id")
+            .get_value("id")
             .map_or_else(|| "undefined".to_owned(), js_string)
     } else {
         prior_id
     };
     let name = chunk
-        .get("name")
+        .get_value("name")
         .and_then(Value::as_str)
         .or_else(|| {
             prior
-                .and_then(|block| block.get("name"))
+                .and_then(|block| block.get_value("name"))
                 .and_then(Value::as_str)
         })
         .unwrap_or_default()
         .to_owned();
     let args = prior
-        .and_then(|block| block.get("argsRaw"))
+        .and_then(|block| block.get_value("argsRaw"))
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned();
     let delta = chunk
-        .get("argumentsDelta")
+        .get_value("argumentsDelta")
         .and_then(Value::as_str)
         .unwrap_or_default();
     set_block(
@@ -466,10 +468,10 @@ fn retry_state(
     state.first_token_time = previous.first_token_time;
     state.usage.clone_from(&previous.usage);
     state.retry = Some(RetryValue {
-        message: display_failure_message(data.get("failure").unwrap_or(&Value::Null)),
+        message: display_failure_message(data.get_value("failure").unwrap_or(null())),
         retry: required_u64(data, "retry")?,
-        max_retries: (data.get("mode").and_then(Value::as_str) == Some("normal"))
-            .then(|| data.get("maxRetries").and_then(Value::as_u64))
+        max_retries: (data.get_value("mode").and_then(Value::as_str) == Some("normal"))
+            .then(|| data.get_value("maxRetries").and_then(Value::as_u64))
             .flatten(),
         delay_ms: required_number(data, "delayMs")?,
     });
@@ -486,8 +488,8 @@ fn assistant_publication(accepted: &ConversationMatch) -> ConversationPublicatio
     let chunk_type = accepted
         .event
         .data
-        .get("chunk")
-        .and_then(|chunk| chunk.get("type"))
+        .get_value("chunk")
+        .and_then(|chunk| chunk.get_value("type"))
         .and_then(Value::as_str);
     if matches!(chunk_type, Some("usage" | "finish")) {
         ConversationPublication::None
@@ -523,7 +525,7 @@ fn build_assistant_view_node(
     }
     let mut data = Map::from_iter([
         ("kind".to_owned(), json!("assistant")),
-        ("partial".to_owned(), partial.unwrap_or(Value::Null)),
+        ("partial".to_owned(), partial.unwrap_or(null().clone())),
     ]);
     if let Some(node) = node {
         data.insert("node".to_owned(), node);
@@ -534,7 +536,7 @@ fn build_assistant_view_node(
     Ok(Some(trajectory_node_at(
         context,
         u64_as_f64(state.start_seq),
-        Value::Object(data),
+        Value::object(data),
     )))
 }
 
@@ -573,9 +575,9 @@ fn fallback_state(
                 if current.usage.is_none() {
                     current.usage = event
                         .data
-                        .get("usage")
+                        .get_value("usage")
                         .cloned()
-                        .map(serde_json::from_value)
+                        .map(crate::json_value::decode)
                         .transpose()
                         .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
                 }
@@ -598,27 +600,27 @@ fn final_node(
         .as_ref()
         .filter(|event| event.event_type == "assistant/message")
     {
-        let message = final_event.data.get("message").unwrap_or(&Value::Null);
-        let source = message.get("source").unwrap_or(&Value::Null);
+        let message = final_event.data.get_value("message").unwrap_or(null());
+        let source = message.get_value("source").unwrap_or(null());
         let mut node = Map::from_iter([
             ("kind".to_owned(), json!("assistant")),
             ("seq".to_owned(), json!(final_event.seq)),
             (
                 "messageId".to_owned(),
-                message.get("id").cloned().unwrap_or(Value::Null),
+                message.get_value("id").cloned().unwrap_or(null().clone()),
             ),
             ("time".to_owned(), json!(final_event.time)),
             ("turn".to_owned(), json!(state.turn)),
             ("step".to_owned(), json!(state.step)),
             (
                 "blocks".to_owned(),
-                Value::Array(message_blocks(&final_event.data)?),
+                Value::array(&message_blocks(&final_event.data)?),
             ),
             (
                 "provenance".to_owned(),
                 json!({
-                    "provider": source.get("provider").cloned().unwrap_or(Value::Null),
-                    "model": source.get("model").cloned().unwrap_or(Value::Null),
+                    "provider": source.get_value("provider").cloned().unwrap_or(null().clone()),
+                    "model": source.get_value("model").cloned().unwrap_or(null().clone()),
                 }),
             ),
             (
@@ -631,7 +633,7 @@ fn final_node(
             ),
         ]);
         copy_present(&mut node, &final_event.data, "usage");
-        return Ok(Some(Value::Object(node)));
+        return Ok(Some(Value::object(node)));
     }
     let boundary = closed_boundary(state, context);
     let blocks = compact_blocks(&state.blocks);
@@ -658,7 +660,7 @@ fn assistant_request(
         return None;
     }
     let interrupted = node
-        .and_then(|node| node.get("interrupted"))
+        .and_then(|node| node.get_value("interrupted"))
         .and_then(Value::as_bool)
         == Some(true);
     let status = if node.is_some() && !interrupted {
@@ -669,10 +671,10 @@ fn assistant_request(
         "running"
     };
     let completed_at = node
-        .and_then(|node| node.get("time"))
+        .and_then(|node| node.get_value("time"))
         .cloned()
         .or_else(|| boundary.map(|(_, time)| json!(time)))
-        .unwrap_or(Value::Null);
+        .unwrap_or(null().clone());
     let mut request = Map::from_iter([
         ("purpose".to_owned(), json!("assistant")),
         ("startSeq".to_owned(), json!(state.start_seq)),
@@ -691,15 +693,15 @@ fn assistant_request(
         request.insert("retryDelayMs".to_owned(), json!(retry.delay_ms));
     }
     if let Some(node) = node.filter(|_| !interrupted) {
-        if let Some(seq) = node.get("seq") {
+        if let Some(seq) = node.get_value("seq") {
             request.insert("resultSeq".to_owned(), seq.clone());
         }
         copy_present(&mut request, node, "provenance");
     }
     if let Some(usage) = &state.usage {
-        request.insert("usage".to_owned(), serde_json::to_value(usage).ok()?);
+        request.insert("usage".to_owned(), Value::from_serialize(usage).ok()?);
     }
-    Some(Value::Object(request))
+    Some(Value::object(request))
 }
 
 fn closed_boundary(
@@ -737,8 +739,8 @@ fn closed_boundary(
 
 fn message_blocks(data: &Value) -> Result<Vec<Value>, ConversationAssemblerError> {
     let content = data
-        .get("message")
-        .and_then(|message| message.get("content"))
+        .get_value("message")
+        .and_then(|message| message.get_value("content"))
         .and_then(Value::as_array)
         .ok_or_else(|| ConversationAssemblerError::new("assistant/message omitted content"))?;
     Ok(content
@@ -775,10 +777,10 @@ fn compact_blocks(blocks: &[Option<Value>]) -> Vec<Value> {
 fn has_visible_content(blocks: &[Value]) -> bool {
     blocks
         .iter()
-        .any(|block| match block.get("kind").and_then(Value::as_str) {
+        .any(|block| match block.get_value("kind").and_then(Value::as_str) {
             Some("tool-call") => false,
             Some("text" | "reasoning") => block
-                .get("text")
+                .get_value("text")
                 .and_then(Value::as_str)
                 .is_some_and(|text| !text.trim().is_empty()),
             _ => true,
@@ -788,9 +790,9 @@ fn has_visible_content(blocks: &[Value]) -> bool {
 fn has_interruption_evidence(blocks: &[Value]) -> bool {
     blocks
         .iter()
-        .any(|block| match block.get("kind").and_then(Value::as_str) {
+        .any(|block| match block.get_value("kind").and_then(Value::as_str) {
             Some("text" | "reasoning") => block
-                .get("text")
+                .get_value("text")
                 .and_then(Value::as_str)
                 .is_some_and(|text| !text.trim().is_empty()),
             _ => true,
@@ -798,15 +800,15 @@ fn has_interruption_evidence(blocks: &[Value]) -> bool {
 }
 
 fn is_token_delta(chunk: &Value) -> bool {
-    match chunk.get("type").and_then(Value::as_str) {
+    match chunk.get_value("type").and_then(Value::as_str) {
         Some("text-delta" | "reasoning-delta") => chunk
-            .get("text")
+            .get_value("text")
             .and_then(Value::as_str)
             .is_some_and(|text| !text.is_empty()),
         Some("tool-call-delta") => {
-            chunk.get("name").is_some_and(|name| !name.is_null())
+            chunk.get_value("name").is_some_and(|name| !name.is_null())
                 || chunk
-                    .get("argumentsDelta")
+                    .get_value("argumentsDelta")
                     .and_then(Value::as_str)
                     .is_some_and(|delta| !delta.is_empty())
         }
@@ -880,22 +882,22 @@ fn js_member_string(value: &Value, key: &str) -> String {
 fn js_string(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
-        Value::Null => "null".to_owned(),
+        null().clone() => "null".to_owned(),
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => value.to_string(),
-        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
+        Value::object(_) => "[object Object]".to_owned(),
     }
 }
 
 fn encode(state: &AssistantState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(state)
+    Value::from_serialize(state)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode(value: &Value) -> Result<AssistantState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value.deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

@@ -214,7 +214,7 @@ impl ChildRegistry {
                 SubagentStartRequest {
                     label: None,
                     prompt: vec![ContentBlock::Text {
-                        text: request.prompt,
+                        text: request.prompt.into(),
                     }],
                     parent: self.parent.clone(),
                     signal: self.signal.clone(),

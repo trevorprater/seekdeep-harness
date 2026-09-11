@@ -1,11 +1,16 @@
 //! Pure replay-safe render intents for Cordis tools.
 
+use seekdeep_lossless_json::{JsonString, JsonValue};
 use seekdeep_tools::{GenericCallView, ToolCallKind, ToolCallView};
 use serde_json::{Value, json};
 
-fn generic(title: String, kind: ToolCallKind, raw_input: Option<Value>) -> ToolCallView {
+fn generic(
+    title: impl Into<JsonString>,
+    kind: ToolCallKind,
+    raw_input: Option<JsonValue>,
+) -> ToolCallView {
     ToolCallView::Generic(GenericCallView {
-        title,
+        title: title.into(),
         kind: Some(kind),
         raw_input,
         content: None,
@@ -50,9 +55,24 @@ pub fn inspect_self_call(plugin_id: Option<&str>, package_id: Option<&str>) -> T
 
 /// Presents an immutable package definition.
 #[must_use]
-pub fn define_call(target: &str, name: &str, purpose: &str, code: &Value) -> ToolCallView {
+pub fn define_call(
+    target: impl Into<JsonString>,
+    name: impl Into<JsonString>,
+    purpose: impl Into<JsonString>,
+    code: &JsonValue,
+) -> ToolCallView {
+    let target = target.into();
+    let name = name.into();
+    let purpose = purpose.into();
     generic(
-        format!("Register Cordis Plugin \"{name}\" for {target}: {purpose}"),
+        JsonString::concat(&[
+            &"Register Cordis Plugin \"".into(),
+            &name,
+            &"\" for ".into(),
+            &target,
+            &": ".into(),
+            &purpose,
+        ]),
         ToolCallKind::Execute,
         Some(code.clone()),
     )

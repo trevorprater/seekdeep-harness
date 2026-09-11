@@ -474,29 +474,24 @@ fn cap_meta(mut meta: SearchMeta, max: usize) -> SearchMeta {
     meta
 }
 
-fn search_view(meta: Option<&Value>) -> Option<SearchResultView> {
-    let meta: SearchMeta = serde_json::from_value(meta?.clone()).ok()?;
-    Some(match meta {
-        SearchMeta::Matches {
-            files,
-            truncated,
-            total,
-        } => SearchResultView::Matches(SearchMatchesResultView {
+fn search_view(result: &ToolResult) -> Option<SearchResultView> {
+    let meta = result.meta.as_ref()?;
+    let truncated = meta.get("truncated")?.as_bool()?;
+    let total = meta.get("total")?.deserialize().ok()?;
+    Some(match meta["shape"].as_str()? {
+        "matches" => SearchResultView::Matches(SearchMatchesResultView {
             title: None,
-            files,
+            files: meta.get("files")?.deserialize().ok()?,
             truncated,
             total,
         }),
-        SearchMeta::Paths {
-            paths,
-            truncated,
-            total,
-        } => SearchResultView::Paths(SearchPathsResultView {
+        "paths" => SearchResultView::Paths(SearchPathsResultView {
             title: None,
-            paths,
+            paths: meta.get("paths")?.deserialize().ok()?,
             truncated,
             total,
         }),
+        _ => return None,
     })
 }
 
@@ -894,7 +889,7 @@ async fn save_spill(
                 label: "result".into(),
             },
             suggested_name: name.into(),
-            content: body,
+            content: body.into(),
         })
         .await
         .ok()
@@ -994,7 +989,7 @@ fn install_post_handler(
                     _ => Vec::new(),
                 };
                 let decision = replacement.map_or(decision, |text| PostToolDecision::Accept {
-                    content: Some(vec![ContentBlock::Text { text }]),
+                    content: Some(vec![ContentBlock::text(text)]),
                     additional_contexts,
                 });
                 Ok(EventReply::Value(Arc::new(decision)))
@@ -1066,7 +1061,7 @@ fn register_glob(
 ) -> anyhow::Result<()> {
     let output = DefineToolOutput::new(
         json!({"type":"object","additionalProperties":false,"properties":{"root":{"type":"string","required":true},"paths":{"type":"array","required":true,"items":{"type":"string"}}}}),
-        Arc::new(move |_args: &GlobInput, value: &GlobValue| Ok(vec![ContentBlock::Text { text: format_glob(&value.paths, &value.root, caps, None) }])),
+        Arc::new(move |_args: &GlobInput, value: &GlobValue| Ok(vec![ContentBlock::Text { text: format_glob(&value.paths, &value.root, caps, None).into() }])),
     ).presentation_meta(Arc::new(move |_args, value| {
         let paths = if value.paths.len() <= caps.glob_max { value.paths.clone() } else if caps.sample { sample_across_top_level(&value.paths, caps.glob_max, &value.root).0 } else { value.paths[..caps.glob_max].to_vec() };
         Ok(serde_json::to_value(cap_meta(SearchMeta::Paths { paths, truncated: value.paths.len() > caps.glob_max, total: value.paths.len() as u64 }, caps.meta_max))?)
@@ -1110,9 +1105,10 @@ fn register_glob(
                 args.path
                     .as_ref()
                     .map_or(String::new(), |path| format!(" in {path}"))
-            ),
+            )
+            .into(),
             kind: Some(ToolCallKind::Search),
-            raw_input: Some(json!(args.pattern)),
+            raw_input: Some(json!(args.pattern).into()),
             content: None,
             locations: None,
         }))
@@ -1121,7 +1117,7 @@ fn register_glob(
         if result.is_error {
             None
         } else {
-            search_view(result.meta.as_ref())
+            search_view(result)
                 .map(ToolResultView::Search)
                 .filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Paths(_))))
         }
@@ -1141,7 +1137,7 @@ fn register_grep(
 ) -> anyhow::Result<()> {
     let output = DefineToolOutput::new(
         json!({"type":"object","additionalProperties":false,"properties":{"matches":{"type":"array","required":true,"items":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string","required":true},"lineNumber":{"type":"integer","required":true},"line":{"type":"string","required":true}}}}}}),
-        Arc::new(move |_args: &GrepInput, value: &GrepValue| Ok(vec![ContentBlock::Text { text: format_grep(&value.matches, caps, None) }])),
+        Arc::new(move |_args: &GrepInput, value: &GrepValue| Ok(vec![ContentBlock::Text { text: format_grep(&value.matches, caps, None).into() }])),
     ).presentation_meta(Arc::new(move |_args, value| {
         let retained = retained_matches(&value.matches, caps.grep_max, caps.line_max);
         Ok(serde_json::to_value(cap_meta(SearchMeta::Matches { files: group_matches(&retained), truncated: value.matches.len() > caps.grep_max, total: value.matches.len() as u64 }, caps.meta_max))?)
@@ -1186,9 +1182,10 @@ fn register_grep(
                 args.include
                     .as_ref()
                     .map_or(String::new(), |include| format!(" ({include})"))
-            ),
+            )
+            .into(),
             kind: Some(ToolCallKind::Search),
-            raw_input: Some(json!(args.pattern)),
+            raw_input: Some(json!(args.pattern).into()),
             content: None,
             locations: None,
         }))
@@ -1197,7 +1194,7 @@ fn register_grep(
         if result.is_error {
             None
         } else {
-            search_view(result.meta.as_ref())
+            search_view(result)
                 .map(ToolResultView::Search)
                 .filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Matches(_))))
         }

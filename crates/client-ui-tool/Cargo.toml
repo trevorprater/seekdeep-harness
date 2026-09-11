@@ -11,6 +11,7 @@ description = "Rust/WASM semantic models for tool-call cards"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+seekdeep-lossless-json = { path = "../lossless-json" }
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

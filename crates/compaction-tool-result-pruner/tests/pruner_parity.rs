@@ -50,13 +50,13 @@ fn measures_only_text_blocks() {
     let pruner = default_pruner();
     let blocks = vec![
         ContentBlock::Text {
-            text: "abcd".to_owned(),
+            text: "abcd".into(),
         },
         ContentBlock::Reasoning {
             text: "ignored".to_owned(),
         },
         ContentBlock::Text {
-            text: "ef".to_owned(),
+            text: "ef".into(),
         },
     ];
     assert_eq!(pruner.measure_content(&blocks), 6);
@@ -67,7 +67,7 @@ fn prunes_an_over_budget_text_middle() {
     let pruner = default_pruner();
     let text = "a".repeat(9_000);
     let pruned_blocks = pruner
-        .prune_content(&[ContentBlock::Text { text }])
+        .prune_content(&[ContentBlock::text(text)])
         .expect("over-budget must prune");
     let ContentBlock::Text { text } = &pruned_blocks[0] else {
         panic!("expected a text block");
@@ -85,7 +85,7 @@ fn prunes_an_over_budget_text_middle() {
 fn leaves_within_budget_content_untouched() {
     let pruner = default_pruner();
     let blocks = [ContentBlock::Text {
-        text: "short".to_owned(),
+        text: "short".into(),
     }];
     assert!(pruner.prune_content(&blocks).is_none());
 }
@@ -110,15 +110,15 @@ fn preserves_rich_block_order_and_supports_zero_head_and_tail() {
     let result = pruner
         .prune_content(&[
             ContentBlock::Text {
-                text: "A".repeat(40),
+                text: "A".repeat(40).into(),
             },
             reasoning.clone(),
             ContentBlock::Text {
-                text: "B".repeat(30),
+                text: "B".repeat(30).into(),
             },
             call.clone(),
             ContentBlock::Text {
-                text: "C".repeat(30),
+                text: "C".repeat(30).into(),
             },
         ])
         .expect("pruned");
@@ -126,12 +126,12 @@ fn preserves_rich_block_order_and_supports_zero_head_and_tail() {
         result,
         [
             ContentBlock::Text {
-                text: format!("AAAA{PRUNE_MARKER}"),
+                text: format!("AAAA{PRUNE_MARKER}").into(),
             },
             reasoning,
             call,
             ContentBlock::Text {
-                text: "CCC".to_owned(),
+                text: "CCC".into(),
             },
         ]
     );
@@ -148,10 +148,10 @@ fn preserves_rich_block_order_and_supports_zero_head_and_tail() {
     .expect("marker-only pruner");
     assert_eq!(
         marker_only.prune_content(&[ContentBlock::Text {
-            text: "x".repeat(100),
+            text: "x".repeat(100).into(),
         }]),
         Some(vec![ContentBlock::Text {
-            text: PRUNE_MARKER.to_owned(),
+            text: PRUNE_MARKER.into(),
         }])
     );
 }
@@ -265,7 +265,7 @@ fn session_prune_preserves_data_prices_and_cites_the_replaced_result() {
         1,
         "one",
         vec![ContentBlock::Text {
-            text: "x".repeat(100),
+            text: "x".repeat(100).into(),
         }],
         &json!({
             "isError": true,
@@ -344,7 +344,7 @@ fn session_prune_uses_stable_surface_order_and_skips_short_results() {
         1,
         "a",
         vec![ContentBlock::Text {
-            text: "A".repeat(100),
+            text: "A".repeat(100).into(),
         }],
         &json!({}),
     );
@@ -353,7 +353,7 @@ fn session_prune_uses_stable_surface_order_and_skips_short_results() {
         2,
         "b",
         vec![ContentBlock::Text {
-            text: "short".to_owned(),
+            text: "short".into(),
         }],
         &json!({}),
     );
@@ -362,7 +362,7 @@ fn session_prune_uses_stable_surface_order_and_skips_short_results() {
         3,
         "c",
         vec![ContentBlock::Text {
-            text: "C".repeat(80),
+            text: "C".repeat(80).into(),
         }],
         &json!({}),
     );

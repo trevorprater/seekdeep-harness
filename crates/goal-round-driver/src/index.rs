@@ -582,7 +582,11 @@ impl Driver {
                     "user/message" => {
                         let mut guard = state.lock();
                         if let Some(attempt) = &mut guard.attempt
-                            && event.data.get("id").and_then(Value::as_str)
+                            && event
+                                .data
+                                .get("id")
+                                .and_then(|id| id.deserialize::<String>().ok())
+                                .as_deref()
                                 == Some(attempt.message_id.as_str())
                         {
                             attempt.phase = AttemptPhase::Admitted;
@@ -593,12 +597,12 @@ impl Driver {
                             .data
                             .get("reason")
                             .and_then(|reason| reason.get("kind"))
-                            .and_then(Value::as_str);
-                        if reason_kind == Some("max-tokens") {
+                            .and_then(|kind| kind.deserialize::<String>().ok());
+                        if reason_kind.as_deref() == Some("max-tokens") {
                             session_driver.disarm(&state.lock());
                             return Ok(EventReply::Undefined);
                         }
-                        if reason_kind != Some("aborted") {
+                        if reason_kind.as_deref() != Some("aborted") {
                             return Ok(EventReply::Undefined);
                         }
                         let mut guard = state.lock();

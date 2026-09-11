@@ -11,7 +11,8 @@ use seekdeep_permission_presets::{CUSTOM_PRESET, PermissionSelect};
 use seekdeep_sandbox::SandboxMode;
 use seekdeep_sandbox_policy::set_sandbox_mode;
 use seekdeep_session_projection::SESSION_PROJECTIONS;
-use serde_json::{Value, json};
+use seekdeep_core::session::JsonValue;
+use serde_json::json;
 
 use support::{MountOptions, agent, base, create_session, default_config, mount, mount_permission};
 
@@ -20,16 +21,14 @@ fn permission_value(
     session: &Arc<seekdeep_core::session::Session>,
 ) -> PermissionSelect {
     let projections = harness.context.get(SESSION_PROJECTIONS).unwrap();
-    serde_json::from_value(
-        projections
+    projections
             .snapshot(session)
             .unwrap()
             .values
             .get("permissions")
-            .cloned()
-            .expect("permissions projection"),
-    )
-    .unwrap()
+            .expect("permissions projection")
+            .deserialize()
+            .unwrap()
 }
 
 #[tokio::test]
@@ -55,7 +54,7 @@ async fn projection_serves_defaults_tracks_knob_changes_and_appends_custom_only_
         ["workspace-write", "danger-full-access"]
     );
 
-    let changes = Arc::new(Mutex::new(Vec::<(String, Value, u64)>::new()));
+    let changes = Arc::new(Mutex::new(Vec::<(String, JsonValue, u64)>::new()));
     let observed = changes.clone();
     harness
         .context

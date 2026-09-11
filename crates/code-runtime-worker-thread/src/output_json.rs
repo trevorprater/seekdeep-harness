@@ -2,6 +2,23 @@
 
 use serde_json::Value;
 
+use crate::CodeJsonString;
+
+/// Measures an exact JavaScript string, including quotes and lone-surrogate escapes.
+#[must_use]
+pub fn code_string_bytes_up_to(text: &CodeJsonString, max_bytes: usize) -> Option<usize> {
+    json_utf16_string_bytes_up_to(text.utf16_units(), max_bytes)
+}
+
+/// Retains the longest source-compatible UTF-16 prefix within one JSON string budget.
+#[must_use]
+pub fn truncate_code_string_bytes(text: &CodeJsonString, max_bytes: usize) -> CodeJsonString {
+    CodeJsonString::from_utf16(&truncate_json_utf16_string_bytes(
+        text.utf16_units(),
+        max_bytes,
+    ))
+}
+
 /// Measures a JSON string, including quotes, without materializing escapes.
 #[must_use]
 pub fn json_string_bytes_up_to(text: &str, max_bytes: usize) -> Option<usize> {

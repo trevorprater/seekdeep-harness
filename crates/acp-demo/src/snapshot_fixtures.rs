@@ -418,7 +418,7 @@ pub(crate) fn workspace_context_compaction_plugin() -> Plugin {
                         })?;
                     let message = UserMessage::new(
                         vec![ContentBlock::Text {
-                            text: "Earlier context was compacted for this snapshot.".to_owned(),
+                            text: "Earlier context was compacted for this snapshot.".into(),
                         }],
                         compact_checkpoint_source(
                             &CompactionId::new("workspace-context-fixture"),
@@ -874,7 +874,7 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                                 .followup(
                                     &parent,
                                     &mapped,
-                                    vec![ContentBlock::Text { text: message }],
+                                    vec![ContentBlock::text(message)],
                                     SubagentFollowupOptions {
                                         source: coordinator_source(parent.id()),
                                         signal: execution.signal(),

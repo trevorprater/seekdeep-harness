@@ -2,6 +2,7 @@
 
 use indexmap::IndexMap;
 use seekdeep_llm::{CallId, ContentBlock, Message, MessageId, MessageRole, MessageSource};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use serde_json::{Value, json};
 
 use crate::session::{SessionEvent, SurfaceOp};
@@ -16,18 +17,18 @@ const OUTCOME_UNKNOWN_TEXT: &str = "The tool call was interrupted after it was r
 
 #[derive(Clone, Debug)]
 struct PendingCall {
-    step: Option<Value>,
+    step: Option<JsonValue>,
     call_seq: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
 enum OpenMarker {
     Undefined,
-    Value(Value),
+    Value(JsonValue),
 }
 
 impl OpenMarker {
-    fn value(&self) -> Option<&Value> {
+    fn value(&self) -> Option<&JsonValue> {
         match self {
             Self::Undefined => None,
             Self::Value(value) => Some(value),
@@ -56,7 +57,7 @@ pub fn try_interrupted_turn_closers(events: &[SessionEvent]) -> anyhow::Result<V
     for event in events {
         match event.event_type.as_str() {
             "turn/start" => {
-                open_turn = open_marker(property(Some(&event.data), "turn")?);
+                open_turn = open_marker(property(Some(event.data.as_ref()), "turn")?);
                 open_step = None;
                 pending.clear();
             }
@@ -65,25 +66,27 @@ pub fn try_interrupted_turn_closers(events: &[SessionEvent]) -> anyhow::Result<V
                 open_step = None;
                 pending.clear();
             }
-            "step/start" => open_step = open_marker(property(Some(&event.data), "step")?),
+            "step/start" => open_step = open_marker(property(Some(event.data.as_ref()), "step")?),
             "step/end" => {
                 pending.clear();
                 open_step = None;
             }
             "assistant/message" => register_assistant_calls(event, &mut pending)?,
             "tool/call" => {
-                if let Some(call_id) =
-                    property(Some(&event.data), "callId")?.and_then(Value::as_str)
-                    && let Some(call) = pending.get_mut(call_id)
+                if let Some(call_id) = property(Some(event.data.as_ref()), "callId")?
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    && let Some(call) = pending.get_mut(&call_id)
                 {
                     call.call_seq = Some(event.seq);
                 }
             }
             "tool/result" => {
-                let message = property(Some(&event.data), "message")?;
+                let message = property(Some(event.data.as_ref()), "message")?;
                 let source = property(message, "source")?;
-                if let Some(call_id) = property(source, "callId")?.and_then(Value::as_str) {
-                    pending.shift_remove(call_id);
+                if let Some(call_id) =
+                    property(source, "callId")?.and_then(|value| value.deserialize::<String>().ok())
+                {
+                    pending.shift_remove(&call_id);
                 }
             }
             _ => {}
@@ -99,19 +102,24 @@ fn register_assistant_calls(
     event: &SessionEvent,
     pending: &mut IndexMap<String, PendingCall>,
 ) -> anyhow::Result<()> {
-    let message = property(Some(&event.data), "message")?;
+    let message = property(Some(event.data.as_ref()), "message")?;
     let content = property(message, "content")?;
-    let Some(content) = content.and_then(Value::as_array) else {
+    let Some(content) = content.and_then(JsonRef::array_items) else {
         anyhow::bail!("event.data.message.content is not iterable");
     };
     for block in content {
-        if property(Some(block), "type")?.and_then(Value::as_str) == Some("tool-call")
-            && let Some(id) = block.get("id").and_then(Value::as_str)
+        if property(Some(block), "type")?
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+            == Some("tool-call")
+            && let Some(id) = block
+                .get("id")
+                .and_then(|value| value.deserialize::<String>().ok())
         {
             pending.insert(
-                id.to_owned(),
+                id,
                 PendingCall {
-                    step: property(Some(&event.data), "step")?.cloned(),
+                    step: property(Some(event.data.as_ref()), "step")?.map(JsonRef::to_owned),
                     call_seq: None,
                 },
             );
@@ -121,7 +129,7 @@ fn register_assistant_calls(
 }
 
 fn synthesize_closers(
-    turn: Option<&Value>,
+    turn: Option<&JsonValue>,
     open_step: Option<OpenMarker>,
     pending: IndexMap<String, PendingCall>,
     last: &SessionEvent,
@@ -151,7 +159,7 @@ fn synthesize_closers(
 }
 
 fn tool_result_closer(
-    turn: Option<&Value>,
+    turn: Option<&JsonValue>,
     call_id: &str,
     pending: &PendingCall,
     seq: u64,
@@ -167,9 +175,9 @@ fn tool_result_closer(
             is_error: Some(true),
             content: vec![ContentBlock::Text {
                 text: if started {
-                    OUTCOME_UNKNOWN_TEXT.to_owned()
+                    OUTCOME_UNKNOWN_TEXT.into()
                 } else {
-                    NOT_STARTED_TEXT.to_owned()
+                    NOT_STARTED_TEXT.into()
                 },
             }],
         }],
@@ -198,7 +206,7 @@ fn tool_result_closer(
     }
 }
 
-fn plain_closer(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEvent {
+fn plain_closer(event_type: &str, seq: u64, time: i64, data: JsonValue) -> SessionEvent {
     SessionEvent {
         event_type: event_type.to_owned(),
         seq,
@@ -210,26 +218,28 @@ fn plain_closer(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEv
     }
 }
 
-fn property<'a>(value: Option<&'a Value>, field: &str) -> anyhow::Result<Option<&'a Value>> {
+fn property<'a>(value: Option<JsonRef<'a>>, field: &str) -> anyhow::Result<Option<JsonRef<'a>>> {
     match value {
         None => anyhow::bail!("Cannot read properties of undefined (reading '{field}')"),
-        Some(Value::Null) => anyhow::bail!("Cannot read properties of null (reading '{field}')"),
+        Some(value) if value.is_null() => {
+            anyhow::bail!("Cannot read properties of null (reading '{field}')")
+        }
         Some(value) => Ok(value.get(field)),
     }
 }
 
-fn open_marker(value: Option<&Value>) -> Option<OpenMarker> {
-    if value == Some(&Value::Null) {
+fn open_marker(value: Option<JsonRef<'_>>) -> Option<OpenMarker> {
+    if value.is_some_and(JsonRef::is_null) {
         None
     } else {
         Some(value.map_or(OpenMarker::Undefined, |value| {
-            OpenMarker::Value(value.clone())
+            OpenMarker::Value(value.to_owned())
         }))
     }
 }
 
-fn positioned_data(turn: Option<&Value>, step: Option<&Value>, extra: Value) -> Value {
-    let mut data = serde_json::Map::new();
+fn positioned_data(turn: Option<&JsonValue>, step: Option<&JsonValue>, extra: Value) -> JsonValue {
+    let mut data = IndexMap::new();
     if let Some(turn) = turn {
         data.insert("turn".to_owned(), turn.clone());
     }
@@ -239,8 +249,12 @@ fn positioned_data(turn: Option<&Value>, step: Option<&Value>, extra: Value) -> 
     let Value::Object(extra) = extra else {
         unreachable!("closer fields are an object")
     };
-    data.extend(extra);
-    Value::Object(data)
+    data.extend(
+        extra
+            .into_iter()
+            .map(|(key, value)| (key, JsonValue::from(value))),
+    );
+    JsonValue::from_serialize(&data).expect("validated closer fields serialize as JSON")
 }
 
 #[cfg(test)]
@@ -252,7 +266,7 @@ mod tests {
             event_type,
             seq,
             i64::try_from(seq).expect("small seq"),
-            data,
+            data.into(),
         )
     }
 
@@ -310,7 +324,10 @@ mod tests {
             assistant(2, "call-1"),
         ];
         let not_started = interrupted_turn_closers(&base);
-        assert_eq!(not_started[0].data["error"]["code"], TOOL_NOT_STARTED);
+        assert_eq!(
+            not_started[0].data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_NOT_STARTED
+        );
 
         let mut started = base;
         started.push(event(
@@ -319,7 +336,10 @@ mod tests {
             json!({"turn": 1, "step": 1, "callId": "call-1", "name": "bash", "arguments": "{}"}),
         ));
         let unknown = interrupted_turn_closers(&started);
-        assert_eq!(unknown[0].data["error"]["code"], TOOL_OUTCOME_UNKNOWN);
+        assert_eq!(
+            unknown[0].data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_OUTCOME_UNKNOWN
+        );
         assert_eq!(unknown[0].source_event_seqs, Some(vec![3]));
     }
     fn turn_start(turn: i64, seq: u64) -> SessionEvent {
@@ -400,7 +420,10 @@ mod tests {
         let closers = interrupted_turn_closers(&[turn_start(1, 0)]);
         assert_eq!(closer_types(&closers), ["turn/end"]);
         assert_eq!(closers[0].seq, 1);
-        assert_eq!(closers[0].data["reason"], json!({"kind": "interrupted"}));
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["reason"],
+            json!({"kind": "interrupted"})
+        );
     }
 
     #[test]
@@ -420,14 +443,18 @@ mod tests {
             [3, 4, 5]
         );
         let result = &closers[0];
-        assert_eq!(result.data["turn"], json!(2));
-        assert_eq!(result.data["step"], json!(1));
-        assert_eq!(result.data["error"]["code"], TOOL_NOT_STARTED);
+        assert_eq!(result.data.as_serde_json().unwrap()["turn"], json!(2));
+        assert_eq!(result.data.as_serde_json().unwrap()["step"], json!(1));
+        assert_eq!(
+            result.data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_NOT_STARTED
+        );
         assert!(matches!(
             &result.surface_op,
             Some(SurfaceOp::Marker(marker)) if marker == "append"
         ));
-        let text = &result.data["message"]["content"][0]["content"][0]["text"];
+        let text =
+            &result.data.as_serde_json().unwrap()["message"]["content"][0]["content"][0]["text"];
         assert_eq!(
             text,
             "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
@@ -477,7 +504,10 @@ mod tests {
             closer_types(&closers),
             ["tool/result", "step/end", "turn/end"]
         );
-        assert_eq!(closers[0].data["message"]["source"]["callId"], "new-call");
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["message"]["source"]["callId"],
+            "new-call"
+        );
     }
 
     #[test]
@@ -493,7 +523,10 @@ mod tests {
             closer_types(&closers),
             ["tool/result", "step/end", "turn/end"]
         );
-        assert_eq!(closers[0].data["message"]["source"]["callId"], "call-b");
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["message"]["source"]["callId"],
+            "call-b"
+        );
     }
 
     #[test]
@@ -516,12 +549,13 @@ mod tests {
         ));
         assert_eq!(result.source_event_seqs, Some(vec![3]));
         assert_eq!(
-            result.data["error"],
+            result.data.as_serde_json().unwrap()["error"],
             json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
         );
-        let text = result.data["message"]["content"][0]["content"][0]["text"]
-            .as_str()
-            .expect("text");
+        let text =
+            result.data.as_serde_json().unwrap()["message"]["content"][0]["content"][0]["text"]
+                .as_str()
+                .expect("text");
         assert!(text.contains("retry only if the operation is read-only or idempotent"));
         assert!(text.contains("first verify external state or ask the user"));
     }

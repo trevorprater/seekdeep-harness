@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionError, SessionId},
+    session::{AppendOptions, JsonValue, Session, SessionError, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
@@ -102,6 +102,58 @@ async fn accepts_interleaved_complete_runs_and_an_unfinished_continuous_prefix()
 
     run_start(&session, "prefix", "prefix");
     agent_start(&session, "prefix", 1, "open");
+}
+
+#[tokio::test]
+async fn raw_workflow_ids_labels_and_opaque_fields_survive_a_complete_fold() {
+    let (_, session) = setup().await;
+    for (event_type, raw) in [
+        (
+            "tool-workflow/run-start",
+            r#"{"runId":"unused","runId":"\ud800","name":"\udfff","\ud800":{"value":"\udfff"}}"#,
+        ),
+        (
+            "tool-workflow/agent-start",
+            r#"{"runId":"\ud800","seq":1e0,"label":"\udfff","phase":"\ud800","childId":"\udfff"}"#,
+        ),
+        (
+            "tool-workflow/agent-end",
+            r#"{"runId":"\ud800","seq":1.0,"outcome":"completed","opaque":"\udfff"}"#,
+        ),
+        (
+            "tool-workflow/run-end",
+            r#"{"runId":"\ud800","stopReason":"completed"}"#,
+        ),
+    ] {
+        let payload = JsonValue::parse(raw.to_owned()).unwrap();
+        session
+            .append_json(event_type, payload.clone(), AppendOptions::default())
+            .unwrap();
+        assert_eq!(
+            session.events().last().unwrap().data.as_raw(),
+            payload.as_raw()
+        );
+    }
+}
+
+#[tokio::test]
+async fn rejects_member_numbers_outside_the_source_safe_integer_range() {
+    let (_, session) = setup().await;
+    run_start(&session, "run", "run");
+    let before = session.events().len();
+    let payload = JsonValue::parse(
+        r#"{"runId":"run","seq":9007199254740992,"label":"member","childId":"child"}"#.to_owned(),
+    )
+    .unwrap();
+    let error = session
+        .append_json(
+            "tool-workflow/agent-start",
+            payload,
+            AppendOptions::default(),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("positive safe integer"));
+    assert_eq!(session.events().len(), before);
 }
 
 #[tokio::test]

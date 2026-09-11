@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentEvent};
 use seekdeep_agent_loop::AgentErrorEvent;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
-use seekdeep_core::session::{Session, SessionEvent};
+use seekdeep_core::session::{JsonValue, Session, SessionEvent};
 use seekdeep_core::session_store::SESSIONS;
 use serde_json::{Map, Value, json};
 
@@ -35,14 +35,8 @@ fn session_key(session: &Arc<Session>) -> usize {
 fn severity_of(event: &SessionEvent) -> SessionTelemetrySeverity {
     match event.event_type.as_str() {
         "tool/result" => {
-            let is_error = event
-                .data
-                .get("message")
-                .and_then(|message| message.get("content"))
-                .and_then(Value::as_array)
-                .and_then(|content| content.first())
-                .and_then(|block| block.get("isError"))
-                .and_then(Value::as_bool)
+            let is_error = event.data["message"]["content"][0]["isError"]
+                .as_bool()
                 .unwrap_or(false);
             if is_error {
                 SessionTelemetrySeverity::Error
@@ -51,12 +45,7 @@ fn severity_of(event: &SessionEvent) -> SessionTelemetrySeverity {
             }
         }
         "turn/end" => {
-            let is_error = event
-                .data
-                .get("reason")
-                .and_then(|reason| reason.get("kind"))
-                .and_then(Value::as_str)
-                == Some("error");
+            let is_error = event.data["reason"]["kind"] == "error";
             if is_error {
                 SessionTelemetrySeverity::Error
             } else {
@@ -76,7 +65,7 @@ fn shutdown_record(session: &Arc<Session>) -> SessionTelemetryRecord {
         time: now_millis(),
         severity: SessionTelemetrySeverity::Info,
         attributes,
-        body: json!({"op": "shutdown"}),
+        body: json!({"op": "shutdown"}).into(),
     }
 }
 
@@ -289,8 +278,8 @@ impl SessionTelemetryCoordinator {
         if event.event_type == "assistant/chunk" {
             let key = format!(
                 "{}:{}",
-                event.data.get("turn").and_then(Value::as_u64).unwrap_or(0),
-                event.data.get("step").and_then(Value::as_u64).unwrap_or(0)
+                event.data["turn"].as_u64().unwrap_or(0),
+                event.data["step"].as_u64().unwrap_or(0)
             );
             self.seen(session).insert(key);
         }
@@ -300,8 +289,8 @@ impl SessionTelemetryCoordinator {
         if event.event_type == "assistant/chunk" {
             let key = format!(
                 "{}:{}",
-                event.data.get("turn").and_then(Value::as_u64).unwrap_or(0),
-                event.data.get("step").and_then(Value::as_u64).unwrap_or(0)
+                event.data["turn"].as_u64().unwrap_or(0),
+                event.data["step"].as_u64().unwrap_or(0)
             );
             let mut seen = self.seen(session);
             if !seen.insert(key) {
@@ -379,7 +368,7 @@ impl SessionTelemetryCoordinator {
             time: now_millis(),
             severity: SessionTelemetrySeverity::Error,
             attributes,
-            body: serde_json::to_value(detail).unwrap_or(Value::Null),
+            body: JsonValue::from_serialize(&detail)?,
         };
         self.deliver(agent.session(), self.redact(record)?, None);
         Ok(())

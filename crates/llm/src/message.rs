@@ -2,7 +2,10 @@
 
 use std::ops::Deref;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use seekdeep_lossless_json::JsonValue;
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeMap as _,
+};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
@@ -153,7 +156,7 @@ impl MessageSource {
 }
 
 /// One immutable identified provider-neutral message.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Message {
     /// Stable identity.
     id: MessageId,
@@ -165,8 +168,44 @@ pub struct Message {
     source: MessageSource,
     /// Module-augmented message fields preserved by construction, persistence,
     /// and routing boundaries.
-    #[serde(flatten)]
     fields: Map<String, Value>,
+}
+
+impl<'de> Deserialize<'de> for Message {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let mut fields = Map::new();
+        for (name, field) in value
+            .object_entries()
+            .ok_or_else(|| D::Error::custom("message must be an object"))?
+        {
+            let name: String = name.deserialize().map_err(D::Error::custom)?;
+            if !matches!(name.as_str(), "id" | "role" | "content" | "source") {
+                fields.insert(name, field.deserialize().map_err(D::Error::custom)?);
+            }
+        }
+        Ok(Self {
+            id: message_field(&value, "id")?,
+            role: message_field(&value, "role")?,
+            content: message_field(&value, "content")?,
+            source: message_field(&value, "source")?,
+            fields,
+        })
+    }
+}
+
+fn message_field<T: serde::de::DeserializeOwned, E: serde::de::Error>(
+    value: &JsonValue,
+    field: &'static str,
+) -> Result<T, E> {
+    value
+        .get(field)
+        .ok_or_else(|| E::missing_field(field))?
+        .deserialize()
+        .map_err(E::custom)
 }
 
 impl Serialize for Message {
@@ -174,32 +213,35 @@ impl Serialize for Message {
     where
         S: Serializer,
     {
-        let mut object = Map::new();
-        let role = serde_json::to_value(self.role).map_err(serde::ser::Error::custom)?;
-        let content = serde_json::to_value(&self.content).map_err(serde::ser::Error::custom)?;
-        let source = serde_json::to_value(&self.source).map_err(serde::ser::Error::custom)?;
+        let mut object = serializer.serialize_map(Some(4 + self.fields.len()))?;
         match self.role {
             MessageRole::User if self.source.kind == "tool" => {
-                object.insert("source".to_owned(), source);
-                object.insert("content".to_owned(), content);
-                object.extend(self.fields.clone());
-                object.insert("role".to_owned(), role);
+                object.serialize_entry("source", &self.source)?;
+                object.serialize_entry("content", &self.content)?;
+                for (field, value) in &self.fields {
+                    object.serialize_entry(field, value)?;
+                }
+                object.serialize_entry("role", &self.role)?;
             }
             MessageRole::User => {
-                object.insert("content".to_owned(), content);
-                object.insert("source".to_owned(), source);
-                object.extend(self.fields.clone());
-                object.insert("role".to_owned(), role);
+                object.serialize_entry("content", &self.content)?;
+                object.serialize_entry("source", &self.source)?;
+                for (field, value) in &self.fields {
+                    object.serialize_entry(field, value)?;
+                }
+                object.serialize_entry("role", &self.role)?;
             }
             MessageRole::System | MessageRole::Assistant => {
-                object.insert("role".to_owned(), role);
-                object.insert("content".to_owned(), content);
-                object.insert("source".to_owned(), source);
-                object.extend(self.fields.clone());
+                object.serialize_entry("role", &self.role)?;
+                object.serialize_entry("content", &self.content)?;
+                object.serialize_entry("source", &self.source)?;
+                for (field, value) in &self.fields {
+                    object.serialize_entry(field, value)?;
+                }
             }
         }
-        object.insert("id".to_owned(), Value::String(self.id.as_str().to_owned()));
-        Value::Object(object).serialize(serializer)
+        object.serialize_entry("id", &self.id)?;
+        object.end()
     }
 }
 
@@ -395,7 +437,7 @@ mod tests {
         let message = Message::tool_result(
             &CallId::new("call-1"),
             vec![ContentBlock::Text {
-                text: "done".to_owned(),
+                text: "done".into(),
             }],
             false,
         );

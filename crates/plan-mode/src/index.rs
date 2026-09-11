@@ -15,7 +15,7 @@ use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_commands::{COMMANDS, CommandDefinition, CommandInvocation, CommandResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
-use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{ContentBlock, JsonString, MessageSource, UserMessage};
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
 };
@@ -118,7 +118,7 @@ pub fn fold_plan_mode(events: &[SessionEvent], end: usize) -> bool {
             active = event
                 .data
                 .get("active")
-                .and_then(Value::as_bool)
+                .and_then(|active| active.as_bool())
                 .unwrap_or(false);
         }
     }
@@ -363,9 +363,7 @@ impl PlanModeController {
             .fields
             .insert("summary".to_owned(), Value::String(text.to_owned()));
         Some(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.to_owned(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             source,
         ))
     }
@@ -489,9 +487,13 @@ impl PlanModeController {
             |state: &Value, event: &SessionEvent| {
                 let mut current: PlanUnitState = serde_json::from_value(state.clone())?;
                 if event.event_type == "command/run"
-                    && event.data.get("name").and_then(Value::as_str) == Some("plan")
+                    && event.data.get("name").is_some_and(|name| name == "plan")
                 {
-                    let Some(args) = event.data.get("args").and_then(Value::as_str) else {
+                    let Some(args) = event
+                        .data
+                        .get("args")
+                        .and_then(|args| args.deserialize::<JsonString>().ok())
+                    else {
                         return Ok(ProjectionTransition::Unchanged);
                     };
                     let wanted = args.trim() != "off";
@@ -505,7 +507,7 @@ impl PlanModeController {
                     current.active = event
                         .data
                         .get("active")
-                        .and_then(Value::as_bool)
+                        .and_then(|active| active.as_bool())
                         .unwrap_or(false);
                     current.wanted = None;
                     return ProjectionTransition::changed(current);
@@ -616,7 +618,7 @@ impl PlanModeController {
                     let outcome = controller.set(&invocation.agent, true)?;
                     if !message.is_empty() {
                         invocation.agent.steer(UserMessage::new(
-                            vec![ContentBlock::Text { text: message }],
+                            vec![ContentBlock::text(message)],
                             MessageSource::user(),
                         ))?;
                     }
@@ -651,7 +653,7 @@ impl PlanModeController {
             Arc::new(|_args: &ExitPlanModeArgs, _value: &ExitPlanModeOutcome| {
                 Ok(vec![ContentBlock::Text {
                     text: "Plan approved — plan mode exited; carry out the plan starting with your next step."
-                        .to_owned(),
+                        .into(),
                 }])
             }),
         );
@@ -762,10 +764,10 @@ impl PlanModeController {
             )
             .present_call(Arc::new(|args: &ExitPlanModeArgs| {
                 Some(ToolCallView::Generic(GenericCallView {
-                    title: first_heading(&args.plan).unwrap_or_else(|| "Plan".to_owned()),
+                    title: first_heading(&args.plan).unwrap_or_else(|| "Plan".to_owned()).into(),
                     kind: Some(ToolCallKind::Other),
                     raw_input: None,
-                    content: Some(vec![ContentBlock::Text { text: args.plan.clone() }]),
+                    content: Some(vec![ContentBlock::Text { text: args.plan.clone().into() }]),
                     locations: None,
                 }))
             }))
@@ -840,7 +842,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq: 0,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

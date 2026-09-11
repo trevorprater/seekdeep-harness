@@ -2,9 +2,225 @@
 
 use std::collections::HashSet;
 
+use serde::Serialize;
 use serde_json::{Map, Number, Value, json};
 
+use crate::{CodeJsonToken, CodeJsonValue};
+
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum EncodedMarker<'a> {
+    Array { length: usize },
+    Object { keys: &'a [CodeJsonValue] },
+}
+
+struct EncodeContainer {
+    offset: usize,
+    length: usize,
+    keys: Option<Vec<CodeJsonValue>>,
+}
+
+/// Encodes validated JSON as the source worker's flat token array, retaining
+/// lone UTF-16 surrogates in both scalar strings and object keys.
+#[must_use]
+#[expect(
+    clippy::missing_panics_doc,
+    reason = "the traversal only receives validated JSON"
+)]
+pub fn encode_code_json(value: &CodeJsonValue) -> CodeJsonValue {
+    let mut wire = Vec::new();
+    let mut frames = Vec::<EncodeContainer>::new();
+    for token in value.tokens() {
+        match token {
+            CodeJsonToken::ArrayStart | CodeJsonToken::ObjectStart => {
+                if let Some(parent) = frames.last_mut() {
+                    parent.length += 1;
+                }
+                let offset = wire.len();
+                wire.push(CodeJsonValue::from(Value::Null));
+                frames.push(EncodeContainer {
+                    offset,
+                    length: 0,
+                    keys: matches!(token, CodeJsonToken::ObjectStart).then(Vec::new),
+                });
+            }
+            CodeJsonToken::ArrayEnd | CodeJsonToken::ObjectEnd => {
+                let frame = frames
+                    .pop()
+                    .expect("validated JSON has balanced containers");
+                let marker = frame.keys.as_ref().map_or(
+                    EncodedMarker::Array {
+                        length: frame.length,
+                    },
+                    |keys| EncodedMarker::Object { keys },
+                );
+                wire[frame.offset] = CodeJsonValue::parse(
+                    serde_json::to_string(&marker).expect("wire markers serialize as JSON"),
+                )
+                .expect("wire markers contain validated JSON");
+            }
+            CodeJsonToken::Key(key) => {
+                frames
+                    .last_mut()
+                    .and_then(|frame| frame.keys.as_mut())
+                    .expect("JSON object keys belong to an object")
+                    .push(key.to_owned());
+            }
+            CodeJsonToken::Scalar(value) => {
+                if let Some(parent) = frames.last_mut() {
+                    parent.length += 1;
+                }
+                wire.push(value.to_owned());
+            }
+        }
+    }
+    CodeJsonValue::array(&wire)
+}
+
+enum RawMarker {
+    Array(Number),
+    Object(Vec<CodeJsonValue>),
+}
+
+impl RawMarker {
+    fn parse(raw: &str) -> Option<Self> {
+        let mut fields: std::collections::HashMap<String, CodeJsonValue> =
+            serde_json::from_str(raw).ok()?;
+        if fields.len() != 2 {
+            return None;
+        }
+        let kind = fields.remove("kind")?;
+        let kind: String = serde_json::from_str(kind.as_raw()).ok()?;
+        match kind.as_str() {
+            "array" => {
+                let length = fields.remove("length")?;
+                serde_json::from_str(length.as_raw()).ok().map(Self::Array)
+            }
+            "object" => {
+                let keys = fields.remove("keys")?;
+                serde_json::from_str(keys.as_raw()).ok().map(Self::Object)
+            }
+            _ => None,
+        }
+    }
+}
+
+struct JsonBuildFrame {
+    length: usize,
+    index: usize,
+    keys: Option<Vec<CodeJsonValue>>,
+}
+
+impl JsonBuildFrame {
+    fn read(marker: RawMarker, remaining: usize) -> Option<Self> {
+        match marker {
+            RawMarker::Array(length) => {
+                let length = length.as_f64()?;
+                if !length.is_finite()
+                    || length.fract() != 0.0
+                    || !(0.0..=9_007_199_254_740_991.0).contains(&length)
+                {
+                    return None;
+                }
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "length is a nonnegative integer no greater than Number.MAX_SAFE_INTEGER"
+                )]
+                let length = length as u64;
+                let length = usize::try_from(length).ok()?;
+                if length > remaining {
+                    return None;
+                }
+                Some(Self {
+                    length,
+                    index: 0,
+                    keys: None,
+                })
+            }
+            RawMarker::Object(keys) => {
+                if keys.len() > remaining {
+                    return None;
+                }
+                let mut unique = HashSet::with_capacity(keys.len());
+                for key in &keys {
+                    if !unique.insert(key.to_utf16()?) {
+                        return None;
+                    }
+                }
+                Some(Self {
+                    length: keys.len(),
+                    index: 0,
+                    keys: Some(keys),
+                })
+            }
+        }
+    }
+
+    fn close(&self) -> char {
+        if self.keys.is_some() { '}' } else { ']' }
+    }
+}
+
+/// Rebuilds one lossless JSON value from the source's flat worker wire without
+/// requiring its strings or object keys to be Unicode scalar values.
+#[must_use]
+pub fn decode_code_json(input: &CodeJsonValue) -> Option<CodeJsonValue> {
+    let wire: Vec<CodeJsonValue> = serde_json::from_str(input.as_raw()).ok()?;
+    if wire.is_empty() {
+        return None;
+    }
+    let mut json = String::new();
+    let mut frames = Vec::<JsonBuildFrame>::new();
+    let mut root_assigned = false;
+    for (index, token) in wire.iter().enumerate() {
+        if let Some(parent) = frames.last_mut() {
+            if parent.index > 0 {
+                json.push(',');
+            }
+            if let Some(keys) = &parent.keys {
+                json.push_str(keys.get(parent.index)?.as_raw());
+                json.push(':');
+            }
+            parent.index += 1;
+        } else if std::mem::replace(&mut root_assigned, true) {
+            return None;
+        }
+        match token.as_raw().as_bytes().first()? {
+            b'{' => {
+                let marker = RawMarker::parse(token.as_raw())?;
+                let frame = JsonBuildFrame::read(marker, wire.len() - index - 1)?;
+                json.push(if frame.keys.is_some() { '{' } else { '[' });
+                if frame.length == 0 {
+                    json.push(frame.close());
+                } else {
+                    frames.push(frame);
+                }
+            }
+            b'[' => return None,
+            b'"' | b'n' | b't' | b'f' => json.push_str(token.as_raw()),
+            _ => {
+                let number = token.as_raw().parse::<f64>().ok()?;
+                if !number.is_finite() || number == 0.0 && number.is_sign_negative() {
+                    return None;
+                }
+                json.push_str(token.as_raw());
+            }
+        }
+        while frames
+            .last()
+            .is_some_and(|frame| frame.index == frame.length)
+        {
+            json.push(frames.pop()?.close());
+        }
+    }
+    if !frames.is_empty() {
+        return None;
+    }
+    CodeJsonValue::parse(json).ok()
+}
 
 /// Encodes one already validated JSON value as a pre-order flat token array.
 #[must_use]
@@ -254,6 +470,53 @@ fn materialize(arena: &[ArenaNode], root: usize) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_wire_retains_lone_surrogates_and_literal_container_marker_values() {
+        for raw in [
+            r#""\ud800""#,
+            r#"{"\ud800":"\udfff","�":"replacement","kind":"array","length":2}"#,
+            r#"[{"kind":"object","keys":["\ud800"]},"\\ud800","😀",null,true,1.5]"#,
+        ] {
+            let value = CodeJsonValue::parse(raw.to_owned()).unwrap();
+            let encoded = encode_code_json(&value);
+            assert_eq!(decode_code_json(&encoded).unwrap().as_raw(), raw);
+        }
+        let value = CodeJsonValue::parse(r#"{"\ud800":"\udfff"}"#.to_owned()).unwrap();
+        assert_eq!(
+            encode_code_json(&value).as_raw(),
+            r#"[{"kind":"object","keys":["\ud800"]},"\udfff"]"#
+        );
+    }
+
+    #[test]
+    fn raw_wire_rejects_lossy_decorated_incomplete_and_duplicate_key_traffic() {
+        for raw in [
+            "[]",
+            "[[]]",
+            "[null,true]",
+            "[-0]",
+            "[1e999]",
+            r#"[{"kind":"array","length":0,"keys":null}]"#,
+            r#"[{"kind":"object","keys":[],"length":null}]"#,
+            r#"[{"kind":"object","keys":["\ud800","\uD800"]},1,2]"#,
+            r#"[{"kind":"array","length":2},1]"#,
+            r#"[{"kind":"object","keys":[1]},null]"#,
+        ] {
+            assert!(
+                decode_code_json(&CodeJsonValue::parse(raw.to_owned()).unwrap()).is_none(),
+                "accepted hostile raw wire: {raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn raw_wire_round_trips_fourteen_thousand_application_levels() {
+        let raw = format!("{}\"\\ud800\"{}", "[".repeat(14_000), "]".repeat(14_000));
+        let value = CodeJsonValue::parse(raw.clone()).unwrap();
+        let wire = encode_code_json(&value);
+        assert_eq!(decode_code_json(&wire).unwrap().as_raw(), raw);
+    }
 
     #[test]
     fn round_trips_every_root_and_preserves_literal_proto_keys() {

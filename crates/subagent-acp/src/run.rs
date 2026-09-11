@@ -7,7 +7,8 @@ use std::sync::{
 
 use parking_lot::Mutex;
 use seekdeep_acp::{
-    AcpClient, AcpSessionUpdate, PermissionPolicy, acp_content_text, acp_stop_reason, to_acp_prompt,
+    AcpClient, AcpSessionUpdate, PermissionPolicy, acp_content_text_json, acp_stop_reason,
+    to_acp_prompt,
 };
 use seekdeep_core::session::SessionId;
 use seekdeep_llm::AbortSignal;
@@ -223,11 +224,12 @@ pub async fn start_acp_run(
         if update
             .update
             .get("sessionUpdate")
-            .and_then(serde_json::Value::as_str)
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
             == Some("agent_message_chunk")
             && let Some(content) = update.update.get("content")
         {
-            observed.lock().push_text(acp_content_text(content));
+            observed.lock().push_text(acp_content_text_json(content));
         }
     }));
     client.start();
@@ -289,7 +291,7 @@ pub async fn start_acp_run(
         let attempt = tokio::select! {
             biased;
             () = result_cancel.cancelled() => Err(anyhow::anyhow!("ACP run cancelled")),
-            result = prompt_client.prompt(&prompt_session, prompt) => result,
+            result = prompt_client.prompt_json(&prompt_session, prompt) => result,
         };
         let output = result_fold.lock().collect().unwrap_or_default();
         let settled = if result_cancel.is_aborted() {
