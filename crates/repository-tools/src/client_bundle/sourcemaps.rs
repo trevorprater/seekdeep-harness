@@ -253,7 +253,40 @@ pub fn attach_source_map_url(wasm: &[u8], url: &str) -> anyhow::Result<Vec<u8>> 
     Ok(wasm)
 }
 
-/// Write a post-bindgen WASM map beside its artifact and attach its browser URL.
+/// Drop the DWARF custom sections a browser never reads.
+///
+/// The line tables stay available to debugging through the map written beside the artifact, so
+/// the shipped module keeps its `sourceMappingURL`, its `name` section, and every content
+/// section byte-for-byte; only `.debug_*` payloads are removed.
+///
+/// # Errors
+///
+/// Returns an error for malformed or truncated WASM bytes.
+pub fn strip_debug_sections(wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let mut result = wasm.get(..8).context("WASM header is truncated")?.to_vec();
+    let mut previous = 8;
+    for payload in Parser::new(0).parse_all(wasm) {
+        let payload = payload?;
+        if let Some((_, range)) = payload.as_section() {
+            let debug = matches!(
+                &payload,
+                Payload::CustomSection(section) if section.name().starts_with(".debug_")
+            );
+            if !debug {
+                result.extend_from_slice(&wasm[previous..range.end]);
+            }
+            previous = range.end;
+        }
+    }
+    anyhow::ensure!(
+        previous == wasm.len(),
+        "WASM debug strip omitted trailing module bytes"
+    );
+    Ok(result)
+}
+
+/// Write a post-bindgen WASM map beside its artifact, attach its browser URL, and ship the module
+/// without the DWARF the map already carries.
 ///
 /// # Errors
 /// Returns map-generation errors or filesystem read/write failures.
@@ -266,7 +299,10 @@ pub fn write_wasm_source_map(wasm: &Path, repository: &Path) -> anyhow::Result<S
     let map = wasm_source_map(&bytes, &file, repository)?;
     let map_name = format!("{file}.map");
     std::fs::write(wasm.with_file_name(&map_name), serde_json::to_vec(&map)?)?;
-    std::fs::write(wasm, attach_source_map_url(&bytes, &map_name)?)?;
+    std::fs::write(
+        wasm,
+        strip_debug_sections(&attach_source_map_url(&bytes, &map_name)?)?,
+    )?;
     Ok(map)
 }
 
@@ -395,6 +431,39 @@ mod tests {
             [("sourceMappingURL".to_owned(), b"\x0asecond.map".to_vec())]
         );
         assert_eq!(remove_source_map_url(&second).unwrap(), empty);
+    }
+
+    #[test]
+    fn shipped_modules_drop_dwarf_and_keep_every_other_section() {
+        fn custom_section(name: &str, data: &[u8]) -> Vec<u8> {
+            let mut payload = Vec::new();
+            unsigned_leb(name.len(), &mut payload);
+            payload.extend_from_slice(name.as_bytes());
+            payload.extend_from_slice(data);
+            let mut section = vec![0];
+            unsigned_leb(payload.len(), &mut section);
+            section.extend(payload);
+            section
+        }
+
+        let mut module = b"\0asm\x01\0\0\0".to_vec();
+        module.extend_from_slice(&custom_section("name", b"\x01\x02\x03"));
+        let mut with_debug = module.clone();
+        with_debug.extend_from_slice(&custom_section(".debug_info", &[7; 4096]));
+        with_debug.extend_from_slice(&custom_section(".debug_str", &[9; 2048]));
+        let mapped = attach_source_map_url(&with_debug, "client_bg.wasm.map").unwrap();
+
+        let stripped = strip_debug_sections(&mapped).unwrap();
+        assert_eq!(
+            stripped,
+            attach_source_map_url(&module, "client_bg.wasm.map").unwrap()
+        );
+        assert_eq!(strip_debug_sections(&stripped).unwrap(), stripped);
+        assert_eq!(
+            strip_debug_sections(b"\0asm\x01\0\0\0").unwrap(),
+            b"\0asm\x01\0\0\0"
+        );
+        assert!(strip_debug_sections(b"\0asm\x01").is_err());
     }
 
     #[test]

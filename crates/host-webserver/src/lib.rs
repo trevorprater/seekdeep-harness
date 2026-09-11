@@ -16,7 +16,10 @@ use std::{
 
 use bytes::Bytes;
 use http_body_util::{BodyExt as _, Empty, Full, combinators::UnsyncBoxBody};
-use hyper::{Request, Response, StatusCode, body::Incoming, service::service_fn};
+use hyper::{
+    Request, Response, StatusCode, body::Body as _, body::Incoming, header, header::HeaderValue,
+    service::service_fn,
+};
 use hyper_util::rt::TokioIo;
 use parking_lot::{Mutex, RwLock};
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
@@ -504,6 +507,13 @@ impl WebServer {
 
     async fn dispatch(&self, request: WebRequest) -> WebResponse {
         let path = request.uri().path().to_owned();
+        let gzip = accepts_encoding(
+            request
+                .headers()
+                .get(header::ACCEPT_ENCODING)
+                .and_then(|value| value.to_str().ok()),
+            "gzip",
+        );
         let is_upgrade = request
             .headers()
             .get(hyper::header::CONNECTION)
@@ -535,6 +545,7 @@ impl WebServer {
             return response(StatusCode::NOT_FOUND, Bytes::new());
         };
         match handler(request).await {
+            Ok(response) if gzip => compress(response).await,
             Ok(response) => response,
             Err(error) => {
                 tracing::warn!(%error, "webserver: request handler failed");
@@ -647,6 +658,127 @@ pub fn response(status: StatusCode, body: impl Into<Bytes>) -> WebResponse {
     let mut response = Response::new(body);
     *response.status_mut() = status;
     response
+}
+
+/// Smallest buffered body worth compressing; below this the framing outweighs the saving.
+const COMPRESS_MIN_BYTES: u64 = 1024;
+
+/// Whether a media type's browser representation compresses well enough to be worth the work.
+fn compressible_media_type(content_type: &str) -> bool {
+    let media_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    media_type.starts_with("text/")
+        || media_type.ends_with("javascript")
+        || media_type.ends_with("+json")
+        || media_type.ends_with("+xml")
+        || matches!(
+            media_type.as_str(),
+            "application/json" | "application/wasm" | "application/xml" | "image/svg+xml"
+        )
+}
+
+/// Whether an `Accept-Encoding` field lists `coding` with a non-zero quality.
+fn accepts_encoding(header: Option<&str>, coding: &str) -> bool {
+    let Some(header) = header else {
+        return false;
+    };
+    header.split(',').any(|entry| {
+        let mut parameters = entry.split(';');
+        let token = parameters.next().unwrap_or_default().trim();
+        token.eq_ignore_ascii_case(coding)
+            && !parameters.any(|parameter| {
+                parameter
+                    .trim()
+                    .strip_prefix("q=")
+                    .and_then(|quality| quality.trim().parse::<f32>().ok())
+                    .is_some_and(|quality| quality <= 0.0)
+            })
+    })
+}
+
+fn gzip(bytes: &[u8]) -> std::io::Result<Vec<u8>> {
+    use std::io::Write as _;
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(6));
+    encoder.write_all(bytes)?;
+    encoder.finish()
+}
+
+/// Compresses a complete response body when the peer accepts gzip and every byte is already in
+/// hand.
+///
+/// Streamed bodies (a `StreamBody` reports no exact length) and media types that do not benefit
+/// pass through untouched, so event streams keep flowing frame by frame.
+async fn compress(response: WebResponse) -> WebResponse {
+    if response.headers().contains_key(header::CONTENT_ENCODING) {
+        return response;
+    }
+    let compressible = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(compressible_media_type);
+    if !compressible {
+        return response;
+    }
+    if response
+        .body()
+        .size_hint()
+        .exact()
+        .is_none_or(|size| size < COMPRESS_MIN_BYTES)
+    {
+        return response;
+    }
+    let (mut parts, body) = response.into_parts();
+    let Ok(collected) = body.collect().await else {
+        tracing::warn!("webserver: response body failed to buffer for compression");
+        return Response::from_parts(
+            parts,
+            Full::new(Bytes::new())
+                .map_err(|never| match never {})
+                .boxed_unsync(),
+        );
+    };
+    let original = collected.to_bytes();
+    let source = original.clone();
+    match tokio::task::spawn_blocking(move || gzip(&source)).await {
+        Ok(Ok(compressed)) => {
+            parts
+                .headers
+                .insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+            parts
+                .headers
+                .append(header::VARY, HeaderValue::from_static("accept-encoding"));
+            parts.headers.remove(header::CONTENT_LENGTH);
+            Response::from_parts(
+                parts,
+                Full::new(Bytes::from(compressed))
+                    .map_err(|never| match never {})
+                    .boxed_unsync(),
+            )
+        }
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "webserver: response compression failed");
+            Response::from_parts(
+                parts,
+                Full::new(original)
+                    .map_err(|never| match never {})
+                    .boxed_unsync(),
+            )
+        }
+        Err(error) => {
+            tracing::warn!(%error, "webserver: response compression task failed");
+            Response::from_parts(
+                parts,
+                Full::new(original)
+                    .map_err(|never| match never {})
+                    .boxed_unsync(),
+            )
+        }
+    }
 }
 
 /// Creates an empty successful upgrade negotiation response.

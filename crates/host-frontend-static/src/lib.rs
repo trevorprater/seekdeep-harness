@@ -62,9 +62,41 @@ where
             StatusCode::OK,
             mime_for(target.extension().and_then(|extension| extension.to_str())),
             body,
+            cache_control_for(&target),
         ),
         Err(_) => index_response(render_index().await?),
     }
+}
+
+/// Cache policy for one resolved file.
+///
+/// The bundler stamps a content hash into every asset it emits, so those bytes can never change
+/// under the same URL and may be kept indefinitely. Everything else, including the rendered index
+/// that carries the boot manifest, must be revalidated because its content names other revisions.
+fn cache_control_for(target: &Path) -> &'static str {
+    if content_hashed(target) {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache"
+    }
+}
+
+/// Whether a file name ends in a bundler content hash such as `index-C8S-ni_M.js`.
+fn content_hashed(target: &Path) -> bool {
+    let stem = target
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or_default();
+    let Some((_, hash)) = stem.rsplit_once('-') else {
+        return false;
+    };
+    hash.len() >= 8
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        && hash.bytes().any(|byte| {
+            byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_'
+        })
 }
 
 fn resolve_inside(root: &Path, pathname: &str) -> Option<PathBuf> {
@@ -90,6 +122,7 @@ fn index_response(body: String) -> anyhow::Result<WebResponse> {
         StatusCode::OK,
         "text/html; charset=utf-8",
         body.into_bytes(),
+        "no-cache",
     )
 }
 
@@ -97,11 +130,16 @@ fn typed_response(
     status: StatusCode,
     content_type: &str,
     body: impl Into<Bytes>,
+    cache_control: &'static str,
 ) -> anyhow::Result<WebResponse> {
     let mut response = response(status, body);
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         header::HeaderValue::from_str(content_type)?,
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static(cache_control),
     );
     Ok(response)
 }

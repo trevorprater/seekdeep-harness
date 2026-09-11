@@ -7544,6 +7544,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "bytes",
+ "flate2",
  "futures",
  "http-body-util",
  "hyper 1.11.0",
