@@ -18,9 +18,8 @@ use crate::{
     ConversationLocationDataStore, ConversationLocationEvent, ConversationMatch,
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
     ConversationNodeDefinition, ConversationPreviousContext, ConversationPublication,
-    ConversationTimelineSnapshot, ConversationViewNode, ConversationViewRegistry, StepLocation,
-    TurnLocation,
-    wasm_session::js_to_json,
+    ConversationTimelineSnapshot, ConversationViewNode, ConversationViewRegistry, PrematchTable,
+    StepLocation, TurnLocation,
     wasm_session::json_to_js,
     wasm_session::render_js,
     wasm_value_bridge::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing},
@@ -328,6 +327,95 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
 
     fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>> {
         self.registry.fallback().map(|entry| self.adapt(&entry))
+    }
+
+    /// Asks each Definition that exposes `matchMany` about the whole window in one call: the
+    /// event faces cross once as an array and the answers come back as one JSON text, instead
+    /// of a boundary crossing per event and Definition. Definitions without it (a JavaScript
+    /// Definition, for one) keep the per-event matcher.
+    fn prematch(
+        &self,
+        events: &[Rc<ConversationLocationEvent>],
+    ) -> Result<Option<PrematchTable>, ConversationAssemblerError> {
+        if events.len() < PREMATCH_MIN_EVENTS {
+            return Ok(None);
+        }
+        let faces = Array::new();
+        for event in events {
+            faces.push(&event_face(event).map_err(adapter_error)?);
+        }
+        let mut table = PrematchTable::default();
+        let mut covered = false;
+        for node in self
+            .registry
+            .entries()
+            .iter()
+            .cloned()
+            .chain(self.registry.fallback())
+        {
+            let batch = Reflect::get(&node.payload, &JsValue::from_str("matchMany"))
+                .map_err(adapter_error)?;
+            let Some(batch) = batch.dyn_ref::<Function>() else {
+                continue;
+            };
+            let rows = batch.call1(&node.payload, &faces).map_err(adapter_error)?;
+            let rows = rows.as_string().ok_or_else(|| {
+                ConversationAssemblerError::new(format!(
+                    "Conversation Definition {} matchMany must return JSON text",
+                    node.kind
+                ))
+            })?;
+            let rows: Vec<Option<PrematchRow>> = serde_json::from_str(&rows).map_err(|error| {
+                ConversationAssemblerError::new(format!(
+                    "Conversation Definition {} matchMany returned invalid rows: {error}",
+                    node.kind
+                ))
+            })?;
+            if rows.len() != events.len() {
+                return Err(ConversationAssemblerError::new(format!(
+                    "Conversation Definition {} matchMany answered {} of {} events",
+                    node.kind,
+                    rows.len(),
+                    events.len()
+                )));
+            }
+            let adapted = self.adapt(&node);
+            for (event, row) in events.iter().zip(rows) {
+                let answer = row.map(|row| row.into_result(&node.kind)).transpose()?;
+                table.insert(&adapted, event.seq, answer);
+            }
+            covered = true;
+        }
+        Ok(covered.then_some(table))
+    }
+}
+
+/// Below this many events a window replacement keeps the per-event matcher: the batch call
+/// pays one array of faces and one JSON crossing per Definition.
+const PREMATCH_MIN_EVENTS: usize = 256;
+
+/// One `matchMany` answer as it crosses back from a Definition module.
+#[derive(serde::Deserialize)]
+struct PrematchRow {
+    id: String,
+    role: String,
+}
+
+impl PrematchRow {
+    fn into_result(
+        self,
+        kind: &str,
+    ) -> Result<ConversationMatchResult, ConversationAssemblerError> {
+        let role = match self.role.as_str() {
+            "start" => ConversationMatchRole::Start,
+            "update" => ConversationMatchRole::Update,
+            role => {
+                return Err(ConversationAssemblerError::new(format!(
+                    "Conversation Definition {kind} matchMany returned match role {role:?}"
+                )));
+            }
+        };
+        Ok(ConversationMatchResult { id: self.id, role })
     }
 }
 
@@ -950,7 +1038,7 @@ fn view_node_from_js(
         kind: required_string(value, "kind", "Conversation view Node")?,
         id: required_string(value, "id", "Conversation view Node")?,
         target,
-        data: Rc::new(js_to_json(&required(
+        data: Rc::new(js_to_value(&required(
             value,
             "data",
             "Conversation view Node",
@@ -1043,7 +1131,7 @@ pub(crate) fn location_data_from_js(
     let kind = required_string(value, "kind", "Conversation Location data")?;
     let turn = required_u64(value, "turn", "Conversation Location data")?;
     let key = required_string(value, "key", "Conversation Location data")?;
-    let carried = Rc::new(js_to_json(&required(
+    let carried = Rc::new(js_to_value(&required(
         value,
         "value",
         "Conversation Location data",
@@ -1070,7 +1158,7 @@ fn optional_json(
     if value.is_undefined() {
         return Ok(None);
     }
-    js_to_json(value)
+    js_to_value(value)
         .map(Rc::new)
         .map(Some)
         .map_err(adapter_error)

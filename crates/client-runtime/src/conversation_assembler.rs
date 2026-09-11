@@ -1,6 +1,6 @@
 //! Incremental business-Context assembly over a contiguous Session event window.
 
-use std::{cell::RefCell, cmp::Ordering, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 
 use indexmap::{IndexMap, IndexSet};
 use serde_json::Value;
@@ -50,6 +50,7 @@ pub enum ConversationMatchRole {
 }
 
 /// Stable business identity and lifecycle role returned by a Definition matcher.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConversationMatchResult {
     /// Definition-local identity.
     pub id: String,
@@ -235,6 +236,53 @@ pub trait AssemblerEventDefinitions {
     fn entries(&self) -> Vec<Rc<AssemblerNodeDefinition>>;
     /// Unmatched-event fallback.
     fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>>;
+    /// Matches a whole window at once for the Definitions that can.
+    ///
+    /// A window replacement otherwise asks every Definition about every event; a Definition
+    /// living in another module pays a boundary crossing per question. `None` keeps the
+    /// per-event matcher, and a table may cover only some Definitions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Definition matcher failure.
+    fn prematch(
+        &self,
+        events: &[Rc<ConversationLocationEvent>],
+    ) -> Result<Option<PrematchTable>, ConversationAssemblerError> {
+        let _ = events;
+        Ok(None)
+    }
+}
+
+/// Match results for a whole window, by Definition and event sequence.
+#[derive(Default)]
+pub struct PrematchTable {
+    results: HashMap<usize, HashMap<u64, Option<ConversationMatchResult>>>,
+}
+
+impl PrematchTable {
+    /// Records one Definition's answer for one event.
+    pub fn insert(
+        &mut self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        seq: u64,
+        result: Option<ConversationMatchResult>,
+    ) {
+        self.results
+            .entry(Rc::as_ptr(definition) as usize)
+            .or_default()
+            .insert(seq, result);
+    }
+
+    fn get(
+        &self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        seq: u64,
+    ) -> Option<&Option<ConversationMatchResult>> {
+        self.results
+            .get(&(Rc::as_ptr(definition) as usize))
+            .and_then(|answers| answers.get(&seq))
+    }
 }
 
 /// Per-target incremental view builder.
@@ -360,6 +408,8 @@ pub struct ConversationNodeAssembler {
     has_more: bool,
     replace_pending: bool,
     timeline_dirty: bool,
+    /// Whole-window match answers while a replacement runs.
+    prematched: Option<PrematchTable>,
 }
 
 impl ConversationNodeAssembler {
@@ -384,6 +434,7 @@ impl ConversationNodeAssembler {
             has_more: false,
             replace_pending: true,
             timeline_dirty: true,
+            prematched: None,
         };
         assembler.reset_view_builders();
         assembler
@@ -414,9 +465,16 @@ impl ConversationNodeAssembler {
         }
         self.location_index.rebuild(&sorted)?;
         self.timeline_dirty = true;
-        for entry in &sorted {
-            self.match_input(entry)?;
-        }
+        let events = sorted
+            .iter()
+            .map(|entry| entry.event.clone())
+            .collect::<Vec<_>>();
+        self.prematched = self.event_definitions.prematch(&events)?;
+        let matched = sorted
+            .iter()
+            .try_for_each(|entry| self.match_input(entry).map(|_| ()));
+        self.prematched = None;
+        matched?;
         self.replay_dependencies()?;
         self.revised.clear();
         self.dirty.extend(self.contexts.keys().cloned());
@@ -687,7 +745,7 @@ impl ConversationNodeAssembler {
         let mut matched_targets = IndexSet::new();
         let mut matches = Vec::new();
         for definition in self.event_definitions.entries() {
-            let Some(result) = (definition.match_event)(&input.event)? else {
+            let Some(result) = self.match_with(&definition, input)? else {
                 continue;
             };
             if let Some(target) = &definition.target {
@@ -698,11 +756,28 @@ impl ConversationNodeAssembler {
         if let Some(fallback) = self.event_definitions.fallback_entry()
             && let Some(target) = &fallback.target
             && !matched_targets.contains(target)
-            && let Some(result) = (fallback.match_event)(&input.event)?
+            && let Some(result) = self.match_with(&fallback, input)?
         {
             matches.push((fallback, result));
         }
         Ok(matches)
+    }
+
+    /// One Definition's answer for one event: the whole-window table when it holds one,
+    /// otherwise the Definition's own matcher.
+    fn match_with(
+        &self,
+        definition: &Rc<AssemblerNodeDefinition>,
+        input: &ConversationEventInput,
+    ) -> Result<Option<ConversationMatchResult>, ConversationAssemblerError> {
+        if let Some(answer) = self
+            .prematched
+            .as_ref()
+            .and_then(|table| table.get(definition, input.event.seq))
+        {
+            return Ok(answer.clone());
+        }
+        (definition.match_event)(&input.event)
     }
 
     fn match_input(

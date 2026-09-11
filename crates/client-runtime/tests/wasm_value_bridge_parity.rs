@@ -91,16 +91,19 @@ fn reusing_conversion_keeps_unchanged_subtrees_and_grows_retained_text() {
 #[wasm_bindgen_test]
 fn parsing_matches_the_deserializer_semantics() {
     let parsed = js_to_value(&deserializerSample()).unwrap();
+    // A number past the safe-integer range keeps JSON's integral reading (the source's
+    // `JSON.stringify` prints it without a fraction); every other shape reads as the
+    // deserializer does.
     assert_eq!(
         parsed,
         json!({
-            "n": 1, "f": 1.5, "neg": -3, "big": 9_007_199_254_740_992.0_f64, "zero": 0, "s": "x",
+            "n": 1, "f": 1.5, "neg": -3, "big": 9_007_199_254_740_992_u64, "zero": 0, "s": "x",
             "u": null, "arr": [null, null, true, "y"], "nested": {"m": {"k": 1}, "empty": {}},
         })
     );
     assert_eq!(
         serde_json::to_string(&parsed).unwrap(),
-        r#"{"n":1,"f":1.5,"neg":-3,"big":9007199254740992.0,"zero":0,"s":"x","u":null,"arr":[null,null,true,"y"],"nested":{"m":{"k":1},"empty":{}}}"#
+        r#"{"n":1,"f":1.5,"neg":-3,"big":9007199254740992,"zero":0,"s":"x","u":null,"arr":[null,null,true,"y"],"nested":{"m":{"k":1},"empty":{}}}"#
     );
 }
 

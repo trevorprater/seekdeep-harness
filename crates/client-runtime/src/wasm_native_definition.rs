@@ -23,7 +23,7 @@ use crate::{
         recover_event, recover_match, recover_node, recover_step, recover_store, recover_turn,
         recover_value, view_node_to_js,
     },
-    wasm_session::{js_to_json, json_to_js, parse_event},
+    wasm_session::{json_to_js, parse_event},
     wasm_value_bridge::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing},
 };
 
@@ -38,16 +38,27 @@ struct ParsedFaces<T> {
     /// Parsed values by id; ids are monotonic, so the first entry is the oldest.
     values: BTreeMap<u32, Rc<T>>,
     next: u32,
+    capacity: usize,
 }
 
 impl<T> ParsedFaces<T> {
     const CAPACITY: usize = 4096;
 
+    /// A whole history window's worth of events, matches, or values: a cache that evicts
+    /// below that re-parses the same event in the match phase, the update phase, and the
+    /// flush. The parsed values are retained by the match lists anyway.
+    const WINDOW_CAPACITY: usize = 65_536;
+
     fn new() -> Self {
+        Self::with_capacity(Self::CAPACITY)
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
         Self {
             ids: js_sys::WeakMap::new(),
             values: BTreeMap::new(),
             next: 0,
+            capacity,
         }
     }
 
@@ -66,7 +77,7 @@ impl<T> ParsedFaces<T> {
             return Ok(value.clone());
         }
         let value = parse()?;
-        while self.values.len() >= Self::CAPACITY {
+        while self.values.len() >= self.capacity {
             self.values.pop_first();
         }
         let id = self.next;
@@ -81,13 +92,16 @@ thread_local! {
     static PARSED_TURNS: RefCell<ParsedFaces<TurnLocation>> = RefCell::new(ParsedFaces::new());
     static PARSED_STEPS: RefCell<ParsedFaces<StepLocation>> = RefCell::new(ParsedFaces::new());
     static PARSED_STORES: RefCell<ParsedFaces<ConversationLocationDataStore>> = RefCell::new(ParsedFaces::new());
-    static PARSED_EVENTS: RefCell<ParsedFaces<crate::ConversationLocationEvent>> = RefCell::new(ParsedFaces::new());
-    static PARSED_MATCHES: RefCell<ParsedFaces<ConversationMatch>> = RefCell::new(ParsedFaces::new());
+    static PARSED_EVENTS: RefCell<ParsedFaces<crate::ConversationLocationEvent>> = RefCell::new(ParsedFaces::with_capacity(ParsedFaces::<crate::ConversationLocationEvent>::WINDOW_CAPACITY));
+    static PARSED_MATCHES: RefCell<ParsedFaces<ConversationMatch>> = RefCell::new(ParsedFaces::with_capacity(ParsedFaces::<ConversationMatch>::WINDOW_CAPACITY));
     /// Converted `matches` arrays by JavaScript array identity: the source Context pushes each
     /// accepted match onto one array, so only the appended tail is converted per call.
     static PARSED_MATCH_ARRAYS: RefCell<ParsedFaces<RefCell<Vec<Rc<ConversationMatch>>>>> = RefCell::new(ParsedFaces::new());
     static PARSED_NODES: RefCell<ParsedFaces<ConversationViewNode>> = RefCell::new(ParsedFaces::new());
-    static PARSED_VALUES: RefCell<ParsedFaces<serde_json::Value>> = RefCell::new(ParsedFaces::new());
+    static PARSED_VALUES: RefCell<ParsedFaces<serde_json::Value>> = RefCell::new(ParsedFaces::with_capacity(ParsedFaces::<serde_json::Value>::WINDOW_CAPACITY));
+    // Window arrays are few and large: keep only the latest handful so an old window's events
+    // do not stay alive through this cache.
+    static PARSED_EVENT_ARRAYS: RefCell<ParsedFaces<Vec<Rc<crate::ConversationLocationEvent>>>> = RefCell::new(ParsedFaces::with_capacity(4));
 }
 
 /// The immutable JSON behind a face, or a fresh parse of a foreign object.
@@ -98,11 +112,36 @@ fn json_value_from_js(value: &JsValue) -> Result<Rc<serde_json::Value>, JsValue>
     PARSED_VALUES.with(|cache| {
         cache
             .borrow_mut()
-            .get_or_parse(value, || js_to_json(value).map(Rc::new))
+            .get_or_parse(value, || js_to_value(value).map(Rc::new))
     })
 }
 
 /// The engine event behind a face, or a fresh parse of a foreign object.
+/// One `matchMany` answer on its way back to the assembler.
+#[derive(serde::Serialize)]
+struct PrematchRow {
+    id: String,
+    role: &'static str,
+}
+
+/// The events behind one window array, parsed once per module.
+fn events_from_js(
+    value: &JsValue,
+) -> Result<Rc<Vec<Rc<crate::ConversationLocationEvent>>>, JsValue> {
+    PARSED_EVENT_ARRAYS.with(|cache| {
+        cache.borrow_mut().get_or_parse(value, || {
+            let array = value.dyn_ref::<Array>().ok_or_else(|| {
+                js_sys::Error::new("Conversation Definition matchMany takes an array of events")
+            })?;
+            array
+                .iter()
+                .map(|face| event_from_js(&face))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Rc::new)
+        })
+    })
+}
+
 fn event_from_js(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
     if let Some(recovered) = recover_event(value) {
         return Ok(recovered);
@@ -141,13 +180,42 @@ pub fn native_conversation_node_definition_to_js(
 
     let matcher = definition.clone();
     let match_event = Closure::wrap(Box::new(move |event: JsValue| -> Result<JsValue, JsValue> {
-        let event = parse_event(&event)?;
+        // Through the identity cache: every Definition of this module is asked about the same
+        // event face, and a parse per Definition dominated a history load.
+        let event = event_from_js(&event)?;
         (matcher.match_event)(&event)
             .map_err(assembler_error)?
             .map_or(Ok(JsValue::NULL), |result| match_result_to_js(&result))
     })
         as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
     set(&value, "match", &match_event.into_js_value())?;
+
+    // The whole-window matcher: one crossing in (an array of event faces, parsed once per
+    // module and shared by every Definition asked about it) and one crossing out (JSON rows).
+    let batch_matcher = definition.clone();
+    let match_many = Closure::wrap(
+        Box::new(move |events: JsValue| -> Result<JsValue, JsValue> {
+            let events = events_from_js(&events)?;
+            let mut rows = Vec::with_capacity(events.len());
+            for event in events.iter() {
+                rows.push(
+                    (batch_matcher.match_event)(event)
+                        .map_err(assembler_error)?
+                        .map(|result| PrematchRow {
+                            id: result.id,
+                            role: match result.role {
+                                ConversationMatchRole::Start => "start",
+                                ConversationMatchRole::Update => "update",
+                            },
+                        }),
+                );
+            }
+            let text = serde_json::to_string(&rows)
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            Ok(JsValue::from_str(&text))
+        }) as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
+    );
+    set(&value, "matchMany", &match_many.into_js_value())?;
 
     let starter = definition.clone();
     let start = Closure::wrap(Box::new(
@@ -640,7 +708,7 @@ fn parse_data_store(data: &JsValue) -> Result<Rc<ConversationLocationDataStore>,
             .get(0)
             .as_string()
             .ok_or_else(|| js_sys::Error::new("Conversation Location data key must be a string"))?;
-        values.insert(key, Rc::new(js_to_json(&pair.get(1))?));
+        values.insert(key, Rc::new(js_to_value(&pair.get(1))?));
     }
     Ok(Rc::new(ConversationLocationDataStore::from_values(values)))
 }
@@ -754,6 +822,9 @@ impl RetainedParses {
 
     fn parse(&mut self, key: &str, face: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
         let value = match self.entries.get(key) {
+            // The same face again is the same data: share the retained value instead of
+            // walking and copying it.
+            Some((previous, previous_js)) if previous_js == face => return Ok(previous.clone()),
             Some((previous, previous_js)) => js_to_value_reusing(previous, previous_js, face)?,
             None => js_to_value(face)?,
         };

@@ -6,8 +6,15 @@
 //! per streamed block. These converters walk the value structurally, hand back the previous
 //! JavaScript subtree wherever the value is unchanged, and extend a retained string by its
 //! appended suffix, so a streaming append costs the delta plus one structural comparison.
+//!
+//! A subtree with nothing to reuse crosses as JSON text: one call into the engine's native
+//! `JSON` and one string copy replace a call per key and per string, which dominated a history
+//! load (tens of thousands of fresh events, each walked key by key from every Definition
+//! module). The structural walk is reserved for subtrees that can share their predecessor.
 
-use js_sys::{Array, JsString, Map as JsMap, Number, Object, Reflect, Symbol};
+use std::cell::RefCell;
+
+use js_sys::{Array, Function, JSON, JsString, Map as JsMap, Number, Object, Reflect, Symbol};
 use serde_json::{Map, Value};
 use wasm_bindgen::{JsCast as _, JsValue};
 
@@ -15,6 +22,39 @@ use crate::wasm_session::{js_to_json, json_to_js};
 
 /// Strings at least this long ride as one retained JavaScript string that grows by its suffix.
 const RETAINED_TEXT_BYTES: usize = 1024;
+
+thread_local! {
+    /// `JSON.stringify` replacer giving the deserializer's readings of the shapes JSON text
+    /// would otherwise lose: an `undefined` member is `null`, a `Map` is its entries, and a
+    /// safe bigint is a number.
+    static ENGINE_REPLACER: RefCell<Option<Function>> = const { RefCell::new(None) };
+}
+
+fn engine_replacer() -> Function {
+    ENGINE_REPLACER.with(|slot| {
+        slot.borrow_mut()
+            .get_or_insert_with(|| {
+                Function::new_with_args(
+                    "key, value",
+                    "if (value === undefined) return null;\
+                     if (value instanceof Map) return Object.fromEntries(value);\
+                     if (typeof value === 'bigint') return Number(value);\
+                     return value;",
+                )
+            })
+            .clone()
+    })
+}
+
+/// Parses a fresh JavaScript object graph through JSON text: one native `JSON.stringify`, one
+/// string crossing, one `serde_json` parse.
+fn fresh_js_to_value(value: &JsValue) -> Result<Value, JsValue> {
+    let text = JSON::stringify_with_replacer(value, &engine_replacer())?;
+    let Some(text) = text.as_string() else {
+        return js_to_json(value);
+    };
+    serde_json::from_str(&text).map_err(|error| js_sys::Error::new(&error.to_string()).into())
+}
 
 /// Converts one JSON value into plain JavaScript data without JSON text.
 ///
@@ -34,23 +74,10 @@ pub fn value_to_js(value: &Value) -> Result<JsValue, JsValue> {
             None => return json_to_js(value),
         },
         Value::String(text) => JsValue::from_str(text),
-        Value::Array(entries) => {
-            let array = Array::new();
-            for entry in entries {
-                array.push(&value_to_js(entry)?);
-            }
-            array.into()
-        }
-        Value::Object(map) => {
-            if map.contains_key("__proto__") {
-                return json_to_js(value);
-            }
-            let object = Object::new();
-            for (key, entry) in map {
-                Reflect::set(&object, &JsValue::from_str(key), &value_to_js(entry)?)?;
-            }
-            object.into()
-        }
+        Value::Array(entries) if entries.is_empty() => Array::new().into(),
+        Value::Object(map) if map.is_empty() => Object::new().into(),
+        // A fresh graph crosses as one JSON text and one native parse.
+        Value::Array(_) | Value::Object(_) => return json_to_js(value),
     })
 }
 
@@ -140,24 +167,10 @@ pub fn js_to_value(value: &JsValue) -> Result<Value, JsValue> {
     if let Some(text) = value.as_string() {
         return Ok(Value::String(text));
     }
-    if let Some(array) = value.dyn_ref::<Array>() {
-        return array
-            .iter()
-            .map(|entry| js_to_value(&entry))
-            .collect::<Result<Vec<_>, _>>()
-            .map(Value::Array);
-    }
-    if is_plain_object(value) {
-        let mut map = Map::new();
-        for entry in Object::entries(value.unchecked_ref()) {
-            let pair: Array = entry.unchecked_into();
-            let key = pair
-                .get(0)
-                .as_string()
-                .ok_or_else(|| js_sys::Error::new("object keys must be strings"))?;
-            map.insert(key, js_to_value(&pair.get(1))?);
-        }
-        return Ok(Value::Object(map));
+    if value.is_object() {
+        // Arrays, plain objects, and the deserializer's collection shapes (Map, iterables) all
+        // take the JSON path; the replacer keeps its readings of `undefined` and `Map`.
+        return fresh_js_to_value(value);
     }
     js_to_json(value)
 }

@@ -220,7 +220,8 @@ fn parse_history_entry(value: &JsValue) -> Result<SessionHistoryEntry, JsValue> 
 pub(crate) fn parse_event(
     value: &JsValue,
 ) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
-    let wire = js_to_json(value)?;
+    // One JSON crossing for the whole event; `data` is the parsed wire's own subtree.
+    let wire = crate::wasm_value_bridge::js_to_value(value)?;
     let seq = safe_u64(
         &required(value, "seq", "Session event")?,
         "Session event seq",
@@ -230,7 +231,10 @@ pub(crate) fn parse_event(
         "Session event time",
     )?;
     let event_type = required_string(value, "type", "Session event")?;
-    let data = js_to_json(&required(value, "data", "Session event")?)?;
+    let data = match wire.get("data") {
+        Some(data) => data.clone(),
+        None => return Err(js_sys::Error::new("Session event lacks data").into()),
+    };
     Ok(crate::ConversationLocationEvent::with_wire(
         seq, time, event_type, data, wire,
     ))
