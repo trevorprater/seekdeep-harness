@@ -379,7 +379,7 @@ fn shared_estimator_prices_envelope_parts_independently() {
     assert!(
         estimate_content(&[ContentBlock::Unknown {
             block_type: "future".to_owned(),
-            fields: Map::from_iter([("payload".to_owned(), json!("abcd"))]).into(),
+            fields: Map::from_iter([("payload".to_owned(), json!("abcd"))]),
         }]) > 4
     );
 }

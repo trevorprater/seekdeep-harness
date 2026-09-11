@@ -150,14 +150,11 @@ fn hands_every_appended_event_over_with_envelope_identity_and_cloned_body() {
     // Deep-copy isolation: mutating the handed-off body never reaches the log.
     {
         let mut records = backend.records.lock();
-        let mut content = records[1].body["content"].as_array().unwrap().clone();
-        content[0].insert("text", json!("tampered").into()).unwrap();
+        let mut blocks = records[1].body["content"].as_array().unwrap().clone();
+        blocks[0].insert("text", json!("tampered").into()).unwrap();
         records[1]
             .body
-            .insert(
-                "content",
-                seekdeep_core::session::JsonValue::array(&content),
-            )
+            .insert("content", seekdeep_core::session::JsonValue::array(&blocks))
             .unwrap();
     }
     let logged = &session.events()[1];

@@ -950,7 +950,7 @@ async fn credentials_are_value_free_write_only_and_forward_committed_events() {
         next_remote_event(&mut events).await,
         (
             "credentials/updated".to_owned(),
-            vec![json!("OPENAI_API_KEY")]
+            vec![json!("OPENAI_API_KEY").into()]
         )
     );
     let after = value(
@@ -1290,7 +1290,7 @@ async fn settings_events_are_forwarded_and_unpolled_streams_release_listeners() 
         seekdeep_settings::SETTINGS_DOCUMENT_UPDATED_EVENT
     );
     assert_eq!(forwarded.1[0], "llm-deepseek");
-    assert!(forwarded.1[1].is_number());
+    assert!(forwarded.1[1].as_f64().is_some());
     signal.abort();
     drop(events);
 

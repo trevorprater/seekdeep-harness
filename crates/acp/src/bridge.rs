@@ -19,7 +19,7 @@ use seekdeep_agent_loop::{AgentErrorEvent, AgentInboxClaimed};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::session::{Session, SessionEvent, SessionId};
 use seekdeep_llm::{ContentBlock, JsonString, MessageSource, ModelId, ProviderId, UserMessage};
-use seekdeep_lossless_json::JsonValue;
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use seekdeep_sdk_protocol::{JsonRpcLineTransport, JsonRpcRawResponseError, JsonRpcResponseError};
 use seekdeep_subagent::SUBAGENTS;
 use seekdeep_system_prompt::SYSTEM_PROMPT;
@@ -387,6 +387,7 @@ impl AcpBridge {
         Ok(json!({"sessionId":id.as_str()}))
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn prompt_json(self: &Arc<Self>, params: JsonValue) -> anyhow::Result<Value> {
         self.assert_open()?;
         let id: JsonString = params
@@ -406,18 +407,16 @@ impl AcpBridge {
         if text.trim().is_empty() {
             return Err(invalid_params("empty prompt"));
         }
-        let id = match id.as_str() {
-            Some(id) => AcpSessionId::new(id),
-            None => {
-                let mut message = JsonString::from("Invalid params: unknown session: ");
-                message.push_utf16(id.utf16_units());
-                return Err(anyhow::Error::new(JsonRpcRawResponseError {
-                    code: Some(-32602),
-                    message,
-                    data: None,
-                }));
-            }
+        let Some(id) = id.as_str() else {
+            let mut message = JsonString::from("Invalid params: unknown session: ");
+            message.push_utf16(id.utf16_units());
+            return Err(anyhow::Error::new(JsonRpcRawResponseError {
+                code: Some(-32602),
+                message,
+                data: None,
+            }));
         };
+        let id = AcpSessionId::new(id);
         let (receiver, agent, message_id, message) = {
             let mut sessions = self.sessions.lock();
             let record = sessions
@@ -718,7 +717,7 @@ impl AcpBridge {
                 && let Some(content) = event
                     .data
                     .pointer("/message/content")
-                    .and_then(|content| content.array_items())
+                    .and_then(JsonRef::array_items)
             {
                 for block in content {
                     let text = match block
@@ -762,7 +761,7 @@ impl AcpBridge {
             let mut error_sender = None;
             if event.event_type == "turn/end"
                 && let Some(inflight) = record.inflight.as_mut()
-                && inflight.turn == event.data.get("turn").and_then(|value| value.as_u64())
+                && inflight.turn == event.data.get("turn").and_then(JsonRef::as_u64)
             {
                 let kind = event
                     .data

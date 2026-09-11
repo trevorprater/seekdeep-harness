@@ -111,7 +111,7 @@ async fn dynamic_tool_keeps_raw_arguments_results_metadata_and_rejections() {
             purpose: "Keep JavaScript string code units through every tool callback.".to_owned(),
             code: DynamicCordisCode {
                 host: Some(
-                    r#"return { inject: ['tools'], apply(ctx) {
+                    r"return { inject: ['tools'], apply(ctx) {
                 harness.registerTool(ctx, harness.defineTool({
                     name: 'raw_echo', description: 'Return the supplied JSON payload.',
                     parameters: { payload: { type: 'json', required: true } },
@@ -126,8 +126,8 @@ async fn dynamic_tool_keeps_raw_arguments_results_metadata_and_rejections() {
                     parameters: {}, output: { schema: { type: 'string' }, render() { return []; } },
                     async execute() { throw '\udfff x \ud800'; }
                 }));
-            }};"#
-                        .to_owned(),
+            }};"
+                    .to_owned(),
                 ),
                 client: None,
             },

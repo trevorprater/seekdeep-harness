@@ -406,6 +406,7 @@ struct RawPresentationArgs {
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn history_and_mux_preserve_raw_presenter_input_output_and_metadata() {
     let harness = Harness::new();
     let seen_meta = Arc::new(Mutex::new(None));

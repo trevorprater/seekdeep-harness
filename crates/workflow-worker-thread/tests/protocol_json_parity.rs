@@ -27,7 +27,7 @@ fn child_settlement_json_round_trip_preserves_scalar_and_surrogate_text() {
 #[test]
 fn host_message_json_keeps_closed_tags_and_required_field_validation() {
     for raw in [
-        r#"{}"#,
+        r"{}",
         r#"{"type":"unknown"}"#,
         r#"{"type":"go","type":"go"}"#,
         r#"{"type":"child-started","callId":1,"callId":2,"childId":"child"}"#,

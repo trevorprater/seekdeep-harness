@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
-use seekdeep_lossless_json::JsonValue;
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use serde_json::{Map, Value, json};
 
@@ -240,8 +240,7 @@ impl AcpClient {
         };
         let update = params
             .get("update")
-            .map(|update| update.to_owned())
-            .unwrap_or_else(|| Value::Null.into());
+            .map_or_else(|| Value::Null.into(), JsonRef::to_owned);
         if let Some(observer) = self.observer.lock().clone() {
             observer(&AcpSessionUpdate {
                 session_id: AcpSessionId::new(session_id),

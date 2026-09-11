@@ -79,6 +79,10 @@ pub fn acp_content_text(content: &Value) -> &str {
 }
 
 /// Translates Harness prompt blocks to ACP text blocks, dropping non-text blocks.
+///
+/// # Panics
+///
+/// Panics if a text block fails to serialize, which the fixed block shape rules out.
 #[must_use]
 pub fn to_acp_prompt(prompt: &[seekdeep_llm::ContentBlock]) -> Vec<JsonValue> {
     prompt

@@ -263,6 +263,7 @@ fn finish_error(finish: &FinishReason) -> Option<anyhow::Error> {
 ///
 /// Returns cancellation, empty-selection, oversize-input, route, stream,
 /// assembly, or empty-title failures.
+#[allow(clippy::too_many_lines)]
 pub async fn generate_session_title_with_llm(
     ctx: &Context,
     config: &SessionTitleLlmConfig,
