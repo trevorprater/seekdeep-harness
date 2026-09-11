@@ -986,7 +986,7 @@ fn wasm_classic_package(
     let bindings = std::fs::read_to_string(staging.join("client.js"))?;
     let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
     let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
-    let web_bundle = classic_web_bundle(&bindings, &global, module_id)?;
+    let web_bundle = classic_web_bundle(&bindings, &bytes, &global, module_id)?;
     let compile = |script| {
         prepare_classic_script(
             &metadata.workspace_root,
@@ -3022,17 +3022,24 @@ fn classic_module_bundle(
 /// decoded from an embedded literal on the main thread.
 ///
 /// The sidecar URL derives from the executing script's own URL (or the `__seekdeepBundleSource`
-/// global a harness sets before evaluating the text), keeping its `?rev=` query so the Host may
-/// serve the sidecar as an immutable, revision-addressed resource. Compatibility exports that
-/// call into the module run once it is ready; the factory handoff carries that readiness so the
-/// module table awaits it before materializing the factory.
-fn classic_web_bundle(bindings: &str, global: &str, module_id: &str) -> anyhow::Result<String> {
+/// global a harness sets before evaluating the text) and names the module by its own content
+/// hash (`?v=`), so the Host may serve the sidecar as an immutable resource while a script
+/// re-fetched at a stale revision (a hot reload) still gets the module its bindings were built
+/// with. Compatibility exports that call into the module run once it is ready; the factory
+/// handoff carries that readiness so the module table awaits it before materializing the factory.
+fn classic_web_bundle(
+    bindings: &str,
+    wasm: &[u8],
+    global: &str,
+    module_id: &str,
+) -> anyhow::Result<String> {
     let bindings = named_wasm_bindings(bindings, global)?;
     let compatibility = compatibility_prelude(global, module_id);
     let factory = module_factory(global, module_id);
     let module_id = serde_json::to_string(module_id)?;
+    let version = hex::encode(<sha1::Sha1 as sha1::Digest>::digest(wasm))[..12].to_owned();
     Ok(format!(
-        "{bindings}\n(() => {{\n  const script = typeof document === 'undefined' ? null : document.currentScript;\n  const source = (script !== null && script.src) || window.__seekdeepBundleSource;\n  if (!source) throw new Error(`seekdeep: bundle ${{{module_id}}} cannot locate its WebAssembly sidecar`);\n  const sidecar = new URL(source, window.location.href);\n  sidecar.pathname = sidecar.pathname.replace(/client(\\.web)?\\.js$/, 'client_bg.wasm');\n  const ready = {global}({{ module_or_path: sidecar.href }}).then(() => {{\n{compatibility}  }});\n  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory}, ready }});\n}})();\n"
+        "{bindings}\n(() => {{\n  const script = typeof document === 'undefined' ? null : document.currentScript;\n  const source = (script !== null && script.src) || window.__seekdeepBundleSource;\n  if (!source) throw new Error(`seekdeep: bundle ${{{module_id}}} cannot locate its WebAssembly sidecar`);\n  const sidecar = new URL(source, window.location.href);\n  sidecar.pathname = sidecar.pathname.replace(/client(\\.web)?\\.js$/, 'client_bg.wasm');\n  sidecar.search = '?v={version}';\n  const ready = {global}({{ module_or_path: sidecar.href }}).then(() => {{\n{compatibility}  }});\n  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory}, ready }});\n}})();\n"
     ))
 }
 
@@ -5230,6 +5237,7 @@ mod tests {
     fn classic_web_bundle_streams_the_sidecar_and_hands_over_readiness() {
         let bundle = classic_web_bundle(
             "let wasm_bindgen = {};",
+            &[1, 2, 3],
             "__seekdeep_probe_wasm",
             "@seekdeep-ai/seekdeep-client-runtime",
         )
@@ -5240,6 +5248,8 @@ mod tests {
         assert!(bundle.contains("document.currentScript"));
         assert!(bundle.contains("window.__seekdeepBundleSource"));
         assert!(bundle.contains(r"replace(/client(\.web)?\.js$/, 'client_bg.wasm')"));
+        // The sidecar is named by the module's own content hash, never by the script's `?rev=`.
+        assert!(bundle.contains("sidecar.search = '?v=7037807198c2'"));
         assert!(
             bundle.contains("__seekdeep_probe_wasm({ module_or_path: sidecar.href }).then(() => {")
         );

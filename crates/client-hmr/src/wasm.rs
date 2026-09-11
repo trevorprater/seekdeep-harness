@@ -62,7 +62,8 @@ impl WasmClientHmrPlatform {
 
         let old_fiber =
             Reflect::get(&entry, &JsValue::from_str("fiber")).map_err(|error| js_error(&error))?;
-        if !old_fiber.is_undefined() {
+        // An entry that never applied, or whose plugin failed, has no fiber object at all.
+        if old_fiber.is_object() {
             let runtime = Reflect::get(&old_fiber, &JsValue::from_str("runtime"))
                 .map_err(|error| js_error(&error))?;
             if !runtime.is_null() {
