@@ -580,7 +580,7 @@ async fn run_step(
         } => {
             let session = require_session(session_id.as_ref(), "promptAndWaitForAgentMessage")?;
             let expected = wait_for_text.clone();
-            let predicate: AcpUpdatePredicate = Box::new(move |update: &Value| {
+            let predicate: AcpUpdatePredicate = Box::new(move |update| {
                 Ok(agent_message_text(update).is_some_and(|text| text == expected))
             });
             let update_done = active.wait_for_update(predicate);
@@ -708,22 +708,20 @@ fn text_prompt(text: &str) -> Vec<Value> {
     vec![json!({"type":"text","text":text})]
 }
 
-fn agent_message_text(update: &Value) -> Option<&str> {
-    (update.get("sessionUpdate").and_then(Value::as_str) == Some("agent_message_chunk"))
-        .then(|| {
-            update
-                .get("content")
-                .and_then(|content| content.get("type"))
-                .and_then(Value::as_str)
-                .filter(|kind| *kind == "text")
-                .and_then(|_| {
-                    update
-                        .get("content")
-                        .and_then(|content| content.get("text"))
-                        .and_then(Value::as_str)
-                })
-        })
-        .flatten()
+fn agent_message_text(update: &seekdeep_core::session::JsonValue) -> Option<&str> {
+    if !update
+        .get("sessionUpdate")
+        .is_some_and(|kind| kind == "agent_message_chunk")
+        || !update
+            .pointer("/content/type")
+            .is_some_and(|kind| kind == "text")
+    {
+        return None;
+    }
+    update
+        .get_value("content")?
+        .get_value("text")
+        .and_then(seekdeep_core::session::JsonValue::as_str)
 }
 
 /// Waits for an open durable turn at or above an optional minimum.

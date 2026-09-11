@@ -10,7 +10,7 @@ use seekdeep_agent::{
 };
 use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::{Context, EventOptions, PluginFiber};
-use seekdeep_core::session::{Session, SessionId};
+use seekdeep_core::session::{JsonValue, Session, SessionId};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, MessageSource, UserMessage};
 use seekdeep_repeat_tool_reminder::RepeatToolReminderConfig;
 use seekdeep_scope::ScopeKey;
@@ -42,16 +42,12 @@ impl Harness {
             tools
                 .register(
                     &root,
-                    define_content_tool_fixture(ContentToolFixtureOptions::<Value>::new(
+                    define_content_tool_fixture(ContentToolFixtureOptions::<JsonValue>::new(
                         name,
                         name,
                         json!({}),
                         Arc::new(|_, _| {
-                            Box::pin(async {
-                                Ok(vec![ContentBlock::Text {
-                                    text: "ok".into(),
-                                }])
-                            })
+                            Box::pin(async { Ok(vec![ContentBlock::Text { text: "ok".into() }]) })
                         }),
                     ))
                     .expect("fixture"),
@@ -84,7 +80,7 @@ impl Harness {
         &self,
         agent: Option<&Arc<Agent>>,
         name: &str,
-        arguments: Value,
+        arguments: impl Into<JsonValue>,
     ) -> ToolExecutionResult {
         let call = self.calls.fetch_add(1, Ordering::Relaxed);
         let mut input = ToolExecutionInput::new(
@@ -123,25 +119,21 @@ impl Harness {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
 
 fn plugin_context(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::plugin("test"),
     )
 }
 
 fn context_text(message: &UserMessage) -> &str {
     match message.content().first() {
-        Some(ContentBlock::Text { text }) => text,
+        Some(ContentBlock::Text { text }) => text.as_str().expect("fixture text is Unicode"),
         other => panic!("expected text context, got {other:?}"),
     }
 }
@@ -156,8 +148,7 @@ fn reminder_texts(result: &ToolExecutionResult) -> Vec<String> {
                     .source()
                     .fields
                     .get("plugin")
-                    .and_then(Value::as_str)
-                    == Some("repeat-tool-reminder")
+                    .is_some_and(|value| value.as_str() == Some("repeat-tool-reminder"))
         })
         .map(|message| context_text(message).to_owned())
         .collect()
@@ -187,6 +178,29 @@ async fn reminds_gently_at_first_default_threshold_and_in_detail_at_second() {
     assert!(reminders[1].contains("consecutive_calls: 5"));
     assert!(reminders[1].contains("- tool: probe"));
     assert!(reminders[1].contains(r#"{"q":"same"}"#));
+}
+
+#[tokio::test]
+async fn raw_arguments_keep_the_same_repeat_chain_across_source_equivalent_objects() {
+    let harness = Harness::new(config(&[2.0, 3.0])).await;
+    let agent = harness.agent("raw-chain");
+    let first = JsonValue::parse(
+        r#"{"z":[{"\ud800":"\udfff","a":1e0}],"__proto__":{"x":1},"10":10,"2":2}"#.to_owned(),
+    )
+    .unwrap();
+    let reordered = JsonValue::parse(
+        r#"{"2":2.0,"10":1e1,"z":[{"a":1,"\uD800":"\uDFFF"}],"__proto__":{"x":999}}"#.to_owned(),
+    )
+    .unwrap();
+    let mut reminders = Vec::new();
+    for arguments in [first, reordered.clone(), reordered] {
+        let result = harness.execute(Some(&agent), "probe", arguments).await;
+        assert!(!result.is_error(), "{:?}", result.error());
+        reminders.extend(reminder_texts(&result));
+    }
+    assert_eq!(reminders.len(), 2);
+    assert!(reminders[1].contains(r#"{"2":2,"10":10,"z":[{"a":1,"\ud800":"\udfff"}]}"#));
+    harness.root.fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]
@@ -501,7 +515,7 @@ async fn reminder_preserves_downstream_canonical_value_replacement() {
             &harness.root,
             |_, _, _| async {
                 Ok(PostToolDecision::ReplaceValue {
-                    value: json!([{"type": "text", "text": "replaced"}]),
+                    value: json!([{"type": "text", "text": "replaced"}]).into(),
                     additional_contexts: Vec::new(),
                 })
             },

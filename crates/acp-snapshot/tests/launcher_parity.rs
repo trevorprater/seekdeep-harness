@@ -29,11 +29,11 @@ fn options(cwd: &TempDir) -> AcpTestLaunchOptions {
     }
 }
 
-fn update_text(update: &Value) -> Option<&str> {
+fn update_text(update: &seekdeep_core::session::JsonValue) -> Option<&str> {
     update
-        .get("content")
-        .and_then(|content| content.get("text"))
-        .and_then(Value::as_str)
+        .get_value("content")
+        .and_then(|content| content.get_value("text"))
+        .and_then(seekdeep_core::session::JsonValue::as_str)
 }
 
 #[tokio::test]

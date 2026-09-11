@@ -241,13 +241,19 @@ enum PwshValue {
         #[serde(rename = "timedOut")]
         timed_out: bool,
         aborted: bool,
-        #[serde(rename = "timeoutMs")]
+        #[serde(rename = "timeoutMs", deserialize_with = "deserialize_number")]
         timeout_ms: f64,
         stdout: OutputSnapshot,
         stderr: OutputSnapshot,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sandbox: Option<SandboxSnapshot>,
     },
+}
+
+fn deserialize_number<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f64, D::Error> {
+    serde_json::Number::deserialize(deserializer)?
+        .as_f64()
+        .ok_or_else(|| serde::de::Error::custom("expected a JavaScript number"))
 }
 
 struct ShellJobHooks {

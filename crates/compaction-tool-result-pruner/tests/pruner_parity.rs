@@ -55,9 +55,7 @@ fn measures_only_text_blocks() {
         ContentBlock::Reasoning {
             text: "ignored".to_owned(),
         },
-        ContentBlock::Text {
-            text: "ef".into(),
-        },
+        ContentBlock::Text { text: "ef".into() },
     ];
     assert_eq!(pruner.measure_content(&blocks), 6);
 }
@@ -130,9 +128,7 @@ fn preserves_rich_block_order_and_supports_zero_head_and_tail() {
             },
             reasoning,
             call,
-            ContentBlock::Text {
-                text: "CCC".into(),
-            },
+            ContentBlock::Text { text: "CCC".into() },
         ]
     );
     assert!(pruner.measure_content(&result) <= 50);

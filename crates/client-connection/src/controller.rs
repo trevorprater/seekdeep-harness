@@ -12,6 +12,7 @@ use std::{
 use futures::{StreamExt, future::BoxFuture, stream::BoxStream};
 use parking_lot::Mutex;
 use seekdeep_abort::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
@@ -28,16 +29,37 @@ pub struct EventFrame {
     #[serde(rename = "rpcId")]
     pub rpc_id: RpcId,
     /// Mux or Host frame payload.
-    pub payload: Value,
+    pub payload: JsonValue,
 }
 
 impl EventFrame {
     fn is_stream_error(&self) -> bool {
         self.payload
-            .as_object()
-            .and_then(|payload| payload.get("type"))
-            .and_then(Value::as_str)
-            == Some("stream/error")
+            .get("type")
+            .is_some_and(|kind| kind == "stream/error")
+    }
+
+    pub(crate) fn server_request(&self) -> anyhow::Result<JsonValue> {
+        #[derive(Serialize)]
+        struct ServerRequest<'a> {
+            #[serde(rename = "type")]
+            kind: &'static str,
+            #[serde(rename = "rpcId")]
+            rpc_id: &'a RpcId,
+            method: &'a JsonValue,
+            payload: &'a JsonValue,
+        }
+        let method = self
+            .payload
+            .get_value("type")
+            .filter(|kind| kind.is_string())
+            .ok_or_else(|| anyhow::anyhow!("downlink frame has no string type"))?;
+        Ok(JsonValue::from_serialize(&ServerRequest {
+            kind: "server-request",
+            rpc_id: &self.rpc_id,
+            method,
+            payload: &self.payload,
+        })?)
     }
 }
 

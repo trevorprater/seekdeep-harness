@@ -844,18 +844,14 @@ mod tests {
         first
             .agent
             .followup(seekdeep_llm::UserMessage::new(
-                vec![seekdeep_llm::ContentBlock::Text {
-                    text: "a".into(),
-                }],
+                vec![seekdeep_llm::ContentBlock::Text { text: "a".into() }],
                 seekdeep_llm::MessageSource::user(),
             ))
             .expect("first prompt");
         second
             .agent
             .followup(seekdeep_llm::UserMessage::new(
-                vec![seekdeep_llm::ContentBlock::Text {
-                    text: "b".into(),
-                }],
+                vec![seekdeep_llm::ContentBlock::Text { text: "b".into() }],
                 seekdeep_llm::MessageSource::user(),
             ))
             .expect("second prompt");

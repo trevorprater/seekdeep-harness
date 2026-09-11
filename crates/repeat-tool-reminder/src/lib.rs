@@ -1,6 +1,6 @@
 //! Advisory per-agent detection of repeated identical tool calls.
 
-use std::{cmp::Ordering, sync::Arc};
+use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentEvent};
@@ -8,9 +8,10 @@ use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonValue};
 use seekdeep_tools::{PostToolDecision, ToolExecution};
 use serde::{Deserialize, Serialize};
-use serde_json::{Number, Value};
+use serde_json::Value;
 
 /// Cordis plugin name.
 pub const NAME: &str = "repeat-tool-reminder";
@@ -377,75 +378,84 @@ pub fn register_invariant(
     registry.register("seekdeep-repeat-tool-reminder", InvariantInstaller::noop())
 }
 
-fn canonicalize(value: &Value) -> String {
+fn canonicalize(value: &JsonValue) -> String {
+    enum Part<'a> {
+        Value(JsonRef<'a>),
+        Key(Vec<u16>),
+        Text(&'static str),
+    }
     let mut output = String::new();
-    write_canonical(value, &mut output);
+    let mut stack = vec![Part::Value(value.as_ref())];
+    while let Some(part) = stack.pop() {
+        match part {
+            Part::Text(text) => output.push_str(text),
+            Part::Key(key) => {
+                output.push_str(JsonString::from_utf16(&key).as_raw());
+                output.push(':');
+            }
+            Part::Value(value) => {
+                if let Some(values) = value.array_items() {
+                    output.push('[');
+                    stack.push(Part::Text("]"));
+                    for (index, value) in values.into_iter().enumerate().rev() {
+                        stack.push(Part::Value(value));
+                        if index > 0 {
+                            stack.push(Part::Text(","));
+                        }
+                    }
+                } else if let Some(entries) = value.object_entries() {
+                    let mut values = BTreeMap::new();
+                    for (key, value) in entries {
+                        let key = key.to_utf16().expect("JSON object keys are strings");
+                        if !key.iter().copied().eq("__proto__".encode_utf16()) {
+                            values.insert(key, value);
+                        }
+                    }
+                    let mut entries = values.into_iter().collect::<Vec<_>>();
+                    entries.sort_by(|(left, _), (right, _)| javascript_key_cmp(left, right));
+                    output.push('{');
+                    stack.push(Part::Text("}"));
+                    for (index, (key, value)) in entries.into_iter().enumerate().rev() {
+                        stack.push(Part::Value(value));
+                        stack.push(Part::Key(key));
+                        if index > 0 {
+                            stack.push(Part::Text(","));
+                        }
+                    }
+                } else {
+                    output.push_str(&value.to_owned().stringify());
+                }
+            }
+        }
+    }
     output
 }
 
-fn write_canonical(value: &Value, output: &mut String) {
-    match value {
-        Value::Null => output.push_str("null"),
-        Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
-        Value::Number(number) => output.push_str(&javascript_number(number)),
-        Value::String(value) => output.push_str(
-            &serde_json::to_string(value).expect("serializing a Rust string cannot fail"),
-        ),
-        Value::Array(values) => {
-            output.push('[');
-            for (index, value) in values.iter().enumerate() {
-                if index > 0 {
-                    output.push(',');
-                }
-                write_canonical(value, output);
-            }
-            output.push(']');
-        }
-        Value::Object(values) => {
-            let mut entries = values.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| javascript_key_cmp(left, right));
-            output.push('{');
-            for (index, (key, value)) in entries.into_iter().enumerate() {
-                if index > 0 {
-                    output.push(',');
-                }
-                output.push_str(
-                    &serde_json::to_string(key).expect("serializing a Rust string cannot fail"),
-                );
-                output.push(':');
-                write_canonical(value, output);
-            }
-            output.push('}');
-        }
-    }
-}
-
-fn javascript_number(number: &Number) -> String {
-    ryu_js::Buffer::new()
-        .format(number.as_f64().expect("JSON numbers are finite"))
-        .to_owned()
-}
-
-fn javascript_key_cmp(left: &str, right: &str) -> Ordering {
+fn javascript_key_cmp(left: &[u16], right: &[u16]) -> Ordering {
     match (array_index(left), array_index(right)) {
         (Some(left), Some(right)) => left.cmp(&right),
         (Some(_), None) => Ordering::Less,
         (None, Some(_)) => Ordering::Greater,
-        (None, None) => left.encode_utf16().cmp(right.encode_utf16()),
+        (None, None) => left.cmp(right),
     }
 }
 
-fn array_index(value: &str) -> Option<u32> {
-    if value == "0" {
+fn array_index(value: &[u16]) -> Option<u32> {
+    if value == [u16::from(b'0')] {
         return Some(0);
     }
-    if value.starts_with('0')
-        || value.is_empty()
-        || !value.bytes().all(|byte| byte.is_ascii_digit())
-    {
+    if value.first() == Some(&u16::from(b'0')) || value.is_empty() {
         return None;
     }
-    value.parse::<u32>().ok().filter(|index| *index != u32::MAX)
+    let mut index = 0_u32;
+    for unit in value {
+        let digit = unit.checked_sub(u16::from(b'0'))?;
+        if digit > 9 {
+            return None;
+        }
+        index = index.checked_mul(10)?.checked_add(u32::from(digit))?;
+    }
+    (index != u32::MAX).then_some(index)
 }
 
 #[cfg(test)]
@@ -457,14 +467,17 @@ mod tests {
     #[test]
     fn canonical_json_sorts_deep_keys_and_emulates_javascript_key_order() {
         assert_eq!(
-            canonicalize(&json!({
-                "nested": { "y": null, "x": [1, 2] },
-                "a": 1
-            })),
+            canonicalize(
+                &json!({
+                    "nested": { "y": null, "x": [1, 2] },
+                    "a": 1
+                })
+                .into()
+            ),
             r#"{"a":1,"nested":{"x":[1,2],"y":null}}"#
         );
         assert_eq!(
-            canonicalize(&json!({"10": true, "2": false, "a": 1})),
+            canonicalize(&json!({"10": true, "2": false, "a": 1}).into()),
             r#"{"2":false,"10":true,"a":1}"#
         );
     }

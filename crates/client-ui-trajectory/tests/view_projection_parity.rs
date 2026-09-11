@@ -11,7 +11,10 @@ use seekdeep_client_ui_trajectory::{
     trajectory_partial_structure_signature, trajectory_request_usage, trajectory_timeline_mode,
     trajectory_timeline_partial,
 };
-use serde_json::json;
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
 
 #[test]
 fn structure_only_partial_preserves_identity_but_removes_streaming_content() {
@@ -79,8 +82,20 @@ fn request_numbers_merge_requests_nodes_usage_provenance_and_compaction() {
     assert_eq!(numbered.len(), 3);
     assert_eq!(numbered[0].number, 1);
     assert_eq!(numbered[0].group, "Step 1");
-    assert_eq!(numbered[0].provider.as_deref(), Some("request-provider"));
-    assert_eq!(numbered[0].model.as_deref(), Some("node-model"));
+    assert_eq!(
+        numbered[0]
+            .provider
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
+        Some("request-provider")
+    );
+    assert_eq!(
+        numbered[0]
+            .model
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
+        Some("node-model")
+    );
     assert_eq!(numbered[0].status, Some(TrajectoryRecordState::Complete));
     assert_eq!(numbered[0].usage.unwrap().input, Some(7));
     assert_eq!(numbered[1].purpose, TrajectoryRequestPurpose::Compaction);

@@ -27,18 +27,14 @@ const BASE: i64 = 1_783_987_200_000;
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
 
 fn plugin_message(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::plugin("time-context-test"),
     )
 }
@@ -48,7 +44,7 @@ fn event(event_type: &str, seq: u64, time: i64, data: Value, surface: bool) -> S
         event_type: event_type.to_owned(),
         seq,
         time,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: surface.then(SurfaceOp::append),
         ignorable: None,
@@ -223,6 +219,24 @@ fn validates_every_browser_zone_before_mixed_classification() {
     let alias = derive_browser_time_zone_context(&[user_rpc_message("x", "x", "Etc/UTC")])
         .expect_err("noncanonical alias");
     assert!(format!("{alias:#}").contains("browser time zone must be canonical"));
+}
+
+#[test]
+fn raw_message_metadata_keeps_browser_zone_validation() {
+    let message: UserMessage = serde_json::from_str(r#"{"id":"raw-zone","role":"user","content":[],"source":{"kind":"user","rpcId":"rpc","clientTimeZone":"UTC","opaque":{"\ud800":"\udfff"}},"opaque":"\udfff"}"#).unwrap();
+    assert_eq!(
+        derive_browser_time_zone_context(&[message]).unwrap(),
+        BrowserTimeZoneContext::Resolved {
+            time_zone: "UTC".to_owned()
+        }
+    );
+    let invalid: UserMessage = serde_json::from_str(r#"{"id":"invalid-zone","role":"user","content":[],"source":{"kind":"user","rpcId":"rpc","clientTimeZone":"\ud800"}}"#).unwrap();
+    assert!(
+        derive_browser_time_zone_context(&[invalid])
+            .unwrap_err()
+            .to_string()
+            .contains("canonical UTC or IANA Area/Location")
+    );
 }
 
 #[test]

@@ -10,13 +10,13 @@ pub use bar::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm::*;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ChatConversationViewMetadata, ConversationAssemblerError,
     ConversationLocation, ConversationLocationEvent, ConversationMatchResult,
     ConversationMatchRole, ConversationNodeContext, ConversationViewNode, ConversationVisibility,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-goal";
@@ -72,11 +72,11 @@ pub struct GoalCommandInputData {
     pub time: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GoalCommandInputState {
     command_id: GoalCommandId,
-    text: String,
+    text: Value,
     time: i64,
     seq: u64,
 }
@@ -95,13 +95,26 @@ pub fn goal_command_text(name: &str, args: Option<&str>) -> String {
     format!("/{name}{}", trim_end_js(args.unwrap_or_default()))
 }
 
+fn goal_command_value(name: &str, args: Option<&Value>) -> Value {
+    let mut text = format!("/{name}").encode_utf16().collect::<Vec<_>>();
+    let mut args = args.and_then(Value::to_utf16).unwrap_or_default();
+    while args
+        .last()
+        .is_some_and(|unit| char::from_u32(u32::from(*unit)).is_some_and(is_js_whitespace))
+    {
+        args.pop();
+    }
+    text.extend(args);
+    Value::from_utf16(&text)
+}
+
 fn event_string(
     event: &ConversationLocationEvent,
     key: &str,
 ) -> Result<String, ConversationAssemblerError> {
     event
         .data
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {
@@ -110,7 +123,7 @@ fn event_string(
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value).map(Rc::new).map_err(|error| {
+    Value::from_serialize(value).map(Rc::new).map_err(|error| {
         ConversationAssemblerError::new(format!("goal command serialization failed: {error}"))
     })
 }
@@ -121,7 +134,7 @@ fn state_of(
     let state = context.state.as_deref().ok_or_else(|| {
         ConversationAssemblerError::new("goal-command-input requires initialized state")
     })?;
-    serde_json::from_value(state.clone()).map_err(|error| {
+    state.deserialize().map_err(|error| {
         ConversationAssemblerError::new(format!("invalid goal-command-input state: {error}"))
     })
 }
@@ -142,7 +155,7 @@ pub fn goal_command_input_definition() -> AssemblerNodeDefinition {
         target: Some("chat".to_owned()),
         match_event: Rc::new(|event| {
             if event.event_type != "command/run"
-                || event.data.get("name").and_then(Value::as_str) != Some("goal")
+                || event.data.get_value("name").and_then(Value::as_str) != Some("goal")
             {
                 return Ok(None);
             }
@@ -159,10 +172,10 @@ pub fn goal_command_input_definition() -> AssemblerNodeDefinition {
             }
             let command_id = GoalCommandId::new(event_string(&accepted.event, "commandId")?);
             let name = event_string(&accepted.event, "name")?;
-            let args = accepted.event.data.get("args").and_then(Value::as_str);
+            let args = accepted.event.data.get_value("args");
             encode(&GoalCommandInputState {
                 command_id,
-                text: goal_command_text(&name, args),
+                text: goal_command_value(&name, args),
                 time: accepted.event.time,
                 seq: accepted.event.seq,
             })
@@ -179,11 +192,11 @@ pub fn goal_command_input_definition() -> AssemblerNodeDefinition {
                 .map_or(ConversationLocation::Unresolved, |start| {
                     start.location.clone()
                 });
-            let data = GoalCommandInputData {
-                command_id: state.command_id,
-                text: state.text,
-                time: state.time,
-            };
+            let data = Value::object([
+                ("commandId", serde_json::json!(state.command_id).into()),
+                ("text", state.text),
+                ("time", serde_json::json!(state.time).into()),
+            ]);
             Ok(Some(Rc::new(ConversationViewNode {
                 key: context.key.clone(),
                 kind: "command-input".to_owned(),

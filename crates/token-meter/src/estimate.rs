@@ -1,6 +1,9 @@
 //! Fixed-density heuristic shared by the service and projection folds.
 
-use seekdeep_core::{request_header::EpochHeader, session::JsonValue};
+use seekdeep_core::{
+    request_header::EpochHeader,
+    session::{JsonRef, JsonValue},
+};
 use seekdeep_llm::{ContentBlock, JsonString, Message};
 
 const CHARS_PER_TOKEN: usize = 4;
@@ -85,7 +88,7 @@ pub fn estimate_tools_tokens(header: Option<&EpochHeader>) -> u64 {
 pub fn estimate_recorded_header(header: &JsonValue) -> (u64, u64) {
     let system = header
         .get("system")
-        .and_then(|system| system.to_utf16())
+        .and_then(JsonRef::to_utf16)
         .filter(|system| !system.is_empty())
         .map_or(0, |system| {
             u64::try_from(system.len().div_ceil(CHARS_PER_TOKEN))

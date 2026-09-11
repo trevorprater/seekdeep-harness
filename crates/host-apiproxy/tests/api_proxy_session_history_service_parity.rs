@@ -415,7 +415,7 @@ async fn history_and_mux_preserve_raw_presenter_input_output_and_metadata() {
         "raw presentation fixture",
         json!({
             "label": { "type": "string", "required": true },
-            "payload": { "type": "object", "required": true }
+            "payload": { "type": "object", "required": true, "additionalProperties": true }
         }),
         Arc::new(|_: RawPresentationArgs, _| Box::pin(async { Ok(Vec::<ContentBlock>::new()) })),
     )
@@ -770,7 +770,9 @@ async fn cold_history_inspects_without_attaching_and_distinguishes_missing_compo
                 event_type: "session/title".to_owned(),
                 seq: 0,
                 time: 1,
-                data: json!({ "title": "Cold", "messageSeqs": [], "source": { "kind": "fallback" } }),
+                data:
+                    json!({ "title": "Cold", "messageSeqs": [], "source": { "kind": "fallback" } })
+                        .into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,
@@ -895,7 +897,7 @@ async fn cold_history_uses_the_logged_preset_standing_presenter_without_resuming
             event_type: "agent-preset/selected".to_owned(),
             seq: 0,
             time: 1,
-            data: json!({ "agentPreset": "minimal" }),
+            data: json!({ "agentPreset": "minimal" }).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -908,7 +910,8 @@ async fn cold_history_uses_the_logged_preset_standing_presenter_without_resuming
                 "callId": "call-1",
                 "name": "term",
                 "arguments": "{\"cmd\":\"echo\"}"
-            }),
+            })
+            .into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

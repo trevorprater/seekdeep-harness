@@ -334,4 +334,14 @@ fn failure_display_preserves_raw_messages_and_redacts_auth_before_rendering() {
             Some(expected)
         );
     }
+    for (value, expected) in [
+        (JsValue::UNDEFINED, "undefined"),
+        (JsValue::from_f64(f64::NAN), "NaN"),
+        (JsValue::from_f64(f64::INFINITY), "Infinity"),
+    ] {
+        assert_eq!(display_failure_message_js(value).unwrap(), expected);
+    }
+    let failure = Object::new();
+    set(&failure, "message", &JsValue::UNDEFINED);
+    assert_eq!(display_failure_message_js(failure.into()).unwrap(), "{}");
 }

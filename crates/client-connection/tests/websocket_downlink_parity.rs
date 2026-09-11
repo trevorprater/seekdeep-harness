@@ -15,11 +15,12 @@ use parking_lot::Mutex;
 use seekdeep_client_connection::{
     ConnectionApiProxy, ConnectionFallback, ConnectionHostConfig, DownlinkApi, DownlinkKind,
     DownlinkStream, EventFrame, HOST_API_PROXY, HOST_EVENTS_PATH, HttpResponse, MUX_EVENTS_PATH,
-    RpcId, WebSocketDownlinks, install_host,
+    RpcId, StreamApi, WebApiClient, WebSocketDownlinks, install_host,
 };
 use seekdeep_cordis::Context;
 use seekdeep_host_webserver::{ListenHost, WebServer, WebServerConfig, WebUpgradeRoute};
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 use tokio_tungstenite::{
@@ -124,7 +125,8 @@ async fn mux_and_host_use_independent_sockets_and_cancel_each_source() {
                             "type": "session/subscribed",
                             "sessionId": "session-1",
                             "lastSeq": 4,
-                        }),
+                        })
+                        .into(),
                     })
                 });
                 let tail =
@@ -146,7 +148,8 @@ async fn mux_and_host_use_independent_sockets_and_cancel_each_source() {
                             "type": "host/remote-event",
                             "event": "commands/change",
                             "args": [],
-                        }),
+                        })
+                        .into(),
                     })
                 });
                 let tail =
@@ -196,6 +199,65 @@ async fn mux_and_host_use_independent_sockets_and_cancel_each_source() {
     host.close(None).await.unwrap();
     wait_until(|| mux_aborted.load(Ordering::Acquire)).await;
     wait_until(|| host_aborted.load(Ordering::Acquire)).await;
+    downlinks.close().await.unwrap();
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn raw_event_view_projection_and_host_args_survive_both_socket_readers_and_observers() {
+    let mux_payload = JsonValue::parse(
+        r#"{"type":"session/event","sessionId":"raw-session","event":{"data":{"text":"before\ud800after","opaque":{"\udfff":["\ud800",1]}}},"view":{"title":"view\udfff"},"projection":{"value":{"\ud800":"\udfff"}}}"#.to_owned(),
+    )
+    .unwrap();
+    let host_payload = JsonValue::parse(
+        r#"{"type":"host/remote-event","event":"raw/change","args":[{"\ud800":"\udfff","text":"host\ud800"}]}"#.to_owned(),
+    )
+    .unwrap();
+    let payload_source = |rpc_id: &'static str, payload: JsonValue| {
+        source(move |signal| {
+            let payload = payload.clone();
+            stream::once(async move {
+                Ok(EventFrame {
+                    rpc_id: RpcId::new(rpc_id),
+                    payload,
+                })
+            })
+            .chain(idle(signal))
+            .boxed()
+        })
+    };
+    let downlinks = WebSocketDownlinks::new(api(
+        payload_source("raw-mux", mux_payload.clone()),
+        payload_source("raw-host", host_payload.clone()),
+    ));
+    let (context, _server, origin) = serve(&downlinks).await;
+    let client = WebApiClient::new(Some(&origin.replacen("ws://", "http://", 1))).unwrap();
+    let observed = Arc::new(Mutex::new(Vec::<JsonValue>::new()));
+    let _subscription = client.subscribe_envelopes({
+        let observed = observed.clone();
+        Arc::new(move |batch| observed.lock().extend_from_slice(batch))
+    });
+    let signal = AbortSignal::default();
+    let mut mux = client.mux(signal.clone(), Arc::new(|| {}));
+    let mut host = client.host(signal.clone(), Arc::new(|| {}));
+    let mux_frame = mux.next().await.unwrap().unwrap();
+    let host_frame = host.next().await.unwrap().unwrap();
+    assert_eq!(mux_frame.payload.as_raw(), mux_payload.as_raw());
+    assert_eq!(host_frame.payload.as_raw(), host_payload.as_raw());
+    wait_until(|| observed.lock().len() == 2).await;
+    for (rpc_id, payload) in [("raw-mux", &mux_payload), ("raw-host", &host_payload)] {
+        let observed = observed.lock();
+        let envelope = observed
+            .iter()
+            .find(|item| item["rpcId"] == rpc_id)
+            .unwrap();
+        assert_eq!(envelope["payload"].as_raw(), payload.as_raw());
+        assert_eq!(envelope["type"], "server-request");
+        assert_eq!(envelope["method"], payload["type"]);
+    }
+    signal.abort();
+    drop(mux);
+    drop(host);
     downlinks.close().await.unwrap();
     context.fiber().dispose().await.unwrap();
 }
@@ -294,7 +356,8 @@ async fn transport_loss_aborts_source_and_late_frame_is_contained() {
                             "type": "session/subscribed",
                             "sessionId": "session-late",
                             "lastSeq": 0,
-                        }),
+                        })
+                        .into(),
                     })
                 })
                 .boxed()
@@ -321,7 +384,7 @@ async fn malformed_source_frame_becomes_stream_error_and_does_not_escape() {
             stream::once(async {
                 Ok(EventFrame {
                     rpc_id: RpcId::new("bad"),
-                    payload: json!({ "missing": "type" }),
+                    payload: json!({ "missing": "type" }).into(),
                 })
             })
             .boxed()
@@ -475,7 +538,7 @@ async fn host_plugin_tracks_optional_api_proxy_install_withdrawal_and_reprovisio
                 stream::once(async {
                     Ok(EventFrame {
                         rpc_id: RpcId::new("dynamic"),
-                        payload: json!({ "type": "session/subscribed", "lastSeq": 0 }),
+                        payload: json!({ "type": "session/subscribed", "lastSeq": 0 }).into(),
                     })
                 })
                 .chain(idle(signal))

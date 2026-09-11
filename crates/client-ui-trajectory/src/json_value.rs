@@ -10,7 +10,7 @@ pub(crate) fn null() -> &'static JsonValue {
     &NULL
 }
 
-pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: JsonValue) -> serde_json::Result<T> {
+pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: &JsonValue) -> serde_json::Result<T> {
     value.deserialize()
 }
 
@@ -19,13 +19,26 @@ pub(crate) fn js_text(value: &JsonValue) -> JsonString {
         value.deserialize().expect("value is a JSON string")
     } else if let Some(values) = value.as_array() {
         JsonString::join(
-            &values.iter().map(|value| if value.is_null() { JsonString::default() } else { js_text(value) }).collect::<Vec<_>>(),
+            &values
+                .iter()
+                .map(|value| {
+                    if value.is_null() {
+                        JsonString::default()
+                    } else {
+                        js_text(value)
+                    }
+                })
+                .collect::<Vec<_>>(),
             ",",
         )
     } else if value.is_object() {
         "[object Object]".into()
     } else if let Some(number) = value.as_f64().filter(|number| !number.is_finite()) {
-        if number.is_sign_negative() { "-Infinity".into() } else { "Infinity".into() }
+        if number.is_sign_negative() {
+            "-Infinity".into()
+        } else {
+            "Infinity".into()
+        }
     } else {
         value.stringify().into()
     }

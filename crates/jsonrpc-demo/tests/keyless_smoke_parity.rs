@@ -178,7 +178,12 @@ async fn max_token_mapping_variants_preserve_reason_tools_request_and_zstd_log()
             .unwrap();
         assert!(result.events.iter().any(|event| {
             event.event_type == "turn/end"
-                && event.data.pointer("/reason/kind") == Some(&json!("max-tokens"))
+                && event
+                    .data
+                    .pointer("/reason/kind")
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    .as_deref()
+                    == Some("max-tokens")
         }));
         harness.close().await.unwrap();
         server.task.await.unwrap();

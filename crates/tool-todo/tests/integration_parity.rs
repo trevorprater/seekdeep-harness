@@ -184,7 +184,7 @@ async fn model_call_records_call_success_and_whole_todo_snapshot() {
         event(&events, "tool/result")
             .data
             .pointer("/message/content/0/isError")
-            .and_then(|value| value.as_bool()),
+            .and_then(seekdeep_core::session::JsonRef::as_bool),
         Some(false)
     );
     assert_eq!(event(&events, "todo/write").data["todos"], todos);

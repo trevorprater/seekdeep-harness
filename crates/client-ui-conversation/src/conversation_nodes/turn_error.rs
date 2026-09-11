@@ -1,29 +1,36 @@
+use super::json_value;
+
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocation,
     ConversationLocationEvent, ConversationMatch, ConversationMatchResult, ConversationMatchRole,
     ConversationNodeContext, ConversationViewNode, ConversationVisibility,
 };
-use seekdeep_failure_display::display_failure_message;
+use seekdeep_failure_display::display_failure_message_json;
+use seekdeep_lossless_json::{JsonString, deserialize_optional};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
 
 use super::{chat_node, chat_node_with, context_location, sequence_anchor};
 
 /// Terminal unsuperseded turn failure definition kind.
 pub const TURN_ERROR_KIND: &str = "turn-error";
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct TurnFailure {
     seq: u64,
     time: i64,
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<String>,
+    message: JsonString,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional",
+        skip_serializing_if = "Option::is_none"
+    )]
+    code: Option<Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct TurnErrorState {
     turn: u64,
     hidden: bool,
@@ -55,8 +62,8 @@ fn match_turn_error_event(event: &ConversationLocationEvent) -> Option<Conversat
     } else if event.event_type == "turn/end"
         && event
             .data
-            .get("reason")
-            .and_then(|reason| reason.get("kind"))
+            .get_value("reason")
+            .and_then(|reason| reason.get_value("kind"))
             .and_then(Value::as_str)
             == Some("error")
     {
@@ -126,18 +133,18 @@ fn build_turn_error(
         message,
         code,
     } = failure;
-    let mut node = Map::from_iter([
-        ("kind".to_owned(), json!(TURN_ERROR_KIND)),
-        ("seq".to_owned(), json!(seq)),
-        ("time".to_owned(), json!(time)),
-        ("turn".to_owned(), json!(state.turn)),
-        ("step".to_owned(), json!(last_step(context))),
-        ("message".to_owned(), json!(message)),
+    let mut node = Vec::from([
+        ("kind".to_owned(), json_value(&TURN_ERROR_KIND)),
+        ("seq".to_owned(), json_value(&seq)),
+        ("time".to_owned(), json_value(&time)),
+        ("turn".to_owned(), json_value(&state.turn)),
+        ("step".to_owned(), json_value(&(last_step(context)))),
+        ("message".to_owned(), json_value(&message)),
     ]);
     if let Some(code) = code {
-        node.insert("code".to_owned(), json!(code));
+        node.push(("code".to_owned(), code));
     }
-    let data = Value::Object(node);
+    let data = Value::object(node);
     if !state.hidden {
         return Ok(Some(chat_node(
             context,
@@ -164,7 +171,7 @@ fn build_turn_error(
 }
 
 fn coordinate(data: &Value, key: &str) -> Option<u64> {
-    data.get(key).and_then(Value::as_u64)
+    data.get_value(key).and_then(Value::as_u64)
 }
 
 fn retry_turn(event_type: &str, data: &Value) -> Option<u64> {
@@ -178,8 +185,8 @@ fn failure_from(accepted: &ConversationMatch) -> Option<TurnFailure> {
         || accepted
             .event
             .data
-            .get("reason")
-            .and_then(|reason| reason.get("kind"))
+            .get_value("reason")
+            .and_then(|reason| reason.get_value("kind"))
             .and_then(Value::as_str)
             != Some("error")
     {
@@ -188,18 +195,15 @@ fn failure_from(accepted: &ConversationMatch) -> Option<TurnFailure> {
     let failure = accepted
         .event
         .data
-        .get("reason")?
-        .get("error")
+        .get_value("reason")?
+        .get_value("error")
         .cloned()
-        .unwrap_or(Value::Null);
+        .unwrap_or_else(|| json_value(&()));
     Some(TurnFailure {
         seq: accepted.event.seq,
         time: accepted.event.time,
-        message: display_failure_message(&failure),
-        code: failure
-            .get("code")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
+        message: display_failure_message_json(&failure),
+        code: failure.get_value("code").cloned(),
     })
 }
 
@@ -229,12 +233,13 @@ fn last_step(context: &ConversationNodeContext) -> u64 {
 }
 
 fn decode(value: &Value) -> Result<TurnErrorState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn encode(value: &TurnErrorState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

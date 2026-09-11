@@ -98,9 +98,7 @@ impl ScriptedProvider {
             continuable: false,
             behavior: Mutex::new(RunBehavior {
                 result: SubagentResult {
-                    output: vec![ContentBlock::Text {
-                        text: reply.into(),
-                    }],
+                    output: vec![ContentBlock::Text { text: reply.into() }],
                     structured: None,
                     stop_reason: SubagentStopReason::Completed,
                 },
@@ -327,10 +325,13 @@ async fn foreground_delegation_schema_config_forwarding_and_disposal_match_the_s
             .contains("does not see this conversation")
     );
     let definition = harness.dependencies.tools.get("subagent", None).unwrap();
-    assert!(definition.is_concurrency_safe.as_ref().unwrap()(&json!({
-        "description": "review code",
-        "prompt": "review it"
-    })));
+    assert!(definition.is_concurrency_safe.as_ref().unwrap()(
+        &json!({
+            "description": "review code",
+            "prompt": "review it"
+        })
+        .into()
+    ));
 
     let result = harness
         .call(

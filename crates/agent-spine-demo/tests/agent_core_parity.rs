@@ -282,9 +282,7 @@ fn open_turn_with_user(session: &Arc<Session>, text: &str) {
         .append(
             "user/message",
             serde_json::to_value(UserMessage::new(
-                vec![ContentBlock::Text {
-                    text: text.into(),
-                }],
+                vec![ContentBlock::Text { text: text.into() }],
                 MessageSource::user(),
             ))
             .unwrap(),
@@ -705,9 +703,7 @@ async fn workspace_instructions_precede_the_configured_skill_catalog() {
     handle
         .agent
         .followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: "hi".into(),
-            }],
+            vec![ContentBlock::Text { text: "hi".into() }],
             MessageSource::user(),
         ))
         .unwrap();
@@ -767,9 +763,7 @@ async fn zero_workspace_budget_keeps_only_the_original_user_message() {
     handle
         .agent
         .followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: "hi".into(),
-            }],
+            vec![ContentBlock::Text { text: "hi".into() }],
             MessageSource::user(),
         ))
         .unwrap();

@@ -392,7 +392,7 @@ fn report_source(sender: &SessionId) -> MessageSource {
     );
     MessageSource {
         kind: "subagent-report".to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 
@@ -409,7 +409,7 @@ fn settled_source(summary: &str, sender: &SessionId) -> MessageSource {
     );
     MessageSource {
         kind: "subagent-settled".to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 

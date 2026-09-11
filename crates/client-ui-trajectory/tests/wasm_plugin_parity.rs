@@ -112,6 +112,7 @@ fn property(value: &JsValue, key: &str) -> JsValue {
 }
 
 #[wasm_bindgen_test]
+#[allow(clippy::too_many_lines)] // Registration, native assembly, and disposal share one live registry.
 fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     let bench = makeTrajectoryPluginBench();
     let ctx = property(&bench, "ctx");
@@ -184,7 +185,7 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
 
     let mut assembler = WasmConversationNodeAssembler::new(&events, &views);
     let wire = js_sys::JSON::parse(
-        r#"{"seq":1,"time":1000,"type":"user/message","data":{"id":"m1","source":{"kind":"user"},"content":[{"type":"text","text":"hello"}]}}"#,
+        r#"{"seq":1,"time":1000,"type":"user/message","data":{"id":"m1","source":{"kind":"user","opaque":{"\ud800":"\udfff"}},"content":[{"type":"text","text":"hello\ud800"}]}}"#,
     )
     .unwrap();
     let input = js_sys::Object::new();
@@ -199,6 +200,22 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     assert_eq!(
         property(&nodes.get(0), "kind").as_string().as_deref(),
         Some("user")
+    );
+    let content = Array::from(&property(&nodes.get(0), "content"));
+    assert_eq!(
+        js_sys::JSON::stringify(&property(&content.get(0), "text"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#""hello\ud800""#
+    );
+    let source = property(&nodes.get(0), "source");
+    assert_eq!(
+        js_sys::JSON::stringify(&property(&source, "opaque"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#"{"\ud800":"\udfff"}"#
     );
 
     trajectoryDisposeAll(&bench);

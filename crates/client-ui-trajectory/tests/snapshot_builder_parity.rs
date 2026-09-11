@@ -6,7 +6,11 @@ use seekdeep_client_runtime::{
     ConversationLocation, ConversationViewNode, ConversationViewPlacement,
 };
 use seekdeep_client_ui_trajectory::{TrajectorySequence, TrajectorySnapshotBuilder};
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 fn contribution(key: &str, anchor_seq: f64, data: Value) -> Rc<ConversationViewNode> {
     Rc::new(ConversationViewNode {
@@ -107,7 +111,7 @@ fn one_header_is_inherited_without_repeating_its_prompt_change() {
         "one initial prompt"
     );
     assert_eq!(snapshot.requests[0]["promptChange"]["kind"], "initial");
-    assert!(snapshot.requests[1].get("promptChange").is_none());
+    assert!(snapshot.requests[1].get_value("promptChange").is_none());
 }
 
 #[test]

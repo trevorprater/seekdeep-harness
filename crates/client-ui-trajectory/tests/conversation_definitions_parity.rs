@@ -8,7 +8,11 @@ use seekdeep_client_runtime::{
     ConversationNodeAssembler,
 };
 use seekdeep_client_ui_trajectory::{trajectory_event_definitions, trajectory_view_definition};
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 struct Events(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -48,7 +52,7 @@ fn assembler(events: &[ConversationEventInput]) -> ConversationNodeAssembler {
             trajectory_event_definitions()
                 .into_iter()
                 .map(Rc::new)
-                .collect(),
+                .collect::<Vec<_>>(),
         )),
         Rc::new(Views),
     );
@@ -67,6 +71,144 @@ fn assistant_message(id: &str, text: &str) -> Value {
         "content": [{"type": "text", "text": text}],
         "source": {"kind": "model", "provider": "test", "model": "test"},
     })
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One stream verifies immutable snapshots, replay, and ledger output.
+fn raw_text_and_tool_payloads_survive_streaming_replay_and_ledger_projection() {
+    use seekdeep_client_ui_trajectory::{
+        TrajectoryCellKind, TrajectorySnapshot, derive_trajectory_layout,
+    };
+    use seekdeep_lossless_json::JsonString;
+
+    let raw = |value: &str| Value::parse(value.to_owned()).unwrap();
+    let mut events = vec![
+        at(1, "turn/start", json!({"turn": 1})),
+        at(2, "step/start", json!({"turn": 1, "step": 1})),
+        at(
+            3,
+            "request/header",
+            raw(
+                r#"{"turn":1,"step":1,"reason":"initial","header":{"config":{"provider":"p","model":"m","stop":["\ud800"]},"system":"\udfff","tools":[{"name":"tool","description":"raw","parameters":{"\udfff":"\ud800"}}]}}"#,
+            ),
+        ),
+        at(
+            4,
+            "assistant/chunk",
+            raw(r#"{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"\ud800"}}"#),
+        ),
+    ];
+    let mut value = assembler(&events);
+    let before = snapshot(&value);
+    assert_eq!(
+        before["partial"]["blocks"][0]["text"].to_utf16().unwrap(),
+        vec![0xd800]
+    );
+    let next = at(
+        5,
+        "assistant/chunk",
+        raw(r#"{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"\udc00"}}"#),
+    );
+    value.append(&next).unwrap();
+    events.push(next);
+    value.flush().unwrap();
+    assert_eq!(
+        snapshot(&value)["partial"]["blocks"][0]["text"]
+            .to_utf16()
+            .unwrap(),
+        vec![0xd800, 0xdc00]
+    );
+    assert_eq!(
+        before["partial"]["blocks"][0]["text"].to_utf16().unwrap(),
+        vec![0xd800]
+    );
+
+    for event in [
+        at(
+            6,
+            "tool/call",
+            raw(
+                r#"{"turn":1,"step":1,"callId":"call","name":"tool","arguments":"{\"x\":\"\\ud800\"}"}"#,
+            ),
+        ),
+        at(
+            7,
+            "tool/code-dispatch-start",
+            raw(
+                r#"{"rootCallId":"call","parentCallId":"call","subCallId":"child","name":"nested","arguments":{"\udfff":"\ud800"}}"#,
+            ),
+        ),
+        at(
+            8,
+            "tool/result",
+            raw(
+                r#"{"turn":1,"step":1,"message":{"source":{"callId":"call"},"content":[{"content":[{"type":"text","text":"result\udfff"}],"isError":false}]},"meta":{"\ud800":"\udfff"}}"#,
+            ),
+        ),
+        at(
+            9,
+            "assistant/message",
+            raw(
+                r#"{"turn":1,"step":1,"message":{"id":"message","source":{"provider":"p","model":"m"},"content":[{"type":"text","text":"answer\ud800"},{"type":"future","payload":{"\udfff":"\ud800"}}]}}"#,
+            ),
+        ),
+        at(10, "step/end", json!({"turn":1,"step":1})),
+    ] {
+        value.append(&event).unwrap();
+        events.push(event);
+    }
+    value.flush().unwrap();
+    let current = snapshot(&value);
+    assert_eq!(current, snapshot(&assembler(&events)));
+    assert_eq!(
+        current["requests"][0]["prompt"]["system"]
+            .to_utf16()
+            .unwrap(),
+        vec![0xdfff]
+    );
+    assert_eq!(
+        current["callSchemas"]["call"]["parameters"],
+        raw(r#"{"\udfff":"\ud800"}"#)
+    );
+    let tool = current["eventNodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["kind"] == "tool-result")
+        .unwrap();
+    assert_eq!(tool["meta"], raw(r#"{"\ud800":"\udfff"}"#));
+    assert_eq!(
+        tool["subCalls"][0]["call"]["argsRaw"],
+        json!(r#"{"\udfff":"\ud800"}"#)
+    );
+
+    let ledger = derive_trajectory_layout(&TrajectorySnapshot {
+        event_nodes: current["eventNodes"].deserialize().unwrap(),
+        requests: current["requests"].deserialize().unwrap(),
+        call_schemas: current["callSchemas"].deserialize().unwrap(),
+        ..TrajectorySnapshot::default()
+    });
+    let cells = ledger
+        .iter()
+        .flat_map(|turn| &turn.groups)
+        .flat_map(|group| &group.cells)
+        .collect::<Vec<_>>();
+    let answer = cells
+        .iter()
+        .find(|cell| cell.kind == TrajectoryCellKind::Message && cell.output_detail.is_some())
+        .unwrap();
+    assert_eq!(
+        answer.output_detail.as_ref().unwrap(),
+        &JsonString::parse(r#""answer\ud800""#.to_owned()).unwrap()
+    );
+    let result = cells
+        .iter()
+        .find(|cell| cell.kind == TrajectoryCellKind::Tool)
+        .unwrap();
+    assert_eq!(
+        result.output_detail.as_ref().unwrap(),
+        &JsonString::parse(r#""result\udfff""#.to_owned()).unwrap()
+    );
 }
 
 #[test]
@@ -126,7 +268,7 @@ fn combined_registry_assembles_streaming_retry_usage_and_interruption() {
     }
     value.flush().unwrap();
     let settled = snapshot(&value);
-    assert_eq!(settled["partial"], Value::Null);
+    assert_eq!(settled["partial"], json!(null));
     assert_eq!(settled["eventNodes"][0]["interrupted"], true);
     assert_eq!(
         settled["eventNodes"][0]["blocks"],
@@ -320,5 +462,5 @@ fn combined_registry_classifies_claimed_steering_and_consumes_header_change_once
     assert_eq!(current["requests"][0]["prompt"]["system"], "system prompt");
     assert_eq!(current["requests"][1]["prompt"]["system"], "system prompt");
     assert_eq!(current["requests"][0]["promptChange"]["kind"], "initial");
-    assert!(current["requests"][1].get("promptChange").is_none());
+    assert!(current["requests"][1].get_value("promptChange").is_none());
 }

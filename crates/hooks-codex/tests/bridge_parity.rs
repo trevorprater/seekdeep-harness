@@ -199,7 +199,11 @@ fn tool(body_calls: Arc<AtomicUsize>) -> seekdeep_tools::ToolDefinition {
         json!({"command":{"type":"string","required":true}}),
         Arc::new(move |args: BashArgs, _| {
             body_calls.fetch_add(1, Ordering::AcqRel);
-            Box::pin(async move { Ok(vec![ContentBlock::Text { text: args.command.into() }]) })
+            Box::pin(async move {
+                Ok(vec![ContentBlock::Text {
+                    text: args.command.into(),
+                }])
+            })
         }),
     ))
     .unwrap()

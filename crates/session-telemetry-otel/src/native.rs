@@ -15,6 +15,7 @@ use opentelemetry_sdk::{
     runtime,
 };
 use seekdeep_anonymous_user_id::{AnonymousUserIdOptions, get_or_create_anonymous_user_id};
+use seekdeep_core::session::JsonValue;
 use serde_json::Value;
 
 use crate::{OtelLogPipeline, OtelLogPipelineFactory, OtelLogRecord, OtelPipelineOptions};
@@ -116,15 +117,24 @@ impl OtelLogPipeline for NativeOtelLogPipeline {
             _ => Severity::Info,
         });
         output.set_severity_text(record.severity_text);
-        if let Some(body) = json_value(record.body) {
-            output.set_body(body);
+        match json_value(&record.body) {
+            Ok(Some(body)) => output.set_body(body),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(%error, "OpenTelemetry SDK rejected an unrepresentable log body");
+                return;
+            }
         }
-        output.add_attributes(
-            record
-                .attributes
-                .into_iter()
-                .filter_map(|(key, value)| json_value(value).map(|value| (Key::new(key), value))),
-        );
+        for (key, value) in record.attributes {
+            match json_value(&value.into()) {
+                Ok(Some(value)) => output.add_attribute(Key::new(key), value),
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::warn!(%error, "OpenTelemetry SDK rejected an unrepresentable log attribute");
+                    return;
+                }
+            }
+        }
         logger.emit(output);
     }
 
@@ -268,29 +278,91 @@ fn unix_millis(value: i64) -> std::time::SystemTime {
     }
 }
 
-fn json_value(value: Value) -> Option<AnyValue> {
-    match value {
-        Value::Null => None,
-        Value::Bool(value) => Some(AnyValue::Boolean(value)),
-        Value::Number(value) => value
-            .as_i64()
-            .map(AnyValue::Int)
-            .or_else(|| {
-                value
-                    .as_u64()
-                    .and_then(|value| i64::try_from(value).ok())
-                    .map(AnyValue::Int)
-            })
-            .or_else(|| value.as_f64().map(AnyValue::Double)),
-        Value::String(value) => Some(AnyValue::String(value.into())),
-        Value::Array(value) => Some(AnyValue::ListAny(Box::new(
-            value.into_iter().filter_map(json_value).collect(),
-        ))),
-        Value::Object(value) => Some(AnyValue::Map(Box::new(
+fn json_value(value: &JsonValue) -> anyhow::Result<Option<AnyValue>> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    if let Some(value) = value.as_bool() {
+        return Ok(Some(AnyValue::Boolean(value)));
+    }
+    if value.is_string() {
+        let value = value.as_str().ok_or_else(|| {
+            anyhow::anyhow!("OpenTelemetry SDK cannot encode unpaired UTF-16 in a body string")
+        })?;
+        return Ok(Some(AnyValue::String(value.to_owned().into())));
+    }
+    if let Some(values) = value.as_array() {
+        let mut output = Vec::new();
+        for value in values {
+            if let Some(value) = json_value(value)? {
+                output.push(value);
+            }
+        }
+        return Ok(Some(AnyValue::ListAny(Box::new(output))));
+    }
+    if let Some(values) = value.object_entries() {
+        let mut fields = HashMap::new();
+        for (key, value) in values {
+            let key: String = key.deserialize().map_err(|_| {
+                anyhow::anyhow!(
+                    "OpenTelemetry SDK cannot encode unpaired UTF-16 in a body object key"
+                )
+            })?;
+            fields.insert(key, value.to_owned());
+        }
+        let mut output = HashMap::new();
+        for (key, value) in fields {
+            if let Some(value) = json_value(&value)? {
+                output.insert(Key::new(key), value);
+            }
+        }
+        return Ok(Some(AnyValue::Map(Box::new(output))));
+    }
+    Ok(value
+        .as_i64()
+        .map(AnyValue::Int)
+        .or_else(|| {
             value
-                .into_iter()
-                .filter_map(|(key, value)| json_value(value).map(|value| (Key::new(key), value)))
-                .collect(),
-        ))),
+                .as_u64()
+                .and_then(|value| i64::try_from(value).ok())
+                .map(AnyValue::Int)
+        })
+        .or_else(|| value.as_f64().map(AnyValue::Double)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_body_conversion_rejects_unrepresentable_strings_and_keys_explicitly() {
+        for raw in [
+            r#""\ud800""#,
+            r#"{"nested":[1,"\udfff"]}"#,
+            r#"{"\ud800":true}"#,
+        ] {
+            let body = JsonValue::parse(raw.to_owned()).unwrap();
+            assert!(
+                json_value(&body)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("cannot encode unpaired UTF-16")
+            );
+            assert_eq!(body.as_raw(), raw);
+        }
+    }
+
+    #[test]
+    fn native_body_conversion_keeps_only_effective_duplicate_field_values() {
+        let body =
+            JsonValue::parse(r#"{"value":"\ud800","value":"ok","count":3}"#.to_owned()).unwrap();
+        let Some(AnyValue::Map(values)) = json_value(&body).unwrap() else {
+            panic!("object body");
+        };
+        assert_eq!(
+            values.get(&Key::new("value")),
+            Some(&AnyValue::String("ok".into()))
+        );
+        assert_eq!(values.get(&Key::new("count")), Some(&AnyValue::Int(3)));
     }
 }

@@ -1,5 +1,7 @@
 //! Source-shaped unified prompt diff projection.
 
+use seekdeep_lossless_json::JsonString;
+
 /// Semantic class for one rendered prompt-diff line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrajectoryPromptDiffKind {
@@ -32,14 +34,14 @@ pub struct TrajectoryPromptDiffLine {
     /// Semantic line class.
     pub kind: TrajectoryPromptDiffKind,
     /// Prefixed unified-diff text.
-    pub text: String,
+    pub text: JsonString,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DiffOperation<'a> {
-    Equal(&'a str),
-    Insert(&'a str),
-    Delete(&'a str),
+    Equal(&'a [u16]),
+    Insert(&'a [u16]),
+    Delete(&'a [u16]),
 }
 
 impl DiffOperation<'_> {
@@ -58,12 +60,17 @@ impl DiffOperation<'_> {
 
 /// Produces the source `structuredPatch` display shape with three context lines.
 #[must_use]
-pub fn trajectory_prompt_diff_lines(before: &str, after: &str) -> Vec<TrajectoryPromptDiffLine> {
+pub fn trajectory_prompt_diff_lines(
+    before: impl Into<JsonString>,
+    after: impl Into<JsonString>,
+) -> Vec<TrajectoryPromptDiffLine> {
+    let before = before.into();
+    let after = after.into();
     if before == after {
         return Vec::new();
     }
-    let before = split_lines(before);
-    let after = split_lines(after);
+    let before = split_lines(&before);
+    let after = split_lines(&after);
     let operations = myers_diff(&before, &after);
     let hunks = hunk_ranges(&operations, 3);
     let mut output = Vec::new();
@@ -71,7 +78,7 @@ pub fn trajectory_prompt_diff_lines(before: &str, after: &str) -> Vec<Trajectory
         if hunk_index > 0 {
             output.push(TrajectoryPromptDiffLine {
                 kind: TrajectoryPromptDiffKind::Meta,
-                text: String::new(),
+                text: JsonString::default(),
             });
         }
         let old_start = operations[..start]
@@ -94,7 +101,7 @@ pub fn trajectory_prompt_diff_lines(before: &str, after: &str) -> Vec<Trajectory
             .count();
         output.push(TrajectoryPromptDiffLine {
             kind: TrajectoryPromptDiffKind::Meta,
-            text: format!("@@ -{old_start},{old_lines} +{new_start},{new_lines} @@"),
+            text: format!("@@ -{old_start},{old_lines} +{new_start},{new_lines} @@").into(),
         });
         output.extend(
             operations[start..end]
@@ -102,15 +109,24 @@ pub fn trajectory_prompt_diff_lines(before: &str, after: &str) -> Vec<Trajectory
                 .map(|operation| match operation {
                     DiffOperation::Equal(line) => TrajectoryPromptDiffLine {
                         kind: TrajectoryPromptDiffKind::Context,
-                        text: format!(" {line}"),
+                        text: JsonString::concat(&[
+                            &JsonString::from(" "),
+                            &JsonString::from_utf16(line),
+                        ]),
                     },
                     DiffOperation::Insert(line) => TrajectoryPromptDiffLine {
                         kind: TrajectoryPromptDiffKind::Added,
-                        text: format!("+{line}"),
+                        text: JsonString::concat(&[
+                            &JsonString::from("+"),
+                            &JsonString::from_utf16(line),
+                        ]),
                     },
                     DiffOperation::Delete(line) => TrajectoryPromptDiffLine {
                         kind: TrajectoryPromptDiffKind::Removed,
-                        text: format!("-{line}"),
+                        text: JsonString::concat(&[
+                            &JsonString::from("-"),
+                            &JsonString::from_utf16(line),
+                        ]),
                     },
                 }),
         );
@@ -118,11 +134,21 @@ pub fn trajectory_prompt_diff_lines(before: &str, after: &str) -> Vec<Trajectory
     output
 }
 
-fn split_lines(value: &str) -> Vec<&str> {
-    value.split_terminator('\n').collect()
+fn split_lines(value: &JsonString) -> Vec<&[u16]> {
+    if value.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = value
+        .utf16_units()
+        .split(|unit| *unit == 0xa)
+        .collect::<Vec<_>>();
+    if value.ends_with("\n") {
+        lines.pop();
+    }
+    lines
 }
 
-fn myers_diff<'a>(before: &[&'a str], after: &[&'a str]) -> Vec<DiffOperation<'a>> {
+fn myers_diff<'a>(before: &[&'a [u16]], after: &[&'a [u16]]) -> Vec<DiffOperation<'a>> {
     let maximum = before.len() + after.len();
     let offset = isize::try_from(maximum).expect("line count fits isize") + 1;
     let mut frontier = vec![0_isize; maximum.saturating_mul(2) + 3];
@@ -162,8 +188,8 @@ fn myers_diff<'a>(before: &[&'a str], after: &[&'a str]) -> Vec<DiffOperation<'a
 }
 
 fn backtrack<'a>(
-    before: &[&'a str],
-    after: &[&'a str],
+    before: &[&'a [u16]],
+    after: &[&'a [u16]],
     trace: &[Vec<isize>],
     depth: isize,
     offset: isize,

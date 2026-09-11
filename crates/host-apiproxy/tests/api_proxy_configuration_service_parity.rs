@@ -449,7 +449,9 @@ async fn provider_settings_harness() -> Harness {
     harness
 }
 
-async fn next_remote_event(stream: &mut ApiDownlinkStream<HostFrame>) -> (String, Vec<Value>) {
+async fn next_remote_event(
+    stream: &mut ApiDownlinkStream<HostFrame>,
+) -> (String, Vec<seekdeep_core::session::JsonValue>) {
     let frame = tokio::time::timeout(Duration::from_secs(2), stream.next())
         .await
         .expect("remote event timeout")

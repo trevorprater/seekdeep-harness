@@ -69,15 +69,15 @@ fn wrapup_renders_complete_and_blocked_envelopes() {
     let seekdeep_llm::ContentBlock::Text { text } = &complete[0] else {
         panic!("expected text block");
     };
-    assert!(text.contains("<goal_complete>"), "{text}");
-    assert!(text.contains("Objective: \"build the thing\""), "{text}");
+    assert!(text.contains("<goal_complete>"), "{text:?}");
+    assert!(text.contains("Objective: \"build the thing\""), "{text:?}");
 
     let blocked = render_wrapup_context("build the thing", Some("no internet"));
     let seekdeep_llm::ContentBlock::Text { text } = &blocked[0] else {
         panic!("expected text block");
     };
-    assert!(text.contains("<goal_blocked>"), "{text}");
-    assert!(text.contains("Blocked: \"no internet\""), "{text}");
+    assert!(text.contains("<goal_blocked>"), "{text:?}");
+    assert!(text.contains("Blocked: \"no internet\""), "{text:?}");
 }
 
 #[test]

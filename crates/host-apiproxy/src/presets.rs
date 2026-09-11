@@ -29,6 +29,7 @@ use seekdeep_api_remotes::{
 use seekdeep_attachment::{ATTACHMENTS, AttachmentError, ImageAttachmentRef, SaveImageAttachment};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
+use seekdeep_core::session::JsonRef;
 use seekdeep_llm::{
     AbortSignal, ContentBlock, LLM, LlmCallConfig, Message, MessageSource, ModelId, ProviderId,
     ReasoningEffortId, UserMessage, content_has_image,
@@ -1786,8 +1787,8 @@ impl PresetApiProxyRuntime {
                 let _ = sender.send(HostFrame::RemoteEvent {
                     event: "agent-preset/selected".to_owned(),
                     args: vec![
-                        Value::String(session_id.to_string()),
-                        Value::String((*preset).clone()),
+                        Value::String(session_id.to_string()).into(),
+                        Value::String((*preset).clone()).into(),
                     ],
                 });
                 Ok(EventReply::Undefined)
@@ -2259,7 +2260,7 @@ fn image_in_event(
             return Some(reference);
         }
     }
-    if let Some(inserted) = event.data.get("inserted").and_then(Value::as_array) {
+    if let Some(inserted) = event.data.get("inserted").and_then(JsonRef::array_items) {
         for message in inserted {
             if let Some(reference) = message
                 .get("content")
@@ -2274,35 +2275,33 @@ fn image_in_event(
             .data
             .get("chunk")
             .and_then(|chunk| chunk.get("type"))
-            .and_then(Value::as_str)
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
             == Some("block-end")
         && let Some(block) = event.data.get("chunk").and_then(|chunk| chunk.get("block"))
     {
-        return image_in_content(&Value::Array(vec![block.clone()]), attachment_id);
+        return image_in_block(block, attachment_id);
     }
     None
 }
 
-fn image_in_content(content: &Value, attachment_id: &str) -> Option<ImageAttachmentRef> {
-    for block in content.as_array()? {
-        if block.get("type").and_then(Value::as_str) == Some("image")
-            && let Some(reference) = block
-                .get("attachment")
-                .cloned()
-                .and_then(|value| serde_json::from_value::<ImageAttachmentRef>(value).ok())
-            && reference.attachment_id.as_str() == attachment_id
-        {
-            return Some(reference);
-        }
-        if block.get("type").and_then(Value::as_str) == Some("tool-result")
-            && let Some(reference) = block
-                .get("content")
-                .and_then(|nested| image_in_content(nested, attachment_id))
-        {
-            return Some(reference);
-        }
+fn image_in_content(content: JsonRef<'_>, attachment_id: &str) -> Option<ImageAttachmentRef> {
+    content
+        .array_items()?
+        .into_iter()
+        .find_map(|block| image_in_block(block, attachment_id))
+}
+
+fn image_in_block(block: JsonRef<'_>, attachment_id: &str) -> Option<ImageAttachmentRef> {
+    match block.get("type")?.deserialize::<String>().ok()?.as_str() {
+        "image" => block
+            .get("attachment")?
+            .deserialize::<ImageAttachmentRef>()
+            .ok()
+            .filter(|reference| reference.attachment_id.as_str() == attachment_id),
+        "tool-result" => image_in_content(block.get("content")?, attachment_id),
+        _ => None,
     }
-    None
 }
 
 fn goal_session_id(

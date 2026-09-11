@@ -57,9 +57,7 @@ fn header(model: &str, system: Option<&str>, tools: Option<Vec<ToolSchema>>) -> 
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -233,9 +231,7 @@ async fn configuration_service_registration_and_fixed_pricing_match_the_source()
         },
         ContentBlock::ToolResult {
             tool_call_id: "c".into(),
-            content: vec![ContentBlock::Text {
-                text: "xy".into(),
-            }],
+            content: vec![ContentBlock::Text { text: "xy".into() }],
             is_error: Some(false),
         },
         ContentBlock::Unknown {

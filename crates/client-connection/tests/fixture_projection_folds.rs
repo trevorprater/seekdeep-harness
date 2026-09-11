@@ -69,9 +69,9 @@ async fn goal_command_appends_a_durable_change_and_pushes_the_goal_projection() 
     );
     let mut goal_projection = None;
     while let Some(Ok(frame)) = mux.next().await {
-        if frame.payload.get("type").and_then(Value::as_str) == Some("session/projection")
-            && frame.payload.get("key").and_then(Value::as_str) == Some("goal")
-            && frame.payload.get("sessionId").and_then(Value::as_str) == Some(session.as_str())
+        if frame.payload["type"] == "session/projection"
+            && frame.payload["key"] == "goal"
+            && frame.payload["sessionId"] == session
         {
             goal_projection = Some(frame.payload["value"].clone());
             break;
@@ -79,15 +79,10 @@ async fn goal_command_appends_a_durable_change_and_pushes_the_goal_projection() 
     }
     let projection = goal_projection.expect("goal projection frame");
     assert_eq!(
-        projection
-            .pointer("/goal/objective")
-            .and_then(Value::as_str),
+        projection["goal"]["objective"].as_str(),
         Some("guard rapid clear clicks")
     );
-    assert_eq!(
-        projection.pointer("/goal/phase").and_then(Value::as_str),
-        Some("active")
-    );
+    assert_eq!(projection["goal"]["phase"].as_str(), Some("active"));
     let again = call(
         &api,
         "commands/execute",

@@ -33,7 +33,7 @@ fn event(seq: u64, event_type: &str, data: Value, surface_op: Option<SurfaceOp>)
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).unwrap(),
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op,
         ignorable: None,
@@ -42,9 +42,7 @@ fn event(seq: u64, event_type: &str, data: Value, surface_op: Option<SurfaceOp>)
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -102,7 +100,7 @@ fn assistant_usage(seq: u64, turn: u64, step: u64, usage: &TokenUsage) -> Sessio
 fn fold(
     definition: &ProjectionDefinition,
     events: &[SessionEvent],
-) -> anyhow::Result<(Value, Value, usize)> {
+) -> anyhow::Result<(seekdeep_llm::JsonValue, seekdeep_llm::JsonValue, usize)> {
     let mut state = definition.initial_state()?;
     let mut changes = 0;
     for event in events {
@@ -381,7 +379,7 @@ fn shared_estimator_prices_envelope_parts_independently() {
     assert!(
         estimate_content(&[ContentBlock::Unknown {
             block_type: "future".to_owned(),
-            fields: Map::from_iter([("payload".to_owned(), json!("abcd"))]),
+            fields: Map::from_iter([("payload".to_owned(), json!("abcd"))]).into(),
         }]) > 4
     );
 }

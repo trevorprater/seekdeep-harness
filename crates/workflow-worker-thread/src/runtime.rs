@@ -826,7 +826,9 @@ async fn run_agent(
                 outcome: WorkflowAgentOutcome::Completed,
             });
             let _ = run.dispose().await;
-            JsValue::from(boa_engine::JsString::from(output_text(&settled.output).utf16_units()))
+            JsValue::from(boa_engine::JsString::from(
+                output_text(&settled.output).utf16_units(),
+            ))
         }
     } else if shared.cancel.is_aborted() {
         shared.observer.agent_end(&WorkflowAgentEndInfo {

@@ -47,7 +47,7 @@ fn input(name: &str, arguments: Value) -> ToolExecutionInput {
     )
 }
 
-fn text(result: &seekdeep_tools::ToolExecutionResult) -> &str {
+fn text(result: &seekdeep_tools::ToolExecutionResult) -> &seekdeep_llm::JsonString {
     let Some(ContentBlock::Text { text }) = result.content().first() else {
         panic!("expected one text result")
     };

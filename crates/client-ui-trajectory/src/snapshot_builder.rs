@@ -126,7 +126,7 @@ impl TrajectorySnapshotBuilder {
             let Some(header) = contribution.data.get_value("header").cloned() else {
                 continue;
             };
-            let Ok(header) = crate::json_value::decode::<TrajectoryRequestHeaderState>(header)
+            let Ok(header) = crate::json_value::decode::<TrajectoryRequestHeaderState>(&header)
             else {
                 continue;
             };
@@ -143,7 +143,7 @@ impl TrajectorySnapshotBuilder {
         let mut call_schemas = IndexMap::<String, Value>::new();
         let mut consumed_prompt_changes = IndexSet::<u64>::new();
         let mut previous_header = None::<TrajectoryRequestHeaderState>;
-        let mut previous_tools = IndexMap::<String, Value>::new();
+        let mut previous_tools = IndexMap::<JsonString, Value>::new();
         let mut partial = None;
         let mut running_calls = Vec::new();
 
@@ -152,7 +152,7 @@ impl TrajectorySnapshotBuilder {
             match data.get_value("kind").and_then(Value::as_str) {
                 Some("request-header") => {
                     if let Some(header) = data.get_value("header").cloned().and_then(|header| {
-                        crate::json_value::decode::<TrajectoryRequestHeaderState>(header).ok()
+                        crate::json_value::decode::<TrajectoryRequestHeaderState>(&header).ok()
                     }) {
                         previous_tools = index_tools(&header.prompt);
                         previous_header = Some(header);
@@ -229,11 +229,7 @@ impl TrajectorySnapshotBuilder {
                         data.get_value("turn").and_then(Value::as_i64),
                         data.get_value("time").and_then(Value::as_i64),
                     ) {
-                        turn_endings.push((
-                            turn,
-                            time,
-                            crate::text_value::member(data, "error"),
-                        ));
+                        turn_endings.push((turn, time, crate::text_value::member(data, "error")));
                     }
                 }
             }
@@ -376,34 +372,29 @@ fn with_request_config(mut node: Value, prompt: Option<&ConversationPromptSnapsh
     node
 }
 
-fn index_tools(prompt: &ConversationPromptSnapshot) -> IndexMap<String, Value> {
+fn index_tools(prompt: &ConversationPromptSnapshot) -> IndexMap<JsonString, Value> {
     prompt
         .tools
         .iter()
-        .filter_map(|tool| {
-            tool.get_value("name")
-                .and_then(Value::as_str)
-                .map(|name| (name.to_owned(), tool.clone()))
-        })
+        .filter_map(|tool| crate::text_value::member(tool, "name").map(|name| (name, tool.clone())))
         .collect()
 }
 
 fn capture_schemas(
     block: &Value,
-    tools_by_name: &IndexMap<String, Value>,
+    tools_by_name: &IndexMap<JsonString, Value>,
     output: &mut IndexMap<String, Value>,
 ) {
     let name = if block.get_value("kind").is_some() {
         block
             .get_value("call")
-            .and_then(|call| call.get_value("name"))
-            .and_then(Value::as_str)
+            .and_then(|call| crate::text_value::member(call, "name"))
     } else {
-        block.get_value("name").and_then(Value::as_str)
+        crate::text_value::member(block, "name")
     };
     if let (Some(call_id), Some(schema)) = (
         block.get_value("callId").and_then(Value::as_str),
-        name.and_then(|name| tools_by_name.get(name)),
+        name.as_ref().and_then(|name| tools_by_name.get(name)),
     ) {
         output.insert(call_id.to_owned(), schema.clone());
     }

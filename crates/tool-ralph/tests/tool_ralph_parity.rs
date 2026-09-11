@@ -288,7 +288,7 @@ fn input(
 
 fn text(result: &ToolExecutionResult) -> &str {
     match result.content().first() {
-        Some(ContentBlock::Text { text }) => text,
+        Some(ContentBlock::Text { text }) => text.as_str().expect("fixture text is Unicode"),
         other => panic!("expected text content, got {other:?}"),
     }
 }

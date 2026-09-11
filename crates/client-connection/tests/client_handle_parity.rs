@@ -300,7 +300,7 @@ fn event_frame_contract_keeps_rpc_id_and_payload() {
     assert_eq!(
         serde_json::to_value(EventFrame {
             rpc_id: RpcId::new("frame"),
-            payload: json!({ "type": "host/status" }),
+            payload: json!({ "type": "host/status" }).into(),
         })
         .unwrap(),
         json!({ "rpcId": "frame", "payload": { "type": "host/status" } })

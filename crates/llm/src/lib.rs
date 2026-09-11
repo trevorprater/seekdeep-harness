@@ -18,6 +18,7 @@ pub mod error;
 pub mod invariant;
 /// Immutable provider-neutral messages.
 pub mod message;
+mod message_fields;
 /// Closed-union escape diagnostics.
 pub mod never;
 /// Provider retry configuration.
@@ -49,6 +50,7 @@ pub use message::{
     CONTEXT_SUMMARY_MAX_CHARS, ContextSnapshotSection, Message, MessageRole, MessageSource,
     UserMessage, bound_context_summary, bound_context_summary_units, chunk_is_token_delta,
 };
+pub use message_fields::MessageFields;
 pub use never::assert_never;
 pub use retry_policy::{
     MAX_TIMER_DELAY_MS, ResolvedRetryPolicy, RetryPolicyMode, resolve_retry_policy,
@@ -59,7 +61,7 @@ pub use runtime::{
     DirectoryRegistrationHandle, LLM, LlmAdapter, LlmDispatchRoute, LlmDispatchTrace, LlmRuntime,
     LlmStream, LlmStreamMiddleware, LlmStreamNext, ModelDiscoveryHandle, PreparedLlmCall,
 };
-pub use seekdeep_lossless_json::JsonString;
+pub use seekdeep_lossless_json::{JsonString, JsonValue};
 pub use types::{
     AbortSignal, ContentBlock, FinishReason, GenerateOptions, LlmCallConfig,
     LlmCallConfigAdapterDefaults, LlmConfigurableProvider, LlmDiscoveredModel, LlmModelContext,

@@ -98,7 +98,12 @@ pub(crate) struct NodeRealm {
     executor: CommandExecutor,
     value_identities: Mutex<ValueIdentities>,
     closed: Arc<AtomicBool>,
-    turn: Mutex<Option<Vec<Value>>>,
+    turn: Mutex<Option<QueuedTurn>>,
+}
+
+struct QueuedTurn {
+    depth: usize,
+    messages: Vec<Value>,
 }
 
 pub(crate) struct NodeTurn<'a> {
@@ -334,8 +339,8 @@ impl NodeRealm {
             ));
         }
         let mut turn = self.turn.lock();
-        if defer && let Some(messages) = turn.as_mut() {
-            messages.push(message);
+        if defer && let Some(turn) = turn.as_mut() {
+            turn.messages.push(message);
             return Ok(());
         }
         if let Err(error) = self.write(&message) {
@@ -346,11 +351,17 @@ impl NodeRealm {
     }
 
     pub(crate) fn defer_turn(&self) -> Result<NodeTurn<'_>, LoaderError> {
-        let mut turn = self.turn.lock();
-        if turn.is_some() {
-            return Err(LoaderError::UpdateInProgress);
+        if self.closed.load(Ordering::Acquire) {
+            return Err(LoaderError::ModuleLoad(
+                "Node plugin realm closed".to_owned(),
+            ));
         }
-        *turn = Some(Vec::new());
+        let mut turn = self.turn.lock();
+        let turn = turn.get_or_insert_with(|| QueuedTurn {
+            depth: 0,
+            messages: Vec::new(),
+        });
+        turn.depth += 1;
         Ok(NodeTurn {
             realm: self,
             finished: false,
@@ -359,9 +370,17 @@ impl NodeRealm {
 
     fn flush_turn(&self) -> Result<(), LoaderError> {
         let mut turn = self.turn.lock();
-        let Some(messages) = turn.take() else {
+        let Some(active) = turn.as_mut() else {
             return Ok(());
         };
+        active.depth -= 1;
+        if active.depth > 0 {
+            return Ok(());
+        }
+        let messages = turn
+            .take()
+            .expect("active turn reached its last owner")
+            .messages;
         if messages.is_empty() {
             return Ok(());
         }

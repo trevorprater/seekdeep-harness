@@ -1,6 +1,6 @@
 //! Pure durable provider-usage and approximate context-pressure folds.
 
-use seekdeep_core::session::{JsonValue, SessionEvent};
+use seekdeep_core::session::{JsonRef, JsonValue, SessionEvent};
 use seekdeep_llm::TokenUsage;
 use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use serde::{Deserialize, Serialize};
@@ -225,7 +225,7 @@ fn pressure_from(usage: &TokenUsage) -> anyhow::Result<u64> {
 fn required_u64(value: &JsonValue, field: &str) -> anyhow::Result<u64> {
     value
         .get(field)
-        .and_then(|value| value.as_u64())
+        .and_then(JsonRef::as_u64)
         .ok_or_else(|| anyhow::anyhow!("token projection {field} must be a non-negative integer"))
 }
 

@@ -44,7 +44,8 @@ fn create_seeded(
                         "role": "user",
                         "source": {"kind": "user"},
                         "content": [{"type": "text", "text": text}]
-                    }).into(),
+                    })
+                    .into(),
                     source_event_seqs: None,
                     surface_op: Some(SurfaceOp::append()),
                     ignorable: None,

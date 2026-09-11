@@ -5,6 +5,7 @@ use std::sync::{Arc, LazyLock};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_llm::ContentBlock;
+use seekdeep_lossless_json::JsonRef;
 use seekdeep_system_prompt::{PromptSection, SYSTEM_PROMPT};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, TOOLS, ToolCallKind, ToolCallView,
@@ -241,17 +242,17 @@ fn search_meta_from_result(result: &ToolResult) -> Option<SearchMeta> {
                 url: source["url"].deserialize().ok()?,
                 title: source
                     .get("title")
-                    .map(|value| value.deserialize::<String>())
+                    .map(JsonRef::deserialize::<String>)
                     .transpose()
                     .ok()?,
                 snippet: source
                     .get("snippet")
-                    .map(|value| value.deserialize::<String>())
+                    .map(JsonRef::deserialize::<String>)
                     .transpose()
                     .ok()?,
                 published_at: source
                     .get("publishedAt")
-                    .map(|value| value.deserialize::<String>())
+                    .map(JsonRef::deserialize::<String>)
                     .transpose()
                     .ok()?,
             })
@@ -261,7 +262,7 @@ fn search_meta_from_result(result: &ToolResult) -> Option<SearchMeta> {
         sources,
         answer: meta
             .get("answer")
-            .map(|value| value.deserialize::<String>())
+            .map(JsonRef::deserialize::<String>)
             .transpose()
             .ok()?,
         truncated: meta.get("truncated")?.as_bool()?,

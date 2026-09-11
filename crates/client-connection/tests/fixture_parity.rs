@@ -18,6 +18,7 @@ use seekdeep_client_connection::{
 };
 use seekdeep_cordis::Context;
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Value, json};
 
 fn fixture() -> Arc<FixtureApi> {
@@ -324,7 +325,7 @@ async fn advance_replay(steps: usize) {
 async fn host_frame_after(
     api: Arc<FixtureApi>,
     operation: impl std::future::Future<Output = ()>,
-) -> Value {
+) -> JsonValue {
     let signal = AbortSignal::default();
     let stream = api.host(signal.clone(), Arc::new(|| {}));
     tokio::pin!(stream);

@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::json_value::{json, null};
+use crate::json_value::json;
 use indexmap::IndexMap as Map;
 use indexmap::IndexSet;
 use seekdeep_lossless_json::{JsonString, JsonValue as Value};
@@ -95,6 +95,12 @@ impl TrajectoryViewSearchController {
     #[must_use]
     pub fn search(&self, query: &str) -> Option<IndexSet<String>> {
         self.index.search(query)
+    }
+
+    /// Runs the current index with an exact UTF-16 query.
+    #[must_use]
+    pub fn search_json(&self, query: &JsonString) -> Option<IndexSet<String>> {
+        self.index.search_json(query)
     }
 }
 
@@ -476,11 +482,18 @@ fn request_status(request: &Value) -> Option<Result<TrajectoryRecordState, Strin
         })
 }
 
-fn provenance_member(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<JsonString> {
-    request.and_then(|value| value.get_value("provenance"))
+fn provenance_member(
+    request: Option<&Value>,
+    node: Option<&Value>,
+    key: &str,
+) -> Option<JsonString> {
+    request
+        .and_then(|value| value.get_value("provenance"))
         .and_then(|value| crate::text_value::member(value, key))
-        .or_else(|| node.and_then(|value| value.get_value("provenance"))
-            .and_then(|value| crate::text_value::member(value, key)))
+        .or_else(|| {
+            node.and_then(|value| value.get_value("provenance"))
+                .and_then(|value| crate::text_value::member(value, key))
+        })
 }
 
 fn first_present(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<Value> {

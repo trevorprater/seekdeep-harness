@@ -2,9 +2,11 @@ use std::rc::Rc;
 
 use seekdeep_client_runtime::{
     ChatConversationViewMetadata, ConversationLocation, ConversationLocationEvent,
-    ConversationNodeContext, ConversationViewNode, ConversationVisibility,
+    ConversationNodeContext, ConversationValue as Value, ConversationViewNode,
+    ConversationVisibility,
 };
-use serde_json::Value;
+use seekdeep_lossless_json::JsonString;
+use serde::Serialize;
 
 pub(crate) const CHAT_TARGET: &str = "chat";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -71,17 +73,17 @@ pub(crate) fn is_append_surface_event(event: &ConversationLocationEvent) -> bool
         && event
             .wire
             .as_ref()
-            .and_then(|wire| wire.get("surfaceOp"))
+            .and_then(|wire| wire.get_value("surfaceOp"))
             .and_then(Value::as_str)
             == Some("append")
 }
 
 pub(crate) fn is_replacement_surface_event(event: &ConversationLocationEvent) -> bool {
     is_surface_eligible(event)
-        && event
-            .wire
-            .as_ref()
-            .is_some_and(|wire| wire.get("surfaceOp").is_some_and(|value| value != "append"))
+        && event.wire.as_ref().is_some_and(|wire| {
+            wire.get_value("surfaceOp")
+                .is_some_and(|value| value != "append")
+        })
 }
 
 fn is_surface_eligible(event: &ConversationLocationEvent) -> bool {
@@ -114,12 +116,47 @@ pub fn conversation_coordinate(value: &Value) -> Option<u64> {
 }
 
 pub(crate) fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+    js_text(value)
+        .try_into_string()
+        .expect("conversation assembler identifiers contain Unicode scalar values")
+}
+
+pub(crate) fn js_text(value: &Value) -> JsonString {
+    if let Some(units) = value.to_utf16() {
+        return JsonString::from_utf16(&units);
     }
+    if value.is_null() {
+        return "null".into();
+    }
+    if let Some(value) = value.as_bool() {
+        return value.to_string().into();
+    }
+    if let Some(values) = value.as_array() {
+        let mut text = JsonString::default();
+        for (index, value) in values.iter().enumerate() {
+            if index > 0 {
+                text.push_str(",");
+            }
+            if !value.is_null() {
+                text.push_utf16(js_text(value).utf16_units());
+            }
+        }
+        return text;
+    }
+    if let Some(number) = value.as_f64() {
+        if number.is_infinite() {
+            return if number.is_sign_negative() {
+                "-Infinity"
+            } else {
+                "Infinity"
+            }
+            .into();
+        }
+        return value.stringify().into();
+    }
+    "[object Object]".into()
+}
+
+pub(crate) fn json_value<T: Serialize + ?Sized>(value: &T) -> Value {
+    Value::from_serialize(value).expect("conversation node fields serialize as JSON")
 }

@@ -10,7 +10,11 @@ use seekdeep_client_runtime::{
     ConversationNodeAssembler, ConversationTimelineSnapshot, ConversationViewNode,
 };
 use seekdeep_client_ui_trajectory::trajectory_request_header_definition;
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 struct Events(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -42,8 +46,9 @@ struct CaptureBuilder {
 
 impl CaptureBuilder {
     fn snapshot(&self) -> Rc<Value> {
-        Rc::new(Value::Array(
-            self.nodes
+        Rc::new(Value::array(
+            &self
+                .nodes
                 .values()
                 .map(|node| {
                     let placement = node.placement.as_ref().expect("trajectory placement");
@@ -57,7 +62,7 @@ impl CaptureBuilder {
                         "data": node.data.as_ref().clone(),
                     })
                 })
-                .collect(),
+                .collect::<Vec<_>>(),
         ))
     }
 }
@@ -178,7 +183,7 @@ fn headers_inherit_previous_prompt_and_publish_exact_step_placement_and_changes(
     assert_eq!(rows[0]["location"]["step"]["step"], 1);
     assert_eq!(rows[0]["data"]["header"]["location"]["step"]["step"], 1);
     assert_eq!(rows[0]["data"]["header"]["change"]["kind"], "initial");
-    assert!(rows[1]["data"]["header"].get("change").is_none());
+    assert!(rows[1]["data"]["header"].get_value("change").is_none());
     assert_eq!(rows[1]["data"]["header"]["location"]["step"]["step"], 2);
     assert_eq!(
         rows[2]["data"]["header"]["change"]["kind"],
@@ -199,7 +204,7 @@ fn truncated_noninitial_header_does_not_invent_change_and_normalizes_nullable_fi
             &[at(
                 10,
                 "request/header",
-                header("retry", &Value::Null, &json!("not-an-array")),
+                header("retry", json_value::null(), &json!("not-an-array")),
             )],
             true,
         )
@@ -209,6 +214,6 @@ fn truncated_noninitial_header_does_not_invent_change_and_normalizes_nullable_fi
     let header = &snapshot[0]["data"]["header"];
     assert_eq!(header["prompt"]["system"], "");
     assert_eq!(header["prompt"]["tools"], json!([]));
-    assert!(header.get("change").is_none());
+    assert!(header.get_value("change").is_none());
     assert_eq!(header["location"]["kind"], "session");
 }

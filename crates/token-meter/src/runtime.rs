@@ -13,7 +13,7 @@ use seekdeep_cordis::{
 };
 use seekdeep_core::{
     request_header::{EpochHeader, canonical_header, header_equals},
-    session::{Session, SessionEvent, is_surface_event},
+    session::{JsonRef, Session, SessionEvent, is_surface_event},
 };
 use seekdeep_llm::{BlockAssembler, Message, StreamChunk, TokenUsage};
 use seekdeep_session_projection::SESSION_PROJECTIONS;
@@ -471,7 +471,7 @@ fn assistant_anchor(
     let usage = event
         .data
         .get("usage")
-        .map(|usage| usage.deserialize::<TokenUsage>())
+        .map(JsonRef::deserialize::<TokenUsage>)
         .transpose()?;
     if let (Some(usage), Some(header)) = (usage, header) {
         let provider_assistant_tokens = estimate_provider_assistant(events, event, event_tokens)?;
@@ -591,7 +591,7 @@ fn coordinate(event: &SessionEvent, field: &str) -> anyhow::Result<u64> {
     event
         .data
         .get(field)
-        .and_then(|value| value.as_u64())
+        .and_then(JsonRef::as_u64)
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "token meter: {} at seq {} has no valid {field}",
@@ -633,7 +633,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: surface,
             ignorable: None,

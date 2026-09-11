@@ -440,21 +440,32 @@ impl InteractionShared {
             for event in events.iter().rev() {
                 match event.event_type.as_str() {
                     "approval/decided" => {
-                        if let Some(id) = event.data.get("id").and_then(Value::as_str) {
+                        if let Some(id) = event
+                            .data
+                            .get("id")
+                            .and_then(|value| value.deserialize::<String>().ok())
+                        {
                             decided.insert(ApprovalRequestId::new(id));
                         }
                     }
                     "approval/asked" => {
-                        let Some(id) = event.data.get("id").and_then(Value::as_str) else {
+                        let Some(id) = event
+                            .data
+                            .get("id")
+                            .and_then(|value| value.deserialize::<String>().ok())
+                        else {
                             continue;
                         };
                         let id = ApprovalRequestId::new(id);
                         if decided.contains(&id) || claimed.contains(&id) {
                             continue;
                         }
-                        let event_call_id = event.data.get("callId").and_then(Value::as_str);
+                        let event_call_id = event
+                            .data
+                            .get("callId")
+                            .and_then(|value| value.deserialize::<String>().ok());
                         let request_call_id = request.call_id.as_ref().map(CallId::as_str);
-                        if event_call_id != request_call_id {
+                        if event_call_id.as_deref() != request_call_id {
                             continue;
                         }
                         approval_id = Some(id);

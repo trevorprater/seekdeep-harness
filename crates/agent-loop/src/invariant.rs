@@ -127,9 +127,7 @@ mod tests {
             .append("turn/start", json!({"turn": 1}), AppendOptions::default())
             .expect("turn");
         let message = Message::user(
-            vec![ContentBlock::Text {
-                text: "hi".into(),
-            }],
+            vec![ContentBlock::Text { text: "hi".into() }],
             MessageSource::user(),
         );
         session

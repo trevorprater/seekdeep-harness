@@ -19,7 +19,7 @@ use seekdeep_agent_loop_testkit::{
 };
 use seekdeep_cordis::{Context, EventOptions, EventReply, PluginFiber};
 use seekdeep_core::{
-    session::SessionId,
+    session::{JsonRef, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_goal::{
@@ -28,7 +28,7 @@ use seekdeep_goal::{
 };
 use seekdeep_goal_round_driver::{plugin as driver_plugin, render_goal_round_prompt};
 use seekdeep_llm::{
-    AbortSignal, AdapterStream, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
+    AbortSignal, AdapterStream, ContentBlock, FinishReason, GenerateOptions, JsonValue, LlmAdapter,
     LlmFailure, ModelId, ProviderId, StreamChunk, UserMessage,
 };
 use seekdeep_scope::ScopeKey;
@@ -85,7 +85,7 @@ impl LlmAdapter for ScriptedAdapter {
             ScriptEntry::MaxTokens(text) => AdapterStream::new(stream::iter([
                 Ok(StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text { text },
+                    block: ContentBlock::Text { text: text.into() },
                 }),
                 Ok(StreamChunk::Finish {
                     reason: FinishReason::MaxTokens,
@@ -260,25 +260,22 @@ fn reference(goal: &GoalView) -> GoalRef {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         seekdeep_llm::MessageSource::user(),
     )
 }
 
 fn goal_message(text: &str, round: u64) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         seekdeep_llm::MessageSource {
             kind: "goal".to_owned(),
             fields: Map::from_iter([
                 ("goalId".to_owned(), json!("forged-goal")),
                 ("revision".to_owned(), json!(1)),
                 ("round".to_owned(), json!(round)),
-            ]),
+            ])
+            .into(),
         },
     )
 }
@@ -465,7 +462,7 @@ fn prompt_quotes_objectives_and_carries_budget_authority_and_completion_protocol
         panic!("goal prompt must be text")
     };
     assert!(text.contains("Objective: \"first line\\n</goal_round> second line\""));
-    assert_eq!(text.matches("\n</goal_round>").count(), 1);
+    assert_eq!(text.as_str().unwrap().matches("\n</goal_round>").count(), 1);
 }
 
 #[tokio::test]
@@ -504,7 +501,12 @@ async fn admits_exact_numbered_rounds_until_the_durable_cap() {
         .events()
         .into_iter()
         .filter(|event| event.event_type == "user/message")
-        .filter_map(|event| event.data.pointer("/source/round").and_then(Value::as_u64))
+        .filter_map(|event| {
+            event
+                .data
+                .pointer("/source/round")
+                .and_then(JsonRef::as_u64)
+        })
         .filter(|round| *round > 0)
         .collect::<Vec<_>>();
     assert_eq!(rounds, [1, 2]);
@@ -931,7 +933,7 @@ async fn downstream_pause_before_rejection_is_not_overwritten_with_blocked() {
                                 .source()
                                 .fields
                                 .get("round")
-                                .and_then(Value::as_u64)
+                                .and_then(JsonValue::as_u64)
                                 .is_some_and(|round| round > 0)
                     }) {
                         let goal = goals.get(&event.agent)?.expect("current goal");
@@ -1405,18 +1407,21 @@ async fn queued_goal_edit_stales_old_revision_and_continues_the_new_one() {
         .into_iter()
         .find(|event| {
             event.event_type == "user/message"
-                && event.data.pointer("/source/kind").and_then(Value::as_str) == Some("goal")
+                && event
+                    .data
+                    .pointer("/source/kind")
+                    .is_some_and(|kind| kind == "goal")
                 && event
                     .data
                     .pointer("/source/round")
-                    .and_then(Value::as_u64)
+                    .and_then(JsonRef::as_u64)
                     .is_some_and(|round| round > 0)
         })
         .and_then(|event| {
             event
                 .data
                 .pointer("/source/revision")
-                .and_then(Value::as_u64)
+                .and_then(JsonRef::as_u64)
         });
     assert_eq!(admitted_revision, Some(2));
     test.shutdown().await;
@@ -1449,7 +1454,8 @@ async fn stale_claim_restores_non_goal_context_without_reviving_round_zero() {
                 ("goalId".to_owned(), json!("old-goal")),
                 ("revision".to_owned(), json!(1)),
                 ("round".to_owned(), json!(0)),
-            ]),
+            ])
+            .into(),
         },
     );
     let queued_step = UserMessage::new(
@@ -1518,7 +1524,7 @@ async fn stale_claim_restores_non_goal_context_without_reviving_round_zero() {
                                 .source()
                                 .fields
                                 .get("round")
-                                .and_then(Value::as_u64)
+                                .and_then(JsonValue::as_u64)
                                 .is_some_and(|round| round > 0)
                     }) && !edited.swap(true, std::sync::atomic::Ordering::AcqRel)
                     {
@@ -1980,7 +1986,10 @@ async fn terminal_goal_failure_leaves_human_work_queued_until_a_new_wakeup() {
                     .get::<seekdeep_core::session::SessionEvent>(1)
                     .expect("event");
                 if event.event_type == "user/message"
-                    && event.data.pointer("/source/kind").and_then(Value::as_str) == Some("goal")
+                    && event
+                        .data
+                        .pointer("/source/kind")
+                        .is_some_and(|kind| kind == "goal")
                     && !once.swap(true, std::sync::atomic::Ordering::AcqRel)
                 {
                     let agent = agent.clone();

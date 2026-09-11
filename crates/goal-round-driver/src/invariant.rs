@@ -14,8 +14,7 @@ use seekdeep_goal::{
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
-use seekdeep_llm::{ContentBlock, MessageSource};
-use serde_json::Value;
+use seekdeep_llm::{ContentBlock, JsonValue, MessageSource};
 
 use crate::prompt::render_goal_round_prompt;
 
@@ -45,9 +44,9 @@ fn goal_source(source: &MessageSource) -> Option<GoalMessageSource> {
     if source.kind != "goal" {
         return None;
     }
-    let goal_id = source.fields.get("goalId").and_then(Value::as_str)?;
-    let revision = source.fields.get("revision").and_then(Value::as_u64)?;
-    let round = source.fields.get("round").and_then(Value::as_u64)?;
+    let goal_id = source.fields.get("goalId").and_then(JsonValue::as_str)?;
+    let revision = source.fields.get("revision").and_then(JsonValue::as_u64)?;
+    let round = source.fields.get("round").and_then(JsonValue::as_u64)?;
     if goal_id.is_empty() || revision < 1 || round < 1 {
         return None;
     }

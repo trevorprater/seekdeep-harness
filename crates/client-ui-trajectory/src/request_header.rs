@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::json_value::{json, null};
+use crate::json_value::json;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocation,
     ConversationLocationEvent, ConversationMatchResult, ConversationMatchRole,
@@ -191,7 +191,6 @@ fn request_prompt(
     let config = crate::json_value::decode(
         header
             .get_value("config")
-            .cloned()
             .ok_or_else(|| ConversationAssemblerError::new("request/header omitted config"))?,
     )
     .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
@@ -234,7 +233,7 @@ fn prompt_change(
     }
     let system_changed = previous.is_some_and(|previous| previous.system != prompt.system);
     let tools_changed = previous.is_some_and(|previous| {
-        serde_json::to_string(&previous.tools).ok() != serde_json::to_string(&prompt.tools).ok()
+        Value::array(&previous.tools).stringify() != Value::array(&prompt.tools).stringify()
     });
     if previous.is_some() && !system_changed && !tools_changed {
         return None;

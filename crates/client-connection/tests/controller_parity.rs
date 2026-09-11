@@ -17,6 +17,7 @@ use seekdeep_client_connection::{
     HostDescription, RpcError, RpcId, RpcResult, StreamApi,
 };
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
@@ -56,7 +57,7 @@ impl StreamControl {
         self.frames
             .start_send(Ok(EventFrame {
                 rpc_id: RpcId::new(format!("{kind}-id")),
-                payload: json!({ "type": kind, "value": value }),
+                payload: json!({ "type": kind, "value": value }).into(),
             }))
             .unwrap();
     }
@@ -65,10 +66,9 @@ impl StreamControl {
         self.frames
             .start_send(Ok(EventFrame {
                 rpc_id: RpcId::new("stream-error"),
-                payload: json!({
-                    "type": "stream/error",
-                    "error": { "code": "internal", "message": "lost", "details": {} },
-                }),
+                payload: JsonValue::parse(
+                    r#"{"type":"stream/error","error":{"code":"internal","message":"lost\ud800","details":{"\udfff":"\ud800"}}}"#.to_owned(),
+                ).unwrap(),
             }))
             .unwrap();
     }

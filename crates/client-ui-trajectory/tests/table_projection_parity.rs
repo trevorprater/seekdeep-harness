@@ -20,7 +20,10 @@ use seekdeep_client_ui_trajectory::{
     trajectory_request_key, trajectory_request_step, trajectory_section_label,
     trajectory_status_label, trajectory_tool_call_text_parts,
 };
-use serde_json::json;
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
 
 fn cell(index: usize, kind: TrajectoryCellKind, text: &str) -> TrajectoryCell {
     TrajectoryCell::new(index, kind, text)
@@ -229,7 +232,10 @@ fn turn_and_assistant_folds_preserve_first_rows_and_exact_summaries() {
     let folded_turn = collapse_trajectory_turn_records(&records, &BTreeSet::from([1]));
     assert_eq!(ids(&folded_turn), vec![1, 2, 2]);
     assert_eq!(
-        folded_turn[2].collapsed_summary.as_deref(),
+        folded_turn[2]
+            .collapsed_summary
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("2 steps · 2 tool calls")
     );
     assert_eq!(
@@ -244,7 +250,10 @@ fn turn_and_assistant_folds_preserve_first_rows_and_exact_summaries() {
     );
     assert_eq!(ids(&folded_assistant), vec![1, 2, 2, 5]);
     assert_eq!(
-        folded_assistant[2].collapsed_summary.as_deref(),
+        folded_assistant[2]
+            .collapsed_summary
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("2 tool calls · bash")
     );
     assert_eq!(
@@ -268,7 +277,7 @@ fn record_states_and_assistant_timing_match_inspector_labels() {
                 cell(1, TrajectoryCellKind::Tool, "pending"),
                 TrajectoryCell {
                     is_error: Some(true),
-                    output_detail: Some("ToolError".to_owned()),
+                    output_detail: Some("ToolError".into()),
                     ..cell(2, TrajectoryCellKind::Tool, "failed")
                 },
                 TrajectoryCell {
@@ -342,18 +351,18 @@ fn tabs_display_text_and_tool_splitting_preserve_source_rules() {
     let mut tool_call_only = cell(1, TrajectoryCellKind::Message, "Tool call only");
     tool_call_only.source_blocks.push(TrajectorySourceBlock {
         kind: "tool-call".to_owned(),
-        content: "{}".to_owned(),
+        content: "{}".into(),
         image_src: None,
         image_alt: None,
         call_id: Some("call-1".to_owned()),
-        tool_name: Some("read".to_owned()),
+        tool_name: Some("read".into()),
     });
     assert!(trajectory_is_tool_call_only(&tool_call_only));
     assert_eq!(trajectory_record_display_text(&tool_call_only).unwrap(), "");
 
     let context = TrajectoryCell {
         input_detail: Some(
-            "<background-job-complete>\nExit code: 0\n</background-job-complete>".to_owned(),
+            "<background-job-complete>\nExit code: 0\n</background-job-complete>".into(),
         ),
         ..cell(2, TrajectoryCellKind::Context, "")
     };
@@ -364,8 +373,8 @@ fn tabs_display_text_and_tool_splitting_preserve_source_rules() {
     );
 
     let mut tool = cell(3, TrajectoryCellKind::Tool, "bash · {\"command\":\"pwd\"}");
-    tool.input_detail = Some("{\"command\":\"pwd\"}".to_owned());
-    tool.output_detail = Some("ok".to_owned());
+    tool.input_detail = Some("{\"command\":\"pwd\"}".into());
+    tool.output_detail = Some("ok".into());
     let records = flatten_trajectory_table_records(&[turn(
         Some(1),
         vec![group("Step 1", vec![tool_call_only, context, tool.clone()])],
@@ -384,9 +393,15 @@ fn tabs_display_text_and_tool_splitting_preserve_source_rules() {
             (TrajectoryDetailTab::Timing, "Timing"),
         ]
     );
-    let parts = trajectory_tool_call_text_parts(tool.kind, &tool.text).unwrap();
+    let parts = trajectory_tool_call_text_parts(tool.kind, tool.text.clone()).unwrap();
     assert_eq!(parts.name, "bash");
-    assert_eq!(parts.arguments.as_deref(), Some("{\"command\":\"pwd\"}"));
+    assert_eq!(
+        parts
+            .arguments
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
+        Some("{\"command\":\"pwd\"}")
+    );
     assert!(trajectory_tool_call_text_parts(TrajectoryCellKind::User, "bash").is_none());
 
     let compacted = flatten_trajectory_table_records(&[turn(
@@ -398,10 +413,13 @@ fn tabs_display_text_and_tool_splitting_preserve_source_rules() {
     )]);
     assert_eq!(trajectory_detail_tabs(&compacted[0])[1].label, "Raw Output");
 
-    tool.result = Some("fallback".to_owned());
-    tool.result_preview_markdown = Some("**preview**".to_owned());
+    tool.result = Some("fallback".into());
+    tool.result_preview_markdown = Some("**preview**".into());
     assert_eq!(
-        trajectory_record_result_text(&tool).unwrap().as_deref(),
+        trajectory_record_result_text(&tool)
+            .unwrap()
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("preview")
     );
 }
@@ -411,11 +429,11 @@ fn hierarchy_sources_usage_and_json_shapes_are_exact() {
     let mut assistant = cell(1, TrajectoryCellKind::Message, "assistant");
     assistant.source_blocks.push(TrajectorySourceBlock {
         kind: "tool-call".to_owned(),
-        content: "{}".to_owned(),
+        content: "{}".into(),
         image_src: None,
         image_alt: None,
         call_id: Some("call-1".to_owned()),
-        tool_name: Some("bash".to_owned()),
+        tool_name: Some("bash".into()),
     });
     let mut tool = cell(2, TrajectoryCellKind::Tool, "bash");
     tool.call_id = Some("call-1".to_owned());
@@ -480,7 +498,7 @@ fn hierarchy_sources_usage_and_json_shapes_are_exact() {
 
 #[test]
 fn request_wire_defaults_absent_purpose_to_assistant() {
-    let request: TrajectoryRequestNumber = serde_json::from_value(json!({
+    let request: TrajectoryRequestNumber = json_value::decode(&json!({
         "group": "Step 1",
         "number": 3,
         "turn": 2,

@@ -143,7 +143,7 @@ fn to_todo_list(raw: &[TodoItemRaw], allow_parallel: bool) -> anyhow::Result<Vec
             "invalid todo: `content` must be a non-empty string"
         );
         anyhow::ensure!(
-            seen.insert(content.to_owned()),
+            seen.insert(content.to_utf16()),
             "invalid todos: duplicate content {}",
             serde_json::to_string(&content)?
         );
@@ -156,10 +156,7 @@ fn to_todo_list(raw: &[TodoItemRaw], allow_parallel: bool) -> anyhow::Result<Vec
         if status == TodoStatus::InProgress {
             active += 1;
         }
-        todos.push(TodoItem {
-            content: content.to_owned(),
-            status,
-        });
+        todos.push(TodoItem { content, status });
     }
     anyhow::ensure!(
         allow_parallel || active <= 1,
@@ -387,7 +384,7 @@ fn validate_todos(value: Option<JsonRef<'_>>, fail: &InvariantFailure) -> anyhow
     };
     let mut seen = std::collections::HashSet::new();
     for item in array {
-        if !item.is_object() {
+        if !item.is_object() && !item.is_array() {
             return Err(fail.fail("todo/write entries must be objects").into());
         }
         let content = item
@@ -402,11 +399,11 @@ fn validate_todos(value: Option<JsonRef<'_>>, fail: &InvariantFailure) -> anyhow
                 .into());
         }
         let content = content.expect("checked above");
-        if !seen.insert(content.to_owned()) {
+        if !seen.insert(content.to_utf16()) {
             return Err(fail
                 .fail(format!(
                     "todo/write repeats content {}",
-                    serde_json::to_string(&content).unwrap_or_default()
+                    JsonValue::from_utf16(content.utf16_units()).stringify()
                 ))
                 .into());
         }
@@ -417,9 +414,10 @@ fn validate_todos(value: Option<JsonRef<'_>>, fail: &InvariantFailure) -> anyhow
             .as_ref()
             .is_none_or(|status| !TODO_STATUSES.contains(&status.as_str()))
         {
-            let rendered = item
-                .get("status")
-                .map_or_else(|| "null".to_owned(), |value| value.as_raw().to_owned());
+            let rendered = item.get("status").map_or_else(
+                || "undefined".to_owned(),
+                |value| value.to_owned().stringify(),
+            );
             return Err(fail
                 .fail(format!("todo/write carries unknown status {rendered}"))
                 .into());

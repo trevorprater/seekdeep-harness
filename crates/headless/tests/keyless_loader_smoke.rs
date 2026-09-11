@@ -66,7 +66,9 @@ impl LlmAdapter for KeylessAdapter {
                     content
                         .iter()
                         .filter_map(|block| match block {
-                            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
+                            ContentBlock::Text { text } => {
+                                Some(text.as_str().expect("fixture uses scalar text"))
+                            }
                             _ => None,
                         })
                         .collect::<String>(),

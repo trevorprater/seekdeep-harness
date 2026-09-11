@@ -141,7 +141,8 @@ mod tests {
                         "source": { "kind": "model", "provider": "mock", "model": "mock" },
                         "content": text_block("replacement")
                     }
-                }).into(),
+                })
+                .into(),
                 source_event_seqs: Some(vec![0]),
                 surface_op: Some(SurfaceOp::Replace(SurfaceReplace {
                     op: "replace".to_owned(),

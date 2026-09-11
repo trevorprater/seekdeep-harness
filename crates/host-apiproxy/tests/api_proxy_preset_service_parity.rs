@@ -533,7 +533,7 @@ async fn committed_selection_is_forwarded_to_the_host_remote_event_stream() {
         frame.payload,
         HostFrame::RemoteEvent {
             event: "agent-preset/selected".to_owned(),
-            args: vec![json!("remote-selection"), json!("minimal")],
+            args: vec![json!("remote-selection").into(), json!("minimal").into()],
         }
     );
 }

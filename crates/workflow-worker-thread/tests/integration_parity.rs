@@ -23,8 +23,8 @@ use seekdeep_subagent::SubagentRuntime;
 use seekdeep_subagent_in_process_driver::STRUCTURED_OUTPUT_TOOL;
 use seekdeep_subagent_spawn_in_process::Config as SpawnConfig;
 use seekdeep_workflow::{
-    WorkflowAgentInfo, WorkflowEngine, WorkflowMeta, WorkflowPhase, WorkflowStartRequest,
-    WorkflowStopReason,
+    WorkflowAgentInfo, WorkflowEngine, WorkflowMeta, WorkflowPhase, WorkflowResult, WorkflowRun,
+    WorkflowStartRequest, WorkflowStopReason,
 };
 use seekdeep_workflow_worker_thread::{Config, WorkerThreadWorkflowEngine};
 use serde_json::{Value, json};
@@ -97,6 +97,16 @@ struct Harness {
     adapter: Arc<ScriptedAdapter>,
     engine: Arc<WorkerThreadWorkflowEngine>,
     parent: AgentHandle,
+}
+
+async fn bounded_result(run: &Arc<dyn WorkflowRun>) -> WorkflowResult {
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), run.result()).await;
+    if result.is_err() {
+        tokio::time::timeout(std::time::Duration::from_secs(10), run.dispose())
+            .await
+            .expect("timed-out workflow disposal must complete");
+    }
+    result.expect("workflow result must settle")
 }
 
 impl Harness {
@@ -325,7 +335,7 @@ const judged = await agent(
 return { prose, containsFour: judged === null ? null : judged.containsFour }"#,
         ))
         .expect("start");
-    let result = run.result().await;
+    let result = bounded_result(&run).await;
     assert_eq!(result.stop_reason, WorkflowStopReason::Completed);
     assert_eq!(
         result.value,
@@ -377,7 +387,7 @@ async fn schema_child_without_a_committed_structured_value_reaches_the_script_as
 return { got: judged === null ? 'null' : 'value' }",
         ))
         .expect("start");
-    let result = run.result().await;
+    let result = bounded_result(&run).await;
     assert_eq!(result.stop_reason, WorkflowStopReason::Completed);
     assert_eq!(result.value, json!({"got": "null"}));
     run.dispose().await;

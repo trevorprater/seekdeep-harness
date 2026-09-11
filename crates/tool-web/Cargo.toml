@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Model-facing web search and fetch tools"
 
 [dependencies]
+seekdeep-lossless-json = { path = "../lossless-json" }
 anyhow.workspace = true
 futures.workspace = true
 mdream.workspace = true

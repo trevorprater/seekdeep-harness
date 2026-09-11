@@ -441,7 +441,7 @@ impl AcpBridge {
                 vec![seekdeep_llm::ContentBlock::text(text)],
                 MessageSource {
                     kind: "user".to_owned(),
-                    fields: Map::new(),
+                    fields: Map::new().into(),
                 },
             );
             let message_id = message.id().as_str().to_owned();

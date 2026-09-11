@@ -2,8 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use serde::{Deserialize, Serialize};
 use seekdeep_lossless_json::JsonString;
+use serde::{Deserialize, Serialize};
 
 use crate::{TrajectoryCell, TrajectoryCellKind, format_duration_millis};
 

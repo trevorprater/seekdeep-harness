@@ -364,7 +364,7 @@ fn project_call(
         return Ok(None);
     };
     if visited.contains(call_id) || depth > MAX_DEPTH {
-        return with_sub_calls(block.clone(), Vec::new()).map(Some);
+        return with_sub_calls(block.clone(), &[]).map(Some);
     }
     let mut next_visited = visited.clone();
     next_visited.insert(call_id.to_owned());
@@ -377,7 +377,7 @@ fn project_call(
         }
     }
     if is_settled(block) || interrupted_at.is_none() {
-        return with_sub_calls(block.clone(), sub_calls).map(Some);
+        return with_sub_calls(block.clone(), &sub_calls).map(Some);
     }
     let (seq, time) = interrupted_at.expect("checked");
     Ok(Some(json!({
@@ -445,10 +445,10 @@ fn interruption(context: &ConversationNodeContext) -> Option<(u64, i64)> {
 
 fn with_sub_calls(
     mut block: Value,
-    sub_calls: Vec<Value>,
+    sub_calls: &[Value],
 ) -> Result<Value, ConversationAssemblerError> {
     block
-        .insert("subCalls", Value::array(&sub_calls))
+        .insert("subCalls", Value::array(sub_calls))
         .map_err(|_| ConversationAssemblerError::new("trajectory Tool block must be an object"))?;
     Ok(block)
 }

@@ -2,7 +2,9 @@
 
 mod deserialize;
 
-use seekdeep_llm::{CallId, ContentBlock, JsonString, LlmError, Message, ModelId, ProviderId};
+use seekdeep_llm::{
+    CallId, ContentBlock, JsonString, JsonValue, LlmError, Message, ModelId, ProviderId,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -328,7 +330,7 @@ fn foreign_assistant(message: &Message) -> Result<PiAssistantMessage, LlmError> 
 
 fn replayed_assistant(
     message: &Message,
-    raw_state: &Value,
+    raw_state: &JsonValue,
 ) -> Result<PiAssistantMessage, LlmError> {
     let state = read_replay_state(raw_state)?;
     let source_provider = model_source_string(message, "provider").unwrap_or_default();
@@ -400,23 +402,23 @@ fn replayed_assistant(
     })
 }
 
-fn read_replay_state(value: &Value) -> Result<PiAiReplayState, LlmError> {
-    let Some(state) = value.as_object() else {
+fn read_replay_state(state: &JsonValue) -> Result<PiAiReplayState, LlmError> {
+    if !state.is_object() {
         return Err(invalid_replay("expected an object"));
-    };
-    if state.get("kind").and_then(Value::as_str) != Some("pi-ai") {
+    }
+    if state.get_value("kind").and_then(JsonValue::as_str) != Some("pi-ai") {
         return Err(invalid_replay("unknown state kind"));
     }
-    if state.get("version").and_then(Value::as_u64) != Some(1) {
+    if state.get_value("version").and_then(JsonValue::as_u64) != Some(1) {
         return Err(invalid_replay(format!(
             "unsupported version {}",
-            js_string(state.get("version"))
+            js_string(state.get_value("version"))
         )));
     }
     let api = required_string(state, "api")?;
     let provider = required_string(state, "provider")?;
     let model = required_string(state, "model")?;
-    let stop_reason = match state.get("stopReason").and_then(Value::as_str) {
+    let stop_reason = match state.get_value("stopReason").and_then(JsonValue::as_str) {
         Some("stop") => PiStopReason::Stop,
         Some("length") => PiStopReason::Length,
         Some("toolUse") => PiStopReason::ToolUse,
@@ -426,28 +428,31 @@ fn read_replay_state(value: &Value) -> Result<PiAiReplayState, LlmError> {
     };
     let response_model = optional_string(state, "responseModel")?.map(ModelId::new);
     let response_id = optional_string(state, "responseId")?.map(PiResponseId::new);
-    let Some(raw_blocks) = state.get("blocks").and_then(Value::as_array) else {
+    let Some(raw_blocks) = state.get_value("blocks").and_then(JsonValue::as_array) else {
         return Err(invalid_replay("blocks must be an array"));
     };
     let mut blocks = Vec::with_capacity(raw_blocks.len());
-    for (index, value) in raw_blocks.iter().enumerate() {
-        let Some(block) = value.as_object() else {
+    for (index, block) in raw_blocks.iter().enumerate() {
+        if !block.is_object() {
             return Err(invalid_replay(format!("block {index} must be an object")));
-        };
-        let block_type = block.get("type").and_then(Value::as_str);
+        }
+        let block_type = block.get_value("type").and_then(JsonValue::as_str);
         if !matches!(block_type, Some("text" | "reasoning" | "tool-call")) {
             return Err(invalid_replay(format!("block {index} has an unknown type")));
         }
         for signature in ["textSignature", "thinkingSignature", "thoughtSignature"] {
-            if block.get(signature).is_some_and(|value| !value.is_string()) {
+            if block
+                .get_value(signature)
+                .is_some_and(|value| value.as_str().is_none())
+            {
                 return Err(invalid_replay(format!(
                     "block {index} {signature} must be a string"
                 )));
             }
         }
         if block
-            .get("redacted")
-            .is_some_and(|value| !value.is_boolean())
+            .get_value("redacted")
+            .is_some_and(|value| value.as_bool().is_none())
         {
             return Err(invalid_replay(format!(
                 "block {index} redacted must be boolean"
@@ -456,21 +461,21 @@ fn read_replay_state(value: &Value) -> Result<PiAiReplayState, LlmError> {
         let replay = match block_type {
             Some("text") => PiAiReplayBlock::Text {
                 text_signature: block
-                    .get("textSignature")
-                    .and_then(Value::as_str)
+                    .get_value("textSignature")
+                    .and_then(JsonValue::as_str)
                     .map(str::to_owned),
             },
             Some("reasoning") => PiAiReplayBlock::Reasoning {
                 thinking_signature: block
-                    .get("thinkingSignature")
-                    .and_then(Value::as_str)
+                    .get_value("thinkingSignature")
+                    .and_then(JsonValue::as_str)
                     .map(str::to_owned),
-                redacted: block.get("redacted").and_then(Value::as_bool),
+                redacted: block.get_value("redacted").and_then(JsonValue::as_bool),
             },
             Some("tool-call") => PiAiReplayBlock::ToolCall {
                 thought_signature: block
-                    .get("thoughtSignature")
-                    .and_then(Value::as_str)
+                    .get_value("thoughtSignature")
+                    .and_then(JsonValue::as_str)
                     .map(str::to_owned),
             },
             _ => unreachable!("block type validated above"),
@@ -490,18 +495,20 @@ fn read_replay_state(value: &Value) -> Result<PiAiReplayState, LlmError> {
     })
 }
 
-fn required_string(state: &Map<String, Value>, key: &str) -> Result<String, LlmError> {
-    match state.get(key).and_then(Value::as_str) {
+fn required_string(state: &JsonValue, key: &str) -> Result<String, LlmError> {
+    match state.get_value(key).and_then(JsonValue::as_str) {
         Some(value) if !value.is_empty() => Ok(value.to_owned()),
         _ => Err(invalid_replay(format!("{key} must be a non-empty string"))),
     }
 }
 
-fn optional_string(state: &Map<String, Value>, key: &str) -> Result<Option<String>, LlmError> {
-    match state.get(key) {
+fn optional_string(state: &JsonValue, key: &str) -> Result<Option<String>, LlmError> {
+    match state.get_value(key) {
         None => Ok(None),
-        Some(Value::String(value)) => Ok(Some(value.clone())),
-        Some(_) => Err(invalid_replay(format!("{key} must be a string"))),
+        Some(value) => value
+            .as_str()
+            .map(|value| Some(value.to_owned()))
+            .ok_or_else(|| invalid_replay(format!("{key} must be a string"))),
     }
 }
 
@@ -530,14 +537,14 @@ fn invalid_replay(message: impl AsRef<str>) -> LlmError {
     )
 }
 
-fn js_string(value: Option<&Value>) -> String {
+fn js_string(value: Option<&JsonValue>) -> String {
     match value {
         None => "undefined".to_owned(),
-        Some(Value::Null) => "null".to_owned(),
-        Some(Value::Bool(value)) => value.to_string(),
-        Some(Value::Number(value)) => value.to_string(),
-        Some(Value::String(value)) => value.clone(),
-        Some(Value::Array(_)) => String::new(),
-        Some(Value::Object(_)) => "[object Object]".to_owned(),
+        Some(value) if value.is_string() => value
+            .as_str()
+            .map_or_else(|| value.as_raw().to_owned(), str::to_owned),
+        Some(value) if value.is_array() => String::new(),
+        Some(value) if value.is_object() => "[object Object]".to_owned(),
+        Some(value) => value.as_raw().to_owned(),
     }
 }

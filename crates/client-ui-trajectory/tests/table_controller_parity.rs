@@ -47,7 +47,7 @@ fn selected_record_identity_survives_prepends_and_tab_history_is_contextual() {
     assert_eq!(controller.selected_index(&initial), Some(1));
 
     let mut tool = cell(3, TrajectoryCellKind::Tool, "bash", 101);
-    tool.output_detail = Some("ok".to_owned());
+    tool.output_detail = Some("ok".into());
     let prepended = records(vec![
         cell(1, TrajectoryCellKind::User, "older prompt", 1),
         cell(
@@ -196,7 +196,7 @@ fn inspect_and_focus_wait_for_a_real_uncollapsed_row() {
 
     controller.focus_record(&records, 1);
     let mut folded = records.clone();
-    folded[0].collapsed_summary = Some("1 tool call".to_owned());
+    folded[0].collapsed_summary = Some("1 tool call".into());
     assert_eq!(controller.take_pending_scroll_index(&folded), None);
     assert!(controller.snapshot().pending_scroll_record_id.is_some());
     assert_eq!(controller.take_pending_scroll_index(&records), Some(1));

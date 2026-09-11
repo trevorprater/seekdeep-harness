@@ -48,7 +48,9 @@ fn resolved(home: &std::path::Path, max_bytes: u64) -> seekdeep_agent_instructio
 }
 
 fn changes(update: &ReconciledInstructionContext) -> Vec<AgentInstructionChange> {
-    serde_json::from_value(update.context.source().fields["changes"].clone()).unwrap()
+    update.context.source().fields["changes"]
+        .deserialize()
+        .unwrap()
 }
 
 fn commit(

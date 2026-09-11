@@ -4,13 +4,16 @@ use seekdeep_client_runtime::ConversationPromptSnapshot;
 use seekdeep_client_ui_trajectory::{
     TrajectoryContribution, TrajectoryLocation, TrajectoryRequestHeaderState,
 };
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
 
 fn header() -> TrajectoryRequestHeaderState {
     TrajectoryRequestHeaderState {
         seq: 2,
         time: 3,
-        prompt: serde_json::from_value::<ConversationPromptSnapshot>(json!({
+        prompt: json_value::decode::<ConversationPromptSnapshot>(&json!({
             "config": {"provider": "test", "model": "model"},
             "system": "prompt",
             "tools": [],
@@ -47,7 +50,7 @@ fn every_contribution_variant_round_trips_exact_optional_members() {
 #[test]
 fn malformed_and_unknown_contributions_fail_at_the_contract_boundary() {
     for value in [
-        Value::Null,
+        json!(null),
         json!({}),
         json!({"kind": "future"}),
         json!({"kind": "node"}),

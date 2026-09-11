@@ -37,7 +37,7 @@ fn authoritative_close_usage_finish_replay_and_default_message_are_preserved() {
     });
     assembler.push(StreamChunk::Finish {
         reason: FinishReason::ToolCalls,
-        replay_state: Some(json!({"cursor": "next"})),
+        replay_state: Some(json!({"cursor": "next"}).into()),
     });
     assert_eq!(
         assembler.blocks().unwrap(),
@@ -47,7 +47,10 @@ fn authoritative_close_usage_finish_replay_and_default_message_are_preserved() {
     );
     assert_eq!(assembler.usage(), Some(&usage));
     assert_eq!(assembler.finish(), FinishReason::ToolCalls);
-    assert_eq!(assembler.replay_state(), Some(&json!({"cursor": "next"})));
+    assert_eq!(
+        assembler.replay_state().unwrap(),
+        &json!({"cursor": "next"})
+    );
     let message = assembler.message(None).unwrap();
     assert_eq!(message.role(), MessageRole::Assistant);
     assert_eq!(message.source().kind, "plugin");
@@ -174,14 +177,14 @@ fn finish_defaults_to_stop_last_finish_wins_and_max_tokens_drops_tool_calls_only
     });
     assembler.push(StreamChunk::Finish {
         reason: FinishReason::Stop,
-        replay_state: Some(json!({"old": true})),
+        replay_state: Some(json!({"old": true}).into()),
     });
     assembler.push(StreamChunk::Finish {
         reason: FinishReason::MaxTokens,
-        replay_state: Some(json!({"new": true})),
+        replay_state: Some(json!({"new": true}).into()),
     });
     assert_eq!(assembler.finish(), FinishReason::MaxTokens);
-    assert_eq!(assembler.replay_state(), Some(&json!({"new": true})));
+    assert_eq!(assembler.replay_state().unwrap(), &json!({"new": true}));
     assert_eq!(
         assembler.blocks().unwrap(),
         [ContentBlock::Text {

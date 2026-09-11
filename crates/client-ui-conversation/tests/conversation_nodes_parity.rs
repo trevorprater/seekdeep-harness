@@ -8,8 +8,8 @@ use seekdeep_client_runtime::{
     AssemblerViewDefinition, AssemblerViewDefinitions, ConversationAssemblerError,
     ConversationEventInput, ConversationLocationData, ConversationLocationDataScope,
     ConversationLocationEvent, ConversationMatchResult, ConversationMatchRole,
-    ConversationNodeAssembler, ConversationTimelineSnapshot, ConversationViewNode,
-    ConversationVisibility,
+    ConversationNodeAssembler, ConversationTimelineSnapshot, ConversationValue as RawValue,
+    ConversationViewNode, ConversationVisibility,
 };
 use seekdeep_client_ui_conversation::{
     CHAT_FINALIZED_FOLLOWUP_OFFSET, CHAT_INTERRUPTED_ASSISTANT_OFFSET,
@@ -63,13 +63,15 @@ struct ChatBuilder {
 }
 
 impl ChatBuilder {
-    fn snapshot(&self) -> Rc<Value> {
-        Rc::new(Value::Array(self.nodes.values().map(node_value).collect()))
+    fn snapshot(&self) -> Rc<RawValue> {
+        Rc::new(RawValue::array(
+            &self.nodes.values().map(node_value).collect::<Vec<_>>(),
+        ))
     }
 }
 
 impl AssemblerViewBuilder for ChatBuilder {
-    fn empty(&self) -> Rc<Value> {
+    fn empty(&self) -> Rc<RawValue> {
         self.snapshot()
     }
 
@@ -77,7 +79,7 @@ impl AssemblerViewBuilder for ChatBuilder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<RawValue>, ConversationAssemblerError> {
         self.nodes = nodes
             .iter()
             .map(|node| (node.key.clone(), node.clone()))
@@ -89,7 +91,7 @@ impl AssemblerViewBuilder for ChatBuilder {
         &mut self,
         upserts: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<RawValue>, ConversationAssemblerError> {
         for node in upserts {
             self.nodes.insert(node.key.clone(), node.clone());
         }
@@ -97,19 +99,23 @@ impl AssemblerViewBuilder for ChatBuilder {
     }
 }
 
-fn node_value(node: &Rc<ConversationViewNode>) -> Value {
+fn node_value(node: &Rc<ConversationViewNode>) -> RawValue {
     let chat = node.chat.as_ref().expect("chat metadata");
-    json!({
-        "key": node.key,
-        "kind": node.kind,
-        "id": node.id,
-        "anchorSeq": chat.anchor_seq,
-        "visibility": match chat.visibility {
-            ConversationVisibility::Visible => "visible",
-            ConversationVisibility::Hidden => "hidden",
-        },
-        "data": node.data.as_ref().clone(),
-    })
+    RawValue::object([
+        ("key", json!(node.key).into()),
+        ("kind", json!(node.kind).into()),
+        ("id", json!(node.id).into()),
+        ("anchorSeq", json!(chat.anchor_seq).into()),
+        (
+            "visibility",
+            json!(match chat.visibility {
+                ConversationVisibility::Visible => "visible",
+                ConversationVisibility::Hidden => "hidden",
+            })
+            .into(),
+        ),
+        ("data", node.data.as_ref().clone()),
+    ])
 }
 
 fn assembler(
@@ -130,7 +136,7 @@ fn assembler(
     value
 }
 
-fn snapshot(value: &ConversationNodeAssembler) -> Rc<Value> {
+fn snapshot(value: &ConversationNodeAssembler) -> Rc<RawValue> {
     value.snapshot("chat").expect("chat snapshot")
 }
 
@@ -150,7 +156,7 @@ fn production_chat_assembler(
     value
 }
 
-fn node<'a>(snapshot: &'a Value, kind: &str) -> Option<&'a Value> {
+fn node<'a>(snapshot: &'a RawValue, kind: &str) -> Option<&'a RawValue> {
     snapshot
         .as_array()
         .expect("node array")
@@ -1153,10 +1159,10 @@ fn max_tokens_notice_uses_tail_closing_anchor_and_survives_partial_windows() {
     assert!((CHAT_INTERRUPTED_FOLLOWUP_OFFSET - -0.8).abs() < f64::EPSILON);
     assert!((CHAT_MAX_TOKENS_NOTICE_OFFSET - 0.05).abs() < f64::EPSILON);
     assert!((CHAT_FINALIZED_FOLLOWUP_OFFSET - 0.1).abs() < f64::EPSILON);
-    assert_eq!(conversation_coordinate(&json!(0)), Some(0));
-    assert_eq!(conversation_coordinate(&json!(7.0)), Some(7));
+    assert_eq!(conversation_coordinate(&json!(0).into()), Some(0));
+    assert_eq!(conversation_coordinate(&json!(7.0).into()), Some(7));
     assert_eq!(
-        conversation_coordinate(&json!(9_007_199_254_740_991_u64)),
+        conversation_coordinate(&json!(9_007_199_254_740_991_u64).into()),
         Some(9_007_199_254_740_991)
     );
     for invalid in [
@@ -1166,7 +1172,7 @@ fn max_tokens_notice_uses_tail_closing_anchor_and_survives_partial_windows() {
         json!("1"),
         Value::Null,
     ] {
-        assert_eq!(conversation_coordinate(&invalid), None);
+        assert_eq!(conversation_coordinate(&invalid.into()), None);
     }
 }
 
@@ -1179,8 +1185,8 @@ fn synthetic_turn_tail_location_data() -> AssemblerNodeDefinition {
                 (event.event_type == "assistant/message").then(|| ConversationMatchResult {
                     id: event
                         .data
-                        .get("turn")
-                        .and_then(Value::as_u64)
+                        .get_value("turn")
+                        .and_then(RawValue::as_u64)
                         .unwrap()
                         .to_string(),
                     role: ConversationMatchRole::Start,
@@ -1188,10 +1194,13 @@ fn synthetic_turn_tail_location_data() -> AssemblerNodeDefinition {
             )
         }),
         start: Rc::new(|_context, accepted, _reader| {
-            Ok(Some(Rc::new(json!({
-                "turn": accepted.event.data["turn"],
-                "closing": {"finalNode": {"seq": accepted.event.seq}},
-            }))))
+            Ok(Some(Rc::new(RawValue::object([
+                ("turn", accepted.event.data["turn"].clone()),
+                (
+                    "closing",
+                    json!({"finalNode": {"seq": accepted.event.seq}}).into(),
+                ),
+            ]))))
         }),
         update: Rc::new(|context, _accepted| Ok(context.state.clone())),
         publication: None,
@@ -1210,4 +1219,129 @@ fn synthetic_turn_tail_location_data() -> AssemblerNodeDefinition {
         })),
         build_view_node: None,
     }
+}
+
+fn lossless_event(
+    seq: u64,
+    kind: &str,
+    data: &str,
+    surface: Option<Value>,
+) -> ConversationEventInput {
+    let data = RawValue::parse(data.to_owned()).unwrap();
+    let mut wire = RawValue::object([
+        ("seq", json!(seq).into()),
+        ("time", json!(seq).into()),
+        ("type", json!(kind).into()),
+        ("data", data.clone()),
+    ]);
+    if let Some(surface) = surface {
+        wire.insert("surfaceOp", surface.into()).unwrap();
+    }
+    ConversationEventInput {
+        event: ConversationLocationEvent::with_wire(
+            seq,
+            i64::try_from(seq).unwrap(),
+            kind,
+            data,
+            wire,
+        ),
+        view: None,
+    }
+}
+
+#[test]
+fn lossless_context_retry_compaction_and_failure_survive_the_production_chat_builder() {
+    let event = lossless_event;
+    let inputs = [
+        event(1, "turn/start", r#"{"turn":1}"#, None),
+        event(2, "step/start", r#"{"turn":1,"step":1}"#, None),
+        event(
+            3,
+            "user/message",
+            r#"{"id":"context","source":{"kind":"future\ud800","extra":{"\udc00":["\ud800",null]}},"content":[{"type":"text","text":"context\ud800"}]}"#,
+            Some(json!("append")),
+        ),
+        event(
+            4,
+            "llm/retry",
+            r#"{"retryId":"r","turn":1,"step":1,"retry":1,"extension":{"\ud800":["\udc00"]},"failure":{"message":"retry\ud800"}}"#,
+            None,
+        ),
+        event(
+            5,
+            "llm/retry-started",
+            r#"{"retryId":"r","turn":1,"step":1,"retry":1}"#,
+            None,
+        ),
+        event(
+            6,
+            "compaction/start",
+            r#"{"compactionId":"c","turn":null}"#,
+            None,
+        ),
+        event(
+            7,
+            "compaction/summary",
+            r#"{"compactionId":"c","summary":[{"type":"text","text":" \ud800 "}],"shadowedSeqs":[1],"shadowedTokenCount":2}"#,
+            None,
+        ),
+        event(
+            8,
+            "user/message",
+            r#"{"id":"checkpoint","source":{"kind":"plugin","plugin":"compact","compactionId":"c"},"content":[]}"#,
+            Some(json!({"op":"replace","start":1,"end":1})),
+        ),
+        event(9, "turn/start", r#"{"turn":2}"#, None),
+        event(
+            10,
+            "turn/end",
+            r#"{"turn":2,"reason":{"kind":"error","error":{"message":"failure\ud800","code":null}}}"#,
+            None,
+        ),
+    ];
+    let definitions = vec![
+        conversation_message_definition(),
+        conversation_retry_definition(),
+        conversation_compaction_definition(),
+        conversation_turn_error_definition(),
+    ];
+    let assembler = production_chat_assembler(definitions, &inputs);
+    let snapshot = snapshot(&assembler);
+    let nodes = &snapshot["nodes"];
+    let context = &node(nodes, "context").unwrap()["data"];
+    assert_eq!(context["source"], inputs[2].event.data["source"]);
+    assert_eq!(context["content"], inputs[2].event.data["content"]);
+    assert_eq!(
+        context["provenance"]["label"],
+        inputs[2].event.data["source"]["kind"]
+    );
+    let retry = &node(nodes, "model-retry").unwrap()["data"]["current"];
+    assert_eq!(retry["retryState"], "started");
+    assert_eq!(retry["extension"], inputs[3].event.data["extension"]);
+    assert_eq!(retry["failure"], inputs[3].event.data["failure"]);
+    assert_eq!(
+        node(nodes, "compaction").unwrap()["data"]["summary"].to_utf16(),
+        Some(vec![32, 0xd800, 32])
+    );
+    let failure = &node(nodes, "turn-error").unwrap()["data"];
+    assert_eq!(
+        failure["message"],
+        inputs[9].event.data["reason"]["error"]["message"]
+    );
+    assert!(failure.get_value("code").unwrap().is_null());
+    let legacy = &snapshot["legacy"]["nodes"];
+    assert!(
+        legacy
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == context)
+    );
+    assert!(
+        legacy
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == retry)
+    );
 }

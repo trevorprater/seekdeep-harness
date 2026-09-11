@@ -3,8 +3,7 @@
 use std::sync::OnceLock;
 
 use regex::Regex;
-use seekdeep_llm::UserMessage;
-use serde_json::Value;
+use seekdeep_llm::{JsonString, JsonValue, UserMessage};
 
 use crate::timestamp::canonical_time_zone_name;
 
@@ -39,7 +38,7 @@ fn browser_time_zone(message: &UserMessage) -> anyhow::Result<Option<String>> {
             .source()
             .fields
             .get("rpcId")
-            .is_some_and(Value::is_string)
+            .is_some_and(JsonValue::is_string)
     {
         return Ok(None);
     }
@@ -47,10 +46,17 @@ fn browser_time_zone(message: &UserMessage) -> anyhow::Result<Option<String>> {
         .source()
         .fields
         .get("clientTimeZone")
-        .and_then(Value::as_str)
+        .filter(|value| value.is_string())
     else {
         return Ok(None);
     };
+    let value = value.as_str().ok_or_else(|| {
+        let text = JsonString::from_utf16(&value.to_utf16().expect("validated string value"));
+        anyhow::anyhow!(
+            "browser time zone must be canonical UTC or IANA Area/Location: {}",
+            text.as_raw()
+        )
+    })?;
     anyhow::ensure!(
         value == "UTC" || iana_pattern().is_match(value),
         "browser time zone must be canonical UTC or IANA Area/Location: {value:?}"

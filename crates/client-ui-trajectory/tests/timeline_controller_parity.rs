@@ -18,7 +18,7 @@ fn model(count: usize) -> TrajectoryTimelineModel {
                 index,
                 is_error: false,
                 kind: TrajectoryCellKind::Message,
-                label: format!("record {index}"),
+                label: format!("record {index}").into(),
                 lane: 1,
             })
             .collect(),

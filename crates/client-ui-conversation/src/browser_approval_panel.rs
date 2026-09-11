@@ -271,7 +271,7 @@ fn render_approval_panel(
             let call_id_text = call_id
                 .as_string()
                 .ok_or_else(|| js_sys::TypeError::new("PendingApproval callId must be a string"))?;
-            let root = root_tool_call_browser(snapshot, call_id_text.clone())?;
+            let root = root_tool_call_browser(snapshot, call_id_text.clone().into())?;
             if root.is_undefined() {
                 return Ok(JsValue::UNDEFINED);
             }

@@ -470,9 +470,7 @@ mod tests {
 
     fn append_user(session: &Session, text: &str) {
         let message = Message::user(
-            vec![ContentBlock::Text {
-                text: text.into(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         );
         session

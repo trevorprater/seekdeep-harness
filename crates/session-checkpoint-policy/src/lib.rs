@@ -174,7 +174,7 @@ fn aborted_before_dispatch_result() -> ToolExecutionResult {
             text: format!("Error: {message}").into(),
         }],
         error: ToolFailure {
-            message,
+            message: message.into(),
             info: Some(ToolErrorInfo {
                 name: "AbortError".to_owned(),
                 code: TOOL_ABORTED_BEFORE_DISPATCH.to_owned(),

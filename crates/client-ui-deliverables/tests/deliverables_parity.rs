@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as SnapshotValue;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
     AssemblerViewDefinition, AssemblerViewDefinitions, ConversationAssemblerError,
@@ -17,7 +18,9 @@ use seekdeep_client_ui_deliverables::{
 use seekdeep_client_ui_deliverables::{
     FILE_REFERENCE_PROMPT, INJECT, PROMPT_SECTION_NAME, PROMPT_SECTION_ORDER, host_plugin,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
+
+include!("../../client-runtime/tests/support/conversation_json.rs");
 
 struct EventDefinitions(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -40,15 +43,15 @@ impl AssemblerViewDefinitions for ViewDefinitions {
 }
 
 struct TimelineBuilder {
-    snapshot: Rc<Value>,
+    snapshot: Rc<SnapshotValue>,
 }
 
 impl TimelineBuilder {
-    fn empty_snapshot() -> Rc<Value> {
-        Rc::new(json!({"turns":{}}))
+    fn empty_snapshot() -> Rc<SnapshotValue> {
+        Rc::new(json!({"turns":{}}).into())
     }
 
-    fn publish(&mut self, timeline: &ConversationTimelineSnapshot) -> Rc<Value> {
+    fn publish(&mut self, timeline: &ConversationTimelineSnapshot) -> Rc<SnapshotValue> {
         let turns = timeline
             .turn_order
             .iter()
@@ -60,14 +63,14 @@ impl TimelineBuilder {
                         .map(|data| (turn.to_string(), data.as_ref().clone()))
                 })
             })
-            .collect::<Map<_, _>>();
-        self.snapshot = Rc::new(json!({"turns":turns}));
+            .collect::<Vec<_>>();
+        self.snapshot = Rc::new(conversation_json!({"turns":SnapshotValue::object(turns)}));
         self.snapshot.clone()
     }
 }
 
 impl AssemblerViewBuilder for TimelineBuilder {
-    fn empty(&self) -> Rc<Value> {
+    fn empty(&self) -> Rc<SnapshotValue> {
         self.snapshot.clone()
     }
 
@@ -75,7 +78,7 @@ impl AssemblerViewBuilder for TimelineBuilder {
         &mut self,
         _nodes: &[Rc<ConversationViewNode>],
         timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         Ok(self.publish(&timeline))
     }
 
@@ -83,7 +86,7 @@ impl AssemblerViewBuilder for TimelineBuilder {
         &mut self,
         _upserts: &[Rc<ConversationViewNode>],
         timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         Ok(self.publish(&timeline))
     }
 }
@@ -129,7 +132,7 @@ fn at(
             data,
             wire,
         ),
-        view: view.map(Rc::new),
+        view: view.map(|value| Rc::new(value.into())),
     }
 }
 
@@ -200,7 +203,27 @@ fn edit(path: &str) -> Value {
 
 fn deliverables_of(value: &ConversationNodeAssembler, turn: u64) -> Option<DeliverablesTurnData> {
     let snapshot = value.snapshot("test")?;
-    serde_json::from_value(snapshot.pointer(&format!("/turns/{turn}"))?.clone()).ok()
+    snapshot
+        .pointer(&format!("/turns/{turn}"))?
+        .to_owned()
+        .deserialize()
+        .ok()
+}
+
+#[test]
+fn raw_call_view_fields_survive_state_folding_without_narrowing() {
+    let mut head = call(2, "raw", None, 1);
+    head.view = Some(Rc::new(SnapshotValue::parse(
+        r#"{"for":"call","view":{"card":"diff","locations":[{"path":"out.txt"}],"diffs":[{"oldText":"\ud800"}],"metadata":{"\udfff":"\ud800"}}}"#.to_owned(),
+    ).unwrap()));
+    let value = assembler(
+        &[turn_start(1, 1), head, result(3, "raw", false, 1, true)],
+        false,
+    );
+    assert_eq!(
+        produced_for_closing(deliverables_of(&value, 1).as_ref(), None),
+        ["out.txt"]
+    );
 }
 
 #[test]

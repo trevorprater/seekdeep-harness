@@ -14,6 +14,7 @@ use parking_lot::Mutex;
 use seekdeep_abort::AbortSignal;
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use seekdeep_identity::RpcId;
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Map, Value, json};
 use tokio::sync::mpsc;
 
@@ -100,7 +101,7 @@ pub struct FixtureTimingState {
     pub emitting: bool,
 }
 
-type EnvelopeListener = Arc<dyn Fn(Vec<Value>) + Send + Sync>;
+type EnvelopeListener = Arc<dyn Fn(Vec<JsonValue>) + Send + Sync>;
 
 /// Idempotent full-envelope observation cleanup.
 pub struct FixtureEnvelopeSubscription {
@@ -353,10 +354,11 @@ impl FixtureApi {
             "rpcId": rpc_id,
             "method": method,
             "payload": payload,
-        })]);
+        })
+        .into()]);
         let result = self.dispatch(method, payload, signal).await?;
         let response = ServerResponse::new(rpc_id, result);
-        self.publish_envelopes(&[serde_json::to_value(&response)?]);
+        self.publish_envelopes(&[JsonValue::from_serialize(&response)?]);
         Ok(response)
     }
 
@@ -401,7 +403,7 @@ impl FixtureApi {
 
     /// Answers one resident approval or question and broadcasts its resolution.
     pub fn respond(&self, message: &Value) -> Value {
-        self.publish_envelopes(std::slice::from_ref(message));
+        self.publish_envelopes(&[message.clone().into()]);
         let rpc_id = message.get("rpcId").and_then(Value::as_str);
         let mut state = self.state.lock();
         if state
@@ -705,7 +707,7 @@ impl FixtureApi {
         self.state.lock().timing_state.clone()
     }
 
-    fn publish_envelopes(&self, envelopes: &[Value]) {
+    fn publish_envelopes(&self, envelopes: &[JsonValue]) {
         let listeners = self
             .envelope_listeners
             .lock()
@@ -1919,7 +1921,7 @@ impl FixtureApi {
     ) {
         let frame = EventFrame {
             rpc_id: self.mint_rpc(),
-            payload,
+            payload: payload.into(),
         };
         let mut senders = senders.lock();
         senders.retain(|sender| sender.send(Ok(frame.clone())).is_ok());
@@ -1934,17 +1936,9 @@ impl FixtureApi {
         self.next_time.fetch_add(1, Ordering::Relaxed)
     }
     fn tap_server_frame(&self, frame: &EventFrame) {
-        let method = frame
-            .payload
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        self.publish_envelopes(&[json!({
-            "type":"server-request",
-            "rpcId":frame.rpc_id,
-            "method":method,
-            "payload":frame.payload,
-        })]);
+        self.publish_envelopes(&[frame
+            .server_request()
+            .expect("fixture downlink frames have string types")]);
     }
 }
 
@@ -2048,7 +2042,7 @@ impl StreamApi for FixtureApi {
                         };
                         let frame = EventFrame {
                             rpc_id: fixture.mint_rpc(),
-                            payload: json!({"type":"host/session-status","sessionId":"fx-gamma","running":running}),
+                            payload: json!({"type":"host/session-status","sessionId":"fx-gamma","running":running}).into(),
                         };
                         fixture.tap_server_frame(&frame);
                         yield Ok(frame);
@@ -2075,7 +2069,7 @@ impl FixtureApi {
             let seq = sequence_from_len(log.len());
             frames.push(EventFrame {
                 rpc_id: self.mint_rpc(),
-                payload: json!({"type":"session/subscribed","sessionId":id,"lastSeq":seq}),
+                payload: json!({"type":"session/subscribed","sessionId":id,"lastSeq":seq}).into(),
             });
             let values = if log.is_empty() {
                 state.history_projections.clone()
@@ -2085,20 +2079,20 @@ impl FixtureApi {
             for (key, value) in values.as_object().into_iter().flatten() {
                 frames.push(EventFrame {
                     rpc_id: self.mint_rpc(),
-                    payload: json!({"type":"session/projection","sessionId":id,"key":key,"value":value,"seq":seq}),
+                    payload: json!({"type":"session/projection","sessionId":id,"key":key,"value":value,"seq":seq}).into(),
                 });
             }
         }
         if let Some((id, payload)) = &state.pending_approval {
             frames.push(EventFrame {
                 rpc_id: id.clone(),
-                payload: payload.clone(),
+                payload: payload.clone().into(),
             });
         }
         if let Some((id, payload)) = &state.pending_question {
             frames.push(EventFrame {
                 rpc_id: id.clone(),
-                payload: payload.clone(),
+                payload: payload.clone().into(),
             });
         }
         frames

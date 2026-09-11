@@ -54,7 +54,7 @@ impl HostWorkspaceProjection {
             let DomainChanged::Put { value, .. } = change else {
                 return Ok(Vec::new());
             };
-            return self.apply_state(serde_json::from_value(value)?, registry);
+            return self.apply_state(value.deserialize()?, registry);
         }
         if change.table() != "workspaces" {
             return Ok(Vec::new());
@@ -73,7 +73,7 @@ impl HostWorkspaceProjection {
                 let id = WorkspaceId::new(&key);
                 if self.committed_ids.contains(&id) {
                     Ok(vec![HostFrame::WorkspaceChanged {
-                        workspace: WorkspaceRegistryRuntime::changed_view(&key, value)?,
+                        workspace: WorkspaceRegistryRuntime::changed_view(&key, &value)?,
                     }])
                 } else {
                     Ok(Vec::new())
@@ -198,8 +198,11 @@ impl WorkspaceRegistryRuntime {
         }
     }
 
-    fn changed_view(id: &str, value: serde_json::Value) -> anyhow::Result<WorkspaceView> {
-        let record: WorkspaceRecord = serde_json::from_value(value)?;
+    fn changed_view(
+        id: &str,
+        value: &seekdeep_core::session::JsonValue,
+    ) -> anyhow::Result<WorkspaceView> {
+        let record: WorkspaceRecord = value.deserialize()?;
         Ok(WorkspaceView {
             workspace_id: WorkspaceId::new(id),
             path: record.path,

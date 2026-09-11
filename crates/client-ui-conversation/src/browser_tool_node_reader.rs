@@ -70,8 +70,8 @@ fn tool_node(node: JsValue) -> Result<Option<JsValue>, JsValue> {
     Ok((kind.as_string().as_deref() == Some("tool-call")).then_some(node))
 }
 
-fn visit_tool_call(block: &JsValue, call_id: &JsString) -> Result<Option<JsValue>, JsValue> {
-    if Reflect::get(block, &JsValue::from_str("callId"))? == *call_id.as_ref() {
+fn visit_tool_call(block: &JsValue, call_id: &JsValue) -> Result<Option<JsValue>, JsValue> {
+    if Reflect::get(block, &JsValue::from_str("callId"))? == *call_id {
         return Ok(Some(block.clone()));
     }
     let children = required_property(block, "subCalls", "Tool call block")?.dyn_into::<Array>()?;

@@ -269,7 +269,7 @@ async fn tool_declaration_errors_and_renderer_preview_match_the_teaching_contrac
         result,
         ToolExecutionResult::Failure(ref failure)
             if failure.error.message.contains("output.render returned [\"xxx")
-                && failure.error.message.contains('…')
+                && failure.error.message.contains("…")
     ));
     context.fiber().dispose().await.unwrap();
 }

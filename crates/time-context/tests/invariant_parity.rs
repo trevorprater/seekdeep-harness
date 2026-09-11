@@ -29,7 +29,7 @@ fn raw_event(event_type: &str, seq: u64, time: i64, data: Value, surface: bool) 
         event_type: event_type.to_owned(),
         seq,
         time,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: surface.then(SurfaceOp::append),
         ignorable: None,
@@ -48,9 +48,7 @@ fn push(events: &mut Vec<SessionEvent>, event_type: &str, data: Value, surface: 
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -146,9 +144,7 @@ fn reading_event(text: &str, time: i64) -> SessionEvent {
         0,
         time,
         serde_json::to_value(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.into(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             source,
         ))
         .expect("reading"),
@@ -565,7 +561,7 @@ async fn content_must_be_exactly_one_plain_text_block() {
     ];
     for content in cases.drain(..) {
         let mut candidate = reading_event(&default_reading(), SECOND + 456);
-        candidate.data["content"] = content;
+        candidate.data.insert("content", content.into()).unwrap();
         let error =
             emit(&context, preparing(1, 1, None), candidate).expect_err("malformed content");
         assert!(message(&error).contains("exactly one text block"));
@@ -585,7 +581,7 @@ async fn snapshot_provenance_is_exact_and_carries_no_request_authority() {
     ];
     for source in sources {
         let mut malformed = base.clone();
-        malformed.data["source"] = source;
+        malformed.data.insert("source", source.into()).unwrap();
         let error =
             emit(&context, preparing(1, 1, None), malformed).expect_err("malformed provenance");
         assert!(message(&error).contains("must carry only the exact snapshot text"));
@@ -629,7 +625,13 @@ async fn seeded_session_created_after_registration_is_validated_and_rolled_back(
 async fn unrelated_events_and_other_plugin_messages_are_ignored() {
     let (context, _) = setup().await;
     let mut other = reading_event("unrelated", SECOND + 456);
-    other.data["source"] = json!({"kind": "plugin", "plugin": "other"});
+    other
+        .data
+        .insert(
+            "source",
+            json!({"kind": "plugin", "plugin": "other"}).into(),
+        )
+        .unwrap();
     emit(&context, preparing(1, 1, None), other).expect("other plugin");
 
     let user_event = raw_event(

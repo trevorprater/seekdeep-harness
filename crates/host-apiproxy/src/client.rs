@@ -14,6 +14,7 @@ use seekdeep_client_connection::{
     ServerResponse, StreamApi, UnaryTimeoutPolicy, WebApiClient, WebApiContract, WebApiDownlink,
     WebConnectionRpc,
 };
+use seekdeep_core::session::JsonValue;
 use seekdeep_llm::AbortSignal;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -40,8 +41,8 @@ use crate::api::{
     llm::{LlmDiscoverModelsRequest, LlmDiscoverModelsValue, LlmModelsValue, LlmProvidersValue},
     method::{RpcMethod, parse_unary_value},
     rpc::{
-        ClientResponse, RpcReceipt, RpcRequest, RpcResponse, parse_rpc_receipt,
-        parse_server_request, parse_server_response,
+        ClientResponse, ContractError, RpcReceipt, RpcRequest, RpcResponse, parse_rpc_receipt,
+        parse_server_request_json, parse_server_response,
     },
     sessions::{
         AcceptedValue, SessionAttachmentRequest, SessionAttachmentValue, SessionCreateRequest,
@@ -70,7 +71,7 @@ use crate::api::{
 };
 
 /// Observer for one microtask-like batch of complete wire envelopes.
-pub type EnvelopeListener = Arc<dyn Fn(&[Value]) + Send + Sync>;
+pub type EnvelopeListener = Arc<dyn Fn(&[JsonValue]) + Send + Sync>;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -81,7 +82,7 @@ struct LocalEnvelopeListener {
 
 #[derive(Default)]
 struct LocalEnvelopeState {
-    buffer: Vec<Value>,
+    buffer: Vec<JsonValue>,
     flush_scheduled: bool,
     listeners: Vec<LocalEnvelopeListener>,
 }
@@ -321,11 +322,11 @@ impl InProcessTransport {
                     if data.is_empty() {
                         continue;
                     }
-                    let parsed = (|| -> anyhow::Result<(Value, EventFrame)> {
-                        let wire: Value = serde_json::from_slice(&data)?;
-                        let full = parse_server_request(&wire)?;
+                    let parsed = (|| -> anyhow::Result<(JsonValue, EventFrame)> {
+                        let wire: JsonValue = serde_json::from_slice(&data)?;
+                        let full = parse_server_request_json(&wire)?;
                         let payload = transport.contract.parse_downlink_payload(downlink, &full.payload)?;
-                        let observed = serde_json::to_value(&full)?;
+                        let observed = JsonValue::from_serialize(&full)?;
                         Ok((observed, EventFrame { rpc_id: full.rpc_id, payload }))
                     })();
                     match parsed {
@@ -342,7 +343,7 @@ impl InProcessTransport {
         })
     }
 
-    fn observe(&self, envelope: Value) {
+    fn observe(&self, envelope: JsonValue) {
         let schedule = {
             let mut state = self.envelopes.lock();
             if state.listeners.is_empty() {
@@ -396,14 +397,14 @@ impl ApiClientTransport for InProcessTransport {
                 method.clone(),
                 payload,
             );
-            transport.observe(serde_json::to_value(&message)?);
+            transport.observe(JsonValue::from_serialize(&message)?);
             let path = format!("/api/{method}");
             let body = transport
                 .post_json(&path, serde_json::to_vec(&message)?, signal, timeout_policy)
                 .await?;
             let wire: Value = serde_json::from_slice(&body)?;
             let mut full = transport.contract.parse_server_response(&wire)?;
-            transport.observe(serde_json::to_value(&full)?);
+            transport.observe(JsonValue::from_serialize(&full)?);
             anyhow::ensure!(
                 full.rpc_id == rpc_id,
                 "rpcId mismatch for {method}: sent {rpc_id}, got {}",
@@ -427,7 +428,7 @@ impl ApiClientTransport for InProcessTransport {
     ) -> BoxFuture<'static, anyhow::Result<Value>> {
         let transport = self.clone();
         Box::pin(async move {
-            transport.observe(message.clone());
+            transport.observe(message.clone().into());
             let body = transport
                 .post_json(
                     "/api/respond",
@@ -566,11 +567,13 @@ impl WebApiContract for ApiProxyContract {
     fn parse_downlink_payload(
         &self,
         downlink: WebApiDownlink,
-        payload: &Value,
-    ) -> anyhow::Result<Value> {
+        payload: &JsonValue,
+    ) -> anyhow::Result<JsonValue> {
         match downlink {
-            WebApiDownlink::Mux => Ok(serde_json::to_value(MuxFrame::parse(payload)?)?),
-            WebApiDownlink::Host => Ok(serde_json::to_value(HostFrame::parse(payload)?)?),
+            WebApiDownlink::Mux => Ok(JsonValue::from_serialize(&MuxFrame::parse_json(payload)?)?),
+            WebApiDownlink::Host => {
+                Ok(JsonValue::from_serialize(&HostFrame::parse_json(payload)?)?)
+            }
         }
     }
 }
@@ -1167,6 +1170,7 @@ impl EventsClient {
         typed_stream(
             self.0
                 .mux(signal, on_open.unwrap_or_else(|| Arc::new(|| {}))),
+            MuxFrame::parse_json,
         )
     }
 
@@ -1181,20 +1185,19 @@ impl EventsClient {
         typed_stream(
             self.0
                 .host(signal, on_open.unwrap_or_else(|| Arc::new(|| {}))),
+            HostFrame::parse_json,
         )
     }
 }
 
-fn typed_stream<T: DeserializeOwned + Send + 'static>(
+fn typed_stream<T: Send + 'static>(
     stream: BoxStream<'static, anyhow::Result<EventFrame>>,
+    parse: fn(&JsonValue) -> Result<T, ContractError>,
 ) -> BoxStream<'static, anyhow::Result<RpcRequest<T>>> {
     stream
-        .map(|frame| {
+        .map(move |frame| {
             let frame = frame?;
-            Ok(RpcRequest::new(
-                frame.rpc_id,
-                serde_json::from_value(frame.payload)?,
-            ))
+            Ok(RpcRequest::new(frame.rpc_id, parse(&frame.payload)?))
         })
         .boxed()
 }

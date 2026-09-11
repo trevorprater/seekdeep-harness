@@ -862,7 +862,7 @@ mod complete_runtime_e2e {
                 }],
                 MessageSource {
                     kind: "user".to_owned(),
-                    fields: Map::new(),
+                    fields: Map::new().into(),
                 },
             ))
             .unwrap();

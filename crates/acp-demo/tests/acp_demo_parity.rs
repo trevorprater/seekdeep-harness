@@ -531,8 +531,8 @@ async fn in_process_app_mounts_spine_persistence_query_checkpoint_and_acp() {
     .await
     .unwrap();
     assert_eq!(
-        updates.lock()[0].update.pointer("/content/text"),
-        Some(&json!("ACP RUST OK"))
+        updates.lock()[0].update.pointer("/content/text").unwrap(),
+        "ACP RUST OK"
     );
     client.shutdown_output().await.unwrap();
     runtime.bridge.connection_closed_signal().cancelled().await;
@@ -662,8 +662,8 @@ async fn compiled_binary_completes_provider_turn_and_writes_default_zstd_log() {
     .await
     .unwrap();
     assert_eq!(
-        updates.lock()[0].update.pointer("/content/text"),
-        Some(&json!("ACP BUILT OK"))
+        updates.lock()[0].update.pointer("/content/text").unwrap(),
+        "ACP BUILT OK"
     );
     let log = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {

@@ -179,7 +179,7 @@ async fn loader_inherits_parent_workspace_into_process_and_remote_session() {
             }],
             MessageSource {
                 kind: "user".to_owned(),
-                fields: Map::new(),
+                fields: Map::new().into(),
             },
         ))
         .unwrap();

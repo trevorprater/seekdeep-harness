@@ -43,6 +43,7 @@ async fn compiled_worker_runs_under_a_scrubbed_plain_process_and_exits_cleanly()
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_seekdeep-workflow-worker"));
     command
         .env_clear()
+        .kill_on_drop(true)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());

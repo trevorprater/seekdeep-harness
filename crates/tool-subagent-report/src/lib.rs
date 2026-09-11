@@ -104,7 +104,8 @@ pub fn install_report_tool(
                     text: format!(
                         "report accepted by the agent that started you as message {}",
                         value.message_id
-                    ).into(),
+                    )
+                    .into(),
                 }])
             }),
         ),
@@ -118,7 +119,9 @@ pub fn install_report_tool(
                     .ok_or_else(|| anyhow::anyhow!("report requires a live child Agent"))?;
                 let message_id = subagents.report_from(
                     &agent,
-                    vec![ContentBlock::Text { text: args.output.into() }],
+                    vec![ContentBlock::Text {
+                        text: args.output.into(),
+                    }],
                     SubagentReportOptions {
                         delivery,
                         signal: run.signal(),

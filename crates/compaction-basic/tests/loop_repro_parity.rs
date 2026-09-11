@@ -33,9 +33,7 @@ use serde_json::{Map, Value, json};
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -52,9 +50,7 @@ fn text_success(text: &str, reason: FinishReason) -> Vec<StreamChunk> {
         },
         StreamChunk::BlockEnd {
             index: 0,
-            block: ContentBlock::Text {
-                text: text.into(),
-            },
+            block: ContentBlock::Text { text: text.into() },
         },
         StreamChunk::Finish {
             reason,

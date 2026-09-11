@@ -209,14 +209,13 @@ fn text_matches(pattern: &Regex, text: &seekdeep_llm::JsonString) -> bool {
     }
     let mut segment = String::new();
     for point in char::decode_utf16(text.utf16_units().iter().copied()) {
-        match point {
-            Ok(point) => segment.push(point),
-            Err(_) => {
-                if pattern.is_match(&segment) {
-                    return true;
-                }
-                segment.clear();
+        if let Ok(point) = point {
+            segment.push(point);
+        } else {
+            if pattern.is_match(&segment) {
+                return true;
             }
+            segment.clear();
         }
     }
     pattern.is_match(&segment)

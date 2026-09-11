@@ -10,6 +10,8 @@ mod browser_table;
 #[cfg(target_arch = "wasm32")]
 mod browser_timeline;
 #[cfg(target_arch = "wasm32")]
+mod browser_value;
+#[cfg(target_arch = "wasm32")]
 mod browser_view;
 mod compaction_definitions;
 mod contract;

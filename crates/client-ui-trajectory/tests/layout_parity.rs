@@ -7,7 +7,11 @@ use seekdeep_client_ui_trajectory::{
     TrajectoryStepLocation, TrajectoryTurnLocation, append_trajectory_partial_layout,
     derive_trajectory_layout,
 };
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 fn snapshot(nodes: Vec<Value>) -> TrajectorySnapshot {
     TrajectorySnapshot {
@@ -72,7 +76,9 @@ fn assistant_blocks_usage_and_result_pair_fold_into_message_and_tool() {
         .unwrap();
     assert_eq!(tool.text, "bash");
     assert_eq!(
-        tool.preview_markdown.as_deref(),
+        tool.preview_markdown
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("{\"command\":\"ls\"}")
     );
     assert_eq!(tool.time_seconds, Some(1.3));
@@ -141,7 +147,10 @@ fn partial_append_shares_unaffected_turn_and_replaces_running_call_placeholder()
     assert_eq!(streamed.len(), 2);
     assert_eq!(streamed[1].groups[0].cells[0].index, 2);
     assert_eq!(
-        streamed[1].groups[0].cells[0].preview_markdown.as_deref(),
+        streamed[1].groups[0].cells[0]
+            .preview_markdown
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("streaming")
     );
 
@@ -211,12 +220,18 @@ fn group_wall_span_histogram_user_turns_and_recorded_step_start_match_source() {
             .find(|group| group.title == "Step 1")
             .unwrap()
             .description
-            .as_deref(),
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("3,000 ms bash×2")
     );
     let second_message = cells(&turns)
         .into_iter()
-        .find(|cell| cell.preview_markdown.as_deref() == Some("ok2"))
+        .find(|cell| {
+            cell.preview_markdown
+                .as_ref()
+                .and_then(seekdeep_lossless_json::JsonString::as_str)
+                == Some("ok2")
+        })
         .unwrap();
     assert_eq!(second_message.started_at, Some(7_000.0));
     assert_eq!(second_message.time_seconds, Some(1.0));
@@ -301,7 +316,10 @@ fn standalone_compaction_and_context_cursor_keep_chronology_without_duplicate_ma
     );
     assert_eq!(turns[1].groups[0].title, "Compaction 3");
     assert_eq!(
-        turns[1].groups[0].cells[0].preview_markdown.as_deref(),
+        turns[1].groups[0].cells[0]
+            .preview_markdown
+            .as_ref()
+            .and_then(seekdeep_lossless_json::JsonString::as_str),
         Some("standalone summary")
     );
     assert_eq!(
@@ -313,7 +331,12 @@ fn standalone_compaction_and_context_cursor_keep_chronology_without_duplicate_ma
     );
     let done = cells(&turns)
         .into_iter()
-        .find(|cell| cell.preview_markdown.as_deref() == Some("done"))
+        .find(|cell| {
+            cell.preview_markdown
+                .as_ref()
+                .and_then(seekdeep_lossless_json::JsonString::as_str)
+                == Some("done")
+        })
         .unwrap();
     assert_eq!(done.time_seconds, Some(0.5));
 }

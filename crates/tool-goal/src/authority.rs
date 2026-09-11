@@ -143,9 +143,12 @@ fn is_matching_goal_round(execution: &GoalToolExecution, goal: &GoalView) -> boo
                 == Some(goal.id.as_str())
             && source
                 .get("revision")
-                .and_then(|revision| revision.as_u64())
+                .and_then(seekdeep_core::session::JsonRef::as_u64)
                 == Some(goal.revision)
-            && source.get("round").and_then(|round| round.as_u64()) == Some(goal.rounds_started)
+            && source
+                .get("round")
+                .and_then(seekdeep_core::session::JsonRef::as_u64)
+                == Some(goal.rounds_started)
     })
 }
 

@@ -78,7 +78,7 @@ impl TrajectoryContribution {
                 root: required(value, "root")?.clone(),
             }),
             Some("request-header") => Ok(Self::RequestHeader {
-                header: crate::json_value::decode(required(value, "header")?.clone())
+                header: crate::json_value::decode(required(value, "header")?)
                     .map_err(|error| error.to_string())?,
             }),
             Some("compaction") => Ok(Self::Compaction {
@@ -102,7 +102,8 @@ impl TrajectoryContribution {
                 error: value
                     .get_value("error")
                     .map(|error| {
-                        error.deserialize::<JsonString>()
+                        error
+                            .deserialize::<JsonString>()
                             .map_err(|_| "trajectory turn-end error must be a string".to_owned())
                     })
                     .transpose()?,

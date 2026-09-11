@@ -815,7 +815,7 @@ async fn middleware_routes_before_resolution_and_replay_filtering_uses_adapter_i
         cross_source
             .fields
             .keys()
-            .map(String::as_str)
+            .map(|key| key.as_str().unwrap().to_owned())
             .collect::<Vec<_>>(),
         ["provider", "model"]
     );

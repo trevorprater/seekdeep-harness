@@ -400,7 +400,7 @@ pub fn index_trajectory_request_boundary_runs(
 
 /// Builds the compact source summary for hidden turn content.
 #[must_use]
-pub fn summarize_trajectory_turn(records: &[TrajectoryTableRecord]) -> String {
+pub fn summarize_trajectory_turn(records: &[TrajectoryTableRecord]) -> JsonString {
     let steps = records
         .iter()
         .filter_map(|record| {
@@ -425,6 +425,7 @@ pub fn summarize_trajectory_turn(records: &[TrajectoryTableRecord]) -> String {
         if steps == 1 { "step" } else { "steps" },
         if tool_calls == 1 { "call" } else { "calls" }
     )
+    .into()
 }
 
 /// Folds each selected turn to its first content row plus a synthetic summary.
@@ -520,26 +521,29 @@ pub fn trajectory_assistant_tool_calls(
 
 /// Builds the compact source summary for hidden assistant tool calls.
 #[must_use]
-pub fn summarize_trajectory_assistant_tools(records: &[TrajectoryTableRecord]) -> String {
+pub fn summarize_trajectory_assistant_tools(records: &[TrajectoryTableRecord]) -> JsonString {
     let names = records
         .iter()
         .filter_map(|record| {
-            let name = record
-                .cell
-                .text
-                .split_once(" · ")
-                .map_or(record.cell.text.as_str(), |(name, _)| name);
+            let name = crate::text_value::split_once(&record.cell.text, " · ")
+                .map_or_else(|| record.cell.text.clone(), |(name, _)| name);
             (!name.is_empty()).then_some(name)
         })
         .collect::<IndexSet<_>>();
     let count = records.len();
-    let summary = format!("{count} tool {}", if count == 1 { "call" } else { "calls" });
+    let summary = JsonString::from(format!(
+        "{count} tool {}",
+        if count == 1 { "call" } else { "calls" }
+    ));
     if names.is_empty() {
         summary
     } else {
-        format!(
-            "{summary} · {}",
-            names.into_iter().collect::<Vec<_>>().join(", ")
+        JsonString::join(
+            &[
+                summary,
+                JsonString::join(&names.into_iter().collect::<Vec<_>>(), ", "),
+            ],
+            " · ",
         )
     }
 }
@@ -723,37 +727,36 @@ pub fn trajectory_assistant_throughput(metrics: &AssistantMetricDetail) -> Strin
 
 /// Builds the source label for a model-visible message producer.
 #[must_use]
-pub fn trajectory_message_source_label(source: &Value) -> String {
-    let Some(properties) = source.is_object().then_some(source) else {
-        return "Unknown".to_owned();
+pub fn trajectory_message_source_label(source: &Value) -> JsonString {
+    let Some(kind) = crate::text_value::member(source, "kind").filter(|kind| !kind.is_empty())
+    else {
+        return "Unknown".into();
     };
-    match properties.get_value("kind").and_then(Value::as_str) {
-        Some("user") => "User".to_owned(),
-        Some("plugin") => properties
-            .get_value("plugin")
-            .and_then(Value::as_str)
+    match kind.as_str() {
+        Some("user") => "User".into(),
+        Some("plugin") => crate::text_value::member(source, "plugin")
             .filter(|plugin| !plugin.is_empty())
             .map_or_else(
-                || "Plugin".to_owned(),
-                |plugin| format!("Plugin · {plugin}"),
+                || "Plugin".into(),
+                |plugin| JsonString::join(&["Plugin".into(), plugin], " · "),
             ),
-        Some("goal") => properties
+        Some("goal") => source
             .get_value("round")
             .and_then(Value::as_f64)
             .filter(|round| *round > 0.0)
             .map_or_else(
-                || "Goal".to_owned(),
-                |round| format!("Goal · Round {round}"),
+                || "Goal".into(),
+                |round| format!("Goal · Round {round}").into(),
             ),
-        Some(kind) if !kind.is_empty() => {
-            let mut characters = kind.chars();
-            let first = characters
-                .next()
-                .map(|character| character.to_uppercase().collect::<String>())
-                .unwrap_or_default();
-            format!("{first}{}", characters.as_str())
+        _ => {
+            let first = kind.utf16_units()[0];
+            let mut output = char::from_u32(u32::from(first)).map_or_else(
+                || JsonString::from_utf16(&[first]),
+                |character| character.to_uppercase().collect::<String>().into(),
+            );
+            output.push_utf16(&kind.utf16_units()[1..]);
+            output
         }
-        _ => "Unknown".to_owned(),
     }
 }
 
@@ -819,8 +822,11 @@ pub fn trajectory_detail_tabs(record: &TrajectoryTableRecord) -> Vec<TrajectoryD
 #[must_use]
 pub fn trajectory_is_tool_call_only(cell: &TrajectoryCell) -> bool {
     cell.kind == TrajectoryCellKind::Message
-        && cell.output_detail.as_ref().is_none_or(String::is_empty)
-        && cell.thinking_detail.as_ref().is_none_or(String::is_empty)
+        && cell.output_detail.as_ref().is_none_or(JsonString::is_empty)
+        && cell
+            .thinking_detail
+            .as_ref()
+            .is_none_or(JsonString::is_empty)
         && cell.text == "Tool call only"
 }
 
@@ -829,32 +835,35 @@ pub fn trajectory_is_tool_call_only(cell: &TrajectoryCell) -> bool {
 /// # Errors
 ///
 /// Returns the shared Markdown preview parser's diagnostic.
-pub fn trajectory_record_display_text(cell: &TrajectoryCell) -> Result<String, String> {
+pub fn trajectory_record_display_text(cell: &TrajectoryCell) -> Result<JsonString, String> {
     if trajectory_is_tool_call_only(cell) {
-        return Ok(String::new());
+        return Ok(JsonString::default());
     }
     if let Some(markdown) = &cell.preview_markdown {
-        let preview = trajectory_preview_text(markdown)?;
+        let preview = trajectory_preview_text(markdown.clone())?;
         return Ok(if cell.text.is_empty() {
             preview
         } else if preview.is_empty() {
             cell.text.clone()
         } else {
-            format!("{} · {preview}", cell.text)
+            JsonString::join(&[cell.text.clone(), preview], " · ")
         });
     }
     if !cell.text.is_empty() {
         return Ok(cell.text.clone());
     }
     let markdown = match cell.kind {
-        TrajectoryCellKind::User | TrajectoryCellKind::Context => cell.input_detail.as_deref(),
+        TrajectoryCellKind::User | TrajectoryCellKind::Context => cell.input_detail.as_ref(),
         TrajectoryCellKind::Message => cell
             .output_detail
-            .as_deref()
-            .or(cell.thinking_detail.as_deref()),
+            .as_ref()
+            .or(cell.thinking_detail.as_ref()),
         _ => None,
     };
-    markdown.map_or_else(|| Ok(String::new()), trajectory_preview_text)
+    markdown.map_or_else(
+        || Ok(JsonString::default()),
+        |markdown| trajectory_preview_text(markdown.clone()),
+    )
 }
 
 /// Builds the source-equivalent result preview.
@@ -862,10 +871,10 @@ pub fn trajectory_record_display_text(cell: &TrajectoryCell) -> Result<String, S
 /// # Errors
 ///
 /// Returns the shared Markdown preview parser's diagnostic.
-pub fn trajectory_record_result_text(cell: &TrajectoryCell) -> Result<Option<String>, String> {
+pub fn trajectory_record_result_text(cell: &TrajectoryCell) -> Result<Option<JsonString>, String> {
     cell.result_preview_markdown.as_ref().map_or_else(
         || Ok(cell.result.clone()),
-        |markdown| trajectory_preview_text(markdown).map(Some),
+        |markdown| trajectory_preview_text(markdown.clone()).map(Some),
     )
 }
 
@@ -873,19 +882,20 @@ pub fn trajectory_record_result_text(cell: &TrajectoryCell) -> Result<Option<Str
 #[must_use]
 pub fn trajectory_tool_call_text_parts(
     kind: TrajectoryCellKind,
-    text: &str,
+    text: impl Into<JsonString>,
 ) -> Option<TrajectoryToolCallTextParts> {
     if !matches!(kind, TrajectoryCellKind::Tool | TrajectoryCellKind::Subtool) {
         return None;
     }
-    Some(text.split_once(" · ").map_or_else(
+    let text = text.into();
+    Some(crate::text_value::split_once(&text, " · ").map_or_else(
         || TrajectoryToolCallTextParts {
-            name: text.to_owned(),
+            name: text.clone(),
             arguments: None,
         },
         |(name, arguments)| TrajectoryToolCallTextParts {
-            name: name.to_owned(),
-            arguments: Some(arguments.to_owned()),
+            name,
+            arguments: Some(arguments),
         },
     ))
 }
@@ -941,19 +951,21 @@ pub fn trajectory_parent_records(
 
 /// Parses any non-null JSON object or array container.
 #[must_use]
-pub fn parse_trajectory_json_container(value: &str) -> Option<Value> {
-    serde_json::from_str(value)
+pub fn parse_trajectory_json_container(value: impl Into<JsonString>) -> Option<Value> {
+    Value::parse_text(&value.into())
         .ok()
         .filter(|value: &Value| value.is_object() || value.is_array())
 }
 
 /// Parses the exact object-shaped Tool schema accepted by the inspector.
 #[must_use]
-pub fn parse_trajectory_tool_schema(value: &str) -> Option<ParsedTrajectoryToolSchema> {
-    let parsed: Value = serde_json::from_str(value).ok()?;
+pub fn parse_trajectory_tool_schema(
+    value: impl Into<JsonString>,
+) -> Option<ParsedTrajectoryToolSchema> {
+    let parsed = Value::parse_text(&value.into()).ok()?;
     let schema = parsed.is_object().then_some(&parsed)?;
-    let name = schema.get_value("name")?.as_str()?.to_owned();
-    let description = schema.get_value("description")?.as_str()?.to_owned();
+    let name = crate::text_value::member(schema, "name")?;
+    let description = crate::text_value::member(schema, "description")?;
     let parameters = schema.get_value("parameters")?.clone();
     if !parameters.is_object() {
         return None;

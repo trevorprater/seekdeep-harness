@@ -1,9 +1,10 @@
+use super::json_value;
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationMatchResult, ConversationMatchRole,
 };
-use serde_json::{Value, json};
 
 use super::{chat_node, is_append_surface_event, sequence_anchor};
 
@@ -25,13 +26,13 @@ pub fn conversation_unknown_fallback_definition() -> AssemblerNodeDefinition {
             )
         }),
         start: Rc::new(|_context, accepted, _reader| {
-            Ok(Some(Rc::new(json!({
-                "kind": "unknown",
-                "seq": accepted.event.seq,
-                "time": accepted.event.time,
-                "type": accepted.event.event_type,
-                "data": accepted.event.data,
-            }))))
+            Ok(Some(Rc::new(Value::object([
+                ("kind", json_value(&"unknown")),
+                ("seq", json_value(&accepted.event.seq)),
+                ("time", json_value(&accepted.event.time)),
+                ("type", json_value(&accepted.event.event_type)),
+                ("data", json_value(&accepted.event.data)),
+            ]))))
         }),
         update: Rc::new(|context, _accepted| Ok(context.state.clone())),
         publication: None,
@@ -40,7 +41,7 @@ pub fn conversation_unknown_fallback_definition() -> AssemblerNodeDefinition {
             let Some(state) = context.state.as_deref() else {
                 return Ok(None);
             };
-            let seq = state.get("seq").and_then(Value::as_u64).unwrap_or(0);
+            let seq = state.get_value("seq").and_then(Value::as_u64).unwrap_or(0);
             Ok(Some(chat_node(
                 context,
                 "unknown",

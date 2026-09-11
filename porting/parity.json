@@ -42413,7 +42413,7 @@
     {
       "source": "packages/client/tsdown.client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/repository-tools/src/client_bundle.rs",
         "crates/repository-tools/src/client_bundle/sourcemaps.rs",
@@ -42448,11 +42448,12 @@
         "crates/client-runtime/tests/support/conversation_json.rs"
       ],
       "evidence": [
-        "Source Client policy/CSS/purity comparisons and actual Chromium WASM-to-Rust source-map proof passed.",
-        "Native/poll dependency watching, failure retention/recovery and SIGTERM cleanup passed; nine emitted packages verified maps, inline Immer and source platform entries.",
-        "Current Session/Conversation/bridge native 152 and Node/WASM 15 plus scoped strict checks passed before latest classifier/trajectory edits."
+        "Rust build/watch and source-preset/CSS/purity policy comparisons passed; 176 numeric argument comparisons passed.",
+        "Real Chromium mapped the emitted WASM failure to Rust source; all current package maps and actual served map responses verified.",
+        "Current Runtime155 native/22 WASM, UI details/readers12, conversation12 native/16 WASM and scoped strict checks passed.",
+        "Fresh production Runtime/Foundation/Remotes packages and actual full Rust Host/Chromium remote-loader passed, including bundled Immer Store and source maps."
       ],
-      "note": "Rust build/watch implementation and focused artifact proofs are complete. Final combined package/Host/browser verification remains pending active lossless presentation/trajectory integration and latest classifier retest."
+      "note": "Build/watch implementation, emitted artifacts, native/WASM consumers and real Host/browser path verified."
     },
     {
       "source": "packages/client/ui-agent-preset/README.i18n.yaml",
@@ -63044,14 +63045,15 @@
     {
       "source": "packages/goal/goal-round-driver/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/goal-round-driver/src/index.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-goal-round-driver --all-features",
         "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "2026-09-11:37/38 driver tests pass, but blocked_goal_observer_work_remains_queued_without_reserving_again fails deterministically: observer follow-up reaches the adapter after blocking instead of remaining queued. Source counterpart confirms expected zero requests. Scheduling repair remains outstanding."
     },
     {
       "source": "packages/goal/goal-round-driver/src/invariant.ts",
@@ -63080,7 +63082,7 @@
     {
       "source": "packages/goal/goal-round-driver/tests/goal-round-driver.spec.ts",
       "kind": "test",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/goal-round-driver/tests/driver_parity.rs",
         "crates/goal-round-driver/src/index.rs",
@@ -63091,7 +63093,7 @@
         "cargo test -p seekdeep-goal-round-driver --all-features",
         "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"
       ],
-      "note": "compiled real-loop differential covers prompt escaping, exact admission/caps, hot-load disarm, checkpoint ordering/failure, human and revision races, retry ownership, cancellation, custom-agent queue failures, scheduler failure/rearm, context restoration, lifecycle retirement, and queued/claimed/admitted teardown"
+      "note": "2026-09-11:37/38 driver tests pass, but blocked_goal_observer_work_remains_queued_without_reserving_again fails deterministically: observer follow-up reaches the adapter after blocking instead of remaining queued. Source counterpart confirms expected zero requests. Scheduling repair remains outstanding."
     },
     {
       "source": "packages/goal/goal-round-driver/tests/invariant.spec.ts",
@@ -74279,7 +74281,7 @@
     {
       "source": "packages/session/session-telemetry-otel/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/session-telemetry-otel/src/lib.rs",
         "crates/session-telemetry-otel/src/native.rs"
@@ -74289,7 +74291,8 @@
         "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features (9 passed, including real OTLP/HTTP JSON wire and Cordis disposal)",
         "cargo clippy --locked --offline -p seekdeep-session-telemetry-otel --all-targets --all-features -- -D warnings",
         "Rust OpenTelemetry SDK pipeline is the production default; object-safe factory replacement is limited to the reporting boundary"
-      ]
+      ],
+      "note": "2026-09-11: native adapter/collector tests and retained-session shutdown regression pass. Native SDK cannot represent lone UTF16 surrogates in strings or keys; conversion rejects explicitly. Matching source raw HTTP/JSON export remains unverified."
     },
     {
       "source": "packages/session/session-telemetry-otel/src/invariant.ts",
@@ -86806,7 +86809,7 @@
     {
       "source": "scripts/dev-web.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/repository-tools/src/client_bundle.rs",
         "crates/repository-tools/src/client_bundle/sourcemaps.rs",
@@ -86841,11 +86844,12 @@
         "crates/client-runtime/tests/support/conversation_json.rs"
       ],
       "evidence": [
-        "Source Client policy/CSS/purity comparisons and actual Chromium WASM-to-Rust source-map proof passed.",
-        "Native/poll dependency watching, failure retention/recovery and SIGTERM cleanup passed; nine emitted packages verified maps, inline Immer and source platform entries.",
-        "Current Session/Conversation/bridge native 152 and Node/WASM 15 plus scoped strict checks passed before latest classifier/trajectory edits."
+        "Rust build/watch and source-preset/CSS/purity policy comparisons passed; 176 numeric argument comparisons passed.",
+        "Real Chromium mapped the emitted WASM failure to Rust source; all current package maps and actual served map responses verified.",
+        "Current Runtime155 native/22 WASM, UI details/readers12, conversation12 native/16 WASM and scoped strict checks passed.",
+        "Fresh production Runtime/Foundation/Remotes packages and actual full Rust Host/Chromium remote-loader passed, including bundled Immer Store and source maps."
       ],
-      "note": "Rust build/watch implementation and focused artifact proofs are complete. Final combined package/Host/browser verification remains pending active lossless presentation/trajectory integration and latest classifier retest."
+      "note": "Build/watch implementation, emitted artifacts, native/WASM consumers and real Host/browser path verified."
     },
     {
       "source": "scripts/doc-budgets.manifest.json",
@@ -87041,7 +87045,7 @@
     {
       "source": "scripts/gen-doc-graphs.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/repository-tools/src/doc_graphs.rs",
         "crates/repository-tools/src/doc_graphs_policy.json",
@@ -87052,9 +87056,10 @@
         "xtask/src/doc_graphs.rs"
       ],
       "evidence": [
-        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+        "Native semantic catalog matches all60 source event relations and all8 graph artifacts.",
+        "2026-09-11 final expanded xtask doc_graphs suite passed4 tests against current shared graph."
       ],
-      "note": "Rust implementation/source proof passed. Expanded xtask graph command and/or final emitted Cordis hook package verification remains pending shared Host compilation."
+      "note": "Rust generation and actual command/source fixture behavior verified. Existing target graph content freshness remains an explicit command input/output condition."
     },
     {
       "source": "scripts/gen-module-graph.ts",
@@ -87980,7 +87985,7 @@
     {
       "source": "scripts/test-invariants.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/test_invariant_paths.rs",
         "crates/cordis/src/wasm/test_invariants.rs",
@@ -87993,9 +87998,11 @@
         "crates/cordis/tests/fixtures/wasm-file-fetch.mjs"
       ],
       "evidence": [
-        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+        "Native invariant host fixtures and98 compiled companions passed.",
+        "Fresh emitted Cordis package passed13 unchanged invariant-host source tests, attachment metadata and public declaration checks.",
+        "Source170 and compiled196 gateway corpora and real Host/Chromium integration passed."
       ],
-      "note": "Rust implementation/source proof passed. Expanded xtask graph command and/or final emitted Cordis hook package verification remains pending shared Host compilation."
+      "note": "Native and actual packaged WASM invariant hooks, declarations and integration verified."
     },
     {
       "source": "scripts/translation-brief.spec.ts",
@@ -88959,7 +88966,7 @@
     {
       "source": "vendor/cordis/src/context.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/context.rs",
         "crates/cordis/src/wasm.rs",
@@ -88970,10 +88977,11 @@
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/events.ts",
@@ -89004,7 +89012,7 @@
     {
       "source": "vendor/cordis/src/fiber.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/fiber.rs",
         "crates/cordis/src/plugin.rs",
@@ -89022,10 +89030,11 @@
         "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/index.ts",
@@ -89046,7 +89055,7 @@
     {
       "source": "vendor/cordis/src/logger.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/logger.rs",
         "crates/cordis/src/logger/format.rs",
@@ -89059,15 +89068,16 @@
         "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/reflect.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/context.rs",
         "crates/cordis/src/service.rs",
@@ -89081,15 +89091,16 @@
         "crates/cordis/tests/reflect_oracle.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/registry.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/plugin.rs",
         "crates/cordis/src/context.rs",
@@ -89105,15 +89116,16 @@
         "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/service.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/service.rs",
         "crates/cordis/src/context.rs",
@@ -89124,15 +89136,16 @@
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/utils.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/utils.rs",
         "crates/cordis/src/wasm/browser_values.rs",
@@ -89150,10 +89163,11 @@
         "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "Complete per-source API audit and repaired regressions are captured by native and source/built WASM fixtures.",
-        "2026-09-11: native Cordis/logger 63 plus lifecycle three tests, native/WASM strict Clippy, direct WASM invariant hook 13, attachment metadata and foundation five including source/Zod passed."
+        "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
+        "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
       ],
-      "note": "Native and actual WASM focused behavior is verified. Final package emission, declarations, source/built gateway corpora and real Host/Chromium remain pending shared lossless JSON integration. Approved native Serial disposal default is preserved."
+      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/tsconfig.json",
@@ -89434,7 +89448,7 @@
     {
       "source": "vendor/hmr/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/code-runtime-worker-thread/node/plugin-loader.cjs",
         "crates/code-runtime-worker-thread/node/src/loader.rs",
@@ -89478,11 +89492,12 @@
         "crates/loader/tests/runtime_parity.rs"
       ],
       "evidence": [
-        "Source matcher/watcher comparisons, config add/change/unlink, dirty refresh, batching and disposal passed.",
-        "Fresh real Node HMR four, Loader runtime 26 and structured diagnostic four tests passed before the last programmatic-entry update.",
-        "Final programmatic-entry/Include-namespace ownership changes and fifth Node HMR case compile; runtime and strict reruns remain pending."
+        "2026-09-11: 66 focused HMR/Loader tests across 16 executables passed with zero failures or timeouts.",
+        "All six actual Node/native lifecycle traces exactly match pinned source, including sibling admission, UID progression, provider visibility, registration rollback, body failures, disabled state and asynchronous disposal order.",
+        "Programmatic reload and duplicate Include-ID ownership/disposal tests passed; full structural entry paths and batched Node lifecycle admission are verified.",
+        "Native/WASM strict Clippy, formatting, whitespace, release WASM build and packaged runtime loading passed. Runtime SHA256 fd66569cf33f0b7b033ef8a866b225dc869a857740cd4c684ca9075cec862935."
       ],
-      "note": "Real Node ESM/CJS resolution and shared-cache HMR are implemented. Final programmatic ownership, duplicate-ID and native lifecycle comparisons are required; source-only probes are not native proof."
+      "note": "Source/native HMR lifecycle and real Node ownership are verified. Assembled Host/workspace gates remain separate. Generic JavaScript observer argument and ctx.get bridge limitations are outside this HMR lifecycle proof."
     },
     {
       "source": "vendor/hmr/tsconfig.json",

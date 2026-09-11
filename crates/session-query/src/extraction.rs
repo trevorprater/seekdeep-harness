@@ -92,7 +92,7 @@ fn str_value(value: Option<JsonRef<'_>>) -> JsonString {
 fn join_text(parts: &[JsonString]) -> JsonString {
     let parts = parts
         .iter()
-        .map(|part| part.trim())
+        .map(JsonString::trim)
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>();
     JsonString::join(&parts, "\n")

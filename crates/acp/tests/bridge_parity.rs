@@ -377,7 +377,7 @@ async fn wait_message_text(harness: &Harness, expected: &str) {
                     update
                         .update
                         .pointer("/content/text")
-                        .and_then(Value::as_str)
+                        .and_then(|value| value.deserialize::<String>().ok())
                 })
                 .collect::<String>();
             if text == expected {
@@ -504,12 +504,12 @@ async fn negotiates_validates_and_runs_committed_text_to_whole_agent_idle() {
         assert_eq!(updates.len(), 2);
         assert_eq!(updates[0].session_id, session);
         assert_eq!(
-            updates[0].update.pointer("/content/text"),
-            Some(&json!("answer"))
+            updates[0].update["content"]["text"].as_str(),
+            Some("answer")
         );
         assert_eq!(
-            updates[1].update.pointer("/content/text"),
-            Some(&json!("partial"))
+            updates[1].update["content"]["text"].as_str(),
+            Some("partial")
         );
     }
     let agent = harness
@@ -522,14 +522,18 @@ async fn negotiates_validates_and_runs_committed_text_to_whole_agent_idle() {
         .iter()
         .filter(|event| {
             event.event_type == "user/message"
-                && event.data.pointer("/source/kind").and_then(Value::as_str) == Some("user")
+                && event
+                    .data
+                    .pointer("/source/kind")
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    .as_deref()
+                    == Some("user")
         })
         .filter_map(|event| {
             event
                 .data
                 .pointer("/content/0/text")
-                .and_then(Value::as_str)
-                .map(str::to_owned)
+                .and_then(|value| value.deserialize::<String>().ok())
         })
         .collect::<Vec<_>>();
     assert_eq!(user_texts, ["onetwo".to_owned(), "again".to_owned()]);
@@ -593,8 +597,10 @@ async fn isolates_concurrent_sessions_one_prompt_slot_and_cancellation() {
             .lock()
             .iter()
             .find(|update| update.session_id == b)
-            .and_then(|update| update.update.pointer("/content/text")),
-        Some(&json!("B done"))
+            .and_then(|update| update.update.pointer("/content/text"))
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref(),
+        Some("B done")
     );
     harness.dispose().await;
 }
@@ -950,7 +956,9 @@ async fn pre_step_rewrite_preserves_prompt_correlation() {
             .iter()
             .flat_map(seekdeep_llm::Message::content)
             .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
+                ContentBlock::Text { text } => {
+                    Some(text.as_str().expect("fixture uses scalar text"))
+                }
                 _ => None,
             })
             .collect::<Vec<_>>()

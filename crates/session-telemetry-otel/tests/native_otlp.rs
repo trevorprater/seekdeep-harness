@@ -114,7 +114,7 @@ async fn native_pipeline_emits_otlp_json_with_resource_scopes_headers_and_gzip()
             ("event.type".to_owned(), json!("turn/end")),
             ("event.seq".to_owned(), json!(7)),
         ]),
-        body: json!({"reason": {"kind": "error"}}),
+        body: json!({"reason": {"kind": "error"}}).into(),
     });
     pipeline.emit(OtelLogRecord {
         scope: "@seekdeep-ai/seekdeep-session-telemetry-otel/ops".to_owned(),
@@ -123,7 +123,7 @@ async fn native_pipeline_emits_otlp_json_with_resource_scopes_headers_and_gzip()
         severity_number: 9,
         severity_text: "INFO",
         attributes: Map::from_iter([("telemetry.op".to_owned(), json!("shutdown"))]),
-        body: json!({"op": "shutdown"}),
+        body: json!({"op": "shutdown"}).into(),
     });
     pipeline.shutdown().await.expect("pipeline shutdown");
 

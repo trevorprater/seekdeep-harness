@@ -24,7 +24,7 @@ use seekdeep_code_runtime_worker_thread::{
 };
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{Session, SessionHeader, SessionId},
+    session::{JsonValue, Session, SessionHeader, SessionId},
     session_store::SessionStore,
 };
 use seekdeep_jobs::{JobRegistry as _, JobStatus};
@@ -275,9 +275,7 @@ struct LoopFixture {
 impl LoopFixture {
     async fn prompt(&self, text: &str) -> anyhow::Result<()> {
         self.handle.agent.followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: text.into(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::user(),
         ))?;
         self.handle.agent.when_idle()?.await
@@ -291,14 +289,16 @@ impl LoopFixture {
             .into_iter()
             .rev()
             .find(|event| event.event_type == "assistant/message")
-            .and_then(|event| event.data.get("message").cloned())
-            .and_then(|message| serde_json::from_value::<Message>(message).ok())
+            .and_then(|event| event.data.get_value("message").cloned())
+            .and_then(|message| message.deserialize::<Message>().ok())
             .map(|message| {
                 message
                     .content()
                     .iter()
                     .filter_map(|block| match block {
-                        ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
+                        ContentBlock::Text { text } => {
+                            Some(text.as_str().expect("fixture uses scalar text"))
+                        }
                         _ => None,
                     })
                     .collect()
@@ -321,9 +321,7 @@ fn value_tool(name: &str, schema: Value, value: Value) -> anyhow::Result<ToolDef
             Arc::new(assert_supported_json_schema(schema)?),
             Arc::new(|_, value| {
                 Ok(value.as_str().map_or_else(Vec::new, |text| {
-                    vec![ContentBlock::Text {
-                        text: text.into(),
-                    }]
+                    vec![ContentBlock::Text { text: text.into() }]
                 }))
             }),
         ),
@@ -334,17 +332,20 @@ fn value_tool(name: &str, schema: Value, value: Value) -> anyhow::Result<ToolDef
     ))
 }
 
-fn completion(result: ToolExecutionResult) -> anyhow::Result<Value> {
+fn completion(result: ToolExecutionResult) -> anyhow::Result<JsonValue> {
     match result {
         ToolExecutionResult::Success(success) => {
-            let Value::Object(mut value) = success.value else {
+            let mut value = success.value;
+            if !value.is_object() {
                 anyhow::bail!("run_code returned a non-object value");
-            };
+            }
             value
-                .remove("result")
+                .remove("result")?
                 .ok_or_else(|| anyhow::anyhow!("run_code did not return a completion"))
         }
-        ToolExecutionResult::Failure(failure) => Err(anyhow::anyhow!(failure.error.message)),
+        ToolExecutionResult::Failure(failure) => {
+            Err(anyhow::anyhow!("{}", failure.error.message.as_raw()))
+        }
     }
 }
 

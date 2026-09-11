@@ -96,7 +96,8 @@ fn mux_and_host_streams_use_distinct_closed_frame_unions() {
                 "sessionId": "s1",
                 "lastSeq": 4,
                 "ignored": true
-            }),
+            })
+            .into(),
         )
         .unwrap();
     assert_eq!(
@@ -112,7 +113,8 @@ fn mux_and_host_streams_use_distinct_closed_frame_unions() {
                 "event": "commands/change",
                 "args": [],
                 "ignored": true
-            }),
+            })
+            .into(),
         )
         .unwrap();
     assert_eq!(

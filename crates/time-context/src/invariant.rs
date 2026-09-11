@@ -6,14 +6,13 @@ use chrono::DateTime;
 use regex::Regex;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionEvent},
+    session::{JsonValue, Session, SessionEvent},
     session_store::SESSIONS,
 };
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
 use seekdeep_llm::UserMessage;
-use serde_json::Value;
 
 use crate::{
     NAME,
@@ -94,7 +93,7 @@ fn request_messages(history: &[SessionEvent], turn: u64) -> Vec<UserMessage> {
     selected
         .iter()
         .filter(|event| event.event_type == "user/message")
-        .filter_map(|event| serde_json::from_value(event.data.clone()).ok())
+        .filter_map(|event| event.data.deserialize().ok())
         .collect()
 }
 
@@ -102,6 +101,15 @@ fn is_owned(event: &SessionEvent) -> bool {
     event.event_type == "user/message"
         && event.data["source"]["kind"] == "plugin"
         && event.data["source"]["plugin"] == NAME
+}
+
+fn has_exact_fields(value: &JsonValue, fields: &[&str]) -> bool {
+    value.object_entries().is_some_and(|entries| {
+        entries
+            .iter()
+            .all(|(key, _)| fields.iter().any(|field| key == field))
+            && fields.iter().all(|field| value.get(field).is_some())
+    })
 }
 
 #[allow(clippy::too_many_lines)]
@@ -113,13 +121,11 @@ fn validate_reading(
     let content = event.data["content"].as_array();
     let block = content
         .and_then(|content| (content.len() == 1).then(|| &content[0]))
-        .and_then(Value::as_object);
+        .filter(|block| has_exact_fields(block, &["type", "text"]));
     let block_text = block
-        .filter(|block| {
-            block.len() == 2 && block.get("type").and_then(Value::as_str) == Some("text")
-        })
-        .and_then(|block| block.get("text"))
-        .and_then(Value::as_str);
+        .filter(|block| block.get_value("type").and_then(JsonValue::as_str) == Some("text"))
+        .and_then(|block| block.get_value("text"))
+        .and_then(JsonValue::as_str);
     let Some(block_text) = block_text else {
         return violation(
             failure,
@@ -156,24 +162,28 @@ fn validate_reading(
             ),
         );
     }
-    let Some(source) = event.data["source"].as_object() else {
+    let Some(source) = event
+        .data
+        .get_value("source")
+        .filter(|source| source.is_object())
+    else {
         return violation(failure, "time-context source must retain package ownership");
     };
-    if source.get("kind").and_then(Value::as_str) != Some("plugin")
-        || source.get("plugin").and_then(Value::as_str) != Some(NAME)
+    if source.get_value("kind").and_then(JsonValue::as_str) != Some("plugin")
+        || source.get_value("plugin").and_then(JsonValue::as_str) != Some(NAME)
     {
         return violation(failure, "time-context source must retain package ownership");
     }
-    let sections = source.get("sections").and_then(Value::as_array);
+    let sections = source.get_value("sections").and_then(JsonValue::as_array);
     let section = sections
         .filter(|sections| sections.len() == 1)
-        .and_then(|sections| sections[0].as_object());
-    let snapshot_valid = source.len() == 4
-        && source.get("form").and_then(Value::as_str) == Some("snapshot")
+        .map(|sections| &sections[0]);
+    let snapshot_valid = has_exact_fields(source, &["kind", "plugin", "form", "sections"])
+        && source.get_value("form").and_then(JsonValue::as_str) == Some("snapshot")
         && section.is_some_and(|section| {
-            section.len() == 2
-                && section.get("name").and_then(Value::as_str) == Some(NAME)
-                && section.get("text").and_then(Value::as_str) == Some(block_text)
+            has_exact_fields(section, &["name", "text"])
+                && section.get_value("name").and_then(JsonValue::as_str) == Some(NAME)
+                && section.get_value("text").and_then(JsonValue::as_str) == Some(block_text)
         });
     if !snapshot_valid {
         return violation(

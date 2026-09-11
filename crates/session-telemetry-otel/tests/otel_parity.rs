@@ -170,7 +170,7 @@ async fn full_mode_maps_resource_scope_severity_direct_and_coordinator_records()
             ("session.id".to_owned(), json!("wire")),
             ("event.type".to_owned(), json!("manual")),
         ]),
-        body: json!({"direct": true}),
+        body: json!({"direct": true}).into(),
     });
     fiber.dispose().await.unwrap();
 
@@ -254,7 +254,7 @@ async fn feedback_only_exports_only_canonical_prefixes_and_ignores_direct_emits(
                     event_type: "feedback/record".to_owned(),
                     seq: u64::try_from(session.events().len()).unwrap(),
                     time: 123,
-                    data: json!({"text": "not committed"}),
+                    data: json!({"text": "not committed"}).into(),
                     source_event_seqs: None,
                     surface_op: None,
                     ignorable: None,
@@ -267,7 +267,7 @@ async fn feedback_only_exports_only_canonical_prefixes_and_ignores_direct_emits(
         time: 0,
         severity: SessionTelemetrySeverity::Info,
         attributes: Map::from_iter([("event.type".to_owned(), json!("direct-bypass"))]),
-        body: Value::Null,
+        body: Value::Null.into(),
     });
     fiber.dispose().await.unwrap();
     let records = records(&harness.factory).await;
@@ -313,7 +313,7 @@ async fn disabled_mode_constructs_no_pipeline_and_discloses_local_only_policy() 
         time: 0,
         severity: SessionTelemetrySeverity::Info,
         attributes: Map::new(),
-        body: Value::Null,
+        body: Value::Null.into(),
     });
     backend.shutdown().await.unwrap();
     fiber.dispose().await.unwrap();

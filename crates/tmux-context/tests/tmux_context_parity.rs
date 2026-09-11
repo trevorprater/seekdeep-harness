@@ -140,9 +140,7 @@ fn mount(config: &TmuxContextConfig, with_shell: bool) -> Harness {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }

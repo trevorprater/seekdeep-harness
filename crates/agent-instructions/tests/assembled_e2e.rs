@@ -376,7 +376,7 @@ fn visible_baseline_seed(
         }],
         MessageSource {
             kind: AGENT_INSTRUCTIONS_KIND.to_owned(),
-            fields: source_fields,
+            fields: source_fields.into(),
         },
     );
     vec![

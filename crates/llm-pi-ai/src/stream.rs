@@ -8,8 +8,8 @@ use futures::{Stream, StreamExt};
 use regex::Regex;
 use seekdeep_llm::{
     BoxLlmChunkStream, CONTEXT_WINDOW_EXCEEDED_CODE, CallId, ContentBlock, EMPTY_RESPONSE_CODE,
-    FinishReason, JsonString, LlmError, LlmFailure, QUOTA_EXCEEDED_CODE, StreamChunk, TokenUsage,
-    is_context_window_exceeded_error, is_quota_exceeded_error,
+    FinishReason, JsonString, JsonValue, LlmError, LlmFailure, QUOTA_EXCEEDED_CODE, StreamChunk,
+    TokenUsage, is_context_window_exceeded_error, is_quota_exceeded_error,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -301,7 +301,7 @@ where
                     yield StreamChunk::Usage { usage: map_usage(&message.usage) };
                     yield StreamChunk::Finish {
                         reason: map_stop_reason(&message, context_window),
-                        replay_state: Some(serde_json::to_value(to_pi_replay_state(&message))?),
+                        replay_state: Some(JsonValue::from_serialize(&to_pi_replay_state(&message))?),
                     };
                     return;
                 }

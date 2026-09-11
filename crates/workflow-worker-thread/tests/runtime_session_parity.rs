@@ -185,9 +185,7 @@ impl ChildPort for ScriptedChildren {
 
 fn text_result(text: &str) -> ChildResult {
     ChildResult {
-        output: vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        output: vec![ContentBlock::Text { text: text.into() }],
         structured: None,
         stop_reason: "completed".to_owned(),
     }

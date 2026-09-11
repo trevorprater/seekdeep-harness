@@ -290,7 +290,7 @@ pub fn read_meta_from_meta(meta: &JsonValue) -> Option<FsReadMeta> {
     let lines = meta.get("lines")?.array_items()?;
     let lang = meta
         .get("lang")
-        .map(|value| value.deserialize::<String>())
+        .map(JsonRef::deserialize::<String>)
         .transpose()
         .ok()?;
     let mut previous = offset - 1;

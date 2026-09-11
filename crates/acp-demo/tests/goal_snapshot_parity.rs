@@ -10,7 +10,7 @@ use seekdeep_acp_snapshot::{
     AgentUnderTest, InputScript, NormalizeContext, NormalizeOptions, RunOptions, SnapshotRunMode,
     normalize_session_log, normalize_stdout, run_scenario, scrub_request_headers,
 };
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonRef, JsonValue, SessionEvent};
 use seekdeep_goal::{GoalPhase, fold::fold_goal};
 use serde_json::Value;
 
@@ -147,7 +147,7 @@ fn tool_call_names(events: &[SessionEvent]) -> Vec<&str> {
     events
         .iter()
         .filter(|event| event.event_type == "tool/call")
-        .filter_map(|event| event.data.get("name").and_then(Value::as_str))
+        .filter_map(|event| event.data.get_value("name").and_then(JsonValue::as_str))
         .collect()
 }
 
@@ -163,8 +163,10 @@ async fn compiled_goal_rounds_persist_pause_after_the_exact_automatic_budget() {
         .filter(|event| event.event_type == "user/message")
         .filter_map(|event| {
             let source = event.data.get("source")?;
-            (source.get("kind").and_then(Value::as_str) == Some("goal"))
-                .then(|| source.get("round").and_then(Value::as_u64))
+            source
+                .get("kind")
+                .is_some_and(|kind| kind == "goal")
+                .then(|| source.get("round").and_then(JsonRef::as_u64))
                 .flatten()
         })
         .collect::<Vec<_>>();
@@ -200,8 +202,14 @@ async fn compiled_goal_completion_injects_one_wrap_up_and_closes_the_same_turn()
         .iter()
         .filter(|event| {
             event.event_type == "user/message"
-                && event.data.pointer("/source/kind").and_then(Value::as_str) == Some("plugin")
-                && event.data.pointer("/source/plugin").and_then(Value::as_str) == Some("tool-goal")
+                && event
+                    .data
+                    .pointer("/source/kind")
+                    .is_some_and(|kind| kind == "plugin")
+                && event
+                    .data
+                    .pointer("/source/plugin")
+                    .is_some_and(|plugin| plugin == "tool-goal")
         })
         .collect::<Vec<_>>();
     assert_eq!(wrapups.len(), 1);
@@ -218,15 +226,16 @@ async fn compiled_goal_completion_injects_one_wrap_up_and_closes_the_same_turn()
         .filter_map(|event| {
             event
                 .data
-                .pointer("/message/content")
-                .and_then(Value::as_array)
+                .get_value("message")
+                .and_then(|message| message.get_value("content"))
+                .and_then(JsonValue::as_array)
         })
         .flatten()
         .filter(|block| {
-            block.get("type").and_then(Value::as_str) == Some("text")
+            block.get("type").is_some_and(|kind| kind == "text")
                 && block
-                    .get("text")
-                    .and_then(Value::as_str)
+                    .get_value("text")
+                    .and_then(JsonValue::as_str)
                     .is_some_and(|text| text.starts_with("GOAL WRAP-UP"))
         })
         .count();
@@ -236,15 +245,12 @@ async fn compiled_goal_completion_injects_one_wrap_up_and_closes_the_same_turn()
         .iter()
         .filter(|event| {
             event.event_type == "turn/end"
-                && event.data.get("turn").and_then(Value::as_u64) == Some(2)
+                && event.data.get("turn").and_then(JsonRef::as_u64) == Some(2)
         })
         .collect::<Vec<_>>();
     assert_eq!(turn_two_ends.len(), 1);
     assert_eq!(
-        turn_two_ends[0]
-            .data
-            .pointer("/reason/kind")
-            .and_then(Value::as_str),
-        Some("completed")
+        turn_two_ends[0].data.pointer("/reason/kind").unwrap(),
+        "completed"
     );
 }

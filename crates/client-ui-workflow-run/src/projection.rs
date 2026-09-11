@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ChatConversationViewMetadata, ConversationAssemblerError,
     ConversationBoundaryStatus, ConversationLocation, ConversationLocationEvent,
@@ -10,7 +11,6 @@ use seekdeep_client_runtime::{
 };
 use seekdeep_identity::SessionId;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -227,10 +227,10 @@ fn project_workflow(state: &WorkflowState, location: &ConversationLocation) -> W
 }
 
 fn decode<T: serde::de::DeserializeOwned>(
-    value: Value,
+    value: &Value,
     event_type: &str,
 ) -> Result<T, ConversationAssemblerError> {
-    serde_json::from_value(value).map_err(|error| {
+    value.deserialize().map_err(|error| {
         ConversationAssemblerError::new(format!("invalid {event_type} data: {error}"))
     })
 }
@@ -241,11 +241,11 @@ fn state_of(
     let state = context.state.as_deref().ok_or_else(|| {
         ConversationAssemblerError::new("workflow-run update requires initialized state")
     })?;
-    decode(state.clone(), "workflow-run state")
+    decode(state, "workflow-run state")
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value).map(Rc::new).map_err(|error| {
+    Value::from_serialize(value).map(Rc::new).map_err(|error| {
         ConversationAssemblerError::new(format!("workflow-run serialization failed: {error}"))
     })
 }
@@ -253,7 +253,7 @@ fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerErr
 fn run_id(event: &ConversationLocationEvent) -> Result<String, ConversationAssemblerError> {
     event
         .data
-        .get("runId")
+        .get_value("runId")
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {
@@ -297,8 +297,7 @@ pub fn workflow_run_definition() -> AssemblerNodeDefinition {
                     "workflow-run start requires tool-workflow/run-start",
                 ));
             }
-            let data: RunStartData =
-                decode(accepted.event.data.clone(), "tool-workflow/run-start")?;
+            let data: RunStartData = decode(&accepted.event.data, "tool-workflow/run-start")?;
             encode(&WorkflowState {
                 name: data.name,
                 stop_reason: None,
@@ -311,7 +310,7 @@ pub fn workflow_run_definition() -> AssemblerNodeDefinition {
             match accepted.event.event_type.as_str() {
                 "tool-workflow/agent-start" => {
                     let data: AgentStartData =
-                        decode(accepted.event.data.clone(), "tool-workflow/agent-start")?;
+                        decode(&accepted.event.data, "tool-workflow/agent-start")?;
                     state.members.push(WorkflowMemberState {
                         seq: data.seq,
                         label: data.label,
@@ -322,7 +321,7 @@ pub fn workflow_run_definition() -> AssemblerNodeDefinition {
                 }
                 "tool-workflow/agent-end" => {
                     let data: AgentEndData =
-                        decode(accepted.event.data.clone(), "tool-workflow/agent-end")?;
+                        decode(&accepted.event.data, "tool-workflow/agent-end")?;
                     for member in &mut state.members {
                         if member.seq == data.seq {
                             member.outcome = Some(data.outcome);
@@ -330,8 +329,7 @@ pub fn workflow_run_definition() -> AssemblerNodeDefinition {
                     }
                 }
                 "tool-workflow/run-end" => {
-                    let data: RunEndData =
-                        decode(accepted.event.data.clone(), "tool-workflow/run-end")?;
+                    let data: RunEndData = decode(&accepted.event.data, "tool-workflow/run-end")?;
                     state.stop_reason = Some(data.stop_reason);
                 }
                 _ => return Ok(context.state.clone()),

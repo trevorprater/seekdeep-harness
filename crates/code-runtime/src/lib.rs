@@ -309,7 +309,9 @@ pub static PORTABLE_RESERVED_WORDS: LazyLock<HashSet<&'static str>> = LazyLock::
 /// Whether a member has Python dunder form (`__x__`, non-empty middle).
 #[must_use]
 pub fn is_dunder_member(name: &str) -> bool {
-    name.len() > 4 && name.starts_with("__") && name.ends_with("__")
+    name.len() > 4
+        && name.starts_with("__")
+        && name.ends_with("__")
         && !name.contains(['\n', '\r', '\u{2028}', '\u{2029}'])
 }
 
@@ -317,8 +319,12 @@ pub fn is_dunder_member(name: &str) -> bool {
 #[must_use]
 pub fn is_dunder_member_string(name: &CodeJsonString) -> bool {
     let units = name.utf16_units();
-    units.len() > 4 && units.starts_with(&[95, 95]) && units.ends_with(&[95, 95])
-        && !units.iter().any(|unit| matches!(unit, 10 | 13 | 0x2028 | 0x2029))
+    units.len() > 4
+        && units.starts_with(&[95, 95])
+        && units.ends_with(&[95, 95])
+        && !units
+            .iter()
+            .any(|unit| matches!(unit, 10 | 13 | 0x2028 | 0x2029))
 }
 
 /// Registers the seam's explained empty invariant companion.
@@ -495,10 +501,23 @@ mod tests {
         for name in ["__dict__", "__init__", "__x__"] {
             assert!(is_dunder_member(name));
         }
-        for name in ["_private", "name", "__mid", "__", "____", "__\n__", "__\r__", "__\u{2028}__", "__\u{2029}__", "__x__\n"] {
+        for name in [
+            "_private",
+            "name",
+            "__mid",
+            "__",
+            "____",
+            "__\n__",
+            "__\r__",
+            "__\u{2028}__",
+            "__\u{2029}__",
+            "__x__\n",
+        ] {
             assert!(!is_dunder_member(name));
         }
-        assert!(is_dunder_member_string(&CodeJsonString::from_utf16(&[95, 95, 0xd800, 95, 95])));
+        assert!(is_dunder_member_string(&CodeJsonString::from_utf16(&[
+            95, 95, 0xd800, 95, 95
+        ])));
         for name in ["function", "lambda", "nonlocal", "class"] {
             assert!(PORTABLE_RESERVED_WORDS.contains(name));
         }

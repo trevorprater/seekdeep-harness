@@ -30,7 +30,6 @@ use seekdeep_session_persistence_jsonl::{JsonlConfig, JsonlSessionPersistence, s
 use seekdeep_system_prompt::{SystemPromptConfig, install as install_system_prompt};
 use seekdeep_tool_todo::{Config as TodoConfig, apply as install_todo};
 use seekdeep_tools::{ToolRuntimeConfig, install as install_tools};
-use serde_json::Value;
 
 #[derive(Debug)]
 struct ToolThenAnswerAdapter {
@@ -147,9 +146,7 @@ fn assert_live_events(events: &[SessionEvent]) -> anyhow::Result<()> {
         .find(|event| event.event_type == "todo/write")
         .ok_or_else(|| anyhow::anyhow!("todo event missing"))?;
     assert_eq!(
-        todo.data
-            .pointer("/todos/0/content")
-            .and_then(Value::as_str),
+        todo.data["todos"][0]["content"].as_str(),
         Some("prove the headless path")
     );
     let call = events
@@ -164,8 +161,7 @@ fn assert_live_events(events: &[SessionEvent]) -> anyhow::Result<()> {
     assert_eq!(
         events
             .last()
-            .and_then(|event| event.data.pointer("/reason/kind"))
-            .and_then(Value::as_str),
+            .and_then(|event| event.data["reason"]["kind"].as_str()),
         Some("completed")
     );
     Ok(())

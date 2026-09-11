@@ -1,11 +1,11 @@
 //! Logical mux and Host stream frame contracts.
 
 use seekdeep_client_connection::{RpcError, RpcId};
-use seekdeep_core::session::SessionId;
+use seekdeep_core::session::{JsonValue, SessionId};
 use seekdeep_llm::{CallId, MessageId};
 use seekdeep_user_approval::{ApprovalOutcome, ApprovalRequestId};
 use seekdeep_user_questions::AskUserQuestionItem;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use serde_json::{Map, Value};
 
 use super::{
@@ -14,8 +14,9 @@ use super::{
     rpc::{ContractError, parse_rpc_error},
     sessions::{
         SessionEvent, ToolEventView, optional_literal, optional_nonempty_string, optional_string,
-        parse_array, require_array, require_bool, require_field, require_nonempty_string,
-        require_nonnegative_integer, require_object, require_string, validate_content_block,
+        parse_array, prefix_error, require_array, require_bool, require_field,
+        require_nonempty_string, require_nonnegative_integer, require_object, require_string,
+        validate_content_block, validate_content_block_json,
     },
     workspace::{WorkspaceId, WorkspaceView},
 };
@@ -40,12 +41,35 @@ pub struct WireMessage {
     /// Closed role.
     pub role: WireMessageRole,
     /// Merge-extensible content blocks.
-    pub content: Vec<Map<String, Value>>,
+    pub content: Vec<JsonValue>,
     /// Loose source object whose `kind` tag is mandatory.
-    pub source: Map<String, Value>,
+    pub source: JsonValue,
 }
 
 impl WireMessage {
+    fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let object = raw_object(value, "$")?;
+        let id = MessageId::new(raw_string(object, "id", "$.id", true)?);
+        let role = match raw_string(object, "role", "$.role", false)? {
+            "system" => WireMessageRole::System,
+            "user" => WireMessageRole::User,
+            "assistant" => WireMessageRole::Assistant,
+            _ => return Err(ContractError::new("$.role", "unknown message role")),
+        };
+        let content = raw_array(object, "content", "$.content")?;
+        let content = parse_raw_array(content, validate_content_block_json, "$.content")?;
+        let source = raw_object(raw_field(object, "source", "$.source")?, "$.source")?;
+        if !raw_field(source, "kind", "$.source.kind")?.is_string() {
+            return Err(ContractError::new("$.source.kind", "expected string"));
+        }
+        Ok(Self {
+            id,
+            role,
+            content,
+            source: source.clone(),
+        })
+    }
+
     fn parse(value: &Value) -> Result<Self, ContractError> {
         let object = require_object(value, "$")?;
         let id = MessageId::new(require_nonempty_string(object, "id", "$.id")?);
@@ -65,8 +89,11 @@ impl WireMessage {
         Ok(Self {
             id,
             role,
-            content,
-            source: source.clone(),
+            content: content
+                .into_iter()
+                .map(|block| Value::Object(block).into())
+                .collect(),
+            source: Value::Object(source.clone()).into(),
         })
     }
 }
@@ -95,6 +122,21 @@ pub struct QueuedInboxItem {
 }
 
 impl QueuedInboxItem {
+    fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let object = raw_object(value, "$")?;
+        let placement = match raw_string(object, "placement", "$.placement", false)? {
+            "queued" => QueuePlacement::Queued,
+            "steering" => QueuePlacement::Steering,
+            "context" => QueuePlacement::Context,
+            _ => return Err(ContractError::new("$.placement", "unknown queue placement")),
+        };
+        Ok(Self {
+            id: MessageId::new(raw_string(object, "id", "$.id", true)?),
+            placement,
+            message: WireMessage::parse_json(raw_field(object, "message", "$.message")?)?,
+        })
+    }
+
     fn parse(value: &Value) -> Result<Self, ContractError> {
         let object = require_object(value, "$")?;
         let placement = match require_string(object, "placement", "$.placement", false)? {
@@ -122,7 +164,7 @@ pub enum QuestionResolutionOutcome {
 }
 
 /// Mux-stream payload union.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum MuxFrame {
     /// Raw Session event and optional Host-computed render intent.
@@ -212,7 +254,7 @@ pub enum MuxFrame {
         /// Non-empty projection key.
         key: String,
         /// Unit-validated value retained wide.
-        value: Value,
+        value: JsonValue,
         /// Non-negative projection watermark.
         seq: u64,
     },
@@ -225,6 +267,62 @@ pub enum MuxFrame {
 }
 
 impl MuxFrame {
+    /// Parses a mux frame while retaining opaque JSON payloads verbatim.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same variant and metadata validation failures as [`Self::parse`].
+    pub fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let object = raw_object(value, "$")?;
+        let kind = raw_string(object, "type", "$.type", false)?;
+        match kind {
+            "session/event" => Ok(Self::SessionEvent {
+                session_id: SessionId::new(raw_string(object, "sessionId", "$.sessionId", true)?),
+                event: SessionEvent::parse_json(raw_field(object, "event", "$.event")?)?,
+                view: object
+                    .get_value("view")
+                    .map(ToolEventView::parse_json)
+                    .transpose()?,
+            }),
+            "session/projection" => Ok(Self::SessionProjection {
+                session_id: SessionId::new(raw_string(object, "sessionId", "$.sessionId", true)?),
+                key: raw_string(object, "key", "$.key", true)?.to_owned(),
+                value: raw_field(object, "value", "$.value")?.clone(),
+                seq: raw_field(object, "seq", "$.seq")?
+                    .as_u64()
+                    .ok_or_else(|| ContractError::new("$.seq", "expected non-negative integer"))?,
+            }),
+            "session/queue" => Ok(Self::SessionQueue {
+                session_id: SessionId::new(raw_string(object, "sessionId", "$.sessionId", true)?),
+                items: parse_raw_array(
+                    raw_array(object, "items", "$.items")?,
+                    QueuedInboxItem::parse_json,
+                    "$.items",
+                )?,
+            }),
+            _ => {
+                let fields: &[&str] = match kind {
+                    "session/subscribed" => &["type", "sessionId", "lastSeq"],
+                    "approval/requested" => &[
+                        "type",
+                        "sessionId",
+                        "approvalId",
+                        "toolName",
+                        "callId",
+                        "reason",
+                    ],
+                    "approval/resolved" => &["type", "sessionId", "approvalId", "outcome"],
+                    "question/requested" => &["type", "sessionId", "questions"],
+                    "question/resolved" => &["type", "sessionId", "questionRpcId", "outcome"],
+                    "session/jobs" => &["type", "sessionId", "jobs"],
+                    "stream/error" => &["type", "error"],
+                    _ => return Err(ContractError::new("$.type", "unknown mux frame type")),
+                };
+                Self::parse(&typed_metadata(object, fields)?)
+            }
+        }
+    }
+
     /// Parses and normalizes one mux-stream frame.
     ///
     /// # Errors
@@ -311,7 +409,7 @@ impl MuxFrame {
             "session/projection" => Ok(Self::SessionProjection {
                 session_id: parse_session_id(object)?,
                 key: require_nonempty_string(object, "key", "$.key")?.to_owned(),
-                value: require_field(object, "value", "$.value")?.clone(),
+                value: require_field(object, "value", "$.value")?.clone().into(),
                 seq: require_nonnegative_integer(object, "seq", "$.seq")?,
             }),
             "stream/error" => Ok(Self::StreamError {
@@ -322,8 +420,15 @@ impl MuxFrame {
     }
 }
 
+impl<'de> Deserialize<'de> for MuxFrame {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        Self::parse_json(&value).map_err(D::Error::custom)
+    }
+}
+
 /// Host-stream payload union.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type")]
 pub enum HostFrame {
     /// A Session was published.
@@ -398,7 +503,7 @@ pub enum HostFrame {
         /// Non-empty Host event name.
         event: String,
         /// JSON-safe arguments retained wide.
-        args: Vec<Value>,
+        args: Vec<JsonValue>,
     },
     /// Terminal stream error.
     #[serde(rename = "stream/error")]
@@ -417,6 +522,43 @@ pub enum SessionAddedOrigin {
 }
 
 impl HostFrame {
+    /// Parses a Host frame while retaining forwarded event arguments verbatim.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same variant and metadata validation failures as [`Self::parse`].
+    pub fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let object = raw_object(value, "$")?;
+        let kind = raw_string(object, "type", "$.type", false)?;
+        if kind == "host/remote-event" {
+            return Ok(Self::RemoteEvent {
+                event: raw_string(object, "event", "$.event", true)?.to_owned(),
+                args: raw_array(object, "args", "$.args")?.to_vec(),
+            });
+        }
+        let fields: &[&str] = match kind {
+            "host/session-added" => &[
+                "type",
+                "sessionId",
+                "blank",
+                "parentSessionId",
+                "origin",
+                "cwd",
+                "agentPreset",
+            ],
+            "host/session-removed" => &["type", "sessionId"],
+            "host/session-status" => &["type", "sessionId", "running"],
+            "host/agent-error" => &["type", "sessionId", "message"],
+            "host/workspace-changed" => &["type", "workspace"],
+            "host/workspace-removed" => &["type", "workspaceId"],
+            "host/workspace-order-changed" => &["type", "workspaceIds"],
+            "host/archived-sessions-changed" => &["type", "archivedSessionIds"],
+            "stream/error" => &["type", "error"],
+            _ => return Err(ContractError::new("$.type", "unknown Host frame type")),
+        };
+        Self::parse(&typed_metadata(object, fields)?)
+    }
+
     /// Parses and normalizes one Host-stream frame.
     ///
     /// # Errors
@@ -487,7 +629,11 @@ impl HostFrame {
             }),
             "host/remote-event" => Ok(Self::RemoteEvent {
                 event: require_nonempty_string(object, "event", "$.event")?.to_owned(),
-                args: require_array(object, "args", "$.args")?.clone(),
+                args: require_array(object, "args", "$.args")?
+                    .iter()
+                    .cloned()
+                    .map(JsonValue::from)
+                    .collect(),
             }),
             "stream/error" => Ok(Self::StreamError {
                 error: parse_rpc_error(require_field(object, "error", "$.error")?)?,
@@ -495,6 +641,142 @@ impl HostFrame {
             _ => Err(ContractError::new("$.type", "unknown Host frame type")),
         }
     }
+}
+
+impl<'de> Deserialize<'de> for HostFrame {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        Self::parse_json(&value).map_err(D::Error::custom)
+    }
+}
+
+fn raw_object<'a>(value: &'a JsonValue, path: &str) -> Result<&'a JsonValue, ContractError> {
+    if value.is_object() {
+        Ok(value)
+    } else {
+        Err(ContractError::new(path, "expected object"))
+    }
+}
+
+fn raw_field<'a>(
+    object: &'a JsonValue,
+    name: &str,
+    path: &str,
+) -> Result<&'a JsonValue, ContractError> {
+    object
+        .get_value(name)
+        .ok_or_else(|| ContractError::new(path, "required property is missing"))
+}
+
+fn raw_string<'a>(
+    object: &'a JsonValue,
+    name: &str,
+    path: &str,
+    nonempty: bool,
+) -> Result<&'a str, ContractError> {
+    let value = raw_field(object, name, path)?
+        .as_str()
+        .ok_or_else(|| ContractError::new(path, "expected string"))?;
+    if nonempty && value.is_empty() {
+        return Err(ContractError::new(path, "expected non-empty string"));
+    }
+    Ok(value)
+}
+
+fn raw_array<'a>(
+    object: &'a JsonValue,
+    name: &str,
+    path: &str,
+) -> Result<&'a [JsonValue], ContractError> {
+    raw_field(object, name, path)?
+        .as_array()
+        .map(Vec::as_slice)
+        .ok_or_else(|| ContractError::new(path, "expected array"))
+}
+
+fn parse_raw_array<T>(
+    values: &[JsonValue],
+    parse: impl Fn(&JsonValue) -> Result<T, ContractError>,
+    path: &str,
+) -> Result<Vec<T>, ContractError> {
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            parse(value).map_err(|error| prefix_error(&error, &format!("{path}[{index}]")))
+        })
+        .collect()
+}
+
+fn typed_metadata(value: &JsonValue, fields: &[&str]) -> Result<Value, ContractError> {
+    typed_object(value, fields)
+        .try_into_serde_json()
+        .map_err(|error| ContractError::new("$", error.to_string()))
+}
+
+fn typed_object(value: &JsonValue, fields: &[&str]) -> JsonValue {
+    if !value.is_object() {
+        return value.clone();
+    }
+    JsonValue::object(fields.iter().filter_map(|name| {
+        value.get_value(name).map(|value| {
+            let value = match *name {
+                "jobs" => typed_array(
+                    value,
+                    &[
+                        "id",
+                        "kind",
+                        "label",
+                        "status",
+                        "detail",
+                        "startedAt",
+                        "finishedAt",
+                    ],
+                ),
+                "questions" => typed_array(
+                    value,
+                    &[
+                        "id",
+                        "question",
+                        "header",
+                        "detail",
+                        "options",
+                        "multiSelect",
+                        "intent",
+                    ],
+                ),
+                "options" => typed_array(value, &["label", "description"]),
+                "intent" => typed_object(value, &["kind", "approve"]),
+                "workspace" => typed_object(
+                    value,
+                    &[
+                        "workspaceId",
+                        "path",
+                        "title",
+                        "sessionIds",
+                        "createdAt",
+                        "updatedAt",
+                    ],
+                ),
+                _ => value.clone(),
+            };
+            (*name, value)
+        })
+    }))
+}
+
+fn typed_array(value: &JsonValue, fields: &[&str]) -> JsonValue {
+    value.as_array().map_or_else(
+        || value.clone(),
+        |values| {
+            JsonValue::array(
+                &values
+                    .iter()
+                    .map(|value| typed_object(value, fields))
+                    .collect::<Vec<_>>(),
+            )
+        },
+    )
 }
 
 fn parse_session_id(object: &Map<String, Value>) -> Result<SessionId, ContractError> {

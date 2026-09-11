@@ -18,7 +18,7 @@ use seekdeep_agent_loop::{
 use seekdeep_bash_local::Config as BashConfig;
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{SessionEvent, SessionHeader, SessionId, SurfaceOp},
+    session::{JsonValue, SessionEvent, SessionHeader, SessionId, SurfaceOp},
     session_store::SessionStore,
 };
 use seekdeep_headless::{HeadlessRunResult, HeadlessRunner};
@@ -230,13 +230,17 @@ fn text_results(events: &[SessionEvent]) -> Vec<&str> {
         .filter_map(|event| {
             event
                 .data
-                .pointer("/message/content/0/content")
-                .and_then(Value::as_array)
+                .get_value("message")
+                .and_then(|message| message.get_value("content"))
+                .and_then(JsonValue::as_array)
+                .and_then(|content| content.first())
+                .and_then(|block| block.get_value("content"))
+                .and_then(JsonValue::as_array)
         })
         .flatten()
         .filter_map(|block| {
-            (block.get("type").and_then(Value::as_str) == Some("text"))
-                .then(|| block.get("text").and_then(Value::as_str))
+            (block.get_value("type").and_then(JsonValue::as_str) == Some("text"))
+                .then(|| block.get_value("text").and_then(JsonValue::as_str))
                 .flatten()
         })
         .collect()
@@ -450,7 +454,7 @@ fn seeded_event(event_type: &str, seq: u64, data: Value, surface: bool) -> Sessi
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).expect("fixture sequence fits i64") + 10,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: surface.then(SurfaceOp::append),
         ignorable: None,
@@ -572,8 +576,7 @@ async fn semantic_checkpoint_repairs_unknown_tool_outcome_before_continuation() 
     assert_eq!(
         events
             .last()
-            .and_then(|event| event.data.pointer("/reason/kind"))
-            .and_then(Value::as_str),
+            .and_then(|event| event.data["reason"]["kind"].as_str()),
         Some("completed")
     );
     {

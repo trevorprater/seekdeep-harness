@@ -29,7 +29,7 @@ fn event(event_type: &str, seq: u64, data: Value, surface: bool) -> SessionEvent
         event_type: event_type.to_owned(),
         seq,
         time: 1_783_987_200_000,
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: surface.then(SurfaceOp::append),
         ignorable: None,

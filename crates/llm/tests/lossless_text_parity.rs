@@ -1,8 +1,8 @@
 //! Exact JavaScript tool-result text through message construction and JSON.
 
 use seekdeep_llm::{
-    CallId, ContentBlock, JsonString, Message, MessageId, MessageRole, MessageSource, StreamChunk,
-    assistant_text,
+    BlockAssembler, CallId, ContentBlock, JsonString, Message, MessageId, MessageRole,
+    MessageSource, StreamChunk, assistant_text,
 };
 use seekdeep_lossless_json::JsonValue;
 
@@ -122,4 +122,41 @@ fn persisted_duplicate_message_fields_use_the_last_json_value() {
         serde_json::to_string(&message).unwrap(),
         r#"{"content":[{"type":"text","text":"\ud800"}],"source":{"kind":"user"},"extra":true,"role":"user","id":"kept"}"#,
     );
+}
+
+#[test]
+fn opaque_message_and_source_fields_retain_surrogate_keys_values_and_order() {
+    let raw = r#"{"content":[{"type":"text","text":"body"}],"source":{"kind":"plugin","plugin":"fixture","opaque":{"\ud800":"\udfff","n":1.2300}},"first":true,"\ud800":{"literal":"\\ud800","text":"\ud800"},"role":"user","id":"opaque"}"#;
+    let message: Message = serde_json::from_str(raw).unwrap();
+    assert_eq!(serde_json::to_string(&message).unwrap(), raw);
+    assert_eq!(
+        message.source().fields.get("opaque").unwrap().as_raw(),
+        r#"{"\ud800":"\udfff","n":1.2300}"#
+    );
+    assert_eq!(
+        message
+            .fields()
+            .get_key(&JsonString::from_utf16(&[0xd800]))
+            .unwrap()
+            .as_raw(),
+        r#"{"literal":"\\ud800","text":"\ud800"}"#
+    );
+}
+
+#[test]
+fn finish_and_assembly_retain_opaque_replay_values_including_explicit_null() {
+    for replay in [r#"{"\ud800":["\udfff",1.2300]}"#, "null"] {
+        let raw =
+            format!(r#"{{"type":"finish","reason":{{"kind":"stop"}},"replayState":{replay}}}"#);
+        let chunk: StreamChunk = serde_json::from_str(&raw).unwrap();
+        assert_eq!(serde_json::to_string(&chunk).unwrap(), raw);
+        let mut assembler = BlockAssembler::new();
+        assembler.push(chunk);
+        let state = assembler.replay_state().unwrap();
+        assert_eq!(state.as_raw(), replay);
+        let mut source = MessageSource::model("fixture", "fixture");
+        source.fields.insert("replayState", state.clone());
+        let source = JsonValue::from_serialize(&source).unwrap();
+        assert_eq!(source.get("replayState").unwrap().as_raw(), replay);
+    }
 }

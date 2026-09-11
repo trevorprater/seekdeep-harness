@@ -266,7 +266,6 @@ fn update_assistant(
                     .event
                     .data
                     .get_value("usage")
-                    .cloned()
                     .map(crate::json_value::decode)
                     .transpose()
                     .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
@@ -297,7 +296,6 @@ fn update_chunk(
         let next: UsageValue = crate::json_value::decode(
             chunk
                 .get_value("usage")
-                .cloned()
                 .ok_or_else(|| ConversationAssemblerError::new("usage chunk omitted usage"))?,
         )
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
@@ -327,16 +325,27 @@ fn update_chunk(
             let index = index.ok_or_else(|| {
                 ConversationAssemblerError::new(format!("{chunk_type} omitted index"))
             })?;
-            let kind = if chunk_type == "text-delta" { "text" } else { "reasoning" };
-            let prefix = state.blocks.get(index).and_then(Option::as_ref)
+            let kind = if chunk_type == "text-delta" {
+                "text"
+            } else {
+                "reasoning"
+            };
+            let prefix = state
+                .blocks
+                .get(index)
+                .and_then(Option::as_ref)
                 .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some(kind))
                 .and_then(|block| crate::text_value::member(block, "text"))
                 .unwrap_or_default();
             let delta = crate::text_value::member(chunk, "text").unwrap_or_default();
-            set_block(&mut state.blocks, index, json!({
-                "kind": kind,
-                "text": JsonString::concat(&[&prefix, &delta]),
-            }));
+            set_block(
+                &mut state.blocks,
+                index,
+                json!({
+                    "kind": kind,
+                    "text": JsonString::concat(&[&prefix, &delta]),
+                }),
+            );
         }
         "tool-call-delta" => update_tool_delta(state, chunk, index)?,
         "block-end" => {
@@ -379,17 +388,21 @@ fn update_tool_delta(
         .and_then(Value::as_str)
         == Some("tool-call");
     let prior = is_tool.then_some(previous).flatten();
-    let prior_id = prior.and_then(|block| crate::text_value::member(block, "callId"))
+    let prior_id = prior
+        .and_then(|block| crate::text_value::member(block, "callId"))
         .unwrap_or_default();
     let call_id = if prior_id.is_empty() {
-        chunk.get_value("id").map_or_else(|| JsonString::from("undefined"), crate::json_value::js_text)
+        chunk
+            .get_value("id")
+            .map_or_else(|| JsonString::from("undefined"), crate::json_value::js_text)
     } else {
         prior_id
     };
     let name = crate::text_value::member(chunk, "name")
         .or_else(|| prior.and_then(|block| crate::text_value::member(block, "name")))
         .unwrap_or_default();
-    let args = prior.and_then(|block| crate::text_value::member(block, "argsRaw"))
+    let args = prior
+        .and_then(|block| crate::text_value::member(block, "argsRaw"))
         .unwrap_or_default();
     let delta = crate::text_value::member(chunk, "argumentsDelta").unwrap_or_default();
     set_block(
@@ -527,7 +540,6 @@ fn fallback_state(
                     current.usage = event
                         .data
                         .get_value("usage")
-                        .cloned()
                         .map(crate::json_value::decode)
                         .transpose()
                         .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;

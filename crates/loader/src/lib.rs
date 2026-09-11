@@ -1107,14 +1107,13 @@ impl PluginCatalog {
         ));
         settlement.attach(&runtime);
         let mut mounted = Vec::new();
-        let realm = self.node_realm.lock().clone();
-        let turn = realm.as_ref().map(|realm| realm.defer_turn()).transpose()?;
         let deferred = context.registry().defer_lifecycle();
         let admission = register_entries(self, context, entries, &mut mounted);
+        let realm = self.node_realm.lock().clone();
+        let turn = realm.as_ref().map(|realm| realm.defer_turn()).transpose();
         drop(deferred);
         let flushed = turn
-            .map(node_plugin::NodeTurn::finish)
-            .transpose()
+            .and_then(|turn| turn.map(node_plugin::NodeTurn::finish).transpose())
             .map(|_| ());
         if let Err(error) = admission.and(flushed) {
             let mut failures = vec![error.to_string()];

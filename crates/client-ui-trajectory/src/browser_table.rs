@@ -7,6 +7,7 @@ use std::{
 };
 
 use js_sys::{Array, Float64Array, Function, Object, Promise, Reflect};
+use seekdeep_lossless_json::JsonString;
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -68,7 +69,7 @@ fn controller_face() -> Result<JsValue, JsValue> {
 
     let state_runtime = runtime.clone();
     let snapshot = Closure::wrap(Box::new(move || {
-        serde_wasm_bindgen::to_value(&state_runtime.borrow().controller.snapshot())
+        crate::browser_value::to_value(&state_runtime.borrow().controller.snapshot())
             .map_err(js_error_from_display)
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     set(&face, "snapshot", &snapshot.into_js_value())?;
@@ -76,7 +77,7 @@ fn controller_face() -> Result<JsValue, JsValue> {
     let turns_runtime = runtime.clone();
     let set_turns = Closure::wrap(Box::new(move |turns: JsValue| -> Result<(), JsValue> {
         let turns: Vec<TrajectoryTurnModel> =
-            serde_wasm_bindgen::from_value(turns).map_err(js_error_from_display)?;
+            crate::browser_value::from_value(&turns).map_err(js_error_from_display)?;
         turns_runtime.borrow_mut().records = flatten_trajectory_table_records(&turns);
         Ok(())
     }) as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
@@ -115,7 +116,7 @@ fn controller_face() -> Result<JsValue, JsValue> {
     let select_request = Closure::wrap(Box::new(
         move |request: JsValue, tab: String| -> Result<(), JsValue> {
             let request: SelectedTrajectoryRequest =
-                serde_wasm_bindgen::from_value(request).map_err(js_error_from_display)?;
+                crate::browser_value::from_value(&request).map_err(js_error_from_display)?;
             request_runtime
                 .borrow_mut()
                 .controller
@@ -382,7 +383,7 @@ struct RenderedWindow {
 fn render_table(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
     let turns_value = required(props, "turns", "TrajectoryTable")?;
     let turns: Vec<TrajectoryTurnModel> =
-        serde_wasm_bindgen::from_value(turns_value.clone()).map_err(js_error_from_display)?;
+        crate::browser_value::from_value(&turns_value.clone()).map_err(js_error_from_display)?;
     let all_records = flatten_trajectory_table_records(&turns);
 
     let controller_ref = use_ref(&ui.react, &JsValue::UNDEFINED)?;
@@ -769,7 +770,7 @@ fn anchor_virtual_offset(
         .collect::<Vec<_>>()
         .join("\u{1}");
     let record = object(&[
-        ("keys", JsValue::from_str(&joined)),
+        ("keys", crate::browser_value::text(&joined)),
         ("starts", Float64Array::from(starts.as_slice()).into()),
     ])?;
     Reflect::set(anchor_ref, &JsValue::from_str("current"), &record)?;
@@ -876,16 +877,18 @@ fn render_table_row(
     let display = trajectory_record_display_text(&record.cell).map_err(js_error_from_display)?;
     let result = trajectory_record_result_text(&record.cell).map_err(js_error_from_display)?;
     let tool_only = trajectory_is_tool_call_only(&record.cell);
-    let tool_parts = trajectory_tool_call_text_parts(record.cell.kind, &display);
+    let tool_parts = trajectory_tool_call_text_parts(record.cell.kind, display.clone());
     let list_display = if tool_only {
-        "(tool call only)".to_owned()
+        JsonString::from("(tool call only)")
     } else if let Some(parts) = &tool_parts {
-        [Some(parts.name.as_str()), parts.arguments.as_deref()]
-            .into_iter()
-            .flatten()
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ")
+        JsonString::join(
+            &[Some(parts.name.clone()), parts.arguments.clone()]
+                .into_iter()
+                .flatten()
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>(),
+            " ",
+        )
     } else {
         display.clone()
     };
@@ -933,7 +936,7 @@ fn render_table_row(
                 &request_controller,
                 "selectRequest",
                 &[
-                    serde_wasm_bindgen::to_value(&request).map_err(js_error_from_display)?,
+                    crate::browser_value::to_value(&request).map_err(js_error_from_display)?,
                     JsValue::from_str("overview"),
                 ],
             )?;
@@ -946,15 +949,15 @@ fn render_table_row(
                 ("type", JsValue::from_str("button")),
                 (
                     "className",
-                    JsValue::from_str(if request_selected {
+                    crate::browser_value::text(if request_selected {
                         "seekdeep-trajectory-table-requestBoundaryControl seekdeep-trajectory-table-requestBoundaryControlActive"
                     } else {
                         "seekdeep-trajectory-table-requestBoundaryControl"
                     }),
                 ),
-                ("aria-label", JsValue::from_str(&label)),
+                ("aria-label", crate::browser_value::text(&label)),
                 ("aria-pressed", JsValue::from_bool(request_selected)),
-                ("data-label", JsValue::from_str(&label)),
+                ("data-label", crate::browser_value::text(&label)),
                 (
                     "data-request-run-index",
                     JsValue::from_f64(usize_as_f64(run)),
@@ -968,7 +971,7 @@ fn render_table_row(
                                 .then_some(TrajectoryRecordState::Error)
                         })
                         .map_or(JsValue::UNDEFINED, |state| {
-                            JsValue::from_str(match state {
+                            crate::browser_value::text(match state {
                                 TrajectoryRecordState::Complete => "complete",
                                 TrajectoryRecordState::Running => "running",
                                 TrajectoryRecordState::Error => "error",
@@ -1009,35 +1012,37 @@ fn render_table_row(
                         ),
                         ("aria-hidden", JsValue::TRUE),
                     ])?),
-                    &[JsValue::from_str(&format!("Turn {turn}"))],
+                    &[crate::browser_value::text(&format!("Turn {turn}"))],
                 )?,
                 ui.tag(
                     "span",
                     Some(&object(&[
                         (
                             "className",
-                            JsValue::from_str("seekdeep-trajectory-table-turnLabelCompact"),
+                            crate::browser_value::text(
+                                "seekdeep-trajectory-table-turnLabelCompact",
+                            ),
                         ),
                         ("aria-hidden", JsValue::TRUE),
                     ])?),
-                    &[JsValue::from_str(&format!("#{turn}"))],
+                    &[crate::browser_value::text(&format!("#{turn}"))],
                 )?,
             ]
         } else {
-            vec![JsValue::from_str(&label)]
+            vec![crate::browser_value::text(&label)]
         };
         event_children.push(ui.tag(
             "span",
             Some(&object(&[
                 (
                     "className",
-                    JsValue::from_str(if section_active {
+                    crate::browser_value::text(if section_active {
                         "seekdeep-trajectory-table-turnLabel seekdeep-trajectory-table-turnLabelActive"
                     } else {
                         "seekdeep-trajectory-table-turnLabel"
                     }),
                 ),
-                ("aria-label", JsValue::from_str(&label)),
+                ("aria-label", crate::browser_value::text(&label)),
             ])?),
             &turn_children,
         )?);
@@ -1092,7 +1097,10 @@ fn render_table_row(
         ui.tag(
             "span",
             Some(&class("seekdeep-trajectory-table-collapsedTurnContent")?),
-            &[JsValue::from_str(&format!("…{summary}"))],
+            &[crate::browser_value::text(&JsonString::concat(&[
+                &"…".into(),
+                summary,
+            ]))],
         )?
     } else {
         let mut request_content = Vec::new();
@@ -1106,25 +1114,25 @@ fn render_table_row(
             request_content.push(ui.tag(
                 "span",
                 Some(&class("seekdeep-trajectory-table-toolCallNameTypeface")?),
-                &[JsValue::from_str(if parts.name.is_empty() {
-                    "—"
+                &[if parts.name.is_empty() {
+                    JsValue::from_str("—")
                 } else {
-                    &parts.name
-                })],
+                    crate::browser_value::text(&parts.name)
+                }],
             )?);
             if let Some(arguments) = &parts.arguments {
                 request_content.push(ui.tag(
                     "span",
                     Some(&class("seekdeep-trajectory-table-toolCallPayload")?),
-                    &[JsValue::from_str(arguments)],
+                    &[crate::browser_value::text(arguments)],
                 )?);
             }
         } else {
-            request_content.push(JsValue::from_str(if display.is_empty() {
-                "—"
+            request_content.push(if display.is_empty() {
+                JsValue::from_str("—")
             } else {
-                &display
-            }));
+                crate::browser_value::text(&display)
+            });
         }
         let mut children = vec![
             ui.tag(
@@ -1140,7 +1148,7 @@ fn render_table_row(
         if let Some(result) = &result {
             children.push(ui.tag("span", Some(&class(if record.cell.is_error == Some(true) { "seekdeep-trajectory-table-inlineResult seekdeep-trajectory-table-error" } else { "seekdeep-trajectory-table-inlineResult" })?), &[
                 ui.tag("span", Some(&class("seekdeep-trajectory-table-arrow")?), &[JsValue::from_str("→")])?,
-                ui.tag("span", Some(&class(if result == "No output" { "seekdeep-trajectory-table-inlineResultText seekdeep-trajectory-table-noOutputText" } else { "seekdeep-trajectory-table-inlineResultText" })?), &[JsValue::from_str(result)])?,
+                ui.tag("span", Some(&class(if result == "No output" { "seekdeep-trajectory-table-inlineResultText seekdeep-trajectory-table-noOutputText" } else { "seekdeep-trajectory-table-inlineResultText" })?), &[crate::browser_value::text(result)])?,
             ])?);
         }
         ui.tag(
@@ -1148,7 +1156,7 @@ fn render_table_row(
             Some(&object(&[
                 (
                     "className",
-                    JsValue::from_str(if result.is_some() {
+                    crate::browser_value::text(if result.is_some() {
                         "seekdeep-trajectory-table-resultPreview"
                     } else {
                         "seekdeep-trajectory-table-contentText"
@@ -1156,9 +1164,9 @@ fn render_table_row(
                 ),
                 (
                     "title",
-                    JsValue::from_str(&result.as_ref().map_or_else(
+                    crate::browser_value::text(&result.as_ref().map_or_else(
                         || list_display.clone(),
-                        |result| format!("{list_display} → {result}"),
+                        |result| JsonString::join(&[list_display.clone(), result.clone()], " → "),
                     )),
                 ),
             ])?),
@@ -1190,7 +1198,10 @@ fn render_table_row(
                     toggle_turn.call1(&JsValue::UNDEFINED, &JsValue::from_f64(u64_as_f64(turn)))?;
                 }
             } else {
-                toggle_assistant.call1(&JsValue::UNDEFINED, &JsValue::from_str(&assistant_id))?;
+                toggle_assistant.call1(
+                    &JsValue::UNDEFINED,
+                    &crate::browser_value::text(&assistant_id),
+                )?;
             }
             return Ok(());
         }
@@ -1227,8 +1238,10 @@ fn render_table_row(
                         .call1(&JsValue::UNDEFINED, &JsValue::from_f64(u64_as_f64(turn)))?;
                 }
             } else {
-                key_toggle_assistant
-                    .call1(&JsValue::UNDEFINED, &JsValue::from_str(&key_assistant_id))?;
+                key_toggle_assistant.call1(
+                    &JsValue::UNDEFINED,
+                    &crate::browser_value::text(&key_assistant_id),
+                )?;
             }
             return Ok(());
         }
@@ -1279,7 +1292,7 @@ fn render_table_row(
             prevent_default(&event)?;
             double_toggle_assistant.call1(
                 &JsValue::UNDEFINED,
-                &JsValue::from_str(&double_assistant_id),
+                &crate::browser_value::text(&double_assistant_id),
             )?;
             return Ok(());
         }
@@ -1293,27 +1306,34 @@ fn render_table_row(
         Ok(())
     }) as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
     let aria_label = if let Some(summary) = &record.collapsed_summary {
-        format!(
-            "Collapsed {} summary, {summary}",
-            match record.collapsed_summary_kind {
-                Some(crate::CollapsedSummaryKind::Turn) => "turn",
-                Some(crate::CollapsedSummaryKind::Assistant) => "assistant",
-                None => "",
-            }
-        )
+        JsonString::concat(&[
+            &format!(
+                "Collapsed {} summary, ",
+                match record.collapsed_summary_kind {
+                    Some(crate::CollapsedSummaryKind::Turn) => "turn",
+                    Some(crate::CollapsedSummaryKind::Assistant) => "assistant",
+                    None => "",
+                }
+            )
+            .into(),
+            summary,
+        ])
     } else if request_only {
-        format!("Request {}, compaction", request.unwrap_or(0))
+        format!("Request {}, compaction", request.unwrap_or(0)).into()
     } else {
-        format!(
-            "{}{}, {}",
-            request.map_or_else(String::new, |request| format!("Request {request}, ")),
-            kind_label(record.cell.kind),
-            if list_display.is_empty() {
-                "no content"
+        JsonString::concat(&[
+            &format!(
+                "{}{}, ",
+                request.map_or_else(String::new, |request| format!("Request {request}, ")),
+                kind_label(record.cell.kind)
+            )
+            .into(),
+            &if list_display.is_empty() {
+                "no content".into()
             } else {
-                &list_display
-            }
-        )
+                list_display.clone()
+            },
+        ])
     };
     ui.tag(
         "tr",
@@ -1329,13 +1349,16 @@ fn render_table_row(
             ),
             (
                 "aria-label",
-                JsValue::from_str(aria_label.trim_end_matches(", ")),
+                crate::browser_value::text(&crate::text_value::trim_end_matches(&aria_label, ", ")),
             ),
             ("aria-selected", JsValue::from_bool(selected)),
-            ("data-kind", JsValue::from_str(record.cell.kind.as_str())),
+            (
+                "data-kind",
+                crate::browser_value::text(record.cell.kind.as_str()),
+            ),
             (
                 "data-trajectory-row-key",
-                JsValue::from_str(&trajectory_row_key(
+                crate::browser_value::text(&trajectory_row_key(
                     &record.cell,
                     record.collapsed_summary_kind,
                 )),
@@ -1374,7 +1397,7 @@ fn render_table_row(
                 record
                     .collapsed_summary_kind
                     .map_or(JsValue::UNDEFINED, |kind| {
-                        JsValue::from_str(match kind {
+                        crate::browser_value::text(match kind {
                             crate::CollapsedSummaryKind::Turn => "turn",
                             crate::CollapsedSummaryKind::Assistant => "assistant",
                         })
@@ -1387,7 +1410,7 @@ fn render_table_row(
                     JsValue::UNDEFINED
                 } else {
                     timeline_focus.map_or(JsValue::UNDEFINED, |focus| {
-                        JsValue::from_str(if focus.contains(&index) {
+                        crate::browser_value::text(if focus.contains(&index) {
                             "inside"
                         } else {
                             "outside"
@@ -1419,10 +1442,10 @@ fn role_tag(ui: &ReactUi, kind: TrajectoryCellKind) -> Result<JsValue, JsValue> 
                 "className",
                 JsValue::from_str("seekdeep-trajectory-table-kindTagIcon"),
             ),
-            ("data-role-icon", JsValue::from_str(icon_name)),
+            ("data-role-icon", crate::browser_value::text(icon_name)),
             ("aria-hidden", JsValue::TRUE),
         ])?),
-        &[JsValue::from_str(match kind {
+        &[crate::browser_value::text(match kind {
             TrajectoryCellKind::Context => "i",
             TrajectoryCellKind::Compacted => "↯",
             TrajectoryCellKind::Tool | TrajectoryCellKind::Subtool => "⌕",
@@ -1434,7 +1457,7 @@ fn role_tag(ui: &ReactUi, kind: TrajectoryCellKind) -> Result<JsValue, JsValue> 
     let tooltip = ui.primitive(
         "Tooltip",
         Some(&object(&[
-            ("label", JsValue::from_str(kind_label(kind))),
+            ("label", crate::browser_value::text(kind_label(kind))),
             ("side", JsValue::from_str("right")),
         ])?),
         &[icon],
@@ -1445,16 +1468,18 @@ fn role_tag(ui: &ReactUi, kind: TrajectoryCellKind) -> Result<JsValue, JsValue> 
         Some(&object(&[
             (
                 "className",
-                JsValue::from_str(&format!("seekdeep-trajectory-table-kindTag {color_class}")),
+                crate::browser_value::text(&format!(
+                    "seekdeep-trajectory-table-kindTag {color_class}"
+                )),
             ),
-            ("data-role-kind", JsValue::from_str(kind.as_str())),
+            ("data-role-kind", crate::browser_value::text(kind.as_str())),
         ])?),
         &[
             tooltip,
             ui.tag(
                 "span",
                 Some(&class("seekdeep-trajectory-table-kindTagLabel")?),
-                &[JsValue::from_str(kind_label(kind))],
+                &[crate::browser_value::text(kind_label(kind))],
             )?,
         ],
     )
@@ -1489,7 +1514,7 @@ fn history_row(
             ("role", JsValue::from_str("status")),
             ("aria-live", JsValue::from_str("polite")),
         ])?),
-        &[JsValue::from_str(if busy {
+        &[crate::browser_value::text(if busy {
             "Loading earlier history…"
         } else {
             ""
@@ -1502,7 +1527,9 @@ fn history_row(
                 Some(&object(&[
                     (
                         "className",
-                        JsValue::from_str("seekdeep-trajectory-table-historyLoadingSpinner"),
+                        crate::browser_value::text(
+                            "seekdeep-trajectory-table-historyLoadingSpinner",
+                        ),
                     ),
                     ("aria-hidden", JsValue::TRUE),
                 ])?),
@@ -1518,7 +1545,7 @@ fn history_row(
     button_children.push(ui.tag(
         "span",
         Some(&object(&[("aria-hidden", JsValue::TRUE)])?),
-        &[JsValue::from_str(if busy {
+        &[crate::browser_value::text(if busy {
             "Loading earlier history…"
         } else {
             "Load earlier history"
@@ -1536,7 +1563,7 @@ fn history_row(
             ("disabled", JsValue::from_bool(busy || on_load.is_none())),
             (
                 "aria-label",
-                JsValue::from_str(if busy {
+                crate::browser_value::text(if busy {
                     "Loading earlier history…"
                 } else {
                     "Load earlier history"
@@ -1585,7 +1612,7 @@ fn virtual_spacer(ui: &ReactUi, side: &str, height: f64) -> Result<JsValue, JsVa
                 "className",
                 JsValue::from_str("seekdeep-trajectory-table-virtualSpacer"),
             ),
-            ("data-virtual-spacer", JsValue::from_str(side)),
+            ("data-virtual-spacer", crate::browser_value::text(side)),
             ("aria-hidden", JsValue::TRUE),
         ])?),
         &[cell],
@@ -1635,7 +1662,7 @@ fn render_inspector(
         header_identity.push(ui.tag(
             "span",
             Some(&class("seekdeep-trajectory-table-requestDetailsName")?),
-            &[JsValue::from_str(&number.map_or_else(
+            &[crate::browser_value::text(&number.map_or_else(
                 || "Request #—".to_owned(),
                 |number| format!("Request #{number}"),
             ))],
@@ -1647,13 +1674,13 @@ fn render_inspector(
                 "seekdeep-trajectory-table-kindTag {}",
                 kind_color_class(record.cell.kind)
             ))?),
-            &[JsValue::from_str(kind_label(record.cell.kind))],
+            &[crate::browser_value::text(kind_label(record.cell.kind))],
         )?);
     }
     header_identity.push(ui.tag(
         "span",
         Some(&class("seekdeep-trajectory-table-detailsLocation")?),
-        &[JsValue::from_str(&header_text)],
+        &[crate::browser_value::text(&header_text)],
     )?);
     let identity = ui.tag(
         "div",
@@ -1721,7 +1748,7 @@ fn render_inspector(
             call_method(
                 &tab_controller,
                 "activateTab",
-                &[JsValue::from_str(tab.as_str())],
+                &[crate::browser_value::text(tab.as_str())],
             )?;
             tab_bump.call0(&JsValue::UNDEFINED)?;
             Ok(())
@@ -1732,20 +1759,20 @@ fn render_inspector(
                 ("type", JsValue::from_str("button")),
                 (
                     "className",
-                    JsValue::from_str(if state.active_tab == tab {
+                    crate::browser_value::text(if state.active_tab == tab {
                         "seekdeep-trajectory-table-detailTab seekdeep-trajectory-table-detailTabActive"
                     } else {
                         "seekdeep-trajectory-table-detailTab"
                     }),
                 ),
                 ("role", JsValue::from_str("tab")),
-                ("id", JsValue::from_str(&format!("trajectory-detail-{}", tab.as_str()))),
+                ("id", crate::browser_value::text(&format!("trajectory-detail-{}", tab.as_str()))),
                 ("aria-controls", JsValue::from_str("trajectory-detail-panel")),
                 ("aria-selected", JsValue::from_bool(state.active_tab == tab)),
-                ("aria-label", JsValue::from_str(label)),
+                ("aria-label", crate::browser_value::text(label)),
                 ("onClick", on_click.into_js_value()),
             ])?),
-            &[JsValue::from_str(label)],
+            &[crate::browser_value::text(label)],
         )?);
     }
     let tabs = ui.tag(
@@ -2046,7 +2073,7 @@ fn render_inspector_body(
                             &request_controller,
                             "selectRequest",
                             &[
-                                serde_wasm_bindgen::to_value(&request)
+                                crate::browser_value::to_value(&request)
                                     .map_err(js_error_from_display)?,
                                 JsValue::from_str("timing"),
                             ],
@@ -2163,13 +2190,15 @@ fn render_inspector_body(
                     (
                         "Status",
                         info.and_then(|request| request.status).map_or_else(
-                            || "Completed".to_owned(),
-                            |state| trajectory_status_label(state).to_owned(),
+                            || JsonString::from("Completed"),
+                            |state| JsonString::from(trajectory_status_label(state)),
                         ),
                     ),
                     (
                         "Request",
-                        number.map_or_else(|| "#—".to_owned(), |number| format!("#{number}")),
+                        JsonString::from(
+                            number.map_or_else(|| "#—".to_owned(), |number| format!("#{number}")),
+                        ),
                     ),
                     (
                         "Tool calls",
@@ -2177,28 +2206,24 @@ fn render_inspector_body(
                             .iter()
                             .filter(|record| record.cell.kind == TrajectoryCellKind::Tool)
                             .count()
-                            .to_string(),
+                            .to_string()
+                            .into(),
                     ),
                 ];
-                if let Some(provider) = info
-                    .and_then(|request| request.provider.as_deref())
-                    .or_else(|| {
-                        info.and_then(|request| request.request_config.as_ref())
-                            .and_then(|config| config.get("provider"))
-                            .and_then(serde_json::Value::as_str)
-                    })
-                {
-                    rows.push(("Provider", provider.to_owned()));
-                }
-                if let Some(model) =
-                    info.and_then(|request| request.model.as_deref())
+                if let Some(provider) =
+                    info.and_then(|request| request.provider.clone())
                         .or_else(|| {
                             info.and_then(|request| request.request_config.as_ref())
-                                .and_then(|config| config.get("model"))
-                                .and_then(serde_json::Value::as_str)
+                                .and_then(|config| crate::text_value::member(config, "provider"))
                         })
                 {
-                    rows.push(("Model", model.to_owned()));
+                    rows.push(("Provider", provider));
+                }
+                if let Some(model) = info.and_then(|request| request.model.clone()).or_else(|| {
+                    info.and_then(|request| request.request_config.as_ref())
+                        .and_then(|config| crate::text_value::member(config, "model"))
+                }) {
+                    rows.push(("Model", model));
                 }
                 if let Some(error) = info.and_then(|request| request.error.as_ref()) {
                     rows.push(("Error", error.clone()));
@@ -2208,8 +2233,8 @@ fn render_inspector_body(
                     rows.push((
                         "Retry",
                         maximum.map_or_else(
-                            || format!("Scheduled {retry}"),
-                            |maximum| format!("Scheduled {retry} of {maximum}"),
+                            || JsonString::from(format!("Scheduled {retry}")),
+                            |maximum| JsonString::from(format!("Scheduled {retry} of {maximum}")),
                         ),
                     ));
                 }
@@ -2222,10 +2247,10 @@ fn render_inspector_body(
         Some(&object(&[
             ("role", JsValue::from_str("tabpanel")),
             ("id", JsValue::from_str("trajectory-detail-panel")),
-            ("aria-labelledby", JsValue::from_str(&format!("trajectory-detail-{}", state.active_tab.as_str()))),
+            ("aria-labelledby", crate::browser_value::text(&format!("trajectory-detail-{}", state.active_tab.as_str()))),
             (
                 "className",
-                JsValue::from_str(if state.active_tab == TrajectoryDetailTab::Overview {
+                crate::browser_value::text(if state.active_tab == TrajectoryDetailTab::Overview {
                     "seekdeep-trajectory-table-detailBody seekdeep-trajectory-table-detailBodySummary"
                 } else {
                     "seekdeep-trajectory-table-detailBody"
@@ -2270,12 +2295,14 @@ fn render_parent_links(
                 ("type", JsValue::from_str("button")),
                 (
                     "className",
-                    JsValue::from_str("seekdeep-trajectory-table-overviewHierarchyNavLink"),
+                    crate::browser_value::text(
+                        "seekdeep-trajectory-table-overviewHierarchyNavLink",
+                    ),
                 ),
-                ("aria-label", JsValue::from_str(label)),
+                ("aria-label", crate::browser_value::text(label)),
                 ("onClick", on_click.into_js_value()),
             ])?),
-            &[JsValue::from_str(label)],
+            &[crate::browser_value::text(label)],
         )?);
     }
     ui.tag(
@@ -2345,7 +2372,11 @@ fn overview_section(
     let bump = bump.clone();
     let tab = tab.to_owned();
     let open = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
-        call_method(&controller, "activateTab", &[JsValue::from_str(&tab)])?;
+        call_method(
+            &controller,
+            "activateTab",
+            &[crate::browser_value::text(&tab)],
+        )?;
         bump.call0(&JsValue::UNDEFINED)?;
         Ok(())
     }) as Box<dyn FnMut() -> Result<(), JsValue>>);
@@ -2360,7 +2391,7 @@ fn overview_section(
             ("onClick", open.into_js_value()),
         ])?),
         &[
-            ui.tag("span", None, &[JsValue::from_str(label)])?,
+            ui.tag("span", None, &[crate::browser_value::text(label)])?,
             ui.primitive(
                 "IconChevronRightOutline14",
                 Some(&object(&[
@@ -2394,16 +2425,15 @@ fn render_markdown_record(
 ) -> Result<JsValue, JsValue> {
     if let Some(thinking) = &record.cell.thinking_detail {
         if !rendered {
-            let source = [
-                Some(thinking.as_str()),
-                record.cell.output_detail.as_deref(),
-            ]
-            .into_iter()
-            .flatten()
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-            return ui.tag("pre", None, &[JsValue::from_str(&source)]);
+            let source = JsonString::join(
+                &[Some(thinking.clone()), record.cell.output_detail.clone()]
+                    .into_iter()
+                    .flatten()
+                    .filter(|value| !value.is_empty())
+                    .collect::<Vec<_>>(),
+                "\n\n",
+            );
+            return ui.tag("pre", None, &[crate::browser_value::text(&source)]);
         }
         let toggle_controller = controller.clone();
         let toggle_bump = bump.clone();
@@ -2428,7 +2458,7 @@ fn render_markdown_record(
         if let Some(output) = record
             .cell
             .output_detail
-            .as_deref()
+            .as_ref()
             .filter(|output| !output.is_empty())
         {
             children.push(markdown_text(ui, output, preview)?);
@@ -2440,45 +2470,45 @@ fn render_markdown_record(
         );
     }
     let source = match record.cell.kind {
-        TrajectoryCellKind::User | TrajectoryCellKind::Context => {
-            record.cell.input_detail.as_deref()
-        }
+        TrajectoryCellKind::User | TrajectoryCellKind::Context => record.cell.input_detail.as_ref(),
         TrajectoryCellKind::Message | TrajectoryCellKind::Compacted => {
-            record.cell.output_detail.as_deref()
+            record.cell.output_detail.as_ref()
         }
         _ => None,
     };
-    if source.is_none_or(str::is_empty) {
+    if source.is_none_or(seekdeep_lossless_json::JsonString::is_empty) {
         return ui.tag(
             "p",
             Some(&class("seekdeep-trajectory-table-noPayload")?),
-            &[JsValue::from_str(
-                if trajectory_is_tool_call_only(&record.cell) {
-                    "Tool call only"
-                } else if record.cell.text.is_empty() {
-                    "No content"
-                } else {
-                    &record.cell.text
-                },
-            )],
+            &[if trajectory_is_tool_call_only(&record.cell) {
+                JsValue::from_str("Tool call only")
+            } else if record.cell.text.is_empty() {
+                JsValue::from_str("No content")
+            } else {
+                crate::browser_value::text(&record.cell.text)
+            }],
         );
     }
     if rendered {
-        markdown_text(ui, source.unwrap_or_default(), preview)
+        markdown_text(ui, source.expect("nonempty source"), preview)
     } else {
         ui.tag(
             "pre",
             Some(&class("seekdeep-trajectory-table-markdownPayload")?),
-            &[JsValue::from_str(source.unwrap_or_default())],
+            &[crate::browser_value::text(source.expect("nonempty source"))],
         )
     }
 }
 
-fn markdown_text(ui: &ReactUi, text: &str, preview: bool) -> Result<JsValue, JsValue> {
+fn markdown_text<T: crate::browser_value::BrowserText + ?Sized>(
+    ui: &ReactUi,
+    text: &T,
+    preview: bool,
+) -> Result<JsValue, JsValue> {
     ui.primitive(
         "MarkdownText",
         Some(&object(&[
-            ("text", JsValue::from_str(text)),
+            ("text", crate::browser_value::text(text)),
             ("data-preview", bool_data(preview)),
         ])?),
         &[],
@@ -2493,15 +2523,15 @@ fn render_record_payload(
     preview: bool,
 ) -> Result<JsValue, JsValue> {
     let value = if input {
-        record.cell.input_detail.as_deref()
+        record.cell.input_detail.as_ref()
     } else {
-        record.cell.output_detail.as_deref()
+        record.cell.output_detail.as_ref()
     };
     let Some(value) = value.filter(|value| !value.is_empty()) else {
         return ui.tag(
             "p",
             Some(&class("seekdeep-trajectory-table-noPayload")?),
-            &[JsValue::from_str(if input {
+            &[crate::browser_value::text(if input {
                 "No payload captured"
             } else {
                 "No result captured"
@@ -2522,8 +2552,8 @@ fn render_record_payload(
             "seekdeep-trajectory-table-jsonPayload"
         }
     );
-    let json = crate::parse_trajectory_json_container(value);
-    let render_json = |json: &serde_json::Value| {
+    let json = crate::parse_trajectory_json_container(value.clone());
+    let render_json = |json: &seekdeep_lossless_json::JsonValue| {
         ui.primitive(
             "JsonTree",
             Some(&object(&[
@@ -2535,9 +2565,9 @@ fn render_record_payload(
                 ),
                 (
                     "label",
-                    JsValue::from_str(if input { "Payload JSON" } else { "Result JSON" }),
+                    crate::browser_value::text(if input { "Payload JSON" } else { "Result JSON" }),
                 ),
-                ("className", JsValue::from_str(&json_class)),
+                ("className", crate::browser_value::text(&json_class)),
             ])?),
             &[],
         )
@@ -2559,20 +2589,25 @@ fn render_record_payload(
             if let Some(source) = &block.image_src {
                 children.push(ui.tag(
                     "img",
-                    Some(&object(&[
-                        ("src", JsValue::from_str(source)),
-                        (
-                            "alt",
-                            JsValue::from_str(block.image_alt.as_deref().unwrap_or("")),
-                        ),
-                    ])?),
+                    Some(&object(
+                        &[
+                            ("src", crate::browser_value::text(source)),
+                            (
+                                "alt",
+                                block.image_alt.as_ref().map_or_else(
+                                    || JsValue::from_str(""),
+                                    crate::browser_value::text,
+                                ),
+                            ),
+                        ],
+                    )?),
                     &[],
                 )?);
             } else if !block.content.is_empty() {
                 children.push(ui.tag(
                     "pre",
                     Some(&class("seekdeep-trajectory-table-resultBlockText")?),
-                    &[JsValue::from_str(&block.content)],
+                    &[crate::browser_value::text(&block.content)],
                 )?);
             }
         }
@@ -2628,7 +2663,7 @@ fn render_record_payload(
     ui.tag(
         "pre",
         Some(&class(&class_name)?),
-        &[JsValue::from_str(value)],
+        &[crate::browser_value::text(value)],
     )
 }
 
@@ -2641,7 +2676,7 @@ fn render_message_source(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result
         Some(&object(&[
             (
                 "data",
-                serde_wasm_bindgen::to_value(source).map_err(js_error_from_display)?,
+                crate::browser_value::to_value(source).map_err(js_error_from_display)?,
             ),
             ("label", JsValue::from_str("Message source JSON")),
         ])?),
@@ -2650,29 +2685,36 @@ fn render_message_source(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result
 }
 
 fn render_record_schema(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<JsValue, JsValue> {
-    let Some(schema) = record.cell.schema_detail.as_deref() else {
+    let Some(schema) = record.cell.schema_detail.as_ref() else {
         return ui.tag("p", None, &[JsValue::from_str("Schema unavailable")]);
     };
-    let Some(parsed) = crate::parse_trajectory_tool_schema(schema) else {
-        return ui.tag("pre", None, &[JsValue::from_str(schema)]);
+    let Some(parsed) = crate::parse_trajectory_tool_schema(schema.clone()) else {
+        return ui.tag("pre", None, &[crate::browser_value::text(schema)]);
     };
     ui.tag(
         "section",
         None,
         &[
-            ui.tag("h3", None, &[JsValue::from_str(&parsed.name)])?,
-            ui.tag("p", None, &[JsValue::from_str(&parsed.description)])?,
+            ui.tag("h3", None, &[crate::browser_value::text(&parsed.name)])?,
+            ui.tag(
+                "p",
+                None,
+                &[crate::browser_value::text(&parsed.description)],
+            )?,
             ui.primitive(
                 "JsonTree",
                 Some(&object(&[
                     (
                         "data",
-                        serde_wasm_bindgen::to_value(&parsed.parameters)
+                        crate::browser_value::to_value(&parsed.parameters)
                             .map_err(js_error_from_display)?,
                     ),
                     (
                         "label",
-                        JsValue::from_str(&format!("{} parameters JSON", parsed.name)),
+                        crate::browser_value::text(&JsonString::concat(&[
+                            &parsed.name,
+                            &" parameters JSON".into(),
+                        ])),
                     ),
                 ])?),
                 &[],
@@ -2821,7 +2863,7 @@ fn started_at_row(
                     ),
                     (
                         "title",
-                        JsValue::from_str(if show_unix {
+                        crate::browser_value::text(if show_unix {
                             "Show local time"
                         } else {
                             "Show Unix timestamp"
@@ -2829,7 +2871,7 @@ fn started_at_row(
                     ),
                     ("onClick", toggle.into_js_value()),
                 ])?),
-                &[JsValue::from_str(&if show_unix {
+                &[crate::browser_value::text(&if show_unix {
                     format!("{:.3}", timestamp / 1_000.0)
                 } else {
                     format_local_timestamp(timestamp)
@@ -2857,8 +2899,8 @@ fn timing_list(
             "div",
             None,
             &[
-                ui.tag("dt", None, &[JsValue::from_str(label)])?,
-                ui.tag("dd", None, &[JsValue::from_str(value)])?,
+                ui.tag("dt", None, &[crate::browser_value::text(label)])?,
+                ui.tag("dd", None, &[crate::browser_value::text(value)])?,
             ],
         )?);
     }
@@ -2888,14 +2930,15 @@ fn render_system_prompt(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<
         .cell
         .prompt_detail
         .as_ref()
-        .and_then(|prompt| prompt.get("system"))
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("");
+        .and_then(|prompt| crate::text_value::member(prompt, "system"))
+        .unwrap_or_default();
     if prompt.is_empty() {
         return ui.tag(
             "p",
             Some(&class("seekdeep-trajectory-table-noPayload")?),
-            &[JsValue::from_str("No system prompt in this request")],
+            &[crate::browser_value::text(
+                "No system prompt in this request",
+            )],
         );
     }
     ui.tag(
@@ -2903,7 +2946,7 @@ fn render_system_prompt(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<
         Some(&class(
             "seekdeep-trajectory-table-markdownPayload seekdeep-trajectory-table-systemPrompt",
         )?),
-        &[markdown_text(ui, prompt, false)?],
+        &[markdown_text(ui, &prompt, false)?],
     )
 }
 
@@ -2912,8 +2955,8 @@ fn render_tool_catalog(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<J
         .cell
         .prompt_detail
         .as_ref()
-        .and_then(|prompt| prompt.get("tools"))
-        .and_then(serde_json::Value::as_array);
+        .and_then(|prompt| prompt.get_value("tools"))
+        .and_then(seekdeep_lossless_json::JsonValue::as_array);
     let Some(tools) = tools.filter(|tools| !tools.is_empty()) else {
         return ui.tag(
             "p",
@@ -2923,18 +2966,12 @@ fn render_tool_catalog(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<J
     };
     let mut children = Vec::new();
     for tool in tools {
-        let name = tool
-            .get("name")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
-        let description = tool
-            .get("description")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("");
+        let name = crate::text_value::member(tool, "name").unwrap_or_default();
+        let description = crate::text_value::member(tool, "description").unwrap_or_default();
         let parameters = tool
-            .get("parameters")
+            .get_value("parameters")
             .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
+            .unwrap_or_else(|| crate::json_value::json!({}));
         let summary = ui.tag(
             "summary",
             Some(&class("seekdeep-trajectory-table-toolCatalogSummary")?),
@@ -2942,12 +2979,12 @@ fn render_tool_catalog(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<J
                 ui.tag(
                     "span",
                     Some(&class("seekdeep-trajectory-table-toolCatalogName")?),
-                    &[JsValue::from_str(name)],
+                    &[crate::browser_value::text(&name)],
                 )?,
                 ui.tag(
                     "span",
                     Some(&class("seekdeep-trajectory-table-toolCatalogDescription")?),
-                    &[JsValue::from_str(description)],
+                    &[crate::browser_value::text(&description)],
                 )?,
             ],
         )?;
@@ -2956,11 +2993,14 @@ fn render_tool_catalog(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<J
             Some(&object(&[
                 (
                     "data",
-                    serde_wasm_bindgen::to_value(&parameters).map_err(js_error_from_display)?,
+                    crate::browser_value::to_value(&parameters).map_err(js_error_from_display)?,
                 ),
                 (
                     "label",
-                    JsValue::from_str(&format!("{name} parameters JSON")),
+                    crate::browser_value::text(&JsonString::concat(&[
+                        &name,
+                        &" parameters JSON".into(),
+                    ])),
                 ),
                 (
                     "className",
@@ -2987,32 +3027,32 @@ fn render_prompt_diff(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<Js
         .cell
         .previous_prompt_detail
         .clone()
-        .unwrap_or_else(|| serde_json::json!({"system": "", "tools": []}));
+        .unwrap_or_else(|| crate::json_value::json!({"system": "", "tools": []}));
     let after = record
         .cell
         .prompt_detail
         .clone()
-        .unwrap_or_else(|| serde_json::json!({"system": "", "tools": []}));
-    let before_system = before
-        .get("system")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("");
-    let after_system = after
-        .get("system")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("");
-    let empty_tools = serde_json::Value::Array(Vec::new());
-    let before_tools = serde_json::to_string_pretty(before.get("tools").unwrap_or(&empty_tools))
-        .map_err(js_error_from_display)?;
-    let after_tools = serde_json::to_string_pretty(after.get("tools").unwrap_or(&empty_tools))
-        .map_err(js_error_from_display)?;
+        .unwrap_or_else(|| crate::json_value::json!({"system": "", "tools": []}));
+    let before_system = crate::text_value::member(&before, "system").unwrap_or_default();
+    let after_system = crate::text_value::member(&after, "system").unwrap_or_default();
+    let empty_tools = seekdeep_lossless_json::JsonValue::array(&[]);
+    let before_tools: JsonString = before
+        .get_value("tools")
+        .unwrap_or(&empty_tools)
+        .stringify_pretty()
+        .into();
+    let after_tools: JsonString = after
+        .get_value("tools")
+        .unwrap_or(&empty_tools)
+        .stringify_pretty()
+        .into();
     let mut sections = Vec::new();
     if before_system != after_system {
         sections.push(prompt_diff_section(
             ui,
             "System Prompt",
-            before_system,
-            after_system,
+            &before_system,
+            &after_system,
         )?);
     }
     if before_tools != after_tools {
@@ -3033,11 +3073,11 @@ fn render_prompt_diff(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<Js
 fn prompt_diff_section(
     ui: &ReactUi,
     title: &str,
-    before: &str,
-    after: &str,
+    before: &JsonString,
+    after: &JsonString,
 ) -> Result<JsValue, JsValue> {
     let mut lines = Vec::new();
-    for line in crate::trajectory_prompt_diff_lines(before, after) {
+    for line in crate::trajectory_prompt_diff_lines(before.clone(), after.clone()) {
         lines.push(ui.tag(
             "span",
             Some(&class(&format!(
@@ -3045,11 +3085,11 @@ fn prompt_diff_section(
                 line.kind.as_str()
             ))?),
             &[
-                JsValue::from_str(if line.text.is_empty() {
-                    " "
+                if line.text.is_empty() {
+                    JsValue::from_str(" ")
                 } else {
-                    &line.text
-                }),
+                    crate::browser_value::text(&line.text)
+                },
                 JsValue::from_str("\n"),
             ],
         )?);
@@ -3061,7 +3101,7 @@ fn prompt_diff_section(
             ui.tag(
                 "h3",
                 Some(&class("seekdeep-trajectory-table-promptDiffTitle")?),
-                &[JsValue::from_str(title)],
+                &[crate::browser_value::text(title)],
             )?,
             ui.tag(
                 "pre",
@@ -3074,7 +3114,7 @@ fn prompt_diff_section(
 
 fn render_request_options(
     ui: &ReactUi,
-    options: Option<&serde_json::Value>,
+    options: Option<&seekdeep_lossless_json::JsonValue>,
 ) -> Result<JsValue, JsValue> {
     let Some(options) = options else {
         return ui.tag(
@@ -3088,7 +3128,7 @@ fn render_request_options(
         Some(&object(&[
             (
                 "data",
-                serde_wasm_bindgen::to_value(options).map_err(js_error_from_display)?,
+                crate::browser_value::to_value(options).map_err(js_error_from_display)?,
             ),
             ("label", JsValue::from_str("Request options JSON")),
             (
@@ -3172,13 +3212,16 @@ fn usage_rows(ui: &ReactUi, usage: Option<crate::TrajectoryUsage>) -> Result<JsV
     definition_list(ui, &rows)
 }
 
-fn definition_list(ui: &ReactUi, rows: &[(&str, String)]) -> Result<JsValue, JsValue> {
+fn definition_list<T: crate::browser_value::BrowserText>(
+    ui: &ReactUi,
+    rows: &[(&str, T)],
+) -> Result<JsValue, JsValue> {
     definition_list_with_prefix(ui, rows, Vec::new())
 }
 
-fn definition_list_with_prefix(
+fn definition_list_with_prefix<T: crate::browser_value::BrowserText>(
     ui: &ReactUi,
-    rows: &[(&str, String)],
+    rows: &[(&str, T)],
     mut children: Vec<JsValue>,
 ) -> Result<JsValue, JsValue> {
     for (label, value) in rows {
@@ -3186,8 +3229,8 @@ fn definition_list_with_prefix(
             "div",
             None,
             &[
-                ui.tag("dt", None, &[JsValue::from_str(label)])?,
-                ui.tag("dd", None, &[JsValue::from_str(value)])?,
+                ui.tag("dt", None, &[crate::browser_value::text(label)])?,
+                ui.tag("dd", None, &[crate::browser_value::text(value)])?,
             ],
         )?);
     }
@@ -3196,7 +3239,7 @@ fn definition_list_with_prefix(
         Some(&object(&[
             (
                 "className",
-                JsValue::from_str(
+                crate::browser_value::text(
                     "seekdeep-trajectory-table-overview seekdeep-trajectory-table-summaryScrollRegion",
                 ),
             ),
@@ -3324,13 +3367,14 @@ fn install_inspect_effect(
                 toggle_turn.call1(&JsValue::UNDEFINED, &JsValue::from_f64(u64_as_f64(*turn)))?;
             }
             if let Some(assistant) = assistant {
-                toggle_assistant.call1(&JsValue::UNDEFINED, &JsValue::from_str(assistant))?;
+                toggle_assistant
+                    .call1(&JsValue::UNDEFINED, &crate::browser_value::text(assistant))?;
             }
         }
         if call_method(
             &effect_controller,
             "inspectCall",
-            &[JsValue::from_str(&call_id)],
+            &[crate::browser_value::text(&call_id)],
         )?
         .as_bool()
             == Some(true)
@@ -3379,7 +3423,7 @@ fn install_pending_scroll_effect(
     virtualized: bool,
     turns: &JsValue,
 ) -> Result<(), JsValue> {
-    let pending = pending_id.map_or(JsValue::NULL, JsValue::from_str);
+    let pending = pending_id.map_or(JsValue::NULL, crate::browser_value::text);
     let target = pending_id.and_then(|id| {
         records
             .iter()
@@ -3421,7 +3465,7 @@ fn install_pending_scroll_effect(
             if query.is_function() {
                 let row = query
                     .dyn_into::<Function>()?
-                    .call1(&pane, &JsValue::from_str(&selector))?;
+                    .call1(&pane, &crate::browser_value::text(&selector))?;
                 if !row.is_null() && !row.is_undefined() {
                     let method = Reflect::get(&row, &JsValue::from_str("scrollIntoView"))?;
                     if method.is_function() {
@@ -3475,7 +3519,7 @@ fn install_timeline_focus_effect(
         .map(|(_, index)| index.to_string())
         .collect::<Vec<_>>()
         .join(",");
-    let dependency = JsValue::from_str(&key);
+    let dependency = crate::browser_value::text(&key);
     let effect_controller = controller.clone();
     let effect_ref = pane_ref.clone();
     let effect_setter = set_viewport.clone();
@@ -3516,7 +3560,7 @@ fn install_timeline_focus_effect(
                 let selector = format!("tr[data-record-index=\"{index}\"]");
                 let row = query
                     .dyn_into::<Function>()?
-                    .call1(&pane, &JsValue::from_str(&selector))?;
+                    .call1(&pane, &crate::browser_value::text(&selector))?;
                 if !row.is_null() && !row.is_undefined() {
                     let method = Reflect::get(&row, &JsValue::from_str("scrollIntoView"))?;
                     if method.is_function() {
@@ -3526,7 +3570,7 @@ fn install_timeline_focus_effect(
                                 ("behavior", JsValue::from_str("smooth")),
                                 (
                                     "block",
-                                    JsValue::from_str(if focus_height > pane_height {
+                                    crate::browser_value::text(if focus_height > pane_height {
                                         "start"
                                     } else {
                                         "center"
@@ -3726,7 +3770,7 @@ fn request_older(
 }
 
 fn controller_snapshot(controller: &JsValue) -> Result<TrajectoryTableControllerSnapshot, JsValue> {
-    serde_wasm_bindgen::from_value(call_method(controller, "snapshot", &[])?)
+    crate::browser_value::from_value(&call_method(controller, "snapshot", &[])?)
         .map_err(js_error_from_display)
 }
 
@@ -3821,7 +3865,7 @@ fn optional_vec<T: serde::de::DeserializeOwned>(
 ) -> Result<Vec<T>, JsValue> {
     optional(props, key)?.map_or_else(
         || Ok(Vec::new()),
-        |value| serde_wasm_bindgen::from_value(value).map_err(js_error_from_display),
+        |value| crate::browser_value::from_value(&value).map_err(js_error_from_display),
     )
 }
 
@@ -3928,7 +3972,7 @@ impl ReactUi {
         props: Option<&Object>,
         children: &[JsValue],
     ) -> Result<JsValue, JsValue> {
-        self.element(&JsValue::from_str(name), props, children)
+        self.element(&crate::browser_value::text(&name), props, children)
     }
 
     fn primitive(
@@ -3963,13 +4007,13 @@ impl ReactUi {
 fn style(entries: &[(&str, String)]) -> Result<Object, JsValue> {
     let value = Object::new();
     for (key, entry) in entries {
-        set(&value, key, &JsValue::from_str(entry))?;
+        set(&value, key, &crate::browser_value::text(entry))?;
     }
     Ok(value)
 }
 
 fn class(value: &str) -> Result<Object, JsValue> {
-    object(&[("className", JsValue::from_str(value))])
+    object(&[("className", crate::browser_value::text(value))])
 }
 
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
@@ -3981,11 +4025,11 @@ fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
 }
 
 fn set(value: &Object, key: &str, entry: &JsValue) -> Result<(), JsValue> {
-    Reflect::set(value, &JsValue::from_str(key), entry).map(|_| ())
+    Reflect::set(value, &crate::browser_value::text(key), entry).map(|_| ())
 }
 
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     if entry.is_undefined() {
         Err(js_sys::Error::new(&format!("{owner} omitted required property {key:?}")).into())
     } else {
@@ -3994,7 +4038,7 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
 }
 
 fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     Ok((!entry.is_undefined()).then_some(entry))
 }
 
@@ -4020,7 +4064,7 @@ fn function(value: &JsValue, key: &str) -> Result<Function, JsValue> {
 }
 
 fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsValue, JsValue> {
-    let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
+    let method = Reflect::get(value, &crate::browser_value::text(&name))?.dyn_into::<Function>()?;
     let args = Array::new();
     for argument in arguments {
         args.push(argument);
@@ -4041,7 +4085,7 @@ fn bool_member(value: &JsValue, key: &str) -> Result<bool, JsValue> {
 }
 
 fn optional_number(value: &JsValue, key: &str) -> Option<f64> {
-    Reflect::get(value, &JsValue::from_str(key))
+    Reflect::get(value, &crate::browser_value::text(key))
         .ok()
         .filter(|value| !value.is_null() && !value.is_undefined())
         .and_then(|value| value.as_f64())

@@ -291,7 +291,8 @@ fn message_event(text: &str, seq: u64, time: i64) -> SessionEvent {
             "role": "user",
             "source": {"kind": "user"},
             "content": [{"type": "text", "text": text}]
-        }).into(),
+        })
+        .into(),
         source_event_seqs: None,
         surface_op: Some(SurfaceOp::append()),
         ignorable: None,

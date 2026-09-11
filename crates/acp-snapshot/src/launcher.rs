@@ -19,11 +19,11 @@ use std::{
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_acp::{AcpClient, AcpPermissionHandler, AcpSessionUpdate, AcpUpdateObserver};
+use seekdeep_core::session::JsonValue as Value;
 use seekdeep_loader_smoke::{
     ExampleLaunchOptions, ExampleMode, SEEKDEEP_AGENTS_HOME_ENV, resolve_example_launch,
 };
 use seekdeep_sdk_protocol::JsonRpcLineTransport;
-use serde_json::Value;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _, ReadBuf},
     process::{Child, Command},

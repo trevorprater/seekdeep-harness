@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as SnapshotValue;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
     AssemblerViewDefinition, AssemblerViewDefinitions, ConversationAssemblerError,
@@ -15,7 +16,9 @@ use seekdeep_client_ui_workflow_run::{
     workflow_dot_state, workflow_phase_key, workflow_run_definition,
 };
 use seekdeep_identity::SessionId;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
+
+include!("../../client-runtime/tests/support/conversation_json.rs");
 
 struct EventDefinitions(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -43,18 +46,18 @@ struct ChatBuilder {
 }
 
 impl ChatBuilder {
-    fn snapshot(&self) -> Rc<Value> {
+    fn snapshot(&self) -> Rc<SnapshotValue> {
         let nodes = self
             .nodes
             .iter()
             .map(|node| (node.key.clone(), node.data.as_ref().clone()))
-            .collect::<Map<_, _>>();
-        Rc::new(json!({"nodes":nodes}))
+            .collect::<Vec<_>>();
+        Rc::new(conversation_json!({"nodes":SnapshotValue::object(nodes)}))
     }
 }
 
 impl AssemblerViewBuilder for ChatBuilder {
-    fn empty(&self) -> Rc<Value> {
+    fn empty(&self) -> Rc<SnapshotValue> {
         self.snapshot()
     }
 
@@ -62,7 +65,7 @@ impl AssemblerViewBuilder for ChatBuilder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         self.nodes = nodes.to_vec();
         Ok(self.snapshot())
     }
@@ -71,7 +74,7 @@ impl AssemblerViewBuilder for ChatBuilder {
         &mut self,
         upserts: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         for upsert in upserts {
             if let Some(node) = self.nodes.iter_mut().find(|node| node.key == upsert.key) {
                 *node = upsert.clone();
@@ -152,8 +155,14 @@ fn complete_events() -> Vec<ConversationEventInput> {
 
 fn workflow_data(value: &ConversationNodeAssembler) -> Option<WorkflowRunChatData> {
     let snapshot = value.snapshot("chat")?;
-    let data = snapshot.get("nodes")?.as_object()?.values().next()?.clone();
-    serde_json::from_value(data).ok()
+    let data = snapshot
+        .get_value("nodes")?
+        .object_entries()?
+        .into_iter()
+        .next()?
+        .1
+        .to_owned();
+    data.deserialize().ok()
 }
 
 #[test]

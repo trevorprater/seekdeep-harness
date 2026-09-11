@@ -4,10 +4,11 @@ use indexmap::{IndexMap, IndexSet};
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationBoundaryStatus,
     ConversationLocation, ConversationMatch, ConversationMatchResult, ConversationMatchRole,
-    ConversationNodeContext,
+    ConversationNodeContext, ConversationValue as Value,
 };
+use seekdeep_lossless_json::JsonString;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::json;
 
 use super::{
     CHAT_INTERRUPTED_FOLLOWUP_OFFSET, chat_node, is_append_surface_event, js_string,
@@ -39,19 +40,12 @@ pub fn conversation_tool_definition() -> AssemblerNodeDefinition {
                     role: ConversationMatchRole::Start,
                 }),
                 "tool/result" if is_append_surface_event(event) => Some(ConversationMatchResult {
-                    id: js_member_string(
-                        event
-                            .data
-                            .get("message")
-                            .and_then(|message| message.get("source"))
-                            .unwrap_or(&Value::Null),
-                        "callId",
-                    ),
+                    id: js_member_string(&event.data["message"]["source"], "callId"),
                     role: ConversationMatchRole::Update,
                 }),
                 "tool/code-dispatch-start" | "tool/code-dispatch" => event
                     .data
-                    .get("rootCallId")
+                    .get_value("rootCallId")
                     .and_then(Value::as_str)
                     .filter(|id| !id.is_empty())
                     .map(|id| ConversationMatchResult {
@@ -122,7 +116,7 @@ fn build_tool_view_node(
         || {
             if is_settled(&state.calls[&state.root_id]) {
                 state.calls[&state.root_id]
-                    .get("seq")
+                    .get_value("seq")
                     .and_then(Value::as_f64)
                     .unwrap_or_else(first_match_seq)
             } else {
@@ -135,7 +129,7 @@ fn build_tool_view_node(
         context,
         TOOL_CALL_KIND,
         anchor_seq,
-        json!({"root": root}),
+        Value::object([("root", root)]),
     )))
 }
 
@@ -146,16 +140,19 @@ fn root_call(accepted: &ConversationMatch) -> Result<Value, ConversationAssemble
         ));
     }
     let data = &accepted.event.data;
-    Ok(json!({
-        "callId": js_member_string(data, "callId"),
-        "name": data.get("name").cloned().unwrap_or(Value::Null),
-        "argsRaw": data.get("arguments").cloned().unwrap_or(Value::Null),
-        "turn": data.get("turn").cloned().unwrap_or(Value::Null),
-        "step": data.get("step").cloned().unwrap_or(Value::Null),
-        "time": accepted.event.time,
-        "callView": match_view(accepted, "call").unwrap_or(Value::Null),
-        "subCalls": [],
-    }))
+    Ok(Value::object([
+        ("callId", json!(js_member_string(data, "callId")).into()),
+        ("name", data["name"].clone()),
+        ("argsRaw", data["arguments"].clone()),
+        ("turn", data["turn"].clone()),
+        ("step", data["step"].clone()),
+        ("time", json!(accepted.event.time).into()),
+        (
+            "callView",
+            match_view(accepted, "call").unwrap_or_else(|| json!(null).into()),
+        ),
+        ("subCalls", Value::array(&[])),
+    ]))
 }
 
 fn root_result(
@@ -167,81 +164,75 @@ fn root_result(
     }
     let data = &accepted.event.data;
     let result = data
-        .get("message")
-        .and_then(|message| message.get("content"))
+        .get_value("message")
+        .and_then(|message| message.get_value("content"))
         .and_then(Value::as_array)
         .and_then(|content| content.first())
         .ok_or_else(|| ConversationAssemblerError::new("tool/result omitted first content"))?;
-    let source = data
-        .get("message")
-        .and_then(|message| message.get("source"))
-        .unwrap_or(&Value::Null);
-    let mut block = Map::from_iter([
-        ("kind".to_owned(), json!("tool-result")),
-        ("seq".to_owned(), json!(accepted.event.seq)),
-        ("time".to_owned(), json!(accepted.event.time)),
+    let source = &data["message"]["source"];
+    let mut block = vec![
+        ("kind", json!("tool-result").into()),
+        ("seq", json!(accepted.event.seq).into()),
+        ("time", json!(accepted.event.time).into()),
+        ("callId", json!(js_member_string(source, "callId")).into()),
         (
-            "callId".to_owned(),
-            json!(js_member_string(source, "callId")),
+            "call",
+            previous.map_or_else(
+                || json!(null).into(),
+                |previous| {
+                    Value::object([
+                        ("name", previous["name"].clone()),
+                        ("argsRaw", previous["argsRaw"].clone()),
+                    ])
+                },
+            ),
         ),
         (
-            "call".to_owned(),
-            previous.map_or(Value::Null, |previous| {
-                json!({
-                    "name": previous.get("name").cloned().unwrap_or(Value::Null),
-                    "argsRaw": previous.get("argsRaw").cloned().unwrap_or(Value::Null),
-                })
-            }),
-        ),
-        (
-            "callTime".to_owned(),
+            "callTime",
             previous
-                .and_then(|previous| previous.get("time"))
+                .and_then(|previous| previous.get_value("time"))
                 .cloned()
-                .unwrap_or(Value::Null),
+                .unwrap_or_else(|| json!(null).into()),
+        ),
+        ("content", result["content"].clone()),
+        (
+            "isError",
+            json!(result.get_value("isError").and_then(Value::as_bool) == Some(true)).into(),
         ),
         (
-            "content".to_owned(),
-            result.get("content").cloned().unwrap_or(Value::Null),
-        ),
-        (
-            "isError".to_owned(),
-            json!(result.get("isError").and_then(Value::as_bool) == Some(true)),
-        ),
-        (
-            "callView".to_owned(),
+            "callView",
             previous
-                .and_then(|previous| previous.get("callView"))
+                .and_then(|previous| previous.get_value("callView"))
                 .cloned()
-                .unwrap_or(Value::Null),
+                .unwrap_or_else(|| json!(null).into()),
         ),
         (
-            "resultView".to_owned(),
-            match_view(accepted, "result").unwrap_or(Value::Null),
+            "resultView",
+            match_view(accepted, "result").unwrap_or_else(|| json!(null).into()),
         ),
-        ("subCalls".to_owned(), json!([])),
-    ]);
+        ("subCalls", Value::array(&[])),
+    ];
     copy_present(&mut block, data, "error");
-    if let Some(meta) = data.get("meta") {
-        block.insert("meta".to_owned(), meta.clone());
+    if let Some(meta) = data.get_value("meta") {
+        block.push(("meta", meta.clone()));
     }
-    Ok(Some(Value::Object(block)))
+    Ok(Some(Value::object(block)))
 }
 
 fn child_call(
     accepted: &ConversationMatch,
     data: &Value,
 ) -> Result<Value, ConversationAssemblerError> {
-    Ok(json!({
-        "callId": required_string(data, "subCallId")?,
-        "name": data.get("name").cloned().unwrap_or(Value::Null),
-        "argsRaw": json_stringify(data.get("arguments"))?,
-        "turn": location_turn(&accepted.location),
-        "step": location_step(&accepted.location),
-        "time": accepted.event.time,
-        "callView": null,
-        "subCalls": [],
-    }))
+    Ok(Value::object([
+        ("callId", json!(required_string(data, "subCallId")?).into()),
+        ("name", data["name"].clone()),
+        ("argsRaw", json_stringify(data.get_value("arguments"))),
+        ("turn", json!(location_turn(&accepted.location)).into()),
+        ("step", json!(location_step(&accepted.location)).into()),
+        ("time", json!(accepted.event.time).into()),
+        ("callView", json!(null).into()),
+        ("subCalls", Value::array(&[])),
+    ]))
 }
 
 fn child_result(
@@ -249,23 +240,40 @@ fn child_result(
     data: &Value,
     previous: Option<&Value>,
 ) -> Result<Value, ConversationAssemblerError> {
-    Ok(json!({
-        "kind": "tool-result",
-        "seq": accepted.event.seq,
-        "time": accepted.event.time,
-        "callId": required_string(data, "subCallId")?,
-        "call": {
-            "name": data.get("name").cloned().unwrap_or(Value::Null),
-            "argsRaw": json_stringify(data.get("arguments"))?,
-        },
-        "callTime": previous.filter(|block| !is_settled(block))
-            .and_then(|block| block.get("time")).cloned().unwrap_or(Value::Null),
-        "content": data.get("content").cloned().unwrap_or_else(|| json!([])),
-        "isError": data.get("isError").and_then(Value::as_bool) == Some(true),
-        "callView": null,
-        "resultView": null,
-        "subCalls": [],
-    }))
+    Ok(Value::object([
+        ("kind", json!("tool-result").into()),
+        ("seq", json!(accepted.event.seq).into()),
+        ("time", json!(accepted.event.time).into()),
+        ("callId", json!(required_string(data, "subCallId")?).into()),
+        (
+            "call",
+            Value::object([
+                ("name", data["name"].clone()),
+                ("argsRaw", json_stringify(data.get_value("arguments"))),
+            ]),
+        ),
+        (
+            "callTime",
+            previous
+                .filter(|block| !is_settled(block))
+                .and_then(|block| block.get_value("time"))
+                .cloned()
+                .unwrap_or_else(|| json!(null).into()),
+        ),
+        (
+            "content",
+            data.get_value("content")
+                .cloned()
+                .unwrap_or_else(|| Value::array(&[])),
+        ),
+        (
+            "isError",
+            json!(data.get_value("isError").and_then(Value::as_bool) == Some(true)).into(),
+        ),
+        ("callView", json!(null).into()),
+        ("resultView", json!(null).into()),
+        ("subCalls", Value::array(&[])),
+    ]))
 }
 
 fn update_root_result(
@@ -363,7 +371,7 @@ fn project_call(
         return Ok(None);
     };
     if visited.contains(call_id) || depth > MAX_DEPTH {
-        return with_sub_calls(block.clone(), Vec::new()).map(Some);
+        return with_sub_calls(block.clone(), &[]).map(Some);
     }
     let mut next_visited = visited.clone();
     next_visited.insert(call_id.to_owned());
@@ -376,26 +384,35 @@ fn project_call(
         }
     }
     if is_settled(block) || interrupted_at.is_none() {
-        return with_sub_calls(block.clone(), sub_calls).map(Some);
+        return with_sub_calls(block.clone(), &sub_calls).map(Some);
     }
     let (seq, time) = interrupted_at.expect("checked");
-    Ok(Some(json!({
-        "kind": "tool-result",
-        "seq": sequence_anchor(seq) + CHAT_INTERRUPTED_FOLLOWUP_OFFSET,
-        "time": time,
-        "callId": block.get("callId").cloned().unwrap_or(Value::Null),
-        "call": {
-            "name": block.get("name").cloned().unwrap_or(Value::Null),
-            "argsRaw": block.get("argsRaw").cloned().unwrap_or(Value::Null),
-        },
-        "callTime": block.get("time").cloned().unwrap_or(Value::Null),
-        "content": [],
-        "isError": true,
-        "error": {"name": "Interrupted", "code": "interrupted"},
-        "callView": block.get("callView").cloned().unwrap_or(Value::Null),
-        "resultView": null,
-        "subCalls": sub_calls,
-    })))
+    Ok(Some(Value::object([
+        ("kind", json!("tool-result").into()),
+        (
+            "seq",
+            json!(sequence_anchor(seq) + CHAT_INTERRUPTED_FOLLOWUP_OFFSET).into(),
+        ),
+        ("time", json!(time).into()),
+        ("callId", block["callId"].clone()),
+        (
+            "call",
+            Value::object([
+                ("name", block["name"].clone()),
+                ("argsRaw", block["argsRaw"].clone()),
+            ]),
+        ),
+        ("callTime", block["time"].clone()),
+        ("content", Value::array(&[])),
+        ("isError", json!(true).into()),
+        (
+            "error",
+            json!({"name": "Interrupted", "code": "interrupted"}).into(),
+        ),
+        ("callView", block["callView"].clone()),
+        ("resultView", json!(null).into()),
+        ("subCalls", Value::array(&sub_calls)),
+    ])))
 }
 
 fn fallback_state(
@@ -444,26 +461,25 @@ fn interruption(context: &ConversationNodeContext) -> Option<(u64, i64)> {
 
 fn with_sub_calls(
     mut block: Value,
-    sub_calls: Vec<Value>,
+    sub_calls: &[Value],
 ) -> Result<Value, ConversationAssemblerError> {
     block
-        .as_object_mut()
-        .ok_or_else(|| ConversationAssemblerError::new("Tool block must be an object"))?
-        .insert("subCalls".to_owned(), Value::Array(sub_calls));
+        .insert("subCalls", Value::array(sub_calls))
+        .map_err(|_| ConversationAssemblerError::new("Tool block must be an object"))?;
     Ok(block)
 }
 
 fn block_call_id(block: &Value) -> Result<&str, ConversationAssemblerError> {
     block
-        .get("callId")
+        .get_value("callId")
         .and_then(Value::as_str)
         .ok_or_else(|| ConversationAssemblerError::new("Tool block omitted callId"))
 }
 
 fn match_view(accepted: &ConversationMatch, expected: &str) -> Option<Value> {
     let view = accepted.view.as_deref()?;
-    (view.get("for").and_then(Value::as_str) == Some(expected))
-        .then(|| view.get("view").cloned())
+    (view.get_value("for").and_then(Value::as_str) == Some(expected))
+        .then(|| view.get_value("view").cloned())
         .flatten()
 }
 
@@ -484,43 +500,43 @@ fn location_step(location: &ConversationLocation) -> u64 {
 }
 
 fn is_settled(block: &Value) -> bool {
-    block.get("kind").is_some()
+    block.get_value("kind").is_some()
 }
 
 fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_str)
         .ok_or_else(|| ConversationAssemblerError::new(format!("dispatch omitted {key}")))
 }
 
-fn json_stringify(value: Option<&Value>) -> Result<Value, ConversationAssemblerError> {
-    value.map_or(Ok(Value::Null), |value| {
-        serde_json::to_string(value)
-            .map(Value::String)
-            .map_err(|error| ConversationAssemblerError::new(error.to_string()))
-    })
+fn json_stringify(value: Option<&Value>) -> Value {
+    value.map_or_else(
+        || json!(null).into(),
+        |value| JsonString::from(value.stringify()).into(),
+    )
 }
 
 fn js_member_string(value: &Value, key: &str) -> String {
     value
-        .get(key)
+        .get_value(key)
         .map_or_else(|| "undefined".to_owned(), js_string)
 }
 
-fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
-    if let Some(value) = input.get(key) {
-        output.insert(key.to_owned(), value.clone());
+fn copy_present(output: &mut Vec<(&'static str, Value)>, input: &Value, key: &'static str) {
+    if let Some(value) = input.get_value(key) {
+        output.push((key, value.clone()));
     }
 }
 
 fn encode(state: &ToolState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(state)
+    Value::from_serialize(state)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode(value: &Value) -> Result<ToolState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

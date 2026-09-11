@@ -19,8 +19,7 @@ use seekdeep_goal::{
     GOAL, GoalActivation, GoalChangedEvent, GoalId, GoalMessageSource, GoalPhase, GoalRef,
     GoalService, GoalView,
 };
-use seekdeep_llm::{ContentBlock, MessageId, MessageSource, UserMessage};
-use serde_json::Value;
+use seekdeep_llm::{ContentBlock, JsonValue, MessageId, MessageSource, UserMessage};
 
 use crate::prompt::render_goal_round_prompt;
 
@@ -65,7 +64,7 @@ fn is_goal_round_source(source: &MessageSource) -> bool {
         && source
             .fields
             .get("round")
-            .and_then(Value::as_u64)
+            .and_then(JsonValue::as_u64)
             .is_some_and(|round| round > 0)
 }
 
@@ -73,9 +72,9 @@ fn goal_source(source: &MessageSource) -> Option<GoalMessageSource> {
     if source.kind != "goal" {
         return None;
     }
-    let goal_id = source.fields.get("goalId").and_then(Value::as_str)?;
-    let revision = source.fields.get("revision").and_then(Value::as_u64)?;
-    let round = source.fields.get("round").and_then(Value::as_u64)?;
+    let goal_id = source.fields.get("goalId").and_then(JsonValue::as_str)?;
+    let revision = source.fields.get("revision").and_then(JsonValue::as_u64)?;
+    let round = source.fields.get("round").and_then(JsonValue::as_u64)?;
     if goal_id.is_empty() || revision < 1 || round < 1 {
         return None;
     }
@@ -247,7 +246,7 @@ impl Driver {
                     fields.insert("goalId".to_owned(), serde_json::json!(goal.id.as_str()));
                     fields.insert("revision".to_owned(), serde_json::json!(goal.revision));
                     fields.insert("round".to_owned(), serde_json::json!(round));
-                    fields
+                    fields.into()
                 },
             },
         );
@@ -769,7 +768,12 @@ impl Driver {
             .filter(|message| {
                 message.id() != message_id
                     && !(message.source().kind == "goal"
-                        && message.source().fields.get("round").and_then(Value::as_u64) == Some(0))
+                        && message
+                            .source()
+                            .fields
+                            .get("round")
+                            .and_then(JsonValue::as_u64)
+                            == Some(0))
             })
             .cloned()
             .collect::<Vec<_>>();

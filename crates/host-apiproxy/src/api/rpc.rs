@@ -3,6 +3,7 @@
 use std::fmt;
 
 use seekdeep_client_connection::{ClientRequest, RpcError, RpcId, RpcResult, ServerResponse};
+use seekdeep_core::session::JsonValue;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use thiserror::Error;
@@ -327,6 +328,38 @@ pub fn parse_server_request(value: &Value) -> Result<ServerRequest, ContractErro
         parse_rpc_id(field(object, "rpcId", "$.rpcId")?)?,
         string_field(object, "method", "$.method")?,
         field(object, "payload", "$.payload")?.clone(),
+    ))
+}
+
+/// Validates a Host request envelope while retaining its uninterpreted payload.
+///
+/// # Errors
+///
+/// Returns an error when a required envelope field is absent or malformed.
+pub fn parse_server_request_json(
+    value: &JsonValue,
+) -> Result<ServerRequest<JsonValue>, ContractError> {
+    if !value.as_ref().is_object() {
+        return Err(ContractError::new("$", "expected object"));
+    }
+    let mut envelope = Map::new();
+    for key in ["type", "rpcId", "method"] {
+        if let Some(field) = value.get(key) {
+            envelope.insert(key.to_owned(), field.deserialize().unwrap_or(Value::Null));
+        }
+    }
+    if value.get("payload").is_some() {
+        envelope.insert("payload".to_owned(), Value::Null);
+    }
+    let normalized = parse_server_request(&Value::Object(envelope))?;
+    let payload = value
+        .get("payload")
+        .ok_or_else(|| ContractError::new("$.payload", "required property is missing"))?
+        .to_owned();
+    Ok(ServerRequest::new(
+        normalized.rpc_id,
+        normalized.method,
+        payload,
     ))
 }
 

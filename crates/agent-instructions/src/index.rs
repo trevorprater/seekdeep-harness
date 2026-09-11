@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentEvent, PreStepDecision};
 use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin};
-use seekdeep_core::session::{Session, SessionEvent, derive_event_message};
+use seekdeep_core::session::{JsonValue, Session, SessionEvent, derive_event_message};
 use seekdeep_fs::FS;
 use seekdeep_llm::{AbortSignal, ContentBlock, Message, MessageSource, UserMessage};
 use seekdeep_tools::{ToolExecution, ToolExecutionResult, ToolExecutionToken};
@@ -95,7 +95,7 @@ fn visible_baseline_source(
     for message in authority_messages.iter().rev() {
         let source = message.source();
         if source.kind == AGENT_INSTRUCTIONS_KIND
-            && source.fields.get("baseline").and_then(Value::as_bool) == Some(true)
+            && source.fields.get("baseline").and_then(JsonValue::as_bool) == Some(true)
         {
             return Some(source.clone());
         }
@@ -110,7 +110,7 @@ fn visible_baseline_source(
         let message = derive_event_message(event)?;
         let source = message.source();
         if source.kind == AGENT_INSTRUCTIONS_KIND
-            && source.fields.get("baseline").and_then(Value::as_bool) == Some(true)
+            && source.fields.get("baseline").and_then(JsonValue::as_bool) == Some(true)
         {
             return Some(source.clone());
         }
@@ -119,25 +119,27 @@ fn visible_baseline_source(
 }
 
 fn instruction_changes_from_source(source: &MessageSource) -> Vec<AgentInstructionChange> {
-    let Some(changes) = source.fields.get("changes").and_then(Value::as_array) else {
+    let Some(changes) = source.fields.get("changes").and_then(JsonValue::as_array) else {
         return Vec::new();
     };
     changes
         .iter()
         .filter_map(|value| {
-            let object = value.as_object()?;
-            let action = match object.get("action")?.as_str()? {
+            if !value.is_object() {
+                return None;
+            }
+            let object = value;
+            let action = match object.get_value("action")?.as_str()? {
                 "set" => AgentInstructionAction::Set,
                 "replace" => AgentInstructionAction::Replace,
                 "remove" => AgentInstructionAction::Remove,
                 _ => return None,
             };
-            let scope = object.get("scope")?.as_str()?.to_owned();
-            let path = object.get("path")?.as_str()?.to_owned();
-            let digest = match object.get("digest") {
+            let scope = object.get_value("scope")?.as_str()?.to_owned();
+            let path = object.get_value("path")?.as_str()?.to_owned();
+            let digest = match object.get_value("digest") {
                 None => None,
-                Some(Value::String(digest)) => Some(digest.clone()),
-                Some(_) => return None,
+                Some(digest) => Some(digest.as_str()?.to_owned()),
             };
             Some(AgentInstructionChange {
                 action,
@@ -168,7 +170,7 @@ fn agent_instruction_source(
     );
     MessageSource {
         kind: AGENT_INSTRUCTIONS_KIND.to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 
@@ -239,7 +241,7 @@ impl InstructionRuntime {
             source
                 .fields
                 .get("baselineIdentity")
-                .and_then(Value::as_str)
+                .and_then(JsonValue::as_str)
         }) == Some(identity.as_str());
         let prepared = self
             .baseline_preparations

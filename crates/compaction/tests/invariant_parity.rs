@@ -210,6 +210,7 @@ async fn raw_summary_and_checkpoint_metadata_do_not_hide_transaction_validation(
     checkpoint.insert("source", source).unwrap();
     let options = AppendOptions {
         surface_op: Some(SurfaceOp::replace(original.seq, original.seq)),
+        source_event_seqs: Some(vec![original.seq]),
         ..AppendOptions::default()
     };
     let rejected = session

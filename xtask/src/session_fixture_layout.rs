@@ -334,7 +334,8 @@ mod tests {
                     "turn": 1,
                     "step": 1,
                     "chunk": {"type":"text-delta","index":0,"text":format!("part-{index}")}
-                }),
+                })
+                .into(),
                 source_event_seqs: None,
                 surface_op: None,
                 ignorable: None,

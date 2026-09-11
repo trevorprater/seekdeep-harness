@@ -384,7 +384,7 @@ pub enum StreamChunk {
             default,
             skip_serializing_if = "Option::is_none"
         )]
-        replay_state: Option<Value>,
+        replay_state: Option<JsonValue>,
     },
 }
 
@@ -429,12 +429,7 @@ impl<'de> Deserialize<'de> for StreamChunk {
             }),
             "finish" => Ok(Self::Finish {
                 reason: chunk_field(object, "reason")?,
-                replay_state: object
-                    .get("replayState")
-                    .map(JsonRef::deserialize)
-                    .transpose()
-                    .map_err(D::Error::custom)?
-                    .flatten(),
+                replay_state: object.get("replayState").map(JsonRef::to_owned),
             }),
             _ => Err(D::Error::unknown_variant(
                 &kind,

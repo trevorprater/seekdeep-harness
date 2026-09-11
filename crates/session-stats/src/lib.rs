@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonValue, SessionEvent};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SessionProjectionRegistry,
@@ -122,7 +122,7 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
             if open.turn != turn
                 || open.step != step
                 || open.first_token_time.is_some()
-                || !is_token_delta(event.data.get("chunk"))
+                || !is_token_delta(event.data.get_value("chunk"))
             {
                 return Ok(ProjectionTransition::Unchanged);
             }
@@ -149,7 +149,7 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
                     .ttft_ms
                     .saturating_add(nonnegative_elapsed(first_token_time, open.start_time));
                 state.totals.ttft_steps = state.totals.ttft_steps.saturating_add(1);
-                if let Some(output_tokens) = usage_output_tokens(event.data.get("usage")) {
+                if let Some(output_tokens) = usage_output_tokens(event.data.get_value("usage")) {
                     state.totals.decode_ms = state
                         .totals
                         .decode_ms
@@ -163,11 +163,7 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
             state.pending_calls.insert(call_id.to_owned(), event.time);
         }
         "tool/result" => {
-            let Some(call_id) = event
-                .data
-                .pointer("/message/source/callId")
-                .and_then(Value::as_str)
-            else {
+            let Some(call_id) = event.data["message"]["source"]["callId"].as_str() else {
                 anyhow::bail!("tool/result lacks message.source.callId");
             };
             let Some(dispatched) = state.pending_calls.shift_remove(call_id) else {
@@ -205,41 +201,41 @@ fn coordinates(event: &SessionEvent) -> anyhow::Result<(u64, u64)> {
     ))
 }
 
-fn integer_field(value: &Value, name: &str) -> anyhow::Result<u64> {
+fn integer_field(value: &JsonValue, name: &str) -> anyhow::Result<u64> {
     value
-        .get(name)
-        .and_then(Value::as_u64)
+        .get_value(name)
+        .and_then(JsonValue::as_u64)
         .ok_or_else(|| anyhow::anyhow!("{value} lacks non-negative integer {name}"))
 }
 
-fn string_field<'a>(value: &'a Value, name: &str) -> anyhow::Result<&'a str> {
+fn string_field<'a>(value: &'a JsonValue, name: &str) -> anyhow::Result<&'a str> {
     value
-        .get(name)
-        .and_then(Value::as_str)
+        .get_value(name)
+        .and_then(JsonValue::as_str)
         .ok_or_else(|| anyhow::anyhow!("{value} lacks string {name}"))
 }
 
-fn is_token_delta(chunk: Option<&Value>) -> bool {
+fn is_token_delta(chunk: Option<&JsonValue>) -> bool {
     let Some(chunk) = chunk else {
         return false;
     };
-    match chunk.get("type").and_then(Value::as_str) {
+    match chunk.get_value("type").and_then(JsonValue::as_str) {
         Some("text-delta" | "reasoning-delta") => chunk
-            .get("text")
-            .and_then(Value::as_str)
+            .get_value("text")
+            .and_then(JsonValue::to_utf16)
             .is_some_and(|text| !text.is_empty()),
         Some("tool-call-delta") => {
             chunk.get("name").is_some()
                 || chunk
-                    .get("argumentsDelta")
-                    .and_then(Value::as_str)
+                    .get_value("argumentsDelta")
+                    .and_then(JsonValue::to_utf16)
                     .is_some_and(|delta| !delta.is_empty())
         }
         _ => false,
     }
 }
 
-fn usage_output_tokens(usage: Option<&Value>) -> Option<f64> {
+fn usage_output_tokens(usage: Option<&JsonValue>) -> Option<f64> {
     usage?
         .get("outputTokens")?
         .as_f64()
@@ -285,12 +281,12 @@ mod tests {
 
     use super::*;
 
-    fn at(seq: u64, time: i64, event_type: &str, data: Value) -> SessionEvent {
+    fn at(seq: u64, time: i64, event_type: &str, data: impl Into<JsonValue>) -> SessionEvent {
         SessionEvent {
             event_type: event_type.to_owned(),
             seq,
             time,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -307,7 +303,10 @@ mod tests {
                 state = next;
             }
         }
-        serde_json::from_value(definition.project(&state).expect("project stats"))
+        definition
+            .project(&state)
+            .expect("project stats")
+            .deserialize()
             .expect("stats value")
     }
 
@@ -386,6 +385,35 @@ mod tests {
                 stats.ttft_steps = 1;
                 stats.decode_ms = 3_000;
                 stats.decode_tokens = 60.0;
+            })
+        );
+    }
+
+    #[test]
+    fn raw_token_text_and_opaque_metadata_do_not_discard_timing() {
+        let events = [
+            at(0, 0, "step/start", json!({"turn":1,"step":1})),
+            at(
+                1,
+                25,
+                "assistant/chunk",
+                JsonValue::parse(r#"{"turn":1,"step":1,"chunk":{"type":"text-delta","text":"\ud800"},"opaque":{"\ud800":"\udfff"}}"#.to_owned()).unwrap(),
+            ),
+            at(
+                2,
+                50,
+                "assistant/message",
+                JsonValue::parse(r#"{"turn":1,"step":1,"usage":{"outputTokens":3,"opaque":"\udfff"}}"#.to_owned()).unwrap(),
+            ),
+        ];
+        assert_eq!(
+            fold(&events),
+            totals(|stats| {
+                stats.llm_ms = 50;
+                stats.ttft_ms = 25;
+                stats.ttft_steps = 1;
+                stats.decode_ms = 25;
+                stats.decode_tokens = 3.0;
             })
         );
     }
@@ -559,14 +587,12 @@ mod tests {
         );
 
         let installation = install(&context, &projections).expect("install stats");
-        let initial: SessionStats = serde_json::from_value(
-            projections
-                .snapshot(&session)
-                .expect("late snapshot")
-                .values[SESSION_STATS_KEY]
-                .clone(),
-        )
-        .expect("stats");
+        let initial: SessionStats = projections
+            .snapshot(&session)
+            .expect("late snapshot")
+            .values[SESSION_STATS_KEY]
+            .deserialize()
+            .expect("stats");
         assert_eq!(initial.turns, 1);
         assert_eq!(initial.steps, 1);
 
@@ -587,8 +613,8 @@ mod tests {
         assert!(changes.lock().iter().any(|(key, value, seq)| {
             key == SESSION_STATS_KEY
                 && *seq == closed.seq
-                && value.get("turns") == Some(&json!(2))
-                && value.get("steps") == Some(&json!(2))
+                && value["turns"] == 2
+                && value["steps"] == 2
         }));
 
         installation.dispose().await.expect("uninstall stats");

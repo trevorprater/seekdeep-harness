@@ -22,7 +22,10 @@ use crate::{
     StepLocation, TurnLocation,
     wasm_session::json_to_js,
     wasm_session::render_js,
-    wasm_value_bridge::{js_to_lossless_value as js_to_value, js_to_lossless_value_reusing as js_to_value_reusing, lossless_value_to_js as value_to_js, lossless_value_to_js_reusing as value_to_js_reusing},
+    wasm_value_bridge::{
+        js_to_lossless_value as js_to_value, js_to_lossless_value_reusing as js_to_value_reusing,
+        lossless_value_to_js as value_to_js, lossless_value_to_js_reusing as value_to_js_reusing,
+    },
 };
 
 type BrowserNode = ConversationNodeDefinition<JsValue>;

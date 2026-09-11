@@ -13,6 +13,7 @@ use seekdeep_agent_loop::{
     install_request_invariant,
 };
 use seekdeep_cordis::{Context, EventOptions, Plugin, ServiceKey};
+use seekdeep_core::session::JsonRef;
 use seekdeep_core::session_store::SessionStore;
 use seekdeep_goal::{
     CreateGoalRequest, GOAL, GoalChangeMeta, GoalOperation, fold::decode_goal_change,
@@ -30,7 +31,7 @@ use seekdeep_session_persistence_jsonl::{JsonlSessionPersistence, plugin as json
 use seekdeep_system_prompt::{SystemPrompt, SystemPromptConfig, install as install_system_prompt};
 use seekdeep_tool_todo::{Config as TodoConfig, apply as install_todo};
 use seekdeep_tools::{ToolRuntime, ToolRuntimeConfig, install as install_tools};
-use serde_json::{Value, json};
+use serde_json::json;
 
 const E2E_SPINE: ServiceKey<E2eSpine> = ServiceKey::new("goalE2eSpine");
 const E2E_RUNTIME: ServiceKey<E2eRuntime> = ServiceKey::new("goalE2eRuntime");
@@ -69,8 +70,7 @@ impl LlmAdapter for ToolThenAnswerAdapter {
                                 "status": "completed",
                             }],
                         })
-                        .to_string()
-                        .into(),
+                        .to_string(),
                     },
                 }),
                 Ok(StreamChunk::Finish {
@@ -353,7 +353,7 @@ async fn real_yaml_headless_tool_round_trip_persists_one_round_zero_goal_snapsho
                     && event
                         .data
                         .pointer("/source/round")
-                        .and_then(|value| value.as_u64())
+                        .and_then(JsonRef::as_u64)
                         .is_some_and(|round| round > 0)
             })
             .count(),

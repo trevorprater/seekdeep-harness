@@ -21,7 +21,7 @@ use seekdeep_cordis::{Context, EventArgs, ServiceKey, fiber::EffectHandle};
 use uuid::Uuid;
 
 use crate::{
-    LlmError, MessageRole, ModelId, ProviderId,
+    JsonValue, LlmError, MessageFields, MessageRole, ModelId, ProviderId,
     adapter_failure::{AdapterRejection, normalize_adapter_rejection, normalize_llm_failure},
     call_config::call_config_equals,
     retry_policy::{ResolvedRetryPolicy, resolve_retry_policy},
@@ -1199,13 +1199,13 @@ impl LlmRuntime {
                 .source()
                 .fields
                 .get("provider")
-                .and_then(serde_json::Value::as_str);
+                .and_then(JsonValue::as_str);
             let same_adapter = provider
                 .and_then(|provider| self.state.lock().adapters.get(provider).cloned())
                 .is_some_and(|registration| Arc::ptr_eq(&registration.adapter, adapter));
             if !same_adapter {
                 rebuilt = true;
-                let mut detached = serde_json::Map::new();
+                let mut detached = MessageFields::new();
                 for key in ["provider", "model"] {
                     if let Some(value) = message.source().fields.get(key).cloned() {
                         detached.insert(key.to_owned(), value);

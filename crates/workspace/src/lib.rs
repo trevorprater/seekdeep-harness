@@ -166,7 +166,7 @@ impl WorkspaceRegistry {
         sessions: Option<Arc<SessionStore>>,
     ) -> anyhow::Result<Arc<Self>> {
         let table = domain.table("workspaces")?;
-        let state = parse_state(domain.global_get()?)?;
+        let state = parse_state(&domain.global_get()?)?;
         let (operations, mut receiver) = mpsc::unbounded_channel::<Operation>();
         let host = Arc::new(WorkspaceHost {
             context,
@@ -648,7 +648,7 @@ impl WorkspaceRegistry {
                 .table
                 .get(id.as_str())?
                 .ok_or_else(|| anyhow::anyhow!("workspace '{id}' disappeared while rebuilding"))?;
-            let record = parse_record(raw)?;
+            let record = parse_record(&raw)?;
             entities.insert(
                 id.clone(),
                 Workspace::new(self.host.clone(), id.clone(), record),
@@ -660,7 +660,8 @@ impl WorkspaceRegistry {
     fn report_filtered_candidates(&self) -> anyhow::Result<()> {
         for entity in self.entities.lock().values() {
             let record = parse_record(
-                self.table
+                &self
+                    .table
                     .get(entity.id().as_str())?
                     .expect("cached entity has durable record"),
             )?;
@@ -758,7 +759,8 @@ impl WorkspaceRegistry {
         for group in groups {
             if let Some(id) = by_path.get(&group.path).cloned() {
                 let current = parse_record(
-                    self.table
+                    &self
+                        .table
                         .get(id.as_str())?
                         .expect("bootstrap path index references table record"),
                 )?;
@@ -782,7 +784,7 @@ impl WorkspaceRegistry {
                 if session_ids != current.session_ids {
                     self.table
                         .update(id.to_string(), move |raw| {
-                            let mut record = parse_record(raw.clone())?;
+                            let mut record = parse_record(raw)?;
                             record.session_ids = session_ids;
                             record.updated_at = now_iso();
                             Ok(seekdeep_lossless_json::JsonValue::from_serialize(&record)?)
@@ -1016,15 +1018,15 @@ fn workspace_entries(table: &KvTable) -> anyhow::Result<Vec<(WorkspaceId, Worksp
     table
         .entries()?
         .into_iter()
-        .map(|(id, value)| Ok((WorkspaceId::new(id), parse_record(value)?)))
+        .map(|(id, value)| Ok((WorkspaceId::new(id), parse_record(&value)?)))
         .collect()
 }
 
-fn parse_record(value: seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceRecord> {
+fn parse_record(value: &seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceRecord> {
     Ok(value.deserialize()?)
 }
 
-fn parse_state(value: seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceDomainState> {
+fn parse_state(value: &seekdeep_lossless_json::JsonValue) -> anyhow::Result<WorkspaceDomainState> {
     Ok(value.deserialize()?)
 }
 

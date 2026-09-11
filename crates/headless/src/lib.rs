@@ -220,9 +220,7 @@ impl HeadlessRunner {
         let first_seq = handle.agent.session().seq();
         if !stopping.is_aborted() {
             handle.agent.followup(UserMessage::new(
-                vec![ContentBlock::Text {
-                    text: task.into(),
-                }],
+                vec![ContentBlock::Text { text: task.into() }],
                 MessageSource::user(),
             ))?;
             wait_for_run_idle(&handle.agent, stopping).await?;
@@ -419,7 +417,11 @@ pub fn summarize(events: &[SessionEvent], first_seq: u64) -> HeadlessOutcome {
                 .into_iter()
                 .flatten()
                 .filter(|block| block.get_value("type").and_then(JsonValue::as_str) == Some("text"))
-                .filter_map(|block| block.get_value("text").and_then(|value| value.deserialize::<JsonString>().ok()))
+                .filter_map(|block| {
+                    block
+                        .get_value("text")
+                        .and_then(|value| value.deserialize::<JsonString>().ok())
+                })
                 .collect::<Vec<_>>();
             let joined = JsonString::join(&parts, "");
             if !joined.is_empty() {
@@ -598,10 +600,13 @@ mod tests {
             None,
             &HeadlessOutcome {
                 text: JsonString::default(),
-                reason: Some(json!({
-                    "kind": "error",
-                    "error": {"code": "SERVER", "message": "provider unavailable"}
-                }).into()),
+                reason: Some(
+                    json!({
+                        "kind": "error",
+                        "error": {"code": "SERVER", "message": "provider unavailable"}
+                    })
+                    .into(),
+                ),
             },
         );
         assert_eq!(result.exit_code, 1);
@@ -622,7 +627,16 @@ mod tests {
         let outcome = summarize(&events, 1);
         assert_eq!(outcome.text.to_utf16(), [0xd800, 0xdc00, 0xdfff]);
         assert_eq!(outcome.reason.as_ref(), end.get_value("reason"));
-        assert_eq!(outcome.reason.as_ref().unwrap().get_value("opaque").unwrap().as_raw(), r#"{"\ud800":"\udfff"}"#);
+        assert_eq!(
+            outcome
+                .reason
+                .as_ref()
+                .unwrap()
+                .get_value("opaque")
+                .unwrap()
+                .as_raw(),
+            r#"{"\ud800":"\udfff"}"#
+        );
         let process = render_outcome(None, &outcome);
         assert_eq!(process.stdout, "𐀀�\n");
         assert_eq!(process.stderr, "seekdeep: E�: failed �\n");
@@ -638,7 +652,13 @@ mod tests {
         assert!(output.status.success());
         let outcome = HeadlessOutcome {
             text: JsonString::from_utf16(&[0xd800, 0xdc00, 0xdfff]),
-            reason: Some(JsonValue::parse(r#"{"kind":"error","error":{"code":"E\ud800","message":"failed \udfff"}}"#.to_owned()).unwrap()),
+            reason: Some(
+                JsonValue::parse(
+                    r#"{"kind":"error","error":{"code":"E\ud800","message":"failed \udfff"}}"#
+                        .to_owned(),
+                )
+                .unwrap(),
+            ),
         };
         let actual = render_outcome(None, &outcome);
         assert_eq!(actual.stdout.as_bytes(), output.stdout);

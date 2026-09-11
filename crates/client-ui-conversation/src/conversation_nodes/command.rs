@@ -1,14 +1,18 @@
+use super::json_value;
+
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocationEvent,
     ConversationMatch, ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
 };
+use seekdeep_lossless_json::JsonString;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
 
 use super::{
-    chat_node, conversation_coordinate, is_replacement_surface_event, js_string, sequence_anchor,
+    chat_node, conversation_coordinate, is_replacement_surface_event, js_string, js_text,
+    sequence_anchor,
 };
 
 /// Slash-command and manual-compaction definition kind.
@@ -87,7 +91,7 @@ fn match_command_event(event: &ConversationLocationEvent) -> Option<Conversation
         return Some(ConversationMatchResult {
             id: event
                 .data
-                .get("commandId")
+                .get_value("commandId")
                 .map_or_else(|| "undefined".to_owned(), js_string),
             role: if event.event_type == "command/run" {
                 ConversationMatchRole::Start
@@ -105,7 +109,7 @@ fn match_command_event(event: &ConversationLocationEvent) -> Option<Conversation
     if matches!(
         event.event_type.as_str(),
         "compaction/start" | "compaction/summary" | "compaction/end"
-    ) && let Some(command_id) = event.data.get("sourceCommandId")
+    ) && let Some(command_id) = event.data.get_value("sourceCommandId")
     {
         return Some(ConversationMatchResult {
             id: js_string(command_id),
@@ -122,15 +126,40 @@ fn command_from_run(accepted: &ConversationMatch) -> Result<Value, ConversationA
         ));
     }
     let data = &accepted.event.data;
-    Ok(json!({
-        "kind": COMMAND_NODE_KIND,
-        "seq": accepted.event.seq,
-        "time": accepted.event.time,
-        "commandId": data.get("commandId").cloned().unwrap_or(Value::Null),
-        "name": data.get("name").cloned().unwrap_or(Value::Null),
-        "args": data.get("args").cloned().filter(|value| !value.is_null()).unwrap_or(Value::Null),
-        "outcome": Value::Null,
-    }))
+    Ok(Value::object([
+        ("kind", json_value(&COMMAND_NODE_KIND)),
+        ("seq", json_value(&accepted.event.seq)),
+        ("time", json_value(&accepted.event.time)),
+        (
+            "commandId",
+            json_value(
+                &(data
+                    .get_value("commandId")
+                    .cloned()
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        (
+            "name",
+            json_value(
+                &(data
+                    .get_value("name")
+                    .cloned()
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        (
+            "args",
+            json_value(
+                &(data
+                    .get_value("args")
+                    .cloned()
+                    .filter(|value| !value.is_null())
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        ("outcome", json_value(&())),
+    ]))
 }
 
 fn command_from_done(
@@ -143,42 +172,88 @@ fn command_from_done(
         ));
     }
     let data = &accepted.event.data;
-    let mut outcome = Map::from_iter([(
+    let mut outcome = Vec::from([(
         "kind".to_owned(),
-        data.get("kind").cloned().unwrap_or(Value::Null),
+        data.get_value("kind")
+            .cloned()
+            .unwrap_or_else(|| json_value(&())),
     )]);
-    if let Some(text) = data.get("text") {
-        outcome.insert("text".to_owned(), text.clone());
+    if let Some(text) = data.get_value("text") {
+        outcome.push(("text".to_owned(), text.clone()));
     }
-    if data.get("kind").and_then(Value::as_str) == Some("success")
-        && let Some(source_event_seq) = data.get("sourceEventSeq").and_then(conversation_coordinate)
+    if data.get_value("kind").and_then(Value::as_str) == Some("success")
+        && let Some(source_event_seq) = data
+            .get_value("sourceEventSeq")
+            .and_then(conversation_coordinate)
     {
-        outcome.insert("sourceEventSeq".to_owned(), json!(source_event_seq));
+        outcome.push(("sourceEventSeq".to_owned(), json_value(&source_event_seq)));
     }
-    Ok(json!({
-        "kind": COMMAND_NODE_KIND,
-        "seq": previous.and_then(|value| value.get("seq")).and_then(Value::as_u64).unwrap_or(accepted.event.seq),
-        "time": previous.and_then(|value| value.get("time")).and_then(Value::as_i64).unwrap_or(accepted.event.time),
-        "commandId": data.get("commandId").cloned().unwrap_or(Value::Null),
-        "name": previous.and_then(|value| value.get("name")).cloned().filter(|value| !value.is_null()).unwrap_or(Value::Null),
-        "args": previous.and_then(|value| value.get("args")).cloned().filter(|value| !value.is_null()).unwrap_or(Value::Null),
-        "outcome": Value::Object(outcome),
-    }))
+    Ok(Value::object([
+        ("kind", json_value(&COMMAND_NODE_KIND)),
+        (
+            "seq",
+            json_value(
+                &(previous
+                    .and_then(|value| value.get_value("seq"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(accepted.event.seq)),
+            ),
+        ),
+        (
+            "time",
+            json_value(
+                &(previous
+                    .and_then(|value| value.get_value("time"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or(accepted.event.time)),
+            ),
+        ),
+        (
+            "commandId",
+            json_value(
+                &(data
+                    .get_value("commandId")
+                    .cloned()
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        (
+            "name",
+            json_value(
+                &(previous
+                    .and_then(|value| value.get_value("name"))
+                    .cloned()
+                    .filter(|value| !value.is_null())
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        (
+            "args",
+            json_value(
+                &(previous
+                    .and_then(|value| value.get_value("args"))
+                    .cloned()
+                    .filter(|value| !value.is_null())
+                    .unwrap_or_else(|| json_value(&()))),
+            ),
+        ),
+        ("outcome", Value::object(outcome)),
+    ]))
 }
 
 pub(crate) fn compact_source(event: &ConversationLocationEvent) -> Option<CompactSource> {
     if event.event_type != "user/message" || !is_replacement_surface_event(event) {
         return None;
     }
-    let source = event.data.get("source")?;
-    if source.get("kind").and_then(Value::as_str) != Some("plugin")
-        || source.get("plugin").and_then(Value::as_str) != Some(COMPACT_PLUGIN)
+    let source = event.data.get_value("source")?;
+    if source.get_value("kind").and_then(Value::as_str) != Some("plugin")
+        || source.get_value("plugin").and_then(Value::as_str) != Some(COMPACT_PLUGIN)
     {
         return None;
     }
     Some(CompactSource {
-        compaction_id: source.get("compactionId")?.as_str()?.to_owned(),
-        source_command_id: source.get("sourceCommandId").cloned(),
+        compaction_id: source.get_value("compactionId")?.as_str()?.to_owned(),
+        source_command_id: source.get_value("sourceCommandId").cloned(),
     })
 }
 
@@ -186,49 +261,55 @@ pub(crate) fn compact_summary(
     summary: Option<&EventEvidence>,
     checkpoint: &EventEvidence,
 ) -> Value {
-    let mut text = Value::Null;
-    let mut shadowed_item_count = Value::Null;
-    let mut shadowed_token_count = Value::Null;
+    let mut text = json_value(&());
+    let mut shadowed_item_count = json_value(&());
+    let mut shadowed_token_count = json_value(&());
     if let Some(summary) = summary.filter(|summary| summary.event_type == "compaction/summary") {
-        if let Some(blocks) = summary.data.get("summary").and_then(Value::as_array) {
-            let joined = blocks
-                .iter()
-                .map(|block| {
-                    if block.get("type").and_then(Value::as_str) == Some("text") {
-                        block.get("text").map_or_else(String::new, js_string)
-                    } else {
-                        String::new()
-                    }
-                })
-                .collect::<String>();
+        if let Some(blocks) = summary.data.get_value("summary").and_then(Value::as_array) {
+            let mut joined = JsonString::default();
+            for block in blocks {
+                if block.get_value("type").and_then(Value::as_str) == Some("text")
+                    && let Some(text) = block.get_value("text")
+                {
+                    joined.push_utf16(js_text(text).utf16_units());
+                }
+            }
             if !joined.trim().is_empty() {
-                text = Value::String(joined);
+                text = json_value(&joined);
             }
         }
-        if let Some(seqs) = summary.data.get("shadowedSeqs").and_then(Value::as_array)
+        if let Some(seqs) = summary
+            .data
+            .get_value("shadowedSeqs")
+            .and_then(Value::as_array)
             && seqs
                 .iter()
                 .all(|seq| conversation_coordinate(seq).is_some())
         {
-            shadowed_item_count = json!(seqs.len());
+            shadowed_item_count = json_value(&(seqs.len()));
         }
         if let Some(tokens) = summary
             .data
-            .get("shadowedTokenCount")
+            .get_value("shadowedTokenCount")
             .and_then(conversation_coordinate)
         {
-            shadowed_token_count = json!(tokens);
+            shadowed_token_count = json_value(&tokens);
         }
     }
-    json!({
-        "kind": "compaction",
-        "seq": checkpoint.seq,
-        "time": checkpoint.time,
-        "summary": text,
-        "summaryEventSeq": summary.map_or(Value::Null, |summary| json!(summary.seq)),
-        "shadowedItemCount": shadowed_item_count,
-        "shadowedTokenCount": shadowed_token_count,
-    })
+    Value::object([
+        ("kind", json_value(&"compaction")),
+        ("seq", json_value(&checkpoint.seq)),
+        ("time", json_value(&checkpoint.time)),
+        ("summary", json_value(&text)),
+        (
+            "summaryEventSeq",
+            json_value(
+                &(summary.map_or_else(|| json_value(&()), |summary| json_value(&summary.seq))),
+            ),
+        ),
+        ("shadowedItemCount", json_value(&shadowed_item_count)),
+        ("shadowedTokenCount", json_value(&shadowed_token_count)),
+    ])
 }
 
 pub(crate) fn update_compaction_state<State>(
@@ -293,17 +374,17 @@ fn fallback_state(context: &ConversationNodeContext) -> Option<CommandState> {
     let mut command = if let Some(done) = done {
         command_from_done(done, None).ok()?
     } else {
-        json!({
-            "kind": COMMAND_NODE_KIND,
-            "seq": checkpoint.event.seq,
-            "time": checkpoint.event.time,
-            "commandId": source_command_id,
-            "name": "compact",
-            "args": Value::Null,
-            "outcome": Value::Null,
-        })
+        Value::object([
+            ("kind", json_value(&COMMAND_NODE_KIND)),
+            ("seq", json_value(&checkpoint.event.seq)),
+            ("time", json_value(&checkpoint.event.time)),
+            ("commandId", json_value(&source_command_id)),
+            ("name", json_value(&"compact")),
+            ("args", json_value(&())),
+            ("outcome", json_value(&())),
+        ])
     };
-    command["name"] = json!("compact");
+    command.insert("name", json_value("compact")).ok()?;
     Some(CommandState {
         command,
         summary: summary.map(|accepted| EventEvidence::from(accepted.as_ref())),
@@ -325,10 +406,10 @@ fn build_command_node(
     };
     let command_seq = state
         .command
-        .get("seq")
+        .get_value("seq")
         .and_then(Value::as_u64)
         .ok_or_else(|| ConversationAssemblerError::new("command state omitted seq"))?;
-    if state.command.get("name").and_then(Value::as_str) != Some("compact") {
+    if state.command.get_value("name").and_then(Value::as_str) != Some("compact") {
         return Ok(Some(chat_node(
             context,
             COMMAND_NODE_KIND,
@@ -342,26 +423,30 @@ fn build_command_node(
         .map(|checkpoint| compact_summary(state.summary.as_ref(), checkpoint));
     let anchor = compaction
         .as_ref()
-        .and_then(|marker| marker.get("seq"))
+        .and_then(|marker| marker.get_value("seq"))
         .and_then(Value::as_u64)
         .unwrap_or(command_seq);
     Ok(Some(chat_node(
         context,
         "manual-compaction",
         sequence_anchor(anchor),
-        json!({"command": state.command, "compaction": compaction}),
+        Value::object([
+            ("command", json_value(&state.command)),
+            ("compaction", json_value(&compaction)),
+        ]),
     )))
 }
 
 pub(crate) fn decode<T: for<'de> Deserialize<'de>>(
     value: &Value,
 ) -> Result<T, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 pub(crate) fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

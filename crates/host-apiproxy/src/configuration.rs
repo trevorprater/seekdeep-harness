@@ -1043,7 +1043,7 @@ fn send_remote_event(
 ) {
     let _ = sender.send(HostFrame::RemoteEvent {
         event: event.to_owned(),
-        args,
+        args: args.into_iter().map(Into::into).collect(),
     });
 }
 

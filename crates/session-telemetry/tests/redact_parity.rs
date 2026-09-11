@@ -79,7 +79,8 @@ async fn passes_records_through_unchanged_when_no_listener_is_mounted() {
     let (context, backend) = setup();
     append(&context, "w", &format!("key {SECRET}"));
     let records = backend.records.lock();
-    let body = records[0].body.as_object().expect("body object");
+    assert!(records[0].body.is_object());
+    let body = &records[0].body;
     let text = body["content"][0]["text"].as_str().expect("text");
     assert_eq!(text, format!("key {SECRET}"));
 }
@@ -99,7 +100,7 @@ async fn applies_a_mounted_rule_to_every_outbound_record() {
                         .downcast::<SessionTelemetryRecord>()
                         .map(|record| (*record).clone())
                         .expect("downstream record");
-                    record.body = json!({"scrubbed": true});
+                    record.body = json!({"scrubbed": true}).into();
                     Ok(EventReply::Value(Arc::new(record)))
                 })
             },
@@ -129,7 +130,7 @@ async fn keeps_the_canonical_log_untouched_by_a_mounted_rule() {
                         .downcast::<SessionTelemetryRecord>()
                         .map(|record| (*record).clone())
                         .expect("downstream record");
-                    record.body = Value::Null;
+                    record.body = Value::Null.into();
                     Ok(EventReply::Value(Arc::new(record)))
                 })
             },
@@ -160,7 +161,8 @@ async fn keeps_the_canonical_log_untouched_by_a_mounted_rule() {
         )
         .expect("append");
     let events = session.events();
-    let logged = events[0].data.as_object().expect("object");
+    assert!(events[0].data.is_object());
+    let logged = &events[0].data;
     assert_eq!(logged["content"][0]["text"].as_str(), Some(SECRET));
 }
 
@@ -243,7 +245,7 @@ async fn a_listener_that_skips_next_replaces_everything_beneath_it() {
                         time: 0,
                         severity: SessionTelemetrySeverity::Info,
                         attributes: Map::new(),
-                        body: json!("replaced"),
+                        body: json!("replaced").into(),
                     };
                     Ok(EventReply::Value(Arc::new(replacement)))
                 })

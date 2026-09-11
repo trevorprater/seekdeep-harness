@@ -99,7 +99,7 @@ fn now_millis() -> i64 {
 pub struct SessionTelemetryCoordinator {
     context: Context,
     backend: Arc<dyn SessionTelemetrySink>,
-    adopted: Mutex<HashSet<usize>>,
+    adopted: Mutex<HashMap<usize, Arc<Session>>>,
     chunk_seen: Mutex<HashMap<usize, HashSet<String>>>,
 }
 
@@ -117,7 +117,7 @@ impl SessionTelemetryCoordinator {
         let coordinator = Arc::new(Self {
             context: context.clone(),
             backend,
-            adopted: Mutex::new(HashSet::new()),
+            adopted: Mutex::new(HashMap::new()),
             chunk_seen: Mutex::new(HashMap::new()),
         });
         if capture == SessionTelemetryCapture::Live {
@@ -126,16 +126,9 @@ impl SessionTelemetryCoordinator {
         let cleanup = coordinator.clone();
         context.own(EffectHandle::new("telemetry capture", move || {
             Box::pin(async move {
-                let adopted: Vec<_> = cleanup.adopted.lock().iter().copied().collect();
-                let sessions = cleanup
-                    .context
-                    .get(SESSIONS)
-                    .map(|store| store.list())
-                    .unwrap_or_default();
-                for key in adopted {
-                    if let Some(session) = sessions.iter().find(|s| session_key(s) == key) {
-                        cleanup.deliver(session, cleanup.redact(shutdown_record(session))?, None);
-                    }
+                let sessions: Vec<_> = cleanup.adopted.lock().values().cloned().collect();
+                for session in sessions {
+                    cleanup.deliver(&session, cleanup.redact(shutdown_record(&session))?, None);
                 }
                 if let Err(error) = cleanup.backend.shutdown().await {
                     tracing::warn!("telemetry: backend shutdown failed: {error}");
@@ -170,7 +163,12 @@ impl SessionTelemetryCoordinator {
                     return Ok(EventReply::Undefined);
                 };
                 Self::contain(|| {
-                    if !disposed.adopted.lock().remove(&session_key(&session)) {
+                    if disposed
+                        .adopted
+                        .lock()
+                        .remove(&session_key(&session))
+                        .is_none()
+                    {
                         return Ok(());
                     }
                     disposed.deliver(&session, disposed.redact(shutdown_record(&session))?, None);
@@ -268,7 +266,12 @@ impl SessionTelemetryCoordinator {
     }
 
     fn adopt(&self, session: &Arc<Session>) {
-        if !self.adopted.lock().insert(session_key(session)) {
+        if self
+            .adopted
+            .lock()
+            .insert(session_key(session), session.clone())
+            .is_some()
+        {
             return;
         }
         self.capture_session(session, None);
@@ -340,7 +343,7 @@ impl SessionTelemetryCoordinator {
     }
 
     fn hint_flush(&self, session: &Arc<Session>) {
-        if self.adopted.lock().contains(&session_key(session)) {
+        if self.adopted.lock().contains_key(&session_key(session)) {
             self.backend.flush();
         }
     }

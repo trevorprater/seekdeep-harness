@@ -13,7 +13,11 @@ use seekdeep_client_ui_trajectory::{
     TRAJECTORY_COMPACTION_KIND, TRAJECTORY_INBOX_KIND, TRAJECTORY_INPUT_MESSAGE_KIND,
     TRAJECTORY_SESSION_END_KIND, trajectory_compaction_definitions, trajectory_message_definitions,
 };
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 struct Events(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -45,11 +49,12 @@ struct DataBuilder {
 
 impl DataBuilder {
     fn snapshot(&self) -> Rc<Value> {
-        Rc::new(Value::Array(
-            self.nodes
+        Rc::new(Value::array(
+            &self
+                .nodes
                 .values()
                 .map(|node| node.data.as_ref().clone())
-                .collect(),
+                .collect::<Vec<_>>(),
         ))
     }
 }
@@ -101,12 +106,17 @@ fn splice(
     inserted: &[&str],
     outcome: Option<&str>,
 ) -> Value {
-    let mut value = serde_json::Map::from_iter([
+    let mut value = indexmap::IndexMap::<String, Value>::from_iter([
         ("target".to_owned(), json!("next-step")),
         ("start".to_owned(), json!(start)),
         (
             "inserted".to_owned(),
-            Value::Array(inserted.iter().map(|id| json!({"id": id})).collect()),
+            Value::array(
+                &inserted
+                    .iter()
+                    .map(|id| json!({"id": id}))
+                    .collect::<Vec<_>>(),
+            ),
         ),
     ]);
     if let Some(removed_count) = removed_count {
@@ -115,7 +125,7 @@ fn splice(
     if let Some(outcome) = outcome {
         value.insert("outcome".to_owned(), json!(outcome));
     }
-    Value::Object(value)
+    Value::object(value)
 }
 
 fn user_message(id: &str, text: &str, source: &Value) -> Value {
@@ -307,7 +317,7 @@ fn compaction_lifecycle_preserves_summary_checkpoint_error_running_and_session_e
     let complete = &nodes[0]["request"];
     assert_eq!(nodes[0]["kind"], "compaction");
     assert_eq!(complete["purpose"], "compaction");
-    assert_eq!(complete["turn"], Value::Null);
+    assert_eq!(complete["turn"], json!(null));
     assert_eq!(complete["step"], 0);
     assert_eq!(complete["status"], "complete");
     assert_eq!(complete["completedAt"], 1_700_000_000_004_i64);
@@ -326,7 +336,7 @@ fn compaction_lifecycle_preserves_summary_checkpoint_error_running_and_session_e
     assert_eq!(nodes[1]["request"]["status"], "error");
     assert_eq!(nodes[1]["request"]["error"], "boom");
     assert_eq!(nodes[2]["request"]["status"], "running");
-    assert_eq!(nodes[2]["request"]["completedAt"], Value::Null);
+    assert_eq!(nodes[2]["request"]["completedAt"], json!(null));
     assert_eq!(
         nodes[3],
         json!({"kind": "session-end", "seq": 9, "time": 1_700_000_000_009_i64})

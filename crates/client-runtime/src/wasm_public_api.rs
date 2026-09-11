@@ -183,7 +183,22 @@ pub fn index_subagent_descendants_js(summaries: JsValue) -> Result<Map, JsValue>
 #[wasm_bindgen(js_name = displayFailureMessage)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn display_failure_message_js(failure: JsValue) -> Result<JsString, JsValue> {
-    let failure = crate::wasm_value_bridge::js_to_lossless_value(&failure)?;
+    if failure.is_null() || !failure.is_object() {
+        return Reflect::get(&js_sys::global(), &JsValue::from_str("String"))?
+            .dyn_into::<Function>()?
+            .call1(&JsValue::UNDEFINED, &failure)?
+            .dyn_into();
+    }
+    let failure =
+        if Reflect::get(&failure, &JsValue::from_str("code"))? == JsValue::from_str("AUTH") {
+            crate::ConversationValue::from(serde_json::json!({"code":"AUTH"}))
+        } else {
+            let message = Reflect::get(&failure, &JsValue::from_str("message"))?;
+            if !message.is_string() {
+                return js_sys::JSON::stringify(&failure);
+            }
+            crate::wasm_value_bridge::js_to_lossless_value(&message)?
+        };
     let message = seekdeep_failure_display::display_failure_message_json(&failure);
     js_sys::JSON::parse(message.as_raw())?.dyn_into()
 }

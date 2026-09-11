@@ -28,7 +28,8 @@ use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
     session::{
-        JsonValue, Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp,
+        JsonRef, JsonValue, Session, SessionEvent, SessionHeader, SessionId, SessionOrigin,
+        SurfaceOp,
     },
     session_store::{SESSIONS, SessionStore},
 };
@@ -663,9 +664,12 @@ impl SessionApiProxyRuntime {
         Ok(agent)
     }
 
-    async fn list(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+    async fn list<T: DeserializeOwned>(
+        &self,
+        request: RpcRequest<Value>,
+    ) -> anyhow::Result<RpcResponse<T>> {
         let items = self.list_visible_summaries(None).await?;
-        let value = serde_json::to_value(SessionListValue { items })?;
+        let value = JsonValue::from_serialize(&SessionListValue { items })?.deserialize()?;
         Ok(RpcResponse::new(
             request.rpc_id,
             RpcResult::Success { value: Some(value) },
@@ -742,7 +746,7 @@ impl SessionApiProxyRuntime {
         let cached_metadata = projections
             .as_ref()
             .and_then(|snapshot| snapshot.values.get("sessionListMetadata"))
-            .and_then(|value| SessionListMetadata::parse(value).ok());
+            .and_then(|value| SessionListMetadata::parse_json(value).ok());
         let probed = if cached_metadata.as_ref().is_some_and(|value| !value.blank) {
             None
         } else {
@@ -1161,11 +1165,11 @@ impl SessionApiProxyRuntime {
                     content: block.get("content")?.deserialize().ok()?,
                     is_error: block
                         .get("isError")
-                        .map(|value| value.deserialize::<bool>())
+                        .map(JsonRef::deserialize::<bool>)
                         .transpose()
                         .ok()?
                         .unwrap_or(false),
-                    meta: event.data.get("meta").map(|value| value.to_owned()),
+                    meta: event.data.get("meta").map(JsonRef::to_owned),
                 };
                 let view = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     presenter(&arguments, &result)
@@ -1646,14 +1650,14 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         let runtime = Arc::new(self.clone());
         async move {
             match method {
+                RpcMethod::SessionList => runtime.list(request).await,
                 RpcMethod::SessionHistory => runtime.history(request).await,
                 RpcMethod::SubagentHistory => runtime.subagent_history(request, signal).await,
-                RpcMethod::SessionCreate
-                | RpcMethod::SessionList
-                | RpcMethod::SessionSearch
-                | RpcMethod::SubagentList => crate::handler::response_json(
-                    runtime.session_unary(method, request, signal).await?,
-                ),
+                RpcMethod::SessionCreate | RpcMethod::SessionSearch | RpcMethod::SubagentList => {
+                    crate::handler::response_json(
+                        runtime.session_unary(method, request, signal).await?,
+                    )
+                }
                 _ => runtime.domains.unary_json(method, request, signal).await,
             }
         }
@@ -1745,7 +1749,8 @@ fn fold_list_metadata(events: &[SessionEvent]) -> SessionListMetadata {
                 .data
                 .get("source")
                 .and_then(|source| source.get("kind"))
-                .and_then(Value::as_str)
+                .and_then(|value| value.deserialize::<String>().ok())
+                .as_deref()
                 == Some("user")
         {
             last_prompt_at = Some(i64_wire_number(event.time));
@@ -1779,7 +1784,8 @@ fn session_list_projection_definition() -> ProjectionDefinition {
                     .data
                     .get("source")
                     .and_then(|source| source.get("kind"))
-                    .and_then(Value::as_str)
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    .as_deref()
                     == Some("user")
             {
                 next.last_prompt_at = Some(i64_wire_number(event.time));
@@ -2216,46 +2222,47 @@ fn queue_envelope(
 /// `agent/inbox/spliced` event is appended before the inbox state changes (source order).
 fn queue_items(
     agent: &Agent,
-    splice: Option<&Value>,
+    splice: Option<&JsonValue>,
 ) -> anyhow::Result<Vec<crate::api::events::QueuedInboxItem>> {
     use crate::api::events::{QueuePlacement, QueuedInboxItem, WireMessage};
-    let project =
-        |target: &str, messages: Vec<seekdeep_llm::UserMessage>| -> anyhow::Result<Vec<Value>> {
-            let mut values = messages
-                .iter()
-                .map(serde_json::to_value)
-                .collect::<Result<Vec<_>, _>>()?;
-            if let Some(splice) =
-                splice.filter(|splice| splice.get("target").and_then(Value::as_str) == Some(target))
-            {
-                let index = |key: &str| {
-                    splice
-                        .get(key)
-                        .and_then(Value::as_u64)
-                        .map_or(0, |value| usize::try_from(value).unwrap_or(usize::MAX))
-                };
-                let start = index("start").min(values.len());
-                let end = start
-                    .saturating_add(index("removedCount"))
-                    .min(values.len());
-                let inserted = splice
-                    .get("inserted")
-                    .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
-                values.splice(start..end, inserted);
-            }
-            Ok(values)
-        };
-    let item = |value: &Value, placement: QueuePlacement| -> anyhow::Result<QueuedInboxItem> {
+    let project = |target: &str,
+                   messages: Vec<seekdeep_llm::UserMessage>|
+     -> anyhow::Result<Vec<JsonValue>> {
+        let mut values = messages
+            .iter()
+            .map(JsonValue::from_serialize)
+            .collect::<Result<Vec<_>, _>>()?;
+        if let Some(splice) = splice
+            .filter(|splice| splice.get_value("target").and_then(JsonValue::as_str) == Some(target))
+        {
+            let index = |key: &str| {
+                splice
+                    .get_value(key)
+                    .and_then(JsonValue::as_u64)
+                    .map_or(0, |value| usize::try_from(value).unwrap_or(usize::MAX))
+            };
+            let start = index("start").min(values.len());
+            let end = start
+                .saturating_add(index("removedCount"))
+                .min(values.len());
+            let inserted = splice
+                .get_value("inserted")
+                .and_then(JsonValue::as_array)
+                .cloned()
+                .unwrap_or_default();
+            values.splice(start..end, inserted);
+        }
+        Ok(values)
+    };
+    let item = |value: &JsonValue, placement: QueuePlacement| -> anyhow::Result<QueuedInboxItem> {
         let id = value
-            .get("id")
-            .and_then(Value::as_str)
+            .get_value("id")
+            .and_then(JsonValue::as_str)
             .ok_or_else(|| anyhow::anyhow!("pending inbox message has no id"))?;
         Ok(QueuedInboxItem {
             id: seekdeep_llm::MessageId::new(id),
             placement,
-            message: serde_json::from_value::<WireMessage>(value.clone())?,
+            message: value.deserialize::<WireMessage>()?,
         })
     };
     let mut items = Vec::new();
@@ -2265,9 +2272,9 @@ fn queue_items(
     for value in project("next-step", agent.inbox().next_step())? {
         // Only user-origin messages are steering; injected context is not a user action.
         let placement = if value
-            .get("source")
-            .and_then(|source| source.get("kind"))
-            .and_then(Value::as_str)
+            .get_value("source")
+            .and_then(|source| source.get_value("kind"))
+            .and_then(JsonValue::as_str)
             == Some("user")
         {
             QueuePlacement::Steering

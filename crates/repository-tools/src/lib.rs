@@ -25,13 +25,13 @@ pub mod cordis_core_api;
 pub mod cordis_walk;
 pub mod coverage_exempt;
 pub mod coverage_uncovered_locations;
+pub mod doc_graphs;
 /// Canonical documentation publication metadata and source-preserving site projection.
 pub mod doc_site;
 pub mod doc_site_fragments;
-pub mod doc_graphs;
-pub mod doc_typecheck;
 /// Stable links to the pinned declarations used by generated documentation.
 pub mod doc_source_links;
+pub mod doc_typecheck;
 /// Workspace source-alias to built-declaration path mapping.
 pub mod doc_typecheck_paths;
 /// Standing-document word-budget policy.
@@ -75,9 +75,6 @@ pub mod release_verify_packed_install;
 pub mod repo_files;
 pub mod rescope_exact_edit;
 pub mod rescope_vendor;
-pub mod third_party_notices;
-pub mod ts_project;
-pub mod type_equiv;
 pub mod run_gates;
 pub mod run_oxlint;
 pub mod runtime_closure;
@@ -86,6 +83,7 @@ pub mod scoped_events_generator;
 pub mod skill_invocation_metadata;
 /// Client slot contract and registration scans.
 pub mod slot_walk;
+pub mod third_party_notices;
 /// Minimal-update translation briefing assembly.
 pub mod translation_brief;
 /// The `gen-translation-brief` command over a repository root.
@@ -99,6 +97,8 @@ pub mod translation_prompt;
 pub mod translation_prompt_verifier;
 /// Lexical TypeScript scanning helpers.
 pub mod ts_lexical;
+pub mod ts_project;
+pub mod type_equiv;
 /// Vendored package lockfile link-integrity policy.
 pub mod vendored_links;
 pub mod workspace_constraints;

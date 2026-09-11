@@ -388,7 +388,7 @@ impl MessageFeedbackService {
         let items = self
             .table
             .get(session_id.as_str())?
-            .and_then(|value| serde_json::from_value::<MessageFeedbackRow>(value).ok())
+            .and_then(|value| value.deserialize::<MessageFeedbackRow>().ok())
             .filter(|row| same_identity(&row.session, &identity_of(&known.meta)))
             .map_or_else(Vec::new, |row| row.items);
         Ok(Ok(items))
@@ -439,7 +439,7 @@ impl MessageFeedbackService {
         let current: Option<MessageFeedbackRow> = self
             .table
             .get(request.session_id.as_str())?
-            .and_then(|value| serde_json::from_value(value).ok())
+            .and_then(|value| value.deserialize().ok())
             .filter(|row: &MessageFeedbackRow| {
                 same_identity(&row.session, &identity_of(&durable.meta))
             });
@@ -516,7 +516,7 @@ impl MessageFeedbackService {
         let current: Option<MessageFeedbackRow> = self
             .table
             .get(request.session_id.as_str())?
-            .and_then(|value| serde_json::from_value(value).ok())
+            .and_then(|value| value.deserialize().ok())
             .filter(|row: &MessageFeedbackRow| {
                 same_identity(&row.session, &identity_of(&known.meta))
             });

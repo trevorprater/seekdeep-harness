@@ -10,7 +10,11 @@ use seekdeep_client_runtime::{
     ConversationTimelineSnapshot, ConversationViewNode,
 };
 use seekdeep_client_ui_trajectory::trajectory_tool_definition;
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 struct Events(Rc<AssemblerNodeDefinition>);
 
@@ -42,11 +46,12 @@ struct DataBuilder {
 
 impl DataBuilder {
     fn snapshot(&self) -> Rc<Value> {
-        Rc::new(Value::Array(
-            self.nodes
+        Rc::new(Value::array(
+            &self
+                .nodes
                 .values()
                 .map(|node| node.data.as_ref().clone())
-                .collect(),
+                .collect::<Vec<_>>(),
         ))
     }
 }
@@ -247,10 +252,10 @@ fn update_only_window_falls_back_to_result_root_and_retains_nested_settlement() 
     value.flush().unwrap();
     let snapshot = value.snapshot("trajectory").unwrap();
     let root = &snapshot[0]["root"];
-    assert_eq!(root["call"], Value::Null);
-    assert_eq!(root["callTime"], Value::Null);
+    assert_eq!(root["call"], json!(null));
+    assert_eq!(root["callTime"], json!(null));
     assert_eq!(root["subCalls"][0]["callId"], "child");
-    assert_eq!(root["subCalls"][0]["callTime"], Value::Null);
+    assert_eq!(root["subCalls"][0]["callTime"], json!(null));
 }
 
 #[test]

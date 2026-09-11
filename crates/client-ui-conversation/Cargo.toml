@@ -11,6 +11,7 @@ description = "Rust/WASM conversation UI semantic core and surfaces"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+seekdeep-lossless-json = { path = "../lossless-json" }
 indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

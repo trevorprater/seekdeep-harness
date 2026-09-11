@@ -307,7 +307,7 @@ async fn sse_decoder_handles_chunk_boundaries_and_skips_malformed_frames() {
 async fn envelope_observation_sees_full_request_response_and_unsubscribe_stops_it() {
     let api = Arc::new(CarrierApi::default());
     let client = InProcessApiClient::new(ApiProxyHandler::new(api));
-    let observed = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let observed = Arc::new(Mutex::new(Vec::<seekdeep_core::session::JsonValue>::new()));
     let subscription = client.subscribe_envelopes({
         let observed = observed.clone();
         Arc::new(move |batch| observed.lock().extend_from_slice(batch))

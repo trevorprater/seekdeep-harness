@@ -10,6 +10,7 @@ use futures::{SinkExt as _, StreamExt as _, future::BoxFuture, stream::BoxStream
 use parking_lot::Mutex;
 use seekdeep_abort::AbortSignal;
 use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -26,7 +27,7 @@ use crate::{
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const INTERNAL_BASE: &str = "http://seekdeep.internal";
 
-type EnvelopeCallback = Arc<dyn Fn(&[Value]) + Send + Sync>;
+type EnvelopeCallback = Arc<dyn Fn(&[JsonValue]) + Send + Sync>;
 
 /// Deadline policy for one unary HTTP call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,8 +83,8 @@ pub trait WebApiContract: Send + Sync + 'static {
     fn parse_downlink_payload(
         &self,
         downlink: WebApiDownlink,
-        payload: &Value,
-    ) -> anyhow::Result<Value>;
+        payload: &JsonValue,
+    ) -> anyhow::Result<JsonValue>;
 }
 
 #[derive(Debug)]
@@ -110,14 +111,10 @@ impl WebApiContract for TransportOnlyContract {
     fn parse_downlink_payload(
         &self,
         _downlink: WebApiDownlink,
-        payload: &Value,
-    ) -> anyhow::Result<Value> {
+        payload: &JsonValue,
+    ) -> anyhow::Result<JsonValue> {
         anyhow::ensure!(
-            payload
-                .as_object()
-                .and_then(|payload| payload.get("type"))
-                .and_then(Value::as_str)
-                .is_some(),
+            payload.get("type").is_some_and(JsonRef::is_string),
             "downlink payload has no string type"
         );
         Ok(payload.clone())
@@ -131,7 +128,7 @@ struct EnvelopeListener {
 
 #[derive(Default)]
 struct EnvelopeState {
-    buffer: Vec<Value>,
+    buffer: Vec<JsonValue>,
     flush_scheduled: bool,
     listeners: Vec<EnvelopeListener>,
 }
@@ -325,14 +322,14 @@ impl WebApiClient {
         Box::pin(async move {
             let rpc_id = RpcId::new(Uuid::new_v4().to_string());
             let message = ClientRequest::new(rpc_id.clone(), method.clone(), payload);
-            client.observe(serde_json::to_value(&message)?);
+            client.observe(JsonValue::from_serialize(&message)?);
             let path = format!("/api/{method}");
             let response = client
                 .post_json(&path, serde_json::to_vec(&message)?, signal, timeout_policy)
                 .await?;
             let wire: Value = serde_json::from_slice(&response.body)?;
             let mut full = client.contract.parse_server_response(&wire)?;
-            client.observe(serde_json::to_value(&full)?);
+            client.observe(JsonValue::from_serialize(&full)?);
             anyhow::ensure!(
                 full.rpc_id == rpc_id,
                 "rpcId mismatch for {method}: sent {rpc_id}, got {}",
@@ -360,7 +357,7 @@ impl WebApiClient {
     ) -> BoxFuture<'static, anyhow::Result<Value>> {
         let client = self.clone();
         Box::pin(async move {
-            client.observe(message.clone());
+            client.observe(message.clone().into());
             let response = client
                 .post_json(
                     "/api/respond",
@@ -477,7 +474,7 @@ impl WebApiClient {
         })
     }
 
-    fn observe(&self, envelope: Value) {
+    fn observe(&self, envelope: JsonValue) {
         let schedule = {
             let mut state = self.envelopes.lock();
             if state.listeners.is_empty() {
@@ -598,19 +595,19 @@ struct WireServerRequest {
     kind: String,
     #[serde(rename = "rpcId")]
     rpc_id: RpcId,
-    method: String,
-    payload: Value,
+    method: JsonString,
+    payload: JsonValue,
 }
 
 fn parse_server_request(
     text: &str,
     downlink: WebApiDownlink,
     contract: &dyn WebApiContract,
-) -> anyhow::Result<(Value, EventFrame)> {
+) -> anyhow::Result<(JsonValue, EventFrame)> {
     let full: WireServerRequest = serde_json::from_str(text)?;
     anyhow::ensure!(full.kind == "server-request", "invalid server-request type");
     let payload = contract.parse_downlink_payload(downlink, &full.payload)?;
-    let envelope = serde_json::to_value(&full)?;
+    let envelope = JsonValue::from_serialize(&full)?;
     Ok((
         envelope,
         EventFrame {

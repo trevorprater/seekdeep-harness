@@ -1,34 +1,30 @@
 use std::rc::Rc;
 
 use indexmap::IndexSet;
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationMatchResult,
     ConversationMatchRole, ConversationPublication,
 };
+use seekdeep_lossless_json::JsonString;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Cumulative next-turn inbox definition kind.
 pub const INBOX_NEXT_TURN_KIND: &str = "inbox-next-turn";
 /// Cumulative next-step inbox definition kind.
 pub const INBOX_NEXT_STEP_KIND: &str = "inbox-next-step";
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct InboxIdentity {
-    id: String,
-}
-
 /// Cumulative durable inbox state used to classify admitted steering messages.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConversationInboxState {
     /// Identities still resident in this inbox.
-    pending: Vec<InboxIdentity>,
+    pending: Vec<Value>,
     /// Next-step identities removed by a non-cancelled splice.
-    claimed: IndexSet<String>,
+    claimed: IndexSet<JsonString>,
 }
 
 impl ConversationInboxState {
-    pub(crate) fn contains_claim(&self, id: &str) -> bool {
+    pub(crate) fn contains_claim(&self, id: &JsonString) -> bool {
         self.claimed.contains(id)
     }
 }
@@ -48,7 +44,7 @@ fn inbox_definition(target: &'static str, kind: &'static str) -> AssemblerNodeDe
         target: None,
         match_event: Rc::new(move |event| {
             Ok((event.event_type == "agent/inbox/spliced"
-                && event.data.get("target").and_then(Value::as_str) == Some(target))
+                && event.data.get_value("target").and_then(Value::as_str) == Some(target))
             .then(|| ConversationMatchResult {
                 id: event.seq.to_string(),
                 role: ConversationMatchRole::Start,
@@ -87,35 +83,29 @@ fn apply_splice(
     let mut claimed = previous.map_or_else(IndexSet::new, |state| state.claimed.clone());
     let start = required_index(splice, "start")?.min(pending.len());
     let removed_count = splice
-        .get("removedCount")
+        .get_value("removedCount")
         .map(|_| required_index(splice, "removedCount"))
         .transpose()?
         .unwrap_or(0);
     let inserted = splice
-        .get("inserted")
+        .get_value("inserted")
         .and_then(Value::as_array)
         .ok_or_else(|| ConversationAssemblerError::new("inbox splice inserted must be an array"))?
         .iter()
-        .map(|identity| {
-            identity
-                .get("id")
-                .and_then(Value::as_str)
-                .map(|id| InboxIdentity { id: id.to_owned() })
-                .ok_or_else(|| {
-                    ConversationAssemblerError::new("inbox splice identity omitted string id")
-                })
-        })
+        .map(|identity| identity_id(identity).map(|_| identity.clone()))
         .collect::<Result<Vec<_>, _>>()?;
     let end = start.saturating_add(removed_count).min(pending.len());
     let removed = pending
         .splice(start..end, inserted.iter().cloned())
         .collect::<Vec<_>>();
     for identity in &inserted {
-        claimed.shift_remove(&identity.id);
+        claimed.shift_remove(&identity_id(identity)?);
     }
-    if target == "next-step" && splice.get("outcome").and_then(Value::as_str) != Some("canceled") {
+    if target == "next-step"
+        && splice.get_value("outcome").and_then(Value::as_str) != Some("canceled")
+    {
         for identity in removed {
-            claimed.insert(identity.id);
+            claimed.insert(identity_id(&identity)?);
         }
     }
     Ok(ConversationInboxState { pending, claimed })
@@ -123,7 +113,7 @@ fn apply_splice(
 
 fn required_index(value: &Value, field: &str) -> Result<usize, ConversationAssemblerError> {
     value
-        .get(field)
+        .get_value(field)
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
         .ok_or_else(|| {
@@ -131,13 +121,21 @@ fn required_index(value: &Value, field: &str) -> Result<usize, ConversationAssem
         })
 }
 
+fn identity_id(value: &Value) -> Result<JsonString, ConversationAssemblerError> {
+    value
+        .get_value("id")
+        .and_then(|value| value.deserialize().ok())
+        .ok_or_else(|| ConversationAssemblerError::new("inbox splice identity omitted string id"))
+}
+
 pub(crate) fn decode(value: &Value) -> Result<ConversationInboxState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

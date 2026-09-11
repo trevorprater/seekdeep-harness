@@ -2,14 +2,13 @@
 
 use std::ops::Deref;
 
-use seekdeep_lossless_json::JsonValue;
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeMap as _,
-};
+use seekdeep_lossless_json::{JsonString, JsonValue};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::Error as _};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::{
+    MessageFields,
     brand::{CallId, MessageId},
     types::{ContentBlock, StreamChunk, is_token_delta},
 };
@@ -68,7 +67,7 @@ pub struct MessageSource {
     /// Producer kind.
     pub kind: String,
     /// Kind-specific fields.
-    pub fields: Map<String, Value>,
+    pub fields: MessageFields,
 }
 
 impl Serialize for MessageSource {
@@ -76,15 +75,18 @@ impl Serialize for MessageSource {
     where
         S: Serializer,
     {
-        let mut object = Map::new();
-        object.insert("kind".to_owned(), Value::String(self.kind.clone()));
-        object.extend(
-            self.fields
-                .iter()
-                .filter(|(field, _)| field.as_str() != "kind")
-                .map(|(field, value)| (field.clone(), value.clone())),
-        );
-        Value::Object(object).serialize(serializer)
+        JsonValue::object(
+            std::iter::once((
+                JsonString::from("kind"),
+                Value::String(self.kind.clone()).into(),
+            ))
+            .chain(
+                self.fields
+                    .iter()
+                    .filter(|(field, _)| field.as_str() != Some("kind")),
+            ),
+        )
+        .serialize(serializer)
     }
 }
 
@@ -93,17 +95,17 @@ impl<'de> Deserialize<'de> for MessageSource {
     where
         D: Deserializer<'de>,
     {
-        let Value::Object(mut object) = Value::deserialize(deserializer)? else {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if !value.is_object() {
             return Err(D::Error::custom("message source must be an object"));
-        };
-        let kind = object
-            .shift_remove("kind")
-            .and_then(|value| value.as_str().map(str::to_owned))
+        }
+        let kind = value
+            .get("kind")
+            .and_then(|value| value.deserialize::<String>().ok())
             .ok_or_else(|| D::Error::custom("message source kind must be a string"))?;
-        Ok(Self {
-            kind,
-            fields: object,
-        })
+        let mut fields = MessageFields::try_from(value).map_err(D::Error::custom)?;
+        fields.remove("kind");
+        Ok(Self { kind, fields })
     }
 }
 
@@ -113,7 +115,7 @@ impl MessageSource {
     pub fn user() -> Self {
         Self {
             kind: "user".to_owned(),
-            fields: Map::new(),
+            fields: MessageFields::new(),
         }
     }
 
@@ -124,7 +126,7 @@ impl MessageSource {
         fields.insert("plugin".to_owned(), Value::String(plugin.into()));
         Self {
             kind: "plugin".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 
@@ -136,7 +138,7 @@ impl MessageSource {
         fields.insert("model".to_owned(), Value::String(model.into()));
         Self {
             kind: "model".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 
@@ -150,7 +152,7 @@ impl MessageSource {
         );
         Self {
             kind: "tool".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 }
@@ -168,7 +170,7 @@ pub struct Message {
     source: MessageSource,
     /// Module-augmented message fields preserved by construction, persistence,
     /// and routing boundaries.
-    fields: Map<String, Value>,
+    fields: MessageFields,
 }
 
 impl<'de> Deserialize<'de> for Message {
@@ -177,14 +179,14 @@ impl<'de> Deserialize<'de> for Message {
         D: Deserializer<'de>,
     {
         let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
-        let mut fields = Map::new();
+        let mut fields = MessageFields::new();
         for (name, field) in value
             .object_entries()
             .ok_or_else(|| D::Error::custom("message must be an object"))?
         {
-            let name: String = name.deserialize().map_err(D::Error::custom)?;
-            if !matches!(name.as_str(), "id" | "role" | "content" | "source") {
-                fields.insert(name, field.deserialize().map_err(D::Error::custom)?);
+            let name: JsonString = name.deserialize().map_err(D::Error::custom)?;
+            if !matches!(name.as_str(), Some("id" | "role" | "content" | "source")) {
+                fields.insert(name, field.to_owned());
             }
         }
         Ok(Self {
@@ -213,35 +215,29 @@ impl Serialize for Message {
     where
         S: Serializer,
     {
-        let mut object = serializer.serialize_map(Some(4 + self.fields.len()))?;
-        match self.role {
+        let source = JsonValue::from_serialize(&self.source).map_err(S::Error::custom)?;
+        let content = JsonValue::from_serialize(&self.content).map_err(S::Error::custom)?;
+        let role = JsonValue::from_serialize(&self.role).map_err(S::Error::custom)?;
+        let id = JsonValue::from_serialize(&self.id).map_err(S::Error::custom)?;
+        let mut fields: Vec<(JsonString, JsonValue)> = match self.role {
             MessageRole::User if self.source.kind == "tool" => {
-                object.serialize_entry("source", &self.source)?;
-                object.serialize_entry("content", &self.content)?;
-                for (field, value) in &self.fields {
-                    object.serialize_entry(field, value)?;
-                }
-                object.serialize_entry("role", &self.role)?;
+                vec![("source".into(), source), ("content".into(), content)]
             }
             MessageRole::User => {
-                object.serialize_entry("content", &self.content)?;
-                object.serialize_entry("source", &self.source)?;
-                for (field, value) in &self.fields {
-                    object.serialize_entry(field, value)?;
-                }
-                object.serialize_entry("role", &self.role)?;
+                vec![("content".into(), content), ("source".into(), source)]
             }
-            MessageRole::System | MessageRole::Assistant => {
-                object.serialize_entry("role", &self.role)?;
-                object.serialize_entry("content", &self.content)?;
-                object.serialize_entry("source", &self.source)?;
-                for (field, value) in &self.fields {
-                    object.serialize_entry(field, value)?;
-                }
-            }
+            MessageRole::System | MessageRole::Assistant => vec![
+                ("role".into(), role.clone()),
+                ("content".into(), content),
+                ("source".into(), source),
+            ],
+        };
+        fields.extend(self.fields.iter());
+        if self.role == MessageRole::User {
+            fields.push(("role".into(), role));
         }
-        object.serialize_entry("id", &self.id)?;
-        object.end()
+        fields.push(("id".into(), id));
+        JsonValue::object(fields).serialize(serializer)
     }
 }
 
@@ -312,14 +308,14 @@ impl Message {
 
     /// Module-augmented message fields.
     #[must_use]
-    pub const fn fields(&self) -> &Map<String, Value> {
+    pub const fn fields(&self) -> &MessageFields {
         &self.fields
     }
 
     /// Creates an identified message.
     #[must_use]
     pub fn new(role: MessageRole, content: Vec<ContentBlock>, source: MessageSource) -> Self {
-        Self::new_with_fields(role, content, source, Map::new())
+        Self::new_with_fields(role, content, source, MessageFields::new())
     }
 
     /// Creates an identified message while preserving module-augmented fields.
@@ -328,8 +324,9 @@ impl Message {
         role: MessageRole,
         content: Vec<ContentBlock>,
         source: MessageSource,
-        mut fields: Map<String, Value>,
+        fields: impl Into<MessageFields>,
     ) -> Self {
+        let mut fields = fields.into();
         remove_reserved_message_fields(&mut fields);
         Self {
             id: MessageId::new(Uuid::new_v4().to_string()),
@@ -347,8 +344,9 @@ impl Message {
         role: MessageRole,
         content: Vec<ContentBlock>,
         source: MessageSource,
-        mut fields: Map<String, Value>,
+        fields: impl Into<MessageFields>,
     ) -> Self {
+        let mut fields = fields.into();
         remove_reserved_message_fields(&mut fields);
         Self {
             id,
@@ -400,7 +398,7 @@ impl Message {
     }
 }
 
-fn remove_reserved_message_fields(fields: &mut Map<String, Value>) {
+fn remove_reserved_message_fields(fields: &mut MessageFields) {
     for field in ["id", "role", "content", "source"] {
         fields.remove(field);
     }

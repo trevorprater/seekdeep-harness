@@ -786,6 +786,10 @@ async fn thread_fallback_keeps_child_session_writers_alive() -> anyhow::Result<(
             "--nocapture",
         ])
         .env_clear()
+        .env(
+            "SEEKDEEP_CODE_RUNTIME_NODE_DIR",
+            seekdeep_code_runtime_worker_thread::node_runtime_assets()?,
+        )
         .current_dir(isolated.path())
         .kill_on_drop(true);
     if let Some(path) = std::env::var_os("PATH") {

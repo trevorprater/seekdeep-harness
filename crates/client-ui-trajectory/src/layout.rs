@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use crate::json_value::{json, null};
+use crate::text_value::member as text;
 use indexmap::{IndexMap, IndexSet};
 use seekdeep_lossless_json::{JsonString, JsonValue as Value};
-use crate::text_value::member as text;
 use url::Url;
 
 use crate::{
@@ -220,8 +220,9 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
                 let summary = request.get_value("summary");
                 let text = match status {
                     "running" => JsonString::from("Compacting context…"),
-                    "error" => text(&request, "error")
-                        .unwrap_or_else(|| "Compaction failed".into()),
+                    "error" => {
+                        text(&request, "error").unwrap_or_else(|| "Compaction failed".into())
+                    }
                     _ if summary.is_none() => JsonString::from("Context compacted"),
                     _ => JsonString::default(),
                 };
@@ -331,15 +332,15 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
         let name = text(call, "name").unwrap_or_default();
         let args = text(call, "argsRaw").unwrap_or_default();
         let mut cell = TrajectoryCell::new(cell_index, TrajectoryCellKind::Tool, name.clone());
-        cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
-        cell.input_detail = Some(args.to_owned());
+        cell.preview_markdown = (!args.is_empty()).then(|| args.clone());
+        cell.input_detail = Some(args.clone());
         cell.call_id = Some(call_id.to_owned());
         cell.time_seconds = None;
         cell.started_at = finite_member(call, "time");
         let subs = blocks_member(call, "subCalls").to_vec();
         let mut laid = vec![LaidCell {
             abs_time: None,
-            tool_name: Some(name.to_owned()),
+            tool_name: Some(name.clone()),
             call_id: Some(call_id.to_owned()),
             sub_calls: subs.clone(),
             cell,
@@ -704,8 +705,8 @@ fn expand_assistant(
         let name = text(block, "name").unwrap_or_default();
         let args = text(block, "argsRaw").unwrap_or_default();
         let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Tool, name.clone());
-        cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
-        cell.input_detail = Some(args.to_owned());
+        cell.preview_markdown = (!args.is_empty()).then(|| args.clone());
+        cell.input_detail = Some(args.clone());
         cell.call_id = Some(call_id.to_owned());
         if let Some(result) = result {
             cell.output_detail = Some(detail_result(result));
@@ -728,7 +729,7 @@ fn expand_assistant(
         output.push(LaidCell {
             cell,
             abs_time: call_abs,
-            tool_name: Some(name.to_owned()),
+            tool_name: Some(name.clone()),
             call_id: Some(call_id.to_owned()),
             sub_calls: call_block
                 .map_or_else(Vec::new, |call| blocks_member(call, "subCalls").to_vec()),
@@ -783,8 +784,8 @@ fn expand_sub_calls(subs: &[Value], start_index: usize) -> Vec<LaidCell> {
         index += 1;
         let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Subtool, name.clone());
         if let Some(args) = args {
-            cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
-            cell.input_detail = Some(args.to_owned());
+            cell.preview_markdown = (!args.is_empty()).then(|| args.clone());
+            cell.input_detail = Some(args.clone());
         } else {
             result_as_text(&mut cell, result_preview.as_ref());
         }
@@ -813,7 +814,7 @@ fn expand_sub_calls(subs: &[Value], start_index: usize) -> Vec<LaidCell> {
         output.push(LaidCell {
             cell,
             abs_time: started_at,
-            tool_name: Some(name.to_owned()),
+            tool_name: Some(name.clone()),
             call_id: Some(call_id.to_owned()),
             sub_calls: Vec::new(),
         });
@@ -958,7 +959,9 @@ fn group_description(laid: &[LaidCell]) -> Option<JsonString> {
         }
     }
     parts.extend(tools.into_iter().map(|(mut name, count)| {
-        if count > 1 { name.push_str(&format!("×{count}")); }
+        if count > 1 {
+            name.push_str(&format!("×{count}"));
+        }
         name
     }));
     (!parts.is_empty()).then(|| JsonString::join(&parts, " "))
@@ -1037,12 +1040,21 @@ fn source_block(value: &Value) -> TrajectorySourceBlock {
     }
     let kind = string(value, "type").unwrap_or("unknown");
     if let Some(content) = text(value, "text") {
-        return source_text(if kind == "reasoning" { "thinking" } else { kind }, content);
+        return source_text(
+            if kind == "reasoning" {
+                "thinking"
+            } else {
+                kind
+            },
+            content,
+        );
     }
     let image_src = source_image(value);
     TrajectorySourceBlock {
         kind: kind.to_owned(),
-        content: image_src.as_ref().map_or_else(|| stringify_source_value(value), |_| JsonString::default()),
+        content: image_src
+            .as_ref()
+            .map_or_else(|| stringify_source_value(value), |_| JsonString::default()),
         image_src,
         image_alt: text(value, "alt"),
         call_id: None,
@@ -1228,11 +1240,15 @@ fn collect_call_ids(turns: &IndexMap<i64, TurnBucket>) -> IndexSet<String> {
 }
 
 fn assistant_text(blocks: &[Value], kind: &str, streaming: bool) -> JsonString {
-    JsonString::join(&blocks.iter()
-        .filter(|block| string(block, "kind") == Some(kind))
-        .filter_map(|block| text(block, "text"))
-        .filter(|text| !streaming || !text.is_empty())
-        .collect::<Vec<_>>(), "\n\n")
+    JsonString::join(
+        &blocks
+            .iter()
+            .filter(|block| string(block, "kind") == Some(kind))
+            .filter_map(|block| text(block, "text"))
+            .filter(|text| !streaming || !text.is_empty())
+            .collect::<Vec<_>>(),
+        "\n\n",
+    )
 }
 
 #[derive(Clone)]
@@ -1244,8 +1260,11 @@ struct ResultPreview {
 fn summarize_result(node: &Value) -> ResultPreview {
     if bool_member(node, "isError") {
         return ResultPreview {
-            result: Some(node.get_value("error").and_then(|error| text(error, "code"))
-                .unwrap_or_else(|| "error".into())),
+            result: Some(
+                node.get_value("error")
+                    .and_then(|error| text(error, "code"))
+                    .unwrap_or_else(|| "error".into()),
+            ),
             markdown: None,
         };
     }
@@ -1253,10 +1272,16 @@ fn summarize_result(node: &Value) -> ResultPreview {
         if string(block, "type") == Some("text")
             && let Some(text) = text(block, "text").filter(|text| !text.is_empty())
         {
-            return ResultPreview { result: Some(JsonString::default()), markdown: Some(text) };
+            return ResultPreview {
+                result: Some(JsonString::default()),
+                markdown: Some(text),
+            };
         }
     }
-    ResultPreview { result: Some("No output".into()), markdown: None }
+    ResultPreview {
+        result: Some("No output".into()),
+        markdown: None,
+    }
 }
 
 fn apply_result_preview(cell: &mut TrajectoryCell, preview: Option<&ResultPreview>) {
@@ -1266,7 +1291,9 @@ fn apply_result_preview(cell: &mut TrajectoryCell, preview: Option<&ResultPrevie
 }
 
 fn result_as_text(cell: &mut TrajectoryCell, preview: Option<&ResultPreview>) {
-    cell.text = preview.and_then(|preview| preview.result.clone()).unwrap_or_default();
+    cell.text = preview
+        .and_then(|preview| preview.result.clone())
+        .unwrap_or_default();
     cell.preview_markdown = preview.and_then(|preview| preview.markdown.clone());
 }
 
@@ -1277,19 +1304,37 @@ fn summarize_call_into(cell: &mut TrajectoryCell, name: JsonString, args: JsonSt
 
 fn detail_result(node: &Value) -> JsonString {
     if bool_member(node, "isError") {
-        return node.get_value("error").map_or_else(|| "error".into(), |error| {
-            JsonString::join(&[text(error, "name").unwrap_or_default(), text(error, "code").unwrap_or_default()], ": ")
-        });
+        return node.get_value("error").map_or_else(
+            || "error".into(),
+            |error| {
+                JsonString::join(
+                    &[
+                        text(error, "name").unwrap_or_default(),
+                        text(error, "code").unwrap_or_default(),
+                    ],
+                    ": ",
+                )
+            },
+        );
     }
     let content = blocks_member(node, "content");
-    let result = JsonString::join(&content.iter()
-        .filter(|block| string(block, "type") == Some("text"))
-        .filter_map(|block| text(block, "text"))
-        .collect::<Vec<_>>(), "\n");
-    if !result.is_empty() { return result }
-    if content.is_empty() || content.iter().all(|block| {
-        string(block, "type") == Some("text") && text(block, "text").is_none_or(|text| text.is_empty())
-    }) {
+    let result = JsonString::join(
+        &content
+            .iter()
+            .filter(|block| string(block, "type") == Some("text"))
+            .filter_map(|block| text(block, "text"))
+            .collect::<Vec<_>>(),
+        "\n",
+    );
+    if !result.is_empty() {
+        return result;
+    }
+    if content.is_empty()
+        || content.iter().all(|block| {
+            string(block, "type") == Some("text")
+                && text(block, "text").is_none_or(|text| text.is_empty())
+        })
+    {
         "No output".into()
     } else {
         Value::array(content).stringify_pretty().into()
@@ -1297,21 +1342,31 @@ fn detail_result(node: &Value) -> JsonString {
 }
 
 fn detail_content(content: &Value) -> JsonString {
-    JsonString::join(&blocks(content).iter()
-        .filter(|block| string(block, "type") == Some("text"))
-        .filter_map(|block| text(block, "text"))
-        .collect::<Vec<_>>(), "\n")
+    JsonString::join(
+        &blocks(content)
+            .iter()
+            .filter(|block| string(block, "type") == Some("text"))
+            .filter_map(|block| text(block, "text"))
+            .collect::<Vec<_>>(),
+        "\n",
+    )
 }
 
 fn detail_reasoning(content: &Value) -> JsonString {
-    JsonString::join(&blocks(content).iter()
-        .filter(|block| string(block, "type") == Some("reasoning"))
-        .filter_map(|block| text(block, "text"))
-        .collect::<Vec<_>>(), "\n")
+    JsonString::join(
+        &blocks(content)
+            .iter()
+            .filter(|block| string(block, "type") == Some("reasoning"))
+            .filter_map(|block| text(block, "text"))
+            .collect::<Vec<_>>(),
+        "\n",
+    )
 }
 
 fn preview_content(content: &Value) -> Option<JsonString> {
-    blocks(content).iter().find(|block| string(block, "type") == Some("text"))
+    blocks(content)
+        .iter()
+        .find(|block| string(block, "type") == Some("text"))
         .and_then(|block| text(block, "text"))
 }
 

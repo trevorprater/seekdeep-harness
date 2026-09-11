@@ -111,9 +111,7 @@ impl RealHarness {
                 "codex",
                 SubagentStartRequest {
                     label: None,
-                    prompt: vec![ContentBlock::Text {
-                        text: task.into(),
-                    }],
+                    prompt: vec![ContentBlock::Text { text: task.into() }],
                     parent: Arc::clone(&self.parent),
                     signal,
                     agent_options: None,

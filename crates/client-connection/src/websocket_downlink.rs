@@ -12,8 +12,7 @@ use hyper_util::rt::TokioIo;
 use parking_lot::Mutex;
 use seekdeep_abort::AbortSignal;
 use seekdeep_host_webserver::{WebHandler, WebHandlerFuture, WebRequest, WebResponse};
-use serde::Serialize;
-use serde_json::{Map, Value};
+use serde_json::Map;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::{
     WebSocketStream,
@@ -194,16 +193,6 @@ impl WebSocketDownlinks {
     }
 }
 
-#[derive(Serialize)]
-struct ServerRequest<'a> {
-    #[serde(rename = "type")]
-    kind: &'static str,
-    #[serde(rename = "rpcId")]
-    rpc_id: &'a RpcId,
-    method: &'a str,
-    payload: &'a Value,
-}
-
 async fn pump<S>(
     mut socket: WebSocketStream<S>,
     mut frames: DownlinkStream,
@@ -286,21 +275,8 @@ async fn send_frame<S>(socket: &mut WebSocketStream<S>, frame: &EventFrame) -> a
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    let method = frame
-        .payload
-        .as_object()
-        .and_then(|payload| payload.get("type"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("downlink frame has no string type"))?;
-    let message = ServerRequest {
-        kind: "server-request",
-        rpc_id: &frame.rpc_id,
-        method,
-        payload: &frame.payload,
-    };
-    socket
-        .send(Message::Text(serde_json::to_string(&message)?.into()))
-        .await?;
+    let message = frame.server_request()?;
+    socket.send(Message::Text(message.as_raw().into())).await?;
     Ok(())
 }
 
@@ -314,7 +290,8 @@ fn failure_frame(message: String) -> EventFrame {
                 message,
                 details: Map::new(),
             },
-        }),
+        })
+        .into(),
     }
 }
 

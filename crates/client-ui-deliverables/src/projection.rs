@@ -3,13 +3,13 @@
 use std::rc::Rc;
 
 use indexmap::IndexMap;
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocationData,
     ConversationLocationDataScope, ConversationLocationEvent, ConversationMatchResult,
     ConversationMatchRole, ConversationNodeContext,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// One produced path and the settlement sequence that made it visible.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,16 +38,17 @@ struct DeliverablesState {
 }
 
 fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value).map(Rc::new).map_err(|error| {
+    Value::from_serialize(value).map(Rc::new).map_err(|error| {
         ConversationAssemblerError::new(format!("deliverables serialization failed: {error}"))
     })
 }
 
 fn decode<T: serde::de::DeserializeOwned>(
-    value: Value,
+    value: &Value,
     owner: &str,
 ) -> Result<T, ConversationAssemblerError> {
-    serde_json::from_value(value)
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(format!("invalid {owner}: {error}")))
 }
 
@@ -57,19 +58,20 @@ fn state_of(
     let state = context.state.as_deref().ok_or_else(|| {
         ConversationAssemblerError::new("deliverables update requires initialized state")
     })?;
-    decode(state.clone(), "deliverables state")
+    decode(state, "deliverables state")
 }
 
 fn value_string(value: Option<&Value>, owner: &str) -> Result<String, ConversationAssemblerError> {
     let value =
         value.ok_or_else(|| ConversationAssemblerError::new(format!("{owner} is missing")))?;
-    match value {
-        Value::String(value) => Ok(value.clone()),
-        Value::Number(value) => Ok(value.to_string()),
-        Value::Bool(value) => Ok(value.to_string()),
-        Value::Null => Ok("null".to_owned()),
-        Value::Array(_) => Ok(value.to_string()),
-        Value::Object(_) => Ok("[object Object]".to_owned()),
+    if value.is_string() {
+        value
+            .deserialize()
+            .map_err(|error| ConversationAssemblerError::new(format!("invalid {owner}: {error}")))
+    } else if value.is_object() {
+        Ok("[object Object]".to_owned())
+    } else {
+        Ok(value.to_string())
     }
 }
 
@@ -78,22 +80,22 @@ fn is_append_result(event: &ConversationLocationEvent) -> bool {
         && event
             .wire
             .as_ref()
-            .and_then(|wire| wire.get("surfaceOp"))
+            .and_then(|wire| wire.get_value("surfaceOp"))
             .and_then(Value::as_str)
             == Some("append")
 }
 
 fn produced_paths(view: Option<&Value>) -> Result<Vec<String>, ConversationAssemblerError> {
-    let Some(view) = view.and_then(Value::as_object) else {
+    let Some(view) = view.filter(|view| view.is_object()) else {
         return Ok(Vec::new());
     };
-    let mutation = view.get("card").and_then(Value::as_str) == Some("diff")
-        || (view.get("card").and_then(Value::as_str) == Some("generic")
-            && view.get("kind").and_then(Value::as_str) == Some("edit"));
+    let mutation = view.get_value("card").and_then(Value::as_str) == Some("diff")
+        || (view.get_value("card").and_then(Value::as_str) == Some("generic")
+            && view.get_value("kind").and_then(Value::as_str) == Some("edit"));
     if !mutation {
         return Ok(Vec::new());
     }
-    let Some(locations) = view.get("locations") else {
+    let Some(locations) = view.get_value("locations") else {
         return Ok(Vec::new());
     };
     if locations.is_null() {
@@ -107,7 +109,7 @@ fn produced_paths(view: Option<&Value>) -> Result<Vec<String>, ConversationAssem
         .iter()
         .map(|location| {
             location
-                .get("path")
+                .get_value("path")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned)
                 .ok_or_else(|| {
@@ -120,9 +122,8 @@ fn produced_paths(view: Option<&Value>) -> Result<Vec<String>, ConversationAssem
 }
 
 fn result_error(event: &ConversationLocationEvent) -> Result<bool, ConversationAssemblerError> {
-    event
-        .data
-        .pointer("/message/content/0/isError")
+    event.data["message"]["content"][0]
+        .get_value("isError")
         .and_then(Value::as_bool)
         .ok_or_else(|| {
             ConversationAssemblerError::new("tool/result is missing message.content[0].isError")
@@ -131,7 +132,7 @@ fn result_error(event: &ConversationLocationEvent) -> Result<bool, ConversationA
 
 fn result_call_id(event: &ConversationLocationEvent) -> Result<String, ConversationAssemblerError> {
     value_string(
-        event.data.pointer("/message/source/callId"),
+        event.data["message"]["source"].get_value("callId"),
         "tool/result message.source.callId",
     )
 }
@@ -140,8 +141,8 @@ fn call_view(accepted: &seekdeep_client_runtime::ConversationMatch) -> Option<Va
     accepted
         .view
         .as_ref()
-        .filter(|view| view.get("for").and_then(Value::as_str) == Some("call"))
-        .and_then(|view| view.get("view"))
+        .filter(|view| view.get_value("for").and_then(Value::as_str) == Some("call"))
+        .and_then(|view| view.get_value("view"))
         .cloned()
 }
 
@@ -159,7 +160,7 @@ pub fn deliverables_definition() -> AssemblerNodeDefinition {
                 _ => return Ok(None),
             };
             Ok(Some(ConversationMatchResult {
-                id: value_string(event.data.get("turn"), "deliverables turn")?,
+                id: value_string(event.data.get_value("turn"), "deliverables turn")?,
                 role,
             }))
         }),
@@ -172,7 +173,7 @@ pub fn deliverables_definition() -> AssemblerNodeDefinition {
             let turn = accepted
                 .event
                 .data
-                .get("turn")
+                .get_value("turn")
                 .and_then(Value::as_u64)
                 .ok_or_else(|| ConversationAssemblerError::new("turn/start requires safe turn"))?;
             encode(&DeliverablesState {
@@ -185,7 +186,8 @@ pub fn deliverables_definition() -> AssemblerNodeDefinition {
         update: Rc::new(|context, accepted| {
             let mut state = state_of(context)?;
             if accepted.event.event_type == "tool/call" {
-                let call_id = value_string(accepted.event.data.get("callId"), "tool/call callId")?;
+                let call_id =
+                    value_string(accepted.event.data.get_value("callId"), "tool/call callId")?;
                 state.calls.insert(call_id, call_view(accepted));
                 return encode(&state).map(Some);
             }

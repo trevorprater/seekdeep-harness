@@ -25,8 +25,8 @@ struct RunTrace {
 /// Shared fold: committed per-session traces plus staged pre-publication candidates.
 #[derive(Debug, Default)]
 struct InvariantState {
-    traces: HashMap<String, HashMap<JsonString, RunTrace>>,
-    staged: HashMap<usize, (String, HashMap<JsonString, RunTrace>)>,
+    traces: HashMap<String, HashMap<Vec<u16>, RunTrace>>,
+    staged: HashMap<usize, (String, HashMap<Vec<u16>, RunTrace>)>,
 }
 
 /// Registers the workflow-record invariant companion.
@@ -167,7 +167,7 @@ fn clone_for(
     state: &Arc<Mutex<InvariantState>>,
     session: &Arc<Session>,
     fail: &InvariantFailure,
-) -> anyhow::Result<HashMap<JsonString, RunTrace>> {
+) -> anyhow::Result<HashMap<Vec<u16>, RunTrace>> {
     let key = session.id().as_str().to_owned();
     if let Some(trace) = state.lock().traces.get(&key) {
         return Ok(trace.clone());
@@ -212,7 +212,7 @@ fn string_id(
 
 #[allow(clippy::too_many_lines)]
 fn validate_into(
-    map: &mut HashMap<JsonString, RunTrace>,
+    map: &mut HashMap<Vec<u16>, RunTrace>,
     event: &SessionEvent,
     fail: &InvariantFailure,
 ) -> anyhow::Result<()> {
@@ -228,12 +228,12 @@ fn validate_into(
         "tool-workflow/run-start" => {
             let name = string_id(object, "name", "tool-workflow/run-start name", fail)?;
             let _ = name;
-            if map.contains_key(&run_id) {
+            if map.contains_key(run_id.utf16_units()) {
                 return Err(fail
                     .fail(format!("tool-workflow/run-start repeats run {run_label}"))
                     .into());
             }
-            map.insert(run_id, RunTrace::default());
+            map.insert(run_id.to_utf16(), RunTrace::default());
         }
         "tool-workflow/agent-start" => {
             let run = open_run(map, &run_id, &event.event_type, fail)?;
@@ -337,13 +337,13 @@ fn validate_into(
 }
 
 fn open_run<'a>(
-    map: &'a mut HashMap<JsonString, RunTrace>,
+    map: &'a mut HashMap<Vec<u16>, RunTrace>,
     run_id: &JsonString,
     event_type: &str,
     fail: &InvariantFailure,
 ) -> anyhow::Result<&'a mut RunTrace> {
     let run_label = display_string(run_id);
-    let Some(run) = map.get_mut(run_id) else {
+    let Some(run) = map.get_mut(run_id.utf16_units()) else {
         return Err(fail
             .fail(format!(
                 "{event_type} has no matching tool-workflow/run-start for run {run_label}"

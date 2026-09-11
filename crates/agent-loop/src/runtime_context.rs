@@ -151,7 +151,7 @@ fn is_owned(message: &UserMessage) -> bool {
             .source()
             .fields
             .get("plugin")
-            .and_then(Value::as_str)
+            .and_then(|value| value.as_str())
             == Some(SOURCE)
 }
 

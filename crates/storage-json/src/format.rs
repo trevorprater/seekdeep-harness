@@ -1,7 +1,7 @@
 //! Human-readable JSON unit format and strict durable-boundary parser.
 
 use indexmap::IndexMap;
-use seekdeep_lossless_json::JsonValue;
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use seekdeep_storage::{KvUnitDescriptor, StorageError, StorageErrorCode};
 use serde_json::{Number, Value};
 
@@ -71,14 +71,13 @@ pub fn parse(text: &str, descriptor: &KvUnitDescriptor) -> Result<UnitState, Sto
     let header_valid = unit.is_some_and(|unit| {
         unit.get("name")
             .is_some_and(|name| name == descriptor.name.as_str())
-    }) && version.is_some();
-    if !header_valid {
+    });
+    let Some(version) = version.filter(|_| header_valid) else {
         return Err(StorageError::new(
             StorageErrorCode::MalformedMedium,
             format!("unit '{}': missing or foreign unit header", descriptor.name),
         ));
-    }
-    let version = version.expect("validated unit header has a numeric version");
+    };
     if !number_equals_u64(&version, descriptor.version) {
         return Err(StorageError::new(
             StorageErrorCode::VersionMismatch,
@@ -129,7 +128,7 @@ pub fn parse(text: &str, descriptor: &KvUnitDescriptor) -> Result<UnitState, Sto
         version: descriptor.version,
         global: document
             .get("global")
-            .map_or_else(|| Value::Null.into(), |value| value.to_owned()),
+            .map_or_else(|| Value::Null.into(), JsonRef::to_owned),
         tables,
     })
 }

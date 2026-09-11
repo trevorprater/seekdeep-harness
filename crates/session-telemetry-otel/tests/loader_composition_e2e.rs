@@ -17,6 +17,7 @@ use seekdeep_agent_loop::AgentRequestEvent;
 use seekdeep_app_boot::{BootOptions, boot};
 use seekdeep_command_feedback::record_feedback;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, fiber::EffectHandle};
+use seekdeep_core::session::JsonValue;
 use seekdeep_llm::{
     AbortSignal, AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LLM,
     LlmAdapter, LlmCallConfig, LlmFailure, LlmModelReasoningInfo, LlmReasoningEffortInfo,
@@ -91,7 +92,9 @@ impl LlmAdapter for CliMockAdapter {
                     content
                         .iter()
                         .filter_map(|block| match block {
-                            ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text")),
+                            ContentBlock::Text { text } => {
+                                Some(text.as_str().expect("fixture uses scalar text"))
+                            }
                             _ => None,
                         })
                         .collect::<String>(),
@@ -246,21 +249,28 @@ fn telemetry_redact_plugin() -> Plugin {
     )
 }
 
-fn scrub(value: Value) -> Value {
+fn scrub(value: JsonValue) -> JsonValue {
     static SECRET_PATTERN: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"sk-e2efixture[0-9]+").expect("fixture secret regex"));
-    match value {
-        Value::String(value) => {
-            Value::String(SECRET_PATTERN.replace_all(&value, PLACEHOLDER).into_owned())
-        }
-        Value::Array(values) => Value::Array(values.into_iter().map(scrub).collect()),
-        Value::Object(values) => Value::Object(
-            values
+    if value.is_string() {
+        let text = value.as_str().expect("fixture text uses Unicode scalars");
+        Value::String(SECRET_PATTERN.replace_all(text, PLACEHOLDER).into_owned()).into()
+    } else if let Some(values) = value.array_items() {
+        JsonValue::array(
+            &values
                 .into_iter()
-                .map(|(key, value)| (key, scrub(value)))
-                .collect(),
-        ),
-        Value::Null | Value::Bool(_) | Value::Number(_) => value,
+                .map(|value| scrub(value.to_owned()))
+                .collect::<Vec<_>>(),
+        )
+    } else if let Some(values) = value.object_entries() {
+        JsonValue::object(values.into_iter().map(|(key, value)| {
+            (
+                key.deserialize::<seekdeep_llm::JsonString>().unwrap(),
+                scrub(value.to_owned()),
+            )
+        }))
+    } else {
+        value
     }
 }
 

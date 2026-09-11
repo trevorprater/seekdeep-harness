@@ -13,7 +13,11 @@ use seekdeep_client_runtime::{
 use seekdeep_client_ui_trajectory::{
     TRAJECTORY_ASSISTANT_KIND, TRAJECTORY_TURN_END_KIND, trajectory_assistant_definitions,
 };
-use serde_json::{Value, json};
+#[path = "../src/json_value.rs"]
+#[allow(dead_code)]
+mod json_value;
+use json_value::json;
+use seekdeep_lossless_json::JsonValue as Value;
 
 struct Events(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -45,11 +49,12 @@ struct DataBuilder {
 
 impl DataBuilder {
     fn snapshot(&self) -> Rc<Value> {
-        Rc::new(Value::Array(
-            self.nodes
+        Rc::new(Value::array(
+            &self
+                .nodes
                 .values()
                 .map(|node| node.data.as_ref().clone())
-                .collect(),
+                .collect::<Vec<_>>(),
         ))
     }
 }
@@ -118,7 +123,7 @@ fn assembler() -> ConversationNodeAssembler {
             trajectory_assistant_definitions()
                 .into_iter()
                 .map(Rc::new)
-                .collect(),
+                .collect::<Vec<_>>(),
         )),
         Rc::new(Views),
     )
@@ -168,7 +173,7 @@ fn finalized_message_separates_stream_request_usage_from_final_node_usage_and_ti
     let snapshot = value.snapshot("trajectory").unwrap();
     let contribution = &snapshot[0];
     assert_eq!(contribution["kind"], "assistant");
-    assert_eq!(contribution["partial"], Value::Null);
+    assert_eq!(contribution["partial"], json!(null));
     let node = &contribution["node"];
     assert_eq!(node["messageId"], "message-1");
     assert_eq!(node["blocks"], json!([{"kind": "text", "text": "final"}]));
@@ -295,8 +300,8 @@ fn update_only_final_falls_back_without_inventing_request_or_step_start() {
     value.flush().unwrap();
     let snapshot = value.snapshot("trajectory").unwrap();
     let contribution = &snapshot[0];
-    assert!(contribution.get("request").is_none());
-    assert_eq!(contribution["node"]["timing"]["stepStartTime"], Value::Null);
+    assert!(contribution.get_value("request").is_none());
+    assert_eq!(contribution["node"]["timing"]["stepStartTime"], json!(null));
     assert_eq!(
         contribution["node"]["timing"]["firstTokenTime"],
         1_700_000_000_010_i64
@@ -367,7 +372,7 @@ fn tool_only_stream_stays_partial_and_publication_cadence_matches_chunk_kind() {
     let snapshot = value.snapshot("trajectory").unwrap();
     assert_eq!(snapshot[0]["partial"]["blocks"][0]["kind"], "tool-call");
     assert_eq!(snapshot[0]["request"]["status"], "running");
-    assert!(snapshot[0].get("node").is_none());
+    assert!(snapshot[0].get_value("node").is_none());
 }
 
 #[test]

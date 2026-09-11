@@ -10,9 +10,9 @@ pub mod service;
 pub mod tool_pairing;
 
 use seekdeep_commands::CommandId;
-use seekdeep_llm::{ContentBlock, MessageSource};
+use seekdeep_llm::{ContentBlock, JsonValue, MessageSource};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, json};
 
 seekdeep_util::string_brand!(
     /// Stable identity shared by one compact start/summary/checkpoint/end transaction.
@@ -71,7 +71,7 @@ pub fn compact_checkpoint_source(
     }
     MessageSource {
         kind: "plugin".to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 
@@ -79,7 +79,8 @@ pub fn compact_checkpoint_source(
 #[must_use]
 pub fn is_compact_checkpoint_source(source: &MessageSource) -> bool {
     source.kind == "plugin"
-        && source.fields.get("plugin").and_then(Value::as_str) == Some(COMPACT_CHECKPOINT_PLUGIN)
+        && source.fields.get("plugin").and_then(JsonValue::as_str)
+            == Some(COMPACT_CHECKPOINT_PLUGIN)
 }
 
 #[cfg(test)]

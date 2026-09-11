@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use seekdeep_attachment::{AttachmentId, ImageAttachmentRef, ImageMediaType};
-use seekdeep_core::session::{JsonValue, SessionId};
+use seekdeep_core::session::{JsonRef, JsonValue, SessionId};
 use seekdeep_llm::MessageId;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -40,7 +40,11 @@ pub struct SessionEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_event_seqs: Option<Vec<f64>>,
     /// Optional surface operation retained without interpretation.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_json"
+    )]
     pub surface_op: Option<JsonValue>,
     /// Present only as literal `true` when an unknown consumer may ignore it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -48,6 +52,28 @@ pub struct SessionEvent {
 }
 
 impl SessionEvent {
+    /// Validates the envelope without interpreting event data or surface operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same envelope errors as [`Self::parse`].
+    pub fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let mut envelope = json_metadata_fields(
+            value,
+            &["type", "seq", "time", "sourceEventSeqs", "ignorable"],
+        )?;
+        if value.get("data").is_some() {
+            envelope.insert("data".to_owned(), Value::Null);
+        }
+        let mut parsed = Self::parse(&Value::Object(envelope))?;
+        parsed.data = value
+            .get("data")
+            .ok_or_else(|| ContractError::new("$.data", "required property is missing"))?
+            .to_owned();
+        parsed.surface_op = value.get("surfaceOp").map(JsonRef::to_owned);
+        Ok(parsed)
+    }
+
     /// Parses and normalizes the strict Session event envelope.
     ///
     /// # Errors
@@ -76,7 +102,7 @@ pub struct SessionProjectionsBlock {
     /// Last committed event represented by every value; `-1` means empty log.
     pub as_of_seq: i64,
     /// Whole current value per registered projection key.
-    pub values: BTreeMap<String, Value>,
+    pub values: BTreeMap<String, JsonValue>,
 }
 
 impl SessionProjectionsBlock {
@@ -740,6 +766,35 @@ pub enum ToolEventViewTarget {
 }
 
 impl ToolEventView {
+    pub(super) fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        let mut envelope = json_metadata_fields(value, &["for"])?;
+        if let Some(view) = value.get("view") {
+            let normalized = if view.is_object() {
+                let mut fields = Map::new();
+                if let Some(card) = view.get("card") {
+                    fields.insert(
+                        "card".to_owned(),
+                        if card.is_string() {
+                            Value::String(String::new())
+                        } else {
+                            Value::Null
+                        },
+                    );
+                }
+                Value::Object(fields)
+            } else {
+                Value::Null
+            };
+            envelope.insert("view".to_owned(), normalized);
+        }
+        let mut parsed = Self::parse(&Value::Object(envelope))?;
+        parsed.view = value
+            .get("view")
+            .ok_or_else(|| ContractError::new("$.view", "required property is missing"))?
+            .to_owned();
+        Ok(parsed)
+    }
+
     pub(super) fn parse(value: &Value) -> Result<Self, ContractError> {
         let object = require_object(value, "$")?;
         let target = match require_string(object, "for", "$.for", false)? {
@@ -833,6 +888,13 @@ pub struct SessionListMetadata {
 }
 
 impl SessionListMetadata {
+    pub(crate) fn parse_json(value: &JsonValue) -> Result<Self, ContractError> {
+        Self::parse(&Value::Object(json_metadata_fields(
+            value,
+            &["blank", "lastPromptAt"],
+        )?))
+    }
+
     /// Parses the Host-side Session-list projection schema.
     ///
     /// # Errors
@@ -1462,6 +1524,51 @@ pub(super) fn validate_content_block(value: &Value) -> Result<WireContentBlock, 
     let object = require_object(value, "$")?;
     require_string(object, "type", "$.type", false)?;
     Ok(object.clone())
+}
+
+pub(super) fn validate_content_block_json(value: &JsonValue) -> Result<JsonValue, ContractError> {
+    if !value.as_ref().is_object() {
+        return Err(ContractError::new("$", "expected object"));
+    }
+    let mut fields = Map::new();
+    if let Some(kind) = value.get("type") {
+        fields.insert(
+            "type".to_owned(),
+            if kind.is_string() {
+                Value::String(String::new())
+            } else {
+                Value::Null
+            },
+        );
+    }
+    validate_content_block(&Value::Object(fields))?;
+    Ok(value.clone())
+}
+
+fn json_metadata_fields(
+    value: &JsonValue,
+    names: &[&str],
+) -> Result<Map<String, Value>, ContractError> {
+    if !value.as_ref().is_object() {
+        return Err(ContractError::new("$", "expected object"));
+    }
+    Ok(names
+        .iter()
+        .filter_map(|name| {
+            value.get(name).map(|field| {
+                (
+                    (*name).to_owned(),
+                    field.deserialize().unwrap_or(Value::Null),
+                )
+            })
+        })
+        .collect())
+}
+
+fn deserialize_optional_json<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<JsonValue>, D::Error> {
+    <JsonValue as Deserialize>::deserialize(deserializer).map(Some)
 }
 
 pub(super) fn prefix_error(error: &ContractError, prefix: &str) -> ContractError {

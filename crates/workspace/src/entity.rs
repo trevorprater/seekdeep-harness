@@ -284,7 +284,7 @@ impl Workspace {
         let future = table.update_with_commit(
             id,
             move |raw| {
-                let current = parse_record(raw.clone())?;
+                let current = parse_record(raw)?;
                 let changed = mutation(current.clone())?;
                 let unchanged = matches!(changed, Mutation::Unchanged);
                 let mut next = match changed {

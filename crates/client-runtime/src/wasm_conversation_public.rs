@@ -273,7 +273,9 @@ fn event_input(value: &JsValue) -> Result<ConversationEventInput, JsValue> {
         view: if view.is_undefined() {
             None
         } else {
-            Some(std::rc::Rc::new(crate::wasm_value_bridge::js_to_lossless_value(&view)?))
+            Some(std::rc::Rc::new(
+                crate::wasm_value_bridge::js_to_lossless_value(&view)?,
+            ))
         },
     })
 }

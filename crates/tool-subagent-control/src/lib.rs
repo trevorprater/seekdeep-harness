@@ -146,7 +146,8 @@ fn send_definition(subagents: Arc<SubagentRuntime>) -> anyhow::Result<ToolDefini
                     text: format!(
                         "message queued as the next turn for subagent {}",
                         args.subagent_id
-                    ).into(),
+                    )
+                    .into(),
                 }])
             }),
         ),
@@ -163,7 +164,9 @@ fn send_definition(subagents: Arc<SubagentRuntime>) -> anyhow::Result<ToolDefini
                     .followup(
                         &parent,
                         &seekdeep_core::session::SessionId::new(args.subagent_id),
-                        vec![ContentBlock::Text { text: args.message.into() }],
+                        vec![ContentBlock::Text {
+                            text: args.message.into(),
+                        }],
                         SubagentFollowupOptions {
                             source,
                             signal: run.signal(),
@@ -188,7 +191,7 @@ fn coordinator_source(sender: &seekdeep_core::session::SessionId) -> MessageSour
     );
     MessageSource {
         kind: "coordinator".to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 

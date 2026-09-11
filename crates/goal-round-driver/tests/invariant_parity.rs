@@ -53,7 +53,8 @@ fn goal_source(round: u64) -> MessageSource {
             ("goalId".to_owned(), json!("goal-round-driver-invariant")),
             ("revision".to_owned(), json!(1)),
             ("round".to_owned(), json!(round)),
-        ]),
+        ])
+        .into(),
     }
 }
 

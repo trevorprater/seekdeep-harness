@@ -43,7 +43,7 @@ fn controller_face(
 
     let state_controller = controller.clone();
     let state = Closure::wrap(Box::new(move || {
-        serde_wasm_bindgen::to_value(&state_controller.borrow().snapshot())
+        crate::browser_value::to_value(&state_controller.borrow().snapshot())
             .map_err(js_error_from_display)
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     set(&face, "snapshot", &state.into_js_value())?;
@@ -51,7 +51,7 @@ fn controller_face(
     let model_controller = controller.clone();
     let set_model = Closure::wrap(Box::new(move |model: JsValue, mode: String| {
         let model: TrajectoryTimelineModel =
-            serde_wasm_bindgen::from_value(model).map_err(js_error_from_display)?;
+            crate::browser_value::from_value(&model).map_err(js_error_from_display)?;
         let mode = parse_mode(&mode)?;
         let mut controller = model_controller.borrow_mut();
         controller.set_model(model);
@@ -133,7 +133,7 @@ fn controller_face(
     let outside_controller = controller;
     let outside = Closure::wrap(Box::new(move |range: JsValue| -> Result<bool, JsValue> {
         let range: TrajectoryTimeRange =
-            serde_wasm_bindgen::from_value(range).map_err(js_error_from_display)?;
+            crate::browser_value::from_value(&range).map_err(js_error_from_display)?;
         Ok(outside_controller.borrow().range_is_outside(range))
     }) as Box<dyn FnMut(JsValue) -> Result<bool, JsValue>>);
     set(&face, "rangeOutside", &outside.into_js_value())?;
@@ -143,7 +143,7 @@ fn controller_face(
 #[allow(clippy::too_many_lines)]
 fn render_timeline(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
     let turns: Vec<TrajectoryTurnModel> =
-        serde_wasm_bindgen::from_value(required(props, "turns", "TrajectoryTimeline")?)
+        crate::browser_value::from_value(&required(props, "turns", "TrajectoryTimeline")?)
             .map_err(js_error_from_display)?;
     let mode_name = required_string(props, "mode", "TrajectoryTimeline")?;
     let mode = parse_mode(&mode_name)?;
@@ -168,9 +168,9 @@ fn render_timeline(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
             &controller,
             "setModel",
             &[
-                serde_wasm_bindgen::to_value(model.as_ref().unwrap_or(&fallback_model))
+                crate::browser_value::to_value(model.as_ref().unwrap_or(&fallback_model))
                     .map_err(js_error_from_display)?,
-                JsValue::from_str(&mode_name),
+                crate::browser_value::text(&mode_name),
             ],
         )?;
     }
@@ -181,7 +181,7 @@ fn render_timeline(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
         call_method(&controller, "reveal", &[JsValue::from_f64(selected)])?;
     }
     let state: TimelineControllerSnapshot =
-        serde_wasm_bindgen::from_value(call_method(&controller, "snapshot", &[])?)
+        crate::browser_value::from_value(&call_method(&controller, "snapshot", &[])?)
             .map_err(js_error_from_display)?;
     let (revision, set_revision) = use_state(&ui.react, &JsValue::from_f64(0.0))?;
     let revision = revision.as_f64().unwrap_or_default();
@@ -190,7 +190,7 @@ fn render_timeline(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
 
     let range: Option<TrajectoryTimeRange> = optional(props, "range")?
         .filter(|value| !value.is_null())
-        .map(|value| serde_wasm_bindgen::from_value(value).map_err(js_error_from_display))
+        .map(|value| crate::browser_value::from_value(&value).map_err(js_error_from_display))
         .transpose()?;
     let on_range =
         required(props, "onRangeChange", "TrajectoryTimeline")?.dyn_into::<Function>()?;
@@ -206,7 +206,7 @@ fn render_timeline(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
     let dependencies = Array::new();
     let model_dependency = JsValue::from_bool(model.is_some());
     let range_dependency = range.map_or(JsValue::NULL, |range| {
-        serde_wasm_bindgen::to_value(&range).unwrap_or(JsValue::NULL)
+        crate::browser_value::to_value(&range).unwrap_or(JsValue::NULL)
     });
     dependencies.push(&model_dependency);
     dependencies.push(&range_dependency);
@@ -484,7 +484,7 @@ fn render_timeline_model(
                 ui.tag(
                     "div",
                     Some(&object(&[
-                        ("className", JsValue::from_str(class_name)),
+                        ("className", crate::browser_value::text(class_name)),
                         (
                             "data-dragging",
                             state
@@ -577,7 +577,7 @@ fn render_timeline_model(
 fn lane_labels(ui: &ReactUi) -> Result<JsValue, JsValue> {
     let labels = ["Input", "Model", "Tools"]
         .into_iter()
-        .map(|label| ui.tag("span", None, &[JsValue::from_str(label)]))
+        .map(|label| ui.tag("span", None, &[crate::browser_value::text(label)]))
         .collect::<Result<Vec<_>, _>>()?;
     ui.tag(
         "div",
@@ -659,7 +659,7 @@ fn earlier_history_boundary(
             ),
             (
                 "aria-label",
-                JsValue::from_str(if loading {
+                crate::browser_value::text(if loading {
                     "Loading earlier history"
                 } else {
                     "Load earlier history"
@@ -687,7 +687,7 @@ fn earlier_history_boundary(
         Some(&object(&[
             (
                 "label",
-                JsValue::from_str(if loading {
+                crate::browser_value::text(if loading {
                     "Loading earlier history…"
                 } else {
                     "Click to load earlier history"
@@ -827,7 +827,10 @@ fn lanes(
                         "className",
                         JsValue::from_str("seekdeep-trajectory-timeline-span"),
                     ),
-                    ("data-timeline-span", JsValue::from_str(span.kind.as_str())),
+                    (
+                        "data-timeline-span",
+                        crate::browser_value::text(span.kind.as_str()),
+                    ),
                     (
                         "data-timeline-record-index",
                         JsValue::from_f64(usize_as_f64(span.index)),
@@ -871,13 +874,13 @@ fn lanes(
                     (
                         "data-search-match",
                         search_match.map_or(JsValue::UNDEFINED, |matched| {
-                            JsValue::from_str(if matched { "true" } else { "false" })
+                            crate::browser_value::text(if matched { "true" } else { "false" })
                         }),
                     ),
                     (
                         "data-selected",
                         selected.map_or(JsValue::UNDEFINED, |selected| {
-                            JsValue::from_str(if selected { "true" } else { "false" })
+                            crate::browser_value::text(if selected { "true" } else { "false" })
                         }),
                     ),
                     ("style", style_owned(&styles)?.into()),
@@ -889,7 +892,7 @@ fn lanes(
                 Some(&object(&[
                     (
                         "label",
-                        JsValue::from_str(&timeline_tooltip_label(span.kind, detail)),
+                        crate::browser_value::text(&timeline_tooltip_label(span.kind, detail)),
                     ),
                     ("side", JsValue::from_str("bottom")),
                     ("delayMs", JsValue::from_f64(TOOLTIP_DELAY_MS)),
@@ -1129,7 +1132,9 @@ fn outcome_to_js(outcome: &TimelinePointerOutcome) -> Result<JsValue, JsValue> {
         &JsValue::from_bool(outcome.range_change.is_some()),
     )?;
     let range = match outcome.range_change {
-        Some(Some(range)) => serde_wasm_bindgen::to_value(&range).map_err(js_error_from_display)?,
+        Some(Some(range)) => {
+            crate::browser_value::to_value(&range).map_err(js_error_from_display)?
+        }
         Some(None) | None => JsValue::NULL,
     };
     set(&value, "range", &range)?;
@@ -1183,7 +1188,7 @@ impl ReactUi {
         props: Option<&Object>,
         children: &[JsValue],
     ) -> Result<JsValue, JsValue> {
-        self.element(&JsValue::from_str(name), props, children)
+        self.element(&crate::browser_value::text(name), props, children)
     }
 
     fn primitive(
@@ -1218,7 +1223,7 @@ impl ReactUi {
 fn style(entries: &[(&str, String)]) -> Result<Object, JsValue> {
     let value = Object::new();
     for (key, entry) in entries {
-        set(&value, key, &JsValue::from_str(entry))?;
+        set(&value, key, &crate::browser_value::text(entry))?;
     }
     Ok(value)
 }
@@ -1226,13 +1231,13 @@ fn style(entries: &[(&str, String)]) -> Result<Object, JsValue> {
 fn style_owned(entries: &[(impl AsRef<str>, String)]) -> Result<Object, JsValue> {
     let value = Object::new();
     for (key, entry) in entries {
-        set(&value, key.as_ref(), &JsValue::from_str(entry))?;
+        set(&value, key.as_ref(), &crate::browser_value::text(entry))?;
     }
     Ok(value)
 }
 
 fn class(value: &str) -> Result<Object, JsValue> {
-    object(&[("className", JsValue::from_str(value))])
+    object(&[("className", crate::browser_value::text(value))])
 }
 
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
@@ -1244,7 +1249,7 @@ fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
 }
 
 fn set(value: &Object, key: &str, entry: &JsValue) -> Result<(), JsValue> {
-    Reflect::set(value, &JsValue::from_str(key), entry).map(|_| ())
+    Reflect::set(value, &crate::browser_value::text(key), entry).map(|_| ())
 }
 
 fn set_optional_index(value: &Object, key: &str, index: Option<usize>) -> Result<(), JsValue> {
@@ -1258,7 +1263,7 @@ fn set_optional_index(value: &Object, key: &str, index: Option<usize>) -> Result
 }
 
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     if entry.is_undefined() {
         Err(js_sys::Error::new(&format!("{owner} omitted required property {key:?}")).into())
     } else {
@@ -1267,7 +1272,7 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
 }
 
 fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     Ok((!entry.is_undefined()).then_some(entry))
 }
 
@@ -1282,7 +1287,7 @@ fn function(value: &JsValue, key: &str) -> Result<Function, JsValue> {
 }
 
 fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsValue, JsValue> {
-    let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
+    let method = Reflect::get(value, &crate::browser_value::text(name))?.dyn_into::<Function>()?;
     let args = Array::new();
     for argument in arguments {
         args.push(argument);
@@ -1309,7 +1314,7 @@ fn i16_member(value: &JsValue, key: &str) -> Result<i16, JsValue> {
 }
 
 fn optional_number(value: &JsValue, key: &str) -> Option<f64> {
-    Reflect::get(value, &JsValue::from_str(key))
+    Reflect::get(value, &crate::browser_value::text(key))
         .ok()
         .filter(|value| !value.is_null() && !value.is_undefined())
         .and_then(|value| value.as_f64())

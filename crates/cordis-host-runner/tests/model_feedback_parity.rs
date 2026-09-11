@@ -22,7 +22,7 @@ use serde_json::json;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Sent {
-    text: String,
+    text: seekdeep_llm::JsonString,
     target: InboxTarget,
     wakeup: bool,
 }
@@ -41,7 +41,7 @@ impl AgentController for RecordingController {
     ) -> Result<(), AgentControlError> {
         let text = match message.content() {
             [ContentBlock::Text { text }] => text.clone(),
-            content => format!("{content:?}"),
+            content => format!("{content:?}").into(),
         };
         self.sent.lock().push(Sent {
             text,

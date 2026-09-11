@@ -141,9 +141,9 @@ impl Observation {
         )
     }
 
-    fn install(&self) -> anyhow::Result<()> {
+    fn install(&self) -> anyhow::Result<Vec<seekdeep_cordis::fiber::EffectHandle>> {
         let observation = self.clone();
-        self.context.events().on(
+        let publication = self.context.events().on(
             &self.context,
             "internal/plugin",
             move |_, args| {
@@ -157,7 +157,7 @@ impl Observation {
             EventOptions::default(),
         )?;
         let observation = self.clone();
-        self.context.events().on(
+        let reload = self.context.events().on(
             &self.context,
             "hmr/reload",
             move |_, _| {
@@ -169,7 +169,7 @@ impl Observation {
             },
             EventOptions::default(),
         )?;
-        Ok(())
+        Ok(vec![publication, reload])
     }
 }
 
@@ -185,7 +185,7 @@ async fn scenario(failure: &str, async_dispose: bool) -> anyhow::Result<Value> {
         old: Arc::default(),
         reject: Arc::new(AtomicBool::new(false)),
     };
-    observation.install()?;
+    let observations = observation.install()?;
     std::fs::write(&filename, plugin("old", "none", async_dispose))?;
     let composition = PluginCatalog::new().load_yaml_at(
         &context,
@@ -234,6 +234,9 @@ async fn scenario(failure: &str, async_dispose: bool) -> anyhow::Result<Value> {
             "disabled":snapshot.disabled,"generation":fiber.plugin_name()})
         })
         .collect::<Vec<_>>();
+    for effect in observations {
+        effect.dispose().await?;
+    }
     composition.dispose().await?;
     Ok(
         json!({"failure":failure,"asyncDispose":async_dispose,"initial":initial,"settled":settled,

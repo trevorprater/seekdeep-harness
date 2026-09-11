@@ -113,12 +113,10 @@ fn agent(context: &Context, id: &str, parent_session: Option<SessionId>) -> Arc<
 
 fn message(kind: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: kind.into(),
-        }],
+        vec![ContentBlock::Text { text: kind.into() }],
         MessageSource {
             kind: kind.to_owned(),
-            fields: serde_json::Map::new(),
+            fields: serde_json::Map::new().into(),
         },
     )
 }

@@ -231,7 +231,7 @@ fn request_messages(agent: &Agent, turn: u64, proposed: &[UserMessage]) -> Vec<U
     entered
         .iter()
         .filter(|event| event.event_type == "user/message")
-        .filter_map(|event| serde_json::from_value(event.data.clone()).ok())
+        .filter_map(|event| event.data.deserialize().ok())
         .chain(proposed.iter().cloned())
         .collect()
 }
@@ -423,10 +423,5 @@ pub fn user_rpc_message(text: &str, rpc_id: &str, time_zone: &str) -> UserMessag
         "clientTimeZone".to_owned(),
         Value::String(time_zone.to_owned()),
     );
-    UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
-        source,
-    )
+    UserMessage::new(vec![ContentBlock::Text { text: text.into() }], source)
 }

@@ -1,11 +1,13 @@
+use super::json_value;
+
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocation, ConversationMatch,
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 
 use super::{CHAT_MAX_TOKENS_NOTICE_OFFSET, chat_node, context_location, sequence_anchor};
 
@@ -29,14 +31,14 @@ pub fn conversation_turn_max_tokens_definition() -> AssemblerNodeDefinition {
             Ok((event.event_type == "turn/end"
                 && event
                     .data
-                    .get("reason")
-                    .and_then(|reason| reason.get("kind"))
+                    .get_value("reason")
+                    .and_then(|reason| reason.get_value("kind"))
                     .and_then(Value::as_str)
                     == Some("max-tokens"))
             .then(|| {
                 event
                     .data
-                    .get("turn")
+                    .get_value("turn")
                     .and_then(Value::as_u64)
                     .map(|turn| ConversationMatchResult {
                         id: turn.to_string(),
@@ -61,13 +63,13 @@ pub fn conversation_turn_max_tokens_definition() -> AssemblerNodeDefinition {
                 return Ok(None);
             };
             let state = decode(state)?;
-            let node = json!({
-                "kind": TURN_MAX_TOKENS_KIND,
-                "seq": state.seq,
-                "time": state.time,
-                "turn": state.turn,
-                "step": last_step(context),
-            });
+            let node = Value::object([
+                ("kind", json_value(&TURN_MAX_TOKENS_KIND)),
+                ("seq", json_value(&state.seq)),
+                ("time", json_value(&state.time)),
+                ("turn", json_value(&state.turn)),
+                ("step", json_value(&(last_step(context)))),
+            ]);
             Ok(Some(chat_node(
                 context,
                 TURN_MAX_TOKENS_KIND,
@@ -83,15 +85,15 @@ fn state_from(accepted: &ConversationMatch) -> Option<TurnMaxTokensState> {
         || accepted
             .event
             .data
-            .get("reason")
-            .and_then(|reason| reason.get("kind"))
+            .get_value("reason")
+            .and_then(|reason| reason.get_value("kind"))
             .and_then(Value::as_str)
             != Some("max-tokens")
     {
         return None;
     }
     Some(TurnMaxTokensState {
-        turn: accepted.event.data.get("turn")?.as_u64()?,
+        turn: accepted.event.data.get_value("turn")?.as_u64()?,
         seq: accepted.event.seq,
         time: accepted.event.time,
     })
@@ -116,12 +118,12 @@ fn notice_anchor(context: &ConversationNodeContext, seq: u64) -> f64 {
     };
     turn.data
         .get("turn-tail")
-        .and_then(|tail| tail.get("closing").cloned())
+        .and_then(|tail| tail.get_value("closing").cloned())
         .filter(|closing| !closing.is_null())
         .and_then(|closing| {
             closing
-                .get("finalNode")
-                .and_then(|node| node.get("seq"))
+                .get_value("finalNode")
+                .and_then(|node| node.get_value("seq"))
                 .and_then(Value::as_f64)
         })
         .map_or(sequence_anchor(seq), |closing| {
@@ -130,12 +132,13 @@ fn notice_anchor(context: &ConversationNodeContext, seq: u64) -> f64 {
 }
 
 fn decode(value: &Value) -> Result<TurnMaxTokensState, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn encode(value: &TurnMaxTokensState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(value)
+    Value::from_serialize(value)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

@@ -162,9 +162,8 @@ fn frame_sink(sinks: &JsValue, name: &str) -> Option<Arc<dyn Fn(EventFrame) + Se
     }
     let id = retain(callback);
     Some(Arc::new(move |frame: EventFrame| {
-        if let Ok(value) = serde_json::to_value(&frame)
-            .map_err(|_| ())
-            .and_then(|value| to_js(&value).map_err(|_| ()))
+        if let Ok(text) = serde_json::to_string(&frame)
+            && let Ok(value) = JSON::parse(&text)
         {
             invoke(id, &[value]);
         }
@@ -251,14 +250,13 @@ pub(crate) fn connection_object(query: &str, hostname: &str) -> Result<JsValue, 
                     .into());
                 }
                 let id = retain(listener);
-                let subscription =
-                    fixture.subscribe_envelopes(Arc::new(move |envelopes: Vec<Value>| {
-                        for envelope in &envelopes {
-                            if let Ok(value) = to_js(envelope) {
-                                invoke(id, &[value]);
-                            }
+                let subscription = fixture.subscribe_envelopes(Arc::new(move |envelopes| {
+                    for envelope in &envelopes {
+                        if let Ok(value) = JSON::parse(envelope.as_raw()) {
+                            invoke(id, &[value]);
                         }
-                    }));
+                    }
+                }));
                 let dispose = Closure::wrap(Box::new(move || {
                     subscription.dispose();
                     release(id);
@@ -531,4 +529,39 @@ fn install_timing_hooks(fixture: &Arc<FixtureApi>) -> Result<(), JsValue> {
     ])?;
     Reflect::set(&js_sys::global(), &JsValue::from_str("__fxTiming"), &hooks)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn frame_sink_preserves_raw_payload_strings_keys_and_numbers() {
+        let received = js_sys::Array::new();
+        let captured = received.clone();
+        let callback = Closure::<dyn FnMut(JsValue)>::new(move |frame| {
+            captured.push(&frame);
+        })
+        .into_js_value();
+        let sinks = object(&[("frame", callback)]).unwrap();
+        let sink = frame_sink(&sinks, "frame").unwrap();
+        let frame: EventFrame = serde_json::from_str(
+            r#"{"rpcId":"raw-frame","payload":{"text":"\ud800","literal":"\\ud800","\udfff":"kept","huge":1e400,"negativeZero":-0}}"#,
+        )
+        .unwrap();
+        sink(frame);
+        assert_eq!(received.length(), 1);
+        let correct = Function::new_with_args(
+            "frame",
+            "return frame.rpcId === 'raw-frame' && frame.payload.text.charCodeAt(0) === 0xd800 && frame.payload.literal === '\\\\ud800' && frame.payload['\\udfff'] === 'kept' && frame.payload.huge === Infinity && Object.is(frame.payload.negativeZero, -0)",
+        );
+        assert_eq!(
+            correct
+                .call1(&JsValue::UNDEFINED, &received.get(0))
+                .unwrap()
+                .as_bool(),
+            Some(true)
+        );
+    }
 }

@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use seekdeep_agent::Agent;
-use seekdeep_core::session::{Session, derive_event_message};
+use seekdeep_core::session::{JsonValue, Session, derive_event_message};
 use seekdeep_fs::FileSystem;
 use seekdeep_fs::types::FsVersion;
 use seekdeep_llm::{AbortSignal, ContentBlock, Message, MessageSource, UserMessage};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, json};
 
 use crate::config::ResolvedConfig;
 use crate::digest::{instruction_content_sha1, trimmed_instruction_digest};
@@ -99,12 +99,10 @@ fn workspace_context_hook(text: &str, changes: &[AgentInstructionChange]) -> Use
         serde_json::to_value(changes).expect("changes serialize"),
     );
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource {
             kind: AGENT_INSTRUCTIONS_KIND.to_owned(),
-            fields,
+            fields: fields.into(),
         },
     )
 }
@@ -113,9 +111,7 @@ fn workspace_context_hook(text: &str, changes: &[AgentInstructionChange]) -> Use
 #[must_use]
 pub fn workspace_context_message(text: &str) -> Message {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::plugin(NAME),
     )
     .into_message()
@@ -123,19 +119,23 @@ pub fn workspace_context_message(text: &str) -> Message {
 
 fn is_workspace_context_source(source: &MessageSource) -> bool {
     source.kind == AGENT_INSTRUCTIONS_KIND
-        && source.fields.get("changes").is_some_and(Value::is_array)
+        && source
+            .fields
+            .get("changes")
+            .is_some_and(JsonValue::is_array)
 }
 
 fn workspace_instruction_changes(source: &MessageSource) -> Vec<AgentInstructionChange> {
-    let Some(changes) = source.fields.get("changes").and_then(Value::as_array) else {
+    let Some(changes) = source.fields.get("changes").and_then(JsonValue::as_array) else {
         return Vec::new();
     };
     let mut result = Vec::new();
     for value in changes {
-        let Some(object) = value.as_object() else {
+        if !value.is_object() {
             continue;
-        };
-        let Some(action) = object.get("action").and_then(Value::as_str) else {
+        }
+        let object = value;
+        let Some(action) = object.get_value("action").and_then(JsonValue::as_str) else {
             continue;
         };
         let action = match action {
@@ -144,16 +144,20 @@ fn workspace_instruction_changes(source: &MessageSource) -> Vec<AgentInstruction
             "remove" => AgentInstructionAction::Remove,
             _ => continue,
         };
-        let Some(scope) = object.get("scope").and_then(Value::as_str) else {
+        let Some(scope) = object.get_value("scope").and_then(JsonValue::as_str) else {
             continue;
         };
-        let Some(path) = object.get("path").and_then(Value::as_str) else {
+        let Some(path) = object.get_value("path").and_then(JsonValue::as_str) else {
             continue;
         };
-        let digest = match object.get("digest") {
+        let digest = match object.get_value("digest") {
             None => None,
-            Some(Value::String(digest)) => Some(digest.clone()),
-            Some(_) => continue,
+            Some(digest) => {
+                let Some(digest) = digest.as_str() else {
+                    continue;
+                };
+                Some(digest.to_owned())
+            }
         };
         result.push(AgentInstructionChange {
             action,

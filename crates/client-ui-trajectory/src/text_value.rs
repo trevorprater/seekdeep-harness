@@ -50,3 +50,13 @@ pub(crate) fn split_once(text: &JsonString, separator: &str) -> Option<(JsonStri
         JsonString::from_utf16(&text.utf16_units()[at + separator.len()..]),
     ))
 }
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn trim_end_matches(text: &JsonString, suffix: &str) -> JsonString {
+    let suffix = suffix.encode_utf16().collect::<Vec<_>>();
+    let mut units = text.utf16_units();
+    while !suffix.is_empty() && units.ends_with(&suffix) {
+        units = &units[..units.len() - suffix.len()];
+    }
+    JsonString::from_utf16(units)
+}

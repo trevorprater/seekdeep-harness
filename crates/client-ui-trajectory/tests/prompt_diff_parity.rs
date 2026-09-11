@@ -7,7 +7,12 @@ use seekdeep_client_ui_trajectory::{
 fn compact(lines: &[TrajectoryPromptDiffLine]) -> Vec<(TrajectoryPromptDiffKind, &str)> {
     lines
         .iter()
-        .map(|line| (line.kind, line.text.as_str()))
+        .map(|line| {
+            (
+                line.kind,
+                line.text.as_str().expect("fixture is scalar text"),
+            )
+        })
         .collect()
 }
 

@@ -12,6 +12,7 @@ use seekdeep_cordis::events::Next;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_skill::{
     SKILLS, SkillCatalogSnapshot, SkillDefinition, SkillInvocationPolicy, SkillLookupOptions,
     SkillRegistry, SkillResourceBase, SkillSource, SkillSummary, SkillViewOptions, escape_text,
@@ -88,7 +89,7 @@ impl SkillCatalogSource {
         );
         MessageSource {
             kind: "skill-catalog".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 }
@@ -226,16 +227,15 @@ pub fn read_catalog_entries(source: &MessageSource) -> Option<Vec<CatalogEntry>>
     parse_entries(source.fields.get("entries")?)
 }
 
-fn parse_entries(entries: &Value) -> Option<Vec<CatalogEntry>> {
+fn parse_entries(entries: &JsonValue) -> Option<Vec<CatalogEntry>> {
     let entries = entries.as_array()?;
     let mut readable = Vec::with_capacity(entries.len());
     for entry in entries {
-        let object = entry.as_object()?;
-        let name = object.get("name")?.as_str()?;
+        let name = entry["name"].as_str()?;
         if name.is_empty() {
             return None;
         }
-        let description = object.get("description")?.as_str()?;
+        let description = entry["description"].as_str()?;
         readable.push(CatalogEntry {
             name: name.to_owned(),
             description: description.to_owned(),
@@ -513,21 +513,7 @@ fn catalog_history(agent: &Agent) -> CatalogHistory {
         if source["kind"] != "skill-catalog" {
             continue;
         }
-        let Some(entries) = source["entries"].as_array().and_then(|entries| {
-            entries
-                .iter()
-                .map(|entry| {
-                    let name = entry["name"].as_str()?;
-                    if name.is_empty() {
-                        return None;
-                    }
-                    Some(CatalogEntry {
-                        name: name.to_owned(),
-                        description: entry["description"].as_str()?.to_owned(),
-                    })
-                })
-                .collect::<Option<Vec<_>>>()
-        }) else {
+        let Some(entries) = parse_entries(&source["entries"]) else {
             continue;
         };
         let digest = digest_catalog_entries(&entries);
@@ -685,7 +671,7 @@ async fn gesture_step(
             }],
             MessageSource {
                 kind: "skill-invocation".to_owned(),
-                fields,
+                fields: fields.into(),
             },
         ));
     }

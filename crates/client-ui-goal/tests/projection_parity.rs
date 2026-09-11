@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as SnapshotValue;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
     AssemblerViewDefinition, AssemblerViewDefinitions, ConversationAssemblerError,
@@ -12,7 +13,9 @@ use seekdeep_client_runtime::{
 use seekdeep_client_ui_goal::{
     GOAL_LOCALES, GOAL_NS, GoalCommandInputData, goal_command_input_definition, goal_command_text,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
+
+include!("../../client-runtime/tests/support/conversation_json.rs");
 
 struct Events(Vec<Rc<AssemblerNodeDefinition>>);
 
@@ -39,7 +42,7 @@ struct Builder {
 }
 
 impl Builder {
-    fn snapshot(&self) -> Rc<Value> {
+    fn snapshot(&self) -> Rc<SnapshotValue> {
         let nodes = self
             .nodes
             .iter()
@@ -47,7 +50,7 @@ impl Builder {
                 let chat = node.chat.as_ref().unwrap();
                 (
                     node.key.clone(),
-                    json!({
+                    conversation_json!({
                         "kind":node.kind,
                         "anchorSeq":chat.anchor_seq,
                         "visible":chat.visibility == ConversationVisibility::Visible,
@@ -61,13 +64,13 @@ impl Builder {
                     }),
                 )
             })
-            .collect::<Map<_, _>>();
-        Rc::new(json!({"nodes":nodes}))
+            .collect::<Vec<_>>();
+        Rc::new(conversation_json!({"nodes":SnapshotValue::object(nodes)}))
     }
 }
 
 impl AssemblerViewBuilder for Builder {
-    fn empty(&self) -> Rc<Value> {
+    fn empty(&self) -> Rc<SnapshotValue> {
         self.snapshot()
     }
 
@@ -75,7 +78,7 @@ impl AssemblerViewBuilder for Builder {
         &mut self,
         nodes: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         self.nodes = nodes.to_vec();
         Ok(self.snapshot())
     }
@@ -84,7 +87,7 @@ impl AssemblerViewBuilder for Builder {
         &mut self,
         upserts: &[Rc<ConversationViewNode>],
         _timeline: Rc<ConversationTimelineSnapshot>,
-    ) -> Result<Rc<Value>, ConversationAssemblerError> {
+    ) -> Result<Rc<SnapshotValue>, ConversationAssemblerError> {
         for upsert in upserts {
             if let Some(current) = self.nodes.iter_mut().find(|node| node.key == upsert.key) {
                 *current = upsert.clone();
@@ -108,7 +111,7 @@ fn at(seq: u64, event_type: &str, data: Value) -> ConversationEventInput {
     }
 }
 
-fn snapshot(entries: &[ConversationEventInput], has_more: bool) -> Rc<Value> {
+fn snapshot(entries: &[ConversationEventInput], has_more: bool) -> Rc<SnapshotValue> {
     let mut assembler = ConversationNodeAssembler::new(
         Rc::new(Events(vec![Rc::new(goal_command_input_definition())])),
         Rc::new(Views(vec![Rc::new(AssemblerViewDefinition {
@@ -129,12 +132,12 @@ fn projection_builds_separate_goal_input_with_exact_anchor_location_and_data() {
         json!({"commandId":"command-goal","name":"goal","args":" ","source":{"kind":"user"}}),
     );
     let value = snapshot(&[run], false);
-    let node = value["nodes"].as_object().unwrap().values().next().unwrap();
+    let node = value["nodes"].object_entries().unwrap()[0].1.to_owned();
     assert_eq!(node["kind"], "command-input");
     assert_eq!(node["anchorSeq"], 0.9);
     assert_eq!(node["location"], "session");
     assert_eq!(node["visible"], true);
-    let data: GoalCommandInputData = serde_json::from_value(node["data"].clone()).unwrap();
+    let data: GoalCommandInputData = node["data"].deserialize().unwrap();
     assert_eq!(data.command_id.as_str(), "command-goal");
     assert_eq!(data.text, "/goal");
     assert_eq!(data.time, 1_700_000_000_001);
@@ -146,7 +149,7 @@ fn projection_builds_separate_goal_input_with_exact_anchor_location_and_data() {
     );
     assert!(
         snapshot(&[plan], false)["nodes"]
-            .as_object()
+            .object_entries()
             .unwrap()
             .is_empty()
     );
@@ -157,7 +160,7 @@ fn projection_builds_separate_goal_input_with_exact_anchor_location_and_data() {
     );
     assert!(
         snapshot(&[done], true)["nodes"]
-            .as_object()
+            .object_entries()
             .unwrap()
             .is_empty()
     );
@@ -177,4 +180,26 @@ fn command_text_and_locales_preserve_internal_lines_and_trailing_trim() {
         ("phase.active", "进行中的目标", "Ongoing Goal")
     );
     assert_eq!(GOAL_LOCALES[10], ("action.clear", "清除目标", "Clear goal"));
+}
+
+#[test]
+fn command_projection_preserves_raw_argument_code_units() {
+    let run = ConversationEventInput {
+        event: ConversationLocationEvent::with_time(
+            1,
+            1,
+            "command/run",
+            SnapshotValue::parse(
+                r#"{"commandId":"raw","name":"goal","args":" \ud800x\udfff \n"}"#.to_owned(),
+            )
+            .unwrap(),
+        ),
+        view: None,
+    };
+    let value = snapshot(&[run], false);
+    let node = value["nodes"].object_entries().unwrap()[0].1.to_owned();
+    assert_eq!(
+        node["data"]["text"].to_utf16(),
+        Some(vec![47, 103, 111, 97, 108, 32, 0xd800, 120, 0xdfff])
+    );
 }

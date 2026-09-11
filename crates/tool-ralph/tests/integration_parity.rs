@@ -178,16 +178,14 @@ impl Harness {
 
 fn text(result: &ToolExecutionResult) -> &str {
     match result.content().first() {
-        Some(ContentBlock::Text { text }) => text,
+        Some(ContentBlock::Text { text }) => text.as_str().expect("fixture text is Unicode"),
         other => panic!("expected text result, got {other:?}"),
     }
 }
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }

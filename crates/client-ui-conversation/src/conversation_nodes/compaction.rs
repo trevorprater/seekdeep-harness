@@ -1,11 +1,11 @@
 use std::rc::Rc;
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocationEvent,
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::{
     chat_node,
@@ -75,13 +75,13 @@ fn match_compaction_event(event: &ConversationLocationEvent) -> Option<Conversat
     if !matches!(
         event.event_type.as_str(),
         "compaction/start" | "compaction/summary" | "compaction/end"
-    ) || event.data.get("sourceCommandId").is_some()
+    ) || event.data.get_value("sourceCommandId").is_some()
     {
         return None;
     }
     let compaction_id = event
         .data
-        .get("compactionId")
+        .get_value("compactionId")
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty())?;
     Some(ConversationMatchResult {

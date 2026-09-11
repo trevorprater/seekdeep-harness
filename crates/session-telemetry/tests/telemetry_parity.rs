@@ -148,7 +148,18 @@ fn hands_every_appended_event_over_with_envelope_identity_and_cloned_body() {
     let message = &ledger[1];
     assert_eq!(message.attributes["event.seq"], 1);
     // Deep-copy isolation: mutating the handed-off body never reaches the log.
-    backend.records.lock()[1].body["content"][0]["text"] = json!("tampered");
+    {
+        let mut records = backend.records.lock();
+        let mut content = records[1].body["content"].as_array().unwrap().clone();
+        content[0].insert("text", json!("tampered").into()).unwrap();
+        records[1]
+            .body
+            .insert(
+                "content",
+                seekdeep_core::session::JsonValue::array(&content),
+            )
+            .unwrap();
+    }
     let logged = &session.events()[1];
     assert_eq!(logged.data["content"][0]["text"], "hello");
 }
@@ -380,7 +391,7 @@ async fn runs_the_mounted_redaction_policy_during_canonical_log_capture() {
                         .downcast::<SessionTelemetryRecord>()
                         .map(|record| (*record).clone())
                         .expect("record");
-                    record.body = json!({"scrubbed": true});
+                    record.body = json!({"scrubbed": true}).into();
                     Ok(EventReply::Value(Arc::new(record)))
                 })
             },

@@ -2,8 +2,9 @@
 //! direction and the discriminated message unions derived from them. Payloads
 //! are plain JSON by construction for structured clone.
 
+use seekdeep_core::session::JsonValue;
 use seekdeep_workflow::{WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 use crate::types::{ChildResult, ChildStartRequest};
 
@@ -99,7 +100,7 @@ pub enum HostToWorkerType {
 }
 
 /// One host-to-worker message.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -146,4 +147,95 @@ pub enum HostToWorkerMessage {
         /// RPC correlation id.
         call_id: u64,
     },
+}
+
+#[derive(Deserialize)]
+struct HostMessageTag {
+    #[serde(rename = "type")]
+    kind: HostToWorkerType,
+}
+
+#[derive(Deserialize)]
+struct CancelFields {
+    reason: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartedFields {
+    call_id: u64,
+    child_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderedFields {
+    call_id: u64,
+    rendered: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettledFields {
+    call_id: u64,
+    result: ChildResult,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DisposedFields {
+    call_id: u64,
+}
+
+impl<'de> Deserialize<'de> for HostToWorkerMessage {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if !raw.is_object() {
+            return Err(D::Error::custom("host message must be an object"));
+        }
+        let tag: HostMessageTag = raw.deserialize().map_err(D::Error::custom)?;
+        match tag.kind {
+            HostToWorkerType::Go => Ok(Self::Go),
+            HostToWorkerType::Cancel => {
+                let fields: CancelFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Cancel {
+                    reason: fields.reason,
+                })
+            }
+            HostToWorkerType::ChildStarted => {
+                let fields: StartedFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::ChildStarted {
+                    call_id: fields.call_id,
+                    child_id: fields.child_id,
+                })
+            }
+            HostToWorkerType::ChildStartError => {
+                let fields: RenderedFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::ChildStartError {
+                    call_id: fields.call_id,
+                    rendered: fields.rendered,
+                })
+            }
+            HostToWorkerType::ChildSettled => {
+                let fields: SettledFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::ChildSettled {
+                    call_id: fields.call_id,
+                    result: fields.result,
+                })
+            }
+            HostToWorkerType::ChildFailed => {
+                let fields: RenderedFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::ChildFailed {
+                    call_id: fields.call_id,
+                    rendered: fields.rendered,
+                })
+            }
+            HostToWorkerType::ChildDisposed => {
+                let fields: DisposedFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::ChildDisposed {
+                    call_id: fields.call_id,
+                })
+            }
+        }
+    }
 }

@@ -9,6 +9,10 @@ use seekdeep_client_ui_trajectory::{
 use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
 
+#[path = "../src/browser_value.rs"]
+#[allow(dead_code)]
+mod browser_value;
+
 #[wasm_bindgen(inline_js = r#"
 function reactHarness() {
   const fibers = new Map()
@@ -242,6 +246,17 @@ export function viewEvent(currentTarget, target = currentTarget, values = {}) {
 export function viewProp(node, key) { return node?.props?.[key] }
 export function viewCalls(bench) { return bench.calls }
 export function viewSetInspect(bench, callId) { bench.props.inspect = callId === null ? null : { callId } }
+export function viewHasExactText(node, text) { return viewText(node).includes(text) }
+export function viewUseRawFixture(bench) {
+  const snapshot = bench.session.views.get('trajectory')
+  snapshot.eventNodes[0].content[0].text = 'user\ud800'
+  snapshot.eventNodes[1].blocks[0].text = 'answer\udfff'
+  const argsRaw = '{"\ud800":"\udfff"}'
+  snapshot.eventNodes[1].blocks[1].argsRaw = argsRaw
+  snapshot.eventNodes[2].call.argsRaw = argsRaw
+  snapshot.eventNodes[2].content[0].text = 'result\ud800'
+  snapshot.callSchemas.set('c1', { name: 'bash', description: 'raw\udfff', parameters: { '\ud800': '\udfff' } })
+}
 "#)]
 extern "C" {
     fn makeViewBench(kind: &str) -> JsValue;
@@ -254,6 +269,8 @@ extern "C" {
     fn viewProp(node: &JsValue, key: &str) -> JsValue;
     fn viewCalls(bench: &JsValue) -> Array;
     fn viewSetInspect(bench: &JsValue, call_id: &str);
+    fn viewHasExactText(node: &JsValue, text: &JsValue) -> bool;
+    fn viewUseRawFixture(bench: &JsValue);
 }
 
 fn property(value: &JsValue, key: &str) -> JsValue {
@@ -385,4 +402,86 @@ fn clicking_a_timeline_span_selects_the_same_table_record() {
     let tool = viewRowsContaining(&selected, "bash").get(0);
     assert_eq!(viewProp(&tool, "aria-selected").as_bool(), Some(true));
     assert!(!viewFind(&selected, "role", &JsValue::from_str("complementary")).is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn raw_text_payload_inspection_and_search_cross_the_assembled_view() {
+    let bench = makeViewBench("full");
+    viewUseRawFixture(&bench);
+    let component = component(&bench);
+    let tree = settled_render(&bench, &component);
+    let user = js_sys::JSON::parse(r#""user\ud800""#).unwrap();
+    let answer = js_sys::JSON::parse(r#""answer\udfff""#).unwrap();
+    assert!(viewHasExactText(&tree, &user));
+    assert!(viewHasExactText(&tree, &answer));
+
+    viewSetInspect(&bench, "c1");
+    let inspected = settled_render(&bench, &component);
+    let payload = viewFind(&inspected, "label", &JsValue::from_str("Payload JSON"));
+    assert!(!payload.is_undefined());
+    assert_eq!(
+        js_sys::JSON::stringify(&viewProp(&payload, "data"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#"{"\ud800":"\udfff"}"#
+    );
+
+    let search = viewFind(
+        &inspected,
+        "aria-label",
+        &JsValue::from_str("Search trajectory"),
+    );
+    let event = js_sys::Object::new();
+    let target = js_sys::Object::new();
+    Reflect::set(&target, &JsValue::from_str("value"), &answer).unwrap();
+    Reflect::set(&event, &JsValue::from_str("currentTarget"), &target).unwrap();
+    viewInvoke(&search, "onChange", &event.into());
+    let searched = settled_render(&bench, &component);
+    assert_eq!(viewRowsContaining(&searched, "answer").length(), 1);
+    assert!(viewHasExactText(&searched, &answer));
+}
+
+#[wasm_bindgen_test]
+fn typed_bridge_keeps_undefined_maps_and_payloads_resembling_raw_wrappers() {
+    use indexmap::IndexMap;
+    use seekdeep_lossless_json::{JsonString, JsonValue};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    struct Typed {
+        absent: Option<JsonString>,
+        text: JsonString,
+        maps: IndexMap<String, IndexMap<String, JsonValue>>,
+        payload: JsonValue,
+    }
+    let raw = JsonValue::parse(r#"{"\ud800":"\udfff"}"#.to_owned()).unwrap();
+    let value = Typed {
+        absent: None,
+        text: JsonString::from_utf16(&[0xd800]),
+        maps: IndexMap::from([(
+            "outer".to_owned(),
+            IndexMap::from([("inner".to_owned(), raw)]),
+        )]),
+        payload: JsonValue::parse(r#"{"$serde_json::private::RawValue":"7"}"#.to_owned()).unwrap(),
+    };
+    let encoded = browser_value::to_value(&value).unwrap();
+    assert!(property(&encoded, "absent").is_undefined());
+    let maps = property(&encoded, "maps")
+        .dyn_into::<js_sys::Map>()
+        .unwrap();
+    assert!(
+        maps.get(&JsValue::from_str("outer"))
+            .is_instance_of::<js_sys::Map>()
+    );
+    assert_eq!(
+        property(
+            &property(&encoded, "payload"),
+            "$serde_json::private::RawValue"
+        )
+        .as_string()
+        .as_deref(),
+        Some("7")
+    );
+    assert_eq!(browser_value::from_value::<Typed>(&encoded).unwrap(), value);
 }

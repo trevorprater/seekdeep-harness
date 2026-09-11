@@ -145,7 +145,7 @@ fn notice_source(summary: &str) -> MessageSource {
     fields.insert("summary".to_owned(), json!(summary));
     MessageSource {
         kind: "plugin".to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 

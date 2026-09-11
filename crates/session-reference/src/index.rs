@@ -308,8 +308,7 @@ impl SessionReferenceResolver {
             })
             .collect::<Vec<_>>();
         let source = session_reference_source(&facts);
-        let additional_context =
-            UserMessage::new(vec![ContentBlock::text(prompt)], source);
+        let additional_context = UserMessage::new(vec![ContentBlock::text(prompt)], source);
         Ok(PreparedReferencedMessage {
             content: accepted_content,
             additional_context: Some(additional_context),
@@ -429,7 +428,7 @@ fn session_reference_source(facts: &[SessionReferenceFact]) -> MessageSource {
     );
     MessageSource {
         kind: SESSION_REFERENCE_SOURCE_KIND.to_owned(),
-        fields,
+        fields: fields.into(),
     }
 }
 

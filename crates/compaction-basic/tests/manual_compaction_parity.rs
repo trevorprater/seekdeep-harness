@@ -26,7 +26,7 @@ use seekdeep_compaction_basic::{
 };
 use seekdeep_cordis::{Context, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionEvent, SessionId, SurfaceOp},
+    session::{AppendOptions, JsonValue, Session, SessionEvent, SessionId, SurfaceOp},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::{
@@ -1614,7 +1614,7 @@ async fn loop_keeps_injected_context_pending_and_marker_listener_order_stable() 
                     .source()
                     .fields
                     .get("plugin")
-                    .and_then(Value::as_str)
+                    .and_then(JsonValue::as_str)
                     == Some("test")
             })
     );
@@ -1695,7 +1695,7 @@ async fn loop_marker_listeners_inject_reentrantly_without_reordering_bracket() {
                     .source()
                     .fields
                     .get("plugin")
-                    .and_then(Value::as_str)
+                    .and_then(JsonValue::as_str)
                     == Some("listener")
             })
             .count(),

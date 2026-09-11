@@ -1,20 +1,21 @@
 use std::{collections::BTreeMap, rc::Rc};
 
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, AssistantBlock, ConversationAssemblerError, ConversationLocation,
     ConversationLocationData, ConversationLocationDataScope, ConversationMatchResult,
     ConversationMatchRole, ConversationNodeContext, ConversationPublication, ConversationViewNode,
     to_assistant_block,
 };
+use seekdeep_lossless_json::JsonString;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
 
 use crate::{AssistantMetricNode, AssistantTiming, derive_turn_metrics};
 
 use super::{
     ASSISTANT_STEP_KIND, CHAT_FINALIZED_FOLLOWUP_OFFSET, CHAT_INTERRUPTED_FOLLOWUP_OFFSET,
     chat_node, command::EventEvidence, conversation_coordinate, is_append_surface_event, js_string,
-    sequence_anchor,
+    json_value, sequence_anchor,
 };
 
 /// Completed-turn footer definition kind and Location-data key.
@@ -44,9 +45,9 @@ pub fn conversation_turn_tail_definition() -> AssemblerNodeDefinition {
                 event.event_type.as_str(),
                 "turn/start" | "turn/end" | "tool/call" | "tool/result"
             ) {
-                event.data.get("turn").cloned()
+                event.data.get_value("turn").cloned()
             } else {
-                turn_coordinates(&event.event_type, &event.data).map(|(turn, _)| json!(turn))
+                turn_coordinates(&event.event_type, &event.data).map(|(turn, _)| json_value(&turn))
             };
             Ok(turn.as_ref().map(|turn| ConversationMatchResult {
                 id: js_string(turn),
@@ -103,7 +104,7 @@ fn build_location_data(
         return Ok(None);
     };
     let turn = value
-        .get("turn")
+        .get_value("turn")
         .and_then(Value::as_u64)
         .ok_or_else(|| ConversationAssemblerError::new("turn-tail data omitted turn"))?;
     Ok(Some(Rc::new(ConversationLocationData::Turn {
@@ -154,7 +155,7 @@ fn tail_data(
         .steps
         .iter()
         .filter_map(|step| step.data.get(ASSISTANT_STEP_KIND))
-        .filter(|assistant| assistant.get("finalNode").is_some())
+        .filter(|assistant| assistant.get_value("finalNode").is_some())
         .map(|assistant| assistant.as_ref().clone())
         .collect::<Vec<_>>();
     finalized.sort_by(|left, right| {
@@ -175,8 +176,8 @@ fn tail_data(
             || (event.event_type == "turn/end"
                 && event
                     .data
-                    .get("reason")
-                    .and_then(|reason| reason.get("kind"))
+                    .get_value("reason")
+                    .and_then(|reason| reason.get_value("kind"))
                     .and_then(Value::as_str)
                     == Some("error"))
             || event.event_type == "llm/retry"
@@ -200,26 +201,32 @@ fn tail_data(
     )
     .get(&required_coordinate(&end.data, "turn")?)
     .copied();
-    let mut value = Map::from_iter([
+    let mut value = Vec::from([
         (
             "turn".to_owned(),
-            end.data.get("turn").cloned().unwrap_or(Value::Null),
+            end.data
+                .get_value("turn")
+                .cloned()
+                .unwrap_or_else(|| json_value(&())),
         ),
-        ("seq".to_owned(), json!(end.seq)),
-        ("time".to_owned(), json!(end.time)),
-        ("closing".to_owned(), closing.unwrap_or(Value::Null)),
+        ("seq".to_owned(), json_value(&end.seq)),
+        ("time".to_owned(), json_value(&end.time)),
+        (
+            "closing".to_owned(),
+            closing.unwrap_or_else(|| json_value(&())),
+        ),
         (
             "branchUnavailable".to_owned(),
-            json!(closing_seq.is_none() || latest_transcript_seq != closing_seq),
+            json_value(&(closing_seq.is_none() || latest_transcript_seq != closing_seq)),
         ),
     ]);
     if let Some(ttft) = metrics.and_then(|metrics| metrics.ttft_ms) {
-        value.insert("ttftMs".to_owned(), json!(ttft));
+        value.push(("ttftMs".to_owned(), json_value(&ttft)));
     }
     if let Some(rate) = metrics.and_then(|metrics| metrics.tokens_per_second) {
-        value.insert("tokensPerSecond".to_owned(), json!(rate));
+        value.push(("tokensPerSecond".to_owned(), json_value(&rate)));
     }
-    Ok(Some(Value::Object(value)))
+    Ok(Some(Value::object(value)))
 }
 
 fn closing_anchor(context: &ConversationNodeContext) -> f64 {
@@ -310,8 +317,8 @@ fn turn_coordinates(event_type: &str, data: &Value) -> Option<(u64, Option<u64>)
         "assistant/message" | "assistant/chunk" | "step/end" | "llm/retry"
     ) {
         Some((
-            data.get("turn").and_then(conversation_coordinate)?,
-            data.get("step").and_then(conversation_coordinate),
+            data.get_value("turn").and_then(conversation_coordinate)?,
+            data.get_value("step").and_then(conversation_coordinate),
         ))
     } else {
         None
@@ -323,8 +330,8 @@ fn has_text_assistant(event: &seekdeep_client_runtime::ConversationLocationEvent
         && is_append_surface_event(event)
         && event
             .data
-            .get("message")
-            .and_then(|message| message.get("content"))
+            .get_value("message")
+            .and_then(|message| message.get_value("content"))
             .and_then(Value::as_array)
             .is_some_and(|content| {
                 content.iter().any(|block| match to_assistant_block(block) {
@@ -335,19 +342,19 @@ fn has_text_assistant(event: &seekdeep_client_runtime::ConversationLocationEvent
 }
 
 fn chunk_has_text(data: &Value) -> bool {
-    let Some(chunk) = data.get("chunk") else {
+    let Some(chunk) = data.get_value("chunk") else {
         return false;
     };
-    match chunk.get("type").and_then(Value::as_str) {
+    match chunk.get_value("type").and_then(Value::as_str) {
         Some("text-delta") => chunk
-            .get("text")
-            .and_then(Value::as_str)
+            .get_value("text")
+            .and_then(|text| text.deserialize::<JsonString>().ok())
             .is_some_and(|text| !text.trim().is_empty()),
-        Some("block-end") => chunk.get("block").is_some_and(|block| {
-            block.get("type").and_then(Value::as_str) == Some("text")
+        Some("block-end") => chunk.get_value("block").is_some_and(|block| {
+            block.get_value("type").and_then(Value::as_str) == Some("text")
                 && block
-                    .get("text")
-                    .and_then(Value::as_str)
+                    .get_value("text")
+                    .and_then(|text| text.deserialize::<JsonString>().ok())
                     .is_some_and(|text| !text.trim().is_empty())
         }),
         _ => false,
@@ -356,17 +363,17 @@ fn chunk_has_text(data: &Value) -> bool {
 
 fn assistant_has_text(assistant: &Value) -> bool {
     assistant
-        .get("finalNode")
+        .get_value("finalNode")
         .is_some_and(|final_node| !final_node.is_null())
         && assistant
-            .get("blocks")
+            .get_value("blocks")
             .and_then(Value::as_array)
             .is_some_and(|blocks| {
                 blocks.iter().any(|block| {
-                    block.get("kind").and_then(Value::as_str) == Some("text")
+                    block.get_value("kind").and_then(Value::as_str) == Some("text")
                         && block
-                            .get("text")
-                            .and_then(Value::as_str)
+                            .get_value("text")
+                            .and_then(|text| text.deserialize::<JsonString>().ok())
                             .is_some_and(|text| !text.trim().is_empty())
                 })
             })
@@ -374,46 +381,47 @@ fn assistant_has_text(assistant: &Value) -> bool {
 
 fn final_seq(assistant: &Value) -> f64 {
     assistant
-        .get("finalNode")
-        .and_then(|node| node.get("seq"))
+        .get_value("finalNode")
+        .and_then(|node| node.get_value("seq"))
         .and_then(Value::as_f64)
         .unwrap_or(0.0)
 }
 
 fn assistant_metric(assistant: &Value) -> Option<AssistantMetricNode> {
-    let final_node = assistant.get("finalNode")?;
-    let timing = final_node.get("timing").and_then(|timing| {
+    let final_node = assistant.get_value("finalNode")?;
+    let timing = final_node.get_value("timing").and_then(|timing| {
         Some(AssistantTiming {
-            step_start_time: timing.get("stepStartTime").and_then(Value::as_f64),
-            first_token_time: timing.get("firstTokenTime").and_then(Value::as_f64),
-            completed_time: timing.get("completedTime")?.as_f64()?,
+            step_start_time: timing.get_value("stepStartTime").and_then(Value::as_f64),
+            first_token_time: timing.get_value("firstTokenTime").and_then(Value::as_f64),
+            completed_time: timing.get_value("completedTime")?.as_f64()?,
         })
     });
     Some(AssistantMetricNode {
-        turn: assistant.get("turn")?.as_u64()?,
-        step: assistant.get("step")?.as_u64()?,
+        turn: assistant.get_value("turn")?.as_u64()?,
+        step: assistant.get_value("step")?.as_u64()?,
         timing,
         output_tokens: final_node
-            .get("usage")
-            .and_then(|usage| usage.get("outputTokens"))
+            .get_value("usage")
+            .and_then(|usage| usage.get_value("outputTokens"))
             .and_then(Value::as_f64),
     })
 }
 
 fn required_coordinate(value: &Value, key: &str) -> Result<u64, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(conversation_coordinate)
         .ok_or_else(|| ConversationAssemblerError::new(format!("turn-tail event omitted {key}")))
 }
 
 fn encode(state: &TurnTailState) -> Result<Rc<Value>, ConversationAssemblerError> {
-    serde_json::to_value(state)
+    Value::from_serialize(state)
         .map(Rc::new)
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 
 fn decode<T: for<'de> Deserialize<'de>>(value: &Value) -> Result<T, ConversationAssemblerError> {
-    serde_json::from_value(value.clone())
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

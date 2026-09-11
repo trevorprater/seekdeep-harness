@@ -276,7 +276,7 @@ impl HarnessSdkJsonRpcServer {
             params.content_blocks,
             MessageSource {
                 kind: "user".to_owned(),
-                fields: Map::new(),
+                fields: Map::new().into(),
             },
         );
         let message_id = message.id().clone();

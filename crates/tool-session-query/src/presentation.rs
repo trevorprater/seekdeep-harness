@@ -236,7 +236,7 @@ pub fn format_event_read(
     title: &TitleView,
     window: &SessionEventWindow,
 ) -> anyhow::Result<JsonString> {
-    let lines = vec![
+    let lines = [
         format!(
             "Session {session_id} — {}",
             workspace_access::title_text(Some(title))

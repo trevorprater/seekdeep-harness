@@ -21,6 +21,7 @@ use seekdeep_client_connection::{
 use seekdeep_cordis::Context;
 use seekdeep_host_webserver::{ListenHost, WebServer, WebServerConfig};
 use seekdeep_llm::AbortSignal;
+use seekdeep_lossless_json::JsonValue;
 use serde_json::{Value, json};
 use tokio::{net::TcpListener, sync::oneshot};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
@@ -57,8 +58,8 @@ impl WebApiContract for CountingContract {
     fn parse_downlink_payload(
         &self,
         _downlink: WebApiDownlink,
-        payload: &Value,
-    ) -> anyhow::Result<Value> {
+        payload: &JsonValue,
+    ) -> anyhow::Result<JsonValue> {
         self.downlinks.fetch_add(1, Ordering::Relaxed);
         Ok(payload.clone())
     }
@@ -145,7 +146,7 @@ async fn concrete_client_drives_unary_handshake_both_downlinks_and_generic_rpc()
                 let first = stream::once(async {
                     Ok(EventFrame {
                         rpc_id: RpcId::new("mux-native"),
-                        payload: json!({ "type": "session/subscribed", "lastSeq": 4 }),
+                        payload: json!({ "type": "session/subscribed", "lastSeq": 4 }).into(),
                     })
                 });
                 let tail =
@@ -165,7 +166,8 @@ async fn concrete_client_drives_unary_handshake_both_downlinks_and_generic_rpc()
                         "type": "host/remote-event",
                         "event": "commands/change",
                         "args": [],
-                    }),
+                    })
+                    .into(),
                 })
             })
             .chain(idle(signal))
@@ -183,7 +185,7 @@ async fn concrete_client_drives_unary_handshake_both_downlinks_and_generic_rpc()
     )
     .unwrap();
     assert!(client.is_loopback());
-    let observed = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let observed = Arc::new(Mutex::new(Vec::<JsonValue>::new()));
     let _subscription = client.subscribe_envelopes({
         let observed = observed.clone();
         Arc::new(move |batch| observed.lock().extend_from_slice(batch))
@@ -246,8 +248,8 @@ async fn concrete_client_drives_unary_handshake_both_downlinks_and_generic_rpc()
         .iter()
         .filter_map(|envelope| {
             envelope
-                .get("method")
-                .and_then(Value::as_str)
+                .get_value("method")
+                .and_then(JsonValue::as_str)
                 .map(str::to_owned)
         })
         .collect::<Vec<_>>();

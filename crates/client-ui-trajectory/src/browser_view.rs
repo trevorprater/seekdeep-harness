@@ -57,7 +57,8 @@ fn search_controller_face() -> Result<JsValue, JsValue> {
     let offer_controller = controller.clone();
     let offer = Closure::wrap(
         Box::new(move |layouts: JsValue| -> Result<String, JsValue> {
-            let layouts = serde_wasm_bindgen::from_value(layouts).map_err(js_error_from_display)?;
+            let layouts =
+                crate::browser_value::from_value(&layouts).map_err(js_error_from_display)?;
             Ok(
                 match offer_controller.borrow_mut().offer(&Rc::new(layouts)) {
                     TrajectorySearchOffer::None => "none",
@@ -83,18 +84,20 @@ fn search_controller_face() -> Result<JsValue, JsValue> {
     Reflect::set(&face, &JsValue::from_str("cancel"), &cancel.into_js_value())?;
 
     let search_controller = controller;
-    let search = Closure::wrap(Box::new(move |query: String| -> JsValue {
-        search_controller
+    let search = Closure::wrap(Box::new(move |query: JsValue| -> Result<JsValue, JsValue> {
+        let query = crate::browser_value::from_value(&query).map_err(js_error_from_display)?;
+        Ok(search_controller
             .borrow()
-            .search(&query)
+            .search_json(&query)
             .map_or(JsValue::NULL, |matches| {
                 let set = JsSet::new(&JsValue::UNDEFINED);
                 for id in matches {
-                    set.add(&JsValue::from_str(&id));
+                    set.add(&crate::browser_value::text(&id));
                 }
                 set.into()
-            })
-    }) as Box<dyn FnMut(String) -> JsValue>);
+            }))
+    })
+        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
     Reflect::set(&face, &JsValue::from_str("search"), &search.into_js_value())?;
     Ok(face.into())
 }
@@ -119,7 +122,8 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
     let (actual_time, set_actual_time) = use_state(&components.react, &JsValue::FALSE)?;
     let actual_time = actual_time.as_bool().unwrap_or(false);
     let (search_query, set_search_query) = use_state(&components.react, &JsValue::from_str(""))?;
-    let search_query = search_query.as_string().unwrap_or_default();
+    let search_query: seekdeep_lossless_json::JsonString =
+        crate::browser_value::from_value(&search_query).map_err(js_error_from_display)?;
     let (search_revision, set_search_revision) =
         use_state(&components.react, &JsValue::from_f64(0.0))?;
     let search_revision = search_revision.as_f64().unwrap_or(0.0);
@@ -149,8 +153,8 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
     let history_base_seq = inspection
         .event_nodes
         .first()
-        .and_then(|node| node.get("seq"))
-        .and_then(serde_json::Value::as_u64)
+        .and_then(|node| node.get_value("seq"))
+        .and_then(seekdeep_lossless_json::JsonValue::as_u64)
         .unwrap_or(0);
     let request_numbers =
         derive_trajectory_request_numbers(&inspection.event_nodes, &inspection.requests)
@@ -158,9 +162,9 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
 
     let mut finalized_snapshot = inspection.clone();
     finalized_snapshot.partial = inspection.partial.as_ref().and_then(|partial| {
-        Some(serde_json::json!({
-            "turn": partial.get("turn")?.clone(),
-            "step": partial.get("step")?.clone(),
+        Some(crate::json_value::json!({
+            "turn": partial.get_value("turn")?.clone(),
+            "step": partial.get_value("step")?.clone(),
             "blocks": [],
         }))
     });
@@ -198,7 +202,7 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
     let search_result = call_method(
         &search_controller,
         "search",
-        &[JsValue::from_str(&search_query)],
+        &[crate::browser_value::text(&search_query)],
     )?;
     let search_ids = if search_result.is_null() {
         None
@@ -221,7 +225,7 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
         None
     } else {
         Some(
-            serde_wasm_bindgen::from_value::<TrajectoryTimeRange>(timeline_selection.clone())
+            crate::browser_value::from_value::<TrajectoryTimeRange>(&timeline_selection.clone())
                 .map_err(js_error_from_display)?,
         )
     };
@@ -272,10 +276,10 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
         &collapsible_assistants,
         all_assistants_collapsed,
     )?;
-    let search_callback = Closure::wrap(Box::new(move |value: String| {
-        set_search_query.call1(&JsValue::UNDEFINED, &JsValue::from_str(&value))
+    let search_callback = Closure::wrap(Box::new(move |value: JsValue| {
+        set_search_query.call1(&JsValue::UNDEFINED, &value)
     })
-        as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>)
+        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
     .into_js_value();
 
     let toolbar_props = object(&[
@@ -290,7 +294,7 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
             JsValue::from_bool(all_assistants_collapsed),
         ),
         ("onToggleAllAssistants", toggle_all_assistants.into()),
-        ("searchQuery", JsValue::from_str(&search_query)),
+        ("searchQuery", crate::browser_value::text(&search_query)),
         ("onSearchQueryChange", search_callback),
         ("t", translate.into()),
     ])?;
@@ -329,13 +333,16 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
     let timeline_props = object(&[
         (
             "turns",
-            serde_wasm_bindgen::to_value(&timeline_turns).map_err(js_error_from_display)?,
+            crate::browser_value::to_value(&timeline_turns).map_err(js_error_from_display)?,
         ),
-        ("mode", JsValue::from_str(timeline_mode_name(timeline_mode))),
+        (
+            "mode",
+            crate::browser_value::text(timeline_mode_name(timeline_mode)),
+        ),
         (
             "range",
             timeline_range.map_or(JsValue::NULL, |range| {
-                serde_wasm_bindgen::to_value(&range).unwrap_or(JsValue::NULL)
+                crate::browser_value::to_value(&range).unwrap_or(JsValue::NULL)
             }),
         ),
         ("hasEarlierRecords", JsValue::from_bool(has_older_history)),
@@ -378,19 +385,21 @@ fn render_view(components: &ViewComponents, props: &JsValue) -> Result<JsValue, 
     let inspect_call_id = optional(props, "inspect")?
         .filter(|inspect| !inspect.is_null())
         .and_then(|inspect| optional_string(&inspect, "callId"))
-        .map_or(JsValue::NULL, |call_id| JsValue::from_str(&call_id));
+        .map_or(JsValue::NULL, |call_id| {
+            crate::browser_value::text(&call_id)
+        });
     let table_props = object(&[
         (
             "requestNumbers",
-            serde_wasm_bindgen::to_value(&request_numbers).map_err(js_error_from_display)?,
+            crate::browser_value::to_value(&request_numbers).map_err(js_error_from_display)?,
         ),
         (
             "turns",
-            serde_wasm_bindgen::to_value(&timeline_turns).map_err(js_error_from_display)?,
+            crate::browser_value::to_value(&timeline_turns).map_err(js_error_from_display)?,
         ),
         (
             "streamingCells",
-            serde_wasm_bindgen::to_value(&streaming_cells).map_err(js_error_from_display)?,
+            crate::browser_value::to_value(&streaming_cells).map_err(js_error_from_display)?,
         ),
         (
             "timelineFocusIndexes",
@@ -460,7 +469,7 @@ fn install_search_effect(
     layouts: &Rc<Vec<Vec<crate::TrajectoryTurnModel>>>,
 ) -> Result<(), JsValue> {
     let layouts_value =
-        serde_wasm_bindgen::to_value(layouts.as_ref()).map_err(js_error_from_display)?;
+        crate::browser_value::to_value(layouts.as_ref()).map_err(js_error_from_display)?;
     let effect_controller = controller.clone();
     let effect_timer = timer_ref.clone();
     let effect_setter = set_revision.clone();
@@ -563,7 +572,9 @@ fn trajectory_snapshot_from_js(value: &JsValue) -> Result<TrajectorySnapshot, Js
         call_schemas: value_map(&required(value, "callSchemas", "trajectory snapshot")?)?,
         partial: optional(value, "partial")?
             .filter(|partial| !partial.is_null())
-            .map(|partial| serde_wasm_bindgen::from_value(partial).map_err(js_error_from_display))
+            .map(|partial| {
+                crate::browser_value::from_value(&partial).map_err(js_error_from_display)
+            })
             .transpose()?,
         running_calls: deserialize_property(value, "runningCalls")?,
     })
@@ -583,13 +594,15 @@ fn location_map(
             .filter(|value| value.is_finite())
             .ok_or_else(|| js_sys::Error::new("event location sequence must be finite"))?;
         let location =
-            serde_wasm_bindgen::from_value(pair.get(1)).map_err(js_error_from_display)?;
+            crate::browser_value::from_value(&pair.get(1)).map_err(js_error_from_display)?;
         output.insert(TrajectorySequence::new(sequence), location);
     }
     Ok(output)
 }
 
-fn value_map(value: &JsValue) -> Result<IndexMap<String, serde_json::Value>, JsValue> {
+fn value_map(
+    value: &JsValue,
+) -> Result<IndexMap<String, seekdeep_lossless_json::JsonValue>, JsValue> {
     let mut output = IndexMap::new();
     let iterator = js_sys::try_iter(value)?
         .ok_or_else(|| js_sys::Error::new("callSchemas must be iterable"))?;
@@ -599,7 +612,8 @@ fn value_map(value: &JsValue) -> Result<IndexMap<String, serde_json::Value>, JsV
             .get(0)
             .as_string()
             .ok_or_else(|| js_sys::Error::new("call schema key must be a string"))?;
-        let schema = serde_wasm_bindgen::from_value(pair.get(1)).map_err(js_error_from_display)?;
+        let schema =
+            crate::browser_value::from_value(&pair.get(1)).map_err(js_error_from_display)?;
         output.insert(key, schema);
     }
     Ok(output)
@@ -637,7 +651,7 @@ fn fold_one_string_callback(setter: &Function, current: &JsValue) -> Result<Func
     let current = current.clone();
     let callback = Closure::wrap(Box::new(move |value: String| -> Result<JsValue, JsValue> {
         let next = JsSet::new(&current);
-        let value = JsValue::from_str(&value);
+        let value = crate::browser_value::text(&value);
         if next.has(&value) {
             next.delete(&value);
         } else {
@@ -684,9 +698,9 @@ fn fold_all_string_callback(
         let next = JsSet::new(&current);
         for value in &available {
             if all_selected {
-                next.delete(&JsValue::from_str(value));
+                next.delete(&crate::browser_value::text(value));
             } else {
-                next.add(&JsValue::from_str(value));
+                next.add(&crate::browser_value::text(value));
             }
         }
         setter.call1(&JsValue::UNDEFINED, next.as_ref())
@@ -759,7 +773,7 @@ fn deserialize_property<T: serde::de::DeserializeOwned>(
     value: &JsValue,
     key: &str,
 ) -> Result<T, JsValue> {
-    serde_wasm_bindgen::from_value(required(value, key, "trajectory snapshot")?)
+    crate::browser_value::from_value(&required(value, key, "trajectory snapshot")?)
         .map_err(js_error_from_display)
 }
 
@@ -800,23 +814,28 @@ fn tag(
     children: &[JsValue],
 ) -> Result<JsValue, JsValue> {
     let props = props.cloned().unwrap_or_else(Object::new);
-    element(components, &JsValue::from_str(name), &props, children)
+    element(
+        components,
+        &crate::browser_value::text(name),
+        &props,
+        children,
+    )
 }
 
 fn class(value: &str) -> Result<Object, JsValue> {
-    object(&[("className", JsValue::from_str(value))])
+    object(&[("className", crate::browser_value::text(value))])
 }
 
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
     let value = Object::new();
     for (key, entry) in entries {
-        Reflect::set(&value, &JsValue::from_str(key), entry)?;
+        Reflect::set(&value, &crate::browser_value::text(key), entry)?;
     }
     Ok(value)
 }
 
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     if entry.is_undefined() {
         Err(js_sys::Error::new(&format!("{owner} omitted required property {key:?}")).into())
     } else {
@@ -825,12 +844,12 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
 }
 
 fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
-    let entry = Reflect::get(value, &JsValue::from_str(key))?;
+    let entry = Reflect::get(value, &crate::browser_value::text(key))?;
     Ok((!entry.is_undefined()).then_some(entry))
 }
 
 fn optional_string(value: &JsValue, key: &str) -> Option<String> {
-    Reflect::get(value, &JsValue::from_str(key))
+    Reflect::get(value, &crate::browser_value::text(key))
         .ok()
         .filter(|value| !value.is_null() && !value.is_undefined())
         .and_then(|value| value.as_string())
@@ -848,7 +867,7 @@ fn optional_function(value: &JsValue, key: &str) -> Result<Option<Function>, JsV
 }
 
 fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsValue, JsValue> {
-    let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
+    let method = Reflect::get(value, &crate::browser_value::text(name))?.dyn_into::<Function>()?;
     let arguments = arguments.iter().collect::<Array>();
     method.apply(value, &arguments)
 }

@@ -1117,8 +1117,12 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             .source()
             .fields
             .get("provider")
-            .and_then(Value::as_str);
-        let model = message.source().fields.get("model").and_then(Value::as_str);
+            .and_then(JsonValue::as_str);
+        let model = message
+            .source()
+            .fields
+            .get("model")
+            .and_then(JsonValue::as_str);
         if message.source().kind != "model"
             || provider.is_none_or(str::is_empty)
             || model.is_none_or(str::is_empty)
@@ -1131,7 +1135,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             .source()
             .fields
             .get("callId")
-            .and_then(Value::as_str)
+            .and_then(JsonValue::as_str)
             .filter(|value| !value.is_empty());
         if message.source().kind != "tool" || source_call_id.is_none() {
             return Err(invalid(format!("{subject} message must have tool source")));

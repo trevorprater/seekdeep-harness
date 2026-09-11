@@ -16,7 +16,9 @@ use seekdeep_agent::{AgentEvent, AgentLifecycleEvent};
 use seekdeep_agent_loop::{AgentInboxMessage, AgentPreStepEvent};
 use seekdeep_compaction::{CompactionId, compact_checkpoint_source};
 use seekdeep_cordis::{EventOptions, EventReply, Plugin, fiber::EffectHandle};
-use seekdeep_core::session::{AppendOptions, Session, SessionEvent, SessionId, SurfaceOp};
+use seekdeep_core::session::{
+    AppendOptions, JsonRef, JsonValue, Session, SessionEvent, SessionId, SurfaceOp,
+};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
 use seekdeep_sandbox::{
     ConfinedArgv, RunnerFailureRule, SandboxEnforcement, SandboxPolicy, SandboxProvider,
@@ -388,8 +390,8 @@ pub(crate) fn workspace_context_compaction_plugin() -> Plugin {
                         || execution.name != "read"
                         || execution
                             .arguments
-                            .get("file_path")
-                            .and_then(serde_json::Value::as_str)
+                            .get_value("file_path")
+                            .and_then(JsonValue::as_str)
                             != Some("nested/task.txt")
                     {
                         return Ok(downstream);
@@ -405,12 +407,11 @@ pub(crate) fn workspace_context_compaction_plugin() -> Plugin {
                                 && event
                                     .data
                                     .pointer("/source/kind")
-                                    .and_then(serde_json::Value::as_str)
-                                    == Some("agent-instructions")
+                                    .is_some_and(|kind| kind == "agent-instructions")
                                 && event
                                     .data
                                     .pointer("/source/baseline")
-                                    .and_then(serde_json::Value::as_bool)
+                                    .and_then(JsonRef::as_bool)
                                     == Some(true)
                         })
                         .ok_or_else(|| {
@@ -503,7 +504,7 @@ pub(crate) fn subagent_report_fence_plugin() -> Plugin {
                             .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
                         if session.header().parent_session.is_none()
                             && event.event_type == "turn/end"
-                            && event.data.get("turn").and_then(serde_json::Value::as_u64) == Some(1)
+                            && event.data.get("turn").and_then(JsonRef::as_u64) == Some(1)
                         {
                             session_fence.mark_parent_stopped();
                         }
@@ -706,7 +707,8 @@ fn coordinator_source(sender: &SessionId) -> MessageSource {
                 "senderSessionId".to_owned(),
                 serde_json::to_value(sender).unwrap_or(serde_json::Value::Null),
             ),
-        ]),
+        ])
+        .into(),
     }
 }
 
@@ -769,14 +771,13 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                             .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
                         if session.header().parent_session.is_none()
                             && event.event_type == "turn/end"
-                            && event.data.get("turn").and_then(serde_json::Value::as_u64) == Some(1)
+                            && event.data.get("turn").and_then(JsonRef::as_u64) == Some(1)
                         {
                             session_state.mark_parent_closed();
                         }
                         if session.header().parent_session.is_some()
                             && event.event_type == "turn/start"
-                            && let Some(turn) =
-                                event.data.get("turn").and_then(serde_json::Value::as_u64)
+                            && let Some(turn) = event.data.get("turn").and_then(JsonRef::as_u64)
                         {
                             session_state
                                 .child_turns
@@ -851,8 +852,8 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                             }
                             let child_id = execution
                                 .arguments
-                                .get("subagent_id")
-                                .and_then(serde_json::Value::as_str)
+                                .get_value("subagent_id")
+                                .and_then(JsonValue::as_str)
                                 .unwrap_or_default();
                             if child_id == UNKNOWN_CHILD_ID {
                                 state.wait_followups().await;
@@ -866,8 +867,8 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                             })?;
                             let message = execution
                                 .arguments
-                                .get("message")
-                                .and_then(serde_json::Value::as_str)
+                                .get_value("message")
+                                .and_then(JsonValue::as_str)
                                 .unwrap_or_default()
                                 .to_owned();
                             let message_id = subagents

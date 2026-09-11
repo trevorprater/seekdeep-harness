@@ -1,12 +1,13 @@
 use std::{cmp::Ordering, rc::Rc};
 
+use super::json_value;
 use indexmap::IndexMap;
+use seekdeep_client_runtime::ConversationValue as Value;
 use seekdeep_client_runtime::{
     AssemblerViewBuilder, AssemblerViewDefinition, ConversationAssemblerError,
     ConversationBoundaryStatus, ConversationLocation, ConversationTimelineSnapshot,
     ConversationViewNode, ConversationVisibility,
 };
-use serde_json::{Value, json};
 
 /// Chat target name and encoded snapshot marker.
 pub const CHAT_VIEW_TARGET: &str = "chat";
@@ -24,16 +25,25 @@ impl ConversationChatSnapshotBuilder {
         let visible = ordered_visible(self.nodes.values());
         let order = visible
             .iter()
-            .map(|node| Value::String(node.key.clone()))
+            .map(|node| json_value(&node.key))
             .collect::<Vec<_>>();
-        Rc::new(json!({
-            "encoding": CHAT_SNAPSHOT_ENCODING,
-            "order": order,
-            "nodes": self.nodes.values().map(|node| node_value(node)).collect::<Vec<_>>(),
-            "locations": location_index(&visible),
-            "timeline": timeline_value(timeline),
-            "legacy": legacy_value(self.nodes.values(), timeline),
-        }))
+        Rc::new(Value::object([
+            ("encoding", json_value(CHAT_SNAPSHOT_ENCODING)),
+            ("order", Value::array(&order)),
+            (
+                "nodes",
+                Value::array(
+                    &self
+                        .nodes
+                        .values()
+                        .map(|node| node_value(node))
+                        .collect::<Vec<_>>(),
+                ),
+            ),
+            ("locations", location_index(&visible)),
+            ("timeline", timeline_value(timeline)),
+            ("legacy", legacy_value(self.nodes.values(), timeline)),
+        ]))
     }
 }
 
@@ -99,41 +109,70 @@ fn ordered_visible<'a>(
 
 fn node_value(node: &ConversationViewNode) -> Value {
     let chat = node.chat.as_ref().expect("Chat target node has metadata");
-    json!({
-        "key": node.key,
-        "kind": node.kind,
-        "id": node.id,
-        "target": node.target,
-        "anchorSeq": chat.anchor_seq,
-        "location": location_value(&chat.location),
-        "visibility": match chat.visibility {
-            ConversationVisibility::Visible => "visible",
-            ConversationVisibility::Hidden => "hidden",
-        },
-        "data": node.data.as_ref().clone(),
-    })
+    Value::object([
+        ("key", json_value(&node.key)),
+        ("kind", json_value(&node.kind)),
+        ("id", json_value(&node.id)),
+        ("target", json_value(&node.target)),
+        ("anchorSeq", json_value(&chat.anchor_seq)),
+        ("location", location_value(&chat.location)),
+        (
+            "visibility",
+            json_value(match chat.visibility {
+                ConversationVisibility::Visible => "visible",
+                ConversationVisibility::Hidden => "hidden",
+            }),
+        ),
+        ("data", node.data.as_ref().clone()),
+    ])
 }
 
 fn location_value(location: &ConversationLocation) -> Value {
     match location {
-        ConversationLocation::Session => json!({"kind": "session"}),
-        ConversationLocation::Turn { turn } => json!({
-            "kind": "turn", "turn": turn.turn, "turnStatus": status_name(turn.status),
-            "turnEnd": turn.end.as_ref().map(|end| end.seq),
-            "turnTail": turn.data.get("turn-tail").map(|value| value.as_ref().clone()),
-        }),
-        ConversationLocation::Step { turn, step } => {
-            json!({
-                "kind": "step", "turn": turn.turn, "step": step.step,
-                "turnStatus": status_name(turn.status),
-                "turnEnd": turn.end.as_ref().map(|end| end.seq),
-                "stepStatus": status_name(step.status),
-                "stepEnd": step.end.as_ref().map(|end| end.seq),
-                "turnTail": turn.data.get("turn-tail").map(|value| value.as_ref().clone()),
-                "assistantStep": step.data.get("assistant-step").map(|value| value.as_ref().clone()),
-            })
-        }
-        ConversationLocation::Unresolved => json!({"kind": "unresolved"}),
+        ConversationLocation::Session => Value::object([("kind", json_value("session"))]),
+        ConversationLocation::Turn { turn } => Value::object([
+            ("kind", json_value("turn")),
+            ("turn", json_value(&turn.turn)),
+            ("turnStatus", json_value(status_name(turn.status))),
+            ("turnEnd", json_value(&turn.end.as_ref().map(|end| end.seq))),
+            (
+                "turnTail",
+                json_value(
+                    &turn
+                        .data
+                        .get("turn-tail")
+                        .map(|value| value.as_ref().clone()),
+                ),
+            ),
+        ]),
+        ConversationLocation::Step { turn, step } => Value::object([
+            ("kind", json_value("step")),
+            ("turn", json_value(&turn.turn)),
+            ("step", json_value(&step.step)),
+            ("turnStatus", json_value(status_name(turn.status))),
+            ("turnEnd", json_value(&turn.end.as_ref().map(|end| end.seq))),
+            ("stepStatus", json_value(status_name(step.status))),
+            ("stepEnd", json_value(&step.end.as_ref().map(|end| end.seq))),
+            (
+                "turnTail",
+                json_value(
+                    &turn
+                        .data
+                        .get("turn-tail")
+                        .map(|value| value.as_ref().clone()),
+                ),
+            ),
+            (
+                "assistantStep",
+                json_value(
+                    &step
+                        .data
+                        .get("assistant-step")
+                        .map(|value| value.as_ref().clone()),
+                ),
+            ),
+        ]),
+        ConversationLocation::Unresolved => Value::object([("kind", json_value("unresolved"))]),
     }
 }
 
@@ -146,45 +185,106 @@ fn location_index(nodes: &[Rc<ConversationViewNode>]) -> Value {
         };
         match &chat.location {
             ConversationLocation::Turn { turn } => {
-                turns.entry(turn.turn).or_default().push(json!(node.key));
+                turns
+                    .entry(turn.turn)
+                    .or_default()
+                    .push(json_value(&node.key));
             }
             ConversationLocation::Step { turn, step } => {
-                turns.entry(turn.turn).or_default().push(json!(node.key));
+                turns
+                    .entry(turn.turn)
+                    .or_default()
+                    .push(json_value(&node.key));
                 steps
                     .entry((turn.turn, step.step))
                     .or_default()
-                    .push(json!(node.key));
+                    .push(json_value(&node.key));
             }
             ConversationLocation::Session | ConversationLocation::Unresolved => {}
         }
     }
-    json!({
-        "turns": turns.into_iter().map(|(turn, keys)| json!([turn, keys])).collect::<Vec<_>>(),
-        "steps": steps.into_iter().map(|((turn, step), keys)| json!([turn, step, keys])).collect::<Vec<_>>(),
-    })
+    Value::object([
+        ("turns", json_value(&turns.into_iter().collect::<Vec<_>>())),
+        (
+            "steps",
+            json_value(
+                &steps
+                    .into_iter()
+                    .map(|((turn, step), keys)| (turn, step, keys))
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+    ])
 }
 
 fn timeline_value(timeline: &ConversationTimelineSnapshot) -> Value {
-    json!({
-        "turnOrder": timeline.turn_order.as_ref(),
-        "turns": timeline.turn_order.iter().filter_map(|number| timeline.turns.get(number)).map(|turn| {
-            json!({
-                "turn": turn.turn,
-                "start": turn.start.as_ref().map(|event| event.wire_value()),
-                "end": turn.end.as_ref().map(|event| event.wire_value()),
-                "status": status_name(turn.status),
-                "data": {"turn-tail": turn.data.get("turn-tail").map(|value| value.as_ref().clone())},
-                "steps": turn.steps.iter().map(|step| json!({
-                    "turn": step.turn,
-                    "step": step.step,
-                    "start": step.start.as_ref().map(|event| event.wire_value()),
-                    "end": step.end.as_ref().map(|event| event.wire_value()),
-                    "status": status_name(step.status),
-                    "data": {"assistant-step": step.data.get("assistant-step").map(|value| value.as_ref().clone())},
-                })).collect::<Vec<_>>(),
-            })
-        }).collect::<Vec<_>>(),
-    })
+    let turns = timeline
+        .turn_order
+        .iter()
+        .filter_map(|number| timeline.turns.get(number))
+        .map(|turn| {
+            let steps = turn
+                .steps
+                .iter()
+                .map(|step| {
+                    Value::object([
+                        ("turn", json_value(&step.turn)),
+                        ("step", json_value(&step.step)),
+                        (
+                            "start",
+                            json_value(&step.start.as_ref().map(|event| event.wire_value())),
+                        ),
+                        (
+                            "end",
+                            json_value(&step.end.as_ref().map(|event| event.wire_value())),
+                        ),
+                        ("status", json_value(status_name(step.status))),
+                        (
+                            "data",
+                            Value::object([(
+                                "assistant-step",
+                                json_value(
+                                    &step
+                                        .data
+                                        .get("assistant-step")
+                                        .map(|value| value.as_ref().clone()),
+                                ),
+                            )]),
+                        ),
+                    ])
+                })
+                .collect::<Vec<_>>();
+            Value::object([
+                ("turn", json_value(&turn.turn)),
+                (
+                    "start",
+                    json_value(&turn.start.as_ref().map(|event| event.wire_value())),
+                ),
+                (
+                    "end",
+                    json_value(&turn.end.as_ref().map(|event| event.wire_value())),
+                ),
+                ("status", json_value(status_name(turn.status))),
+                (
+                    "data",
+                    Value::object([(
+                        "turn-tail",
+                        json_value(
+                            &turn
+                                .data
+                                .get("turn-tail")
+                                .map(|value| value.as_ref().clone()),
+                        ),
+                    )]),
+                ),
+                ("steps", Value::array(&steps)),
+            ])
+        })
+        .collect::<Vec<_>>();
+    Value::object([
+        ("turnOrder", json_value(timeline.turn_order.as_ref())),
+        ("turns", Value::array(&turns)),
+    ])
 }
 
 fn status_name(status: ConversationBoundaryStatus) -> &'static str {
@@ -216,13 +316,13 @@ fn legacy_value<'a>(
     }
     finalized.sort_by(|left, right| {
         left.1
-            .get("seq")
+            .get_value("seq")
             .and_then(Value::as_f64)
             .unwrap_or(left.0)
             .partial_cmp(
                 &right
                     .1
-                    .get("seq")
+                    .get_value("seq")
                     .and_then(Value::as_f64)
                     .unwrap_or(right.0),
             )
@@ -236,10 +336,16 @@ fn legacy_value<'a>(
         .filter_map(|number| timeline.turns.get(number))
         .filter_map(|turn| {
             turn.start.as_ref().map(|start| {
-                json!([turn.turn, {
-                    "startTime": start.time,
-                    "endTime": turn.end.as_ref().map(|end| end.time),
-                }])
+                json_value(&(
+                    turn.turn,
+                    Value::object([
+                        ("startTime", json_value(&start.time)),
+                        (
+                            "endTime",
+                            json_value(&turn.end.as_ref().map(|end| end.time)),
+                        ),
+                    ]),
+                ))
             })
         })
         .collect::<Vec<_>>();
@@ -247,15 +353,40 @@ fn legacy_value<'a>(
         .turn_order
         .iter()
         .filter_map(|number| timeline.turns.get(number))
-        .filter_map(|turn| turn.end.as_ref().map(|end| json!([turn.turn, end.seq])))
+        .filter_map(|turn| {
+            turn.end
+                .as_ref()
+                .map(|end| json_value(&(turn.turn, end.seq)))
+        })
         .collect::<Vec<_>>();
-    json!({
-        "nodes": finalized.into_iter().map(|(_, node)| node).collect::<Vec<_>>(),
-        "turnTimings": turn_timings,
-        "turnEnds": turn_ends,
-        "partial": partials.pop().map_or(Value::Null, |(_, partial)| partial),
-        "runningCalls": running.into_iter().map(|(_, call)| call).collect::<Vec<_>>(),
-    })
+    Value::object([
+        (
+            "nodes",
+            json_value(
+                &finalized
+                    .into_iter()
+                    .map(|(_, node)| node)
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+        ("turnTimings", Value::array(&turn_timings)),
+        ("turnEnds", Value::array(&turn_ends)),
+        (
+            "partial",
+            partials
+                .pop()
+                .map_or_else(|| json_value(&()), |(_, partial)| partial),
+        ),
+        (
+            "runningCalls",
+            json_value(
+                &running
+                    .into_iter()
+                    .map(|(_, call)| call)
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+    ])
 }
 
 fn legacy_contribution(
@@ -277,24 +408,29 @@ fn legacy_contribution(
         "user" | "steering" | "context" | "command" | "compaction" | "turn-error"
         | "turn-max-tokens" | "unknown" => finalized.push((anchor, data.clone())),
         "assistant-step" => {
-            if data.get("status").and_then(Value::as_str) == Some("running") {
+            if data.get_value("status").and_then(Value::as_str) == Some("running") {
                 if visible {
                     partials.push((
                         anchor,
-                        json!({
-                            "turn": data.get("turn").cloned().unwrap_or(Value::Null),
-                            "step": data.get("step").cloned().unwrap_or(Value::Null),
-                            "blocks": data.get("blocks").cloned().unwrap_or_else(|| json!([])),
-                        }),
+                        Value::object([
+                            ("turn", json_value(&data.get_value("turn"))),
+                            ("step", json_value(&data.get_value("step"))),
+                            (
+                                "blocks",
+                                data.get_value("blocks")
+                                    .cloned()
+                                    .unwrap_or_else(|| Value::array(&[])),
+                            ),
+                        ]),
                     ));
                 }
-            } else if let Some(final_node) = data.get("finalNode") {
+            } else if let Some(final_node) = data.get_value("finalNode") {
                 finalized.push((anchor, final_node.clone()));
             }
         }
         "tool-call" => {
-            if let Some(root) = data.get("root") {
-                if root.get("kind").is_some() {
+            if let Some(root) = data.get_value("root") {
+                if root.get_value("kind").is_some() {
                     finalized.push((anchor, root.clone()));
                 } else {
                     running.push((anchor, root.clone()));
@@ -302,15 +438,18 @@ fn legacy_contribution(
             }
         }
         "manual-compaction" => {
-            if let Some(command) = data.get("command") {
+            if let Some(command) = data.get_value("command") {
                 finalized.push((anchor, command.clone()));
             }
-            if let Some(compaction) = data.get("compaction").filter(|value| !value.is_null()) {
+            if let Some(compaction) = data
+                .get_value("compaction")
+                .filter(|value| !value.is_null())
+            {
                 finalized.push((anchor, compaction.clone()));
             }
         }
         "model-retry" => {
-            if let Some(attempts) = data.get("attempts").and_then(Value::as_array) {
+            if let Some(attempts) = data.get_value("attempts").and_then(Value::as_array) {
                 finalized.extend(attempts.iter().cloned().map(|attempt| (anchor, attempt)));
             }
         }

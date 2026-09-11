@@ -79,6 +79,30 @@ async fn accepts_raw_content_and_opaque_fields_and_rejects_exact_utf16_duplicate
         .unwrap_err();
     assert!(error.to_string().contains(r#"repeats content "\ud800""#));
     assert_eq!(session.events().len(), 1);
+
+    for (raw, expected) in [
+        (
+            r#"{"todos":[[]]}"#,
+            "content must be non-empty and already trimmed",
+        ),
+        (
+            r#"{"todos":[{"content":"item"}]}"#,
+            "carries unknown status undefined",
+        ),
+        (
+            r#"{"todos":[{"content":"item","status":{"10":10,"2":2,"\ud800":"\udfff","x":0,"x":1}}]}"#,
+            r#"carries unknown status {"2":2,"10":10,"\ud800":"\udfff","x":1}"#,
+        ),
+    ] {
+        let error = session
+            .append_json(
+                "todo/write",
+                JsonValue::parse(raw.to_owned()).unwrap(),
+                AppendOptions::default(),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains(expected), "{error}");
+    }
 }
 
 #[tokio::test]
