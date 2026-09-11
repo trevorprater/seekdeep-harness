@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 mod client_build;
 mod client_test_runtime_built_smoke_driver;
+mod node_runtime;
 mod remote_built_smoke_driver;
 mod remote_contracts;
 mod typert_corpus;
@@ -57,6 +58,12 @@ enum Command {
         source: PathBuf,
         #[arg(long)]
         check: bool,
+    },
+    /// Stage the compiled Node code-runtime beside the built Host binaries
+    /// (`target/debug/code-runtime-node`, or the release directory with `--release`).
+    NodeRuntime {
+        #[arg(long)]
+        release: bool,
     },
     /// Build the actual Web frontend with the isolated, pinned browser dependencies.
     WebBuild,
@@ -427,6 +434,14 @@ fn main() -> anyhow::Result<()> {
         Command::WebKeyless { source, scenario } => {
             web_settings::run_keyless(&source, scenario.as_deref())
         }
+        Command::NodeRuntime { release } => {
+            let staged = node_runtime::stage(
+                &cargo_metadata()?,
+                if release { "release" } else { "debug" },
+            )?;
+            println!("{}", staged.display());
+            Ok(())
+        }
         Command::WebAssembledSnapshots { source, suite } => {
             web_assembled_snapshots::run(&source, suite.as_deref())
         }
@@ -624,6 +639,7 @@ fn remote_built_smoke() -> anyhow::Result<()> {
         .args(["build", "-p", "seekdeep"])
         .status()?;
     anyhow::ensure!(status.success(), "native SeekDeep Host build failed");
+    node_runtime::stage(&cargo_metadata()?, "debug")?;
 
     for (package, artifact, module_id, out_dir) in [
         (

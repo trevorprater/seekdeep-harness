@@ -23,6 +23,7 @@ pub(super) fn run(source: &Path) -> anyhow::Result<()> {
         host.is_file(),
         "build the native fixture together with xtask: cargo build --locked -p xtask -p seekdeep --bin xtask --example keyless_web_host"
     );
+    super::node_runtime::stage(&metadata, "debug")?;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().canonicalize()?;
     let workspace = home.join("fixture");

@@ -97,6 +97,7 @@ fn run_case_with(
         host.is_file(),
         "build xtask and keyless_web_host together before web-settings"
     );
+    super::node_runtime::stage(&metadata, "debug")?;
     let temporary = tempfile::tempdir()?;
     let world = temporary.path().canonicalize()?;
     let output = metadata.target_directory.join("xtask").join(name);
