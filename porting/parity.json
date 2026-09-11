@@ -63045,7 +63045,7 @@
     {
       "source": "packages/goal/goal-round-driver/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal-round-driver/src/index.rs"
       ],
@@ -63053,7 +63053,7 @@
         "cargo test -p seekdeep-goal-round-driver --all-features",
         "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"
       ],
-      "note": "2026-09-11:37/38 driver tests pass, but blocked_goal_observer_work_remains_queued_without_reserving_again fails deterministically: observer follow-up reaches the adapter after blocking instead of remaining queued. Source counterpart confirms expected zero requests. Scheduling repair remains outstanding."
+      "note": "2026-09-11: 38/38 driver tests pass. blocked_goal_observer_work_remains_queued_without_reserving_again failed because the loop controller latched every wake landing on a running activity; it now latches only behind maintenance, an aborted activity, or a driver that already observed an empty inbox, as the source does, so the observer follow-up stays queued after the block."
     },
     {
       "source": "packages/goal/goal-round-driver/src/invariant.ts",
@@ -63082,7 +63082,7 @@
     {
       "source": "packages/goal/goal-round-driver/tests/goal-round-driver.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal-round-driver/tests/driver_parity.rs",
         "crates/goal-round-driver/src/index.rs",
@@ -63093,7 +63093,7 @@
         "cargo test -p seekdeep-goal-round-driver --all-features",
         "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"
       ],
-      "note": "2026-09-11:37/38 driver tests pass, but blocked_goal_observer_work_remains_queued_without_reserving_again fails deterministically: observer follow-up reaches the adapter after blocking instead of remaining queued. Source counterpart confirms expected zero requests. Scheduling repair remains outstanding."
+      "note": "2026-09-11: 38/38 driver tests pass. blocked_goal_observer_work_remains_queued_without_reserving_again failed because the loop controller latched every wake landing on a running activity; it now latches only behind maintenance, an aborted activity, or a driver that already observed an empty inbox, as the source does, so the observer follow-up stays queued after the block."
     },
     {
       "source": "packages/goal/goal-round-driver/tests/invariant.spec.ts",
