@@ -717,7 +717,7 @@ fn cold_blank_fixture_route(
                 persistence.create(&header).await?;
                 persistence.append(&header.id, &[seekdeep_core::session::SessionEvent {
                     event_type: "session/end-seed".to_owned(), seq: 0, time: header.created_at.try_into()?,
-                    data: json!({}), source_event_seqs: None, surface_op: None, ignorable: None,
+                    data: json!({}).into(), source_event_seqs: None, surface_op: None, ignorable: None,
                 }]).await?;
                 let location = persistence.locate(&header).ok_or_else(|| anyhow::anyhow!("blank fixture has no artifact"))?;
                 let size = tokio::fs::metadata(&location.path).await?.len();
