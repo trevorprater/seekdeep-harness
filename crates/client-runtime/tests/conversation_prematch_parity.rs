@@ -360,7 +360,11 @@ fn a_sliced_replacement_publishes_nothing_until_its_last_slice() {
         "complete stays complete"
     );
     assert_eq!(*batches.borrow(), vec![2, 1]);
-    assert_eq!(*seen.borrow(), vec![2, 3, 5]);
+    assert_eq!(
+        *seen.borrow(),
+        vec![2, 3, 4],
+        "the note at seq 4 is not a tool Match, so the last fold saw four"
+    );
     assert!(assembler.flush().unwrap(), "the finished window publishes");
 
     // A mutation while a replacement is in progress completes it first.
