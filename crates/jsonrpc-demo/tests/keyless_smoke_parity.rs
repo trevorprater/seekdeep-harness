@@ -12,7 +12,7 @@ use seekdeep_core::session::SessionId;
 use seekdeep_sdk_client::{
     DeepSeekHarness, DeepSeekHarnessOptions, HarnessClientOptions, RunOptions,
 };
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},

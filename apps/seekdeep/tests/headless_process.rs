@@ -485,8 +485,7 @@ async fn collect_cold_jsonl(home: &Path, workspace: &Path) -> anyhow::Result<Col
                 .iter()
                 .find(|event| event.event_type == "todo/write")
                 .and_then(|event| event.data.pointer("/todos/0/content"))
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+                .and_then(|content| content.deserialize::<String>().ok()),
             has_answer: events.iter().any(|event| {
                 event.event_type == "assistant/message" && event.data.to_string().contains(ANSWER)
             }),
@@ -495,14 +494,13 @@ async fn collect_cold_jsonl(home: &Path, workspace: &Path) -> anyhow::Result<Col
                 .rev()
                 .find(|event| event.event_type == "turn/end")
                 .and_then(|event| event.data.pointer("/reason/kind"))
-                .and_then(Value::as_str)
-                .map(str::to_owned),
+                .and_then(|kind| kind.deserialize::<String>().ok()),
             final_error: events
                 .iter()
                 .rev()
                 .find(|event| event.event_type == "turn/end")
                 .and_then(|event| event.data.pointer("/reason/error"))
-                .cloned(),
+                .and_then(|error| error.deserialize::<Value>().ok()),
             tool_names: events
                 .iter()
                 .filter(|event| event.event_type == "tool/call")
@@ -511,7 +509,12 @@ async fn collect_cold_jsonl(home: &Path, workspace: &Path) -> anyhow::Result<Col
             tool_results: events
                 .iter()
                 .filter(|event| event.event_type == "tool/result")
-                .map(|event| event.data.clone())
+                .map(|event| {
+                    event
+                        .data
+                        .deserialize::<Value>()
+                        .expect("tool result data is JSON")
+                })
                 .collect(),
             has_request_header: events.iter().any(|event| {
                 event.event_type == "request/header"

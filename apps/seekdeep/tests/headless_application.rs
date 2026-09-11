@@ -347,7 +347,8 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
             .rev()
             .find(|event| event.event_type == "turn/end")
             .and_then(|event| event.data.pointer("/reason/kind"))
-            .and_then(Value::as_str),
+            .and_then(|kind| kind.deserialize::<String>().ok())
+            .as_deref(),
         Some("completed")
     );
     Ok(())

@@ -475,7 +475,14 @@ async fn history_and_mux_preserve_raw_presenter_input_output_and_metadata() {
     );
     let result = JsonValue::parse(r#"{"turn":1,"step":1,"message":{"id":"raw-result","role":"user","source":{"kind":"tool","callId":"raw-call"},"content":[{"type":"tool-result","toolCallId":"raw-call","content":[{"type":"text","text":"\ud800"}]}]},"meta":{"\ud800":"\udfff","number":1e3}}"#.to_owned()).unwrap();
     session
-        .append_json("tool/result", result, AppendOptions::default())
+        .append_json(
+            "tool/result",
+            result,
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                ..AppendOptions::default()
+            },
+        )
         .unwrap();
     let MuxFrame::SessionEvent {
         view: Some(result_view),

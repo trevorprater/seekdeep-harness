@@ -191,7 +191,10 @@ fn content_texts(content: &[ContentBlock]) -> Vec<String> {
     content
         .iter()
         .map(|block| match block {
-            ContentBlock::Text { text } => text.clone(),
+            ContentBlock::Text { text } => text
+                .as_str()
+                .expect("scaffold text content is UTF-8")
+                .to_owned(),
             other => panic!("unexpected content block {other:?}"),
         })
         .collect()

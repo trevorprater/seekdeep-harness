@@ -104,7 +104,7 @@ impl LlmAdapter for CliMockAdapter {
                         .iter()
                         .filter_map(|block| {
                             if let ContentBlock::Text { text } = block {
-                                Some(text.as_str())
+                                text.as_str()
                             } else {
                                 None
                             }
@@ -127,7 +127,7 @@ impl LlmAdapter for CliMockAdapter {
                 },
                 StreamChunk::BlockEnd {
                     index: 0,
-                    block: ContentBlock::Text { text: reply },
+                    block: ContentBlock::Text { text: reply.into() },
                 },
                 StreamChunk::Usage {
                     usage: TokenUsage {
