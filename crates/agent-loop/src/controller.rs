@@ -54,6 +54,9 @@ enum Phase {
         turn: u64,
         step: u64,
         wake_requested: bool,
+        /// The driver observed an empty inbox and is exiting: a waking send landing after this
+        /// point can no longer be claimed by it and latches its wake.
+        drained: bool,
         activity: u64,
     },
     Disposed {
@@ -169,6 +172,7 @@ impl LoopController {
             signal,
             step,
             wake_requested,
+            drained,
             ..
         } = &mut state.phase
         else {
@@ -177,7 +181,27 @@ impl LoopController {
         *signal = AbortSignal::default();
         *step = 0;
         *wake_requested = false;
+        *drained = false;
         Ok(())
+    }
+
+    /// Reports whether the inbox still holds work for the live driver's next turn.
+    ///
+    /// An empty inbox marks the running phase drained: the driver is about to exit, so a
+    /// waking send that lands between this check and the exit latches its wake for replay at
+    /// convergence instead of parking (the single-threaded source closes that gap by
+    /// construction; here `send` may run on another thread).
+    #[must_use]
+    pub fn inbox_pending_or_drained(&self) -> bool {
+        let mut state = self.state.lock();
+        let pending = self
+            .agent
+            .upgrade()
+            .is_some_and(|agent| agent.inbox().has_pending());
+        if !pending && let Phase::Running { drained, .. } = &mut state.phase {
+            *drained = true;
+        }
+        pending
     }
 
     /// Permanently rejects new work after cancelling and converging the driver.
@@ -209,26 +233,37 @@ impl LoopController {
         }
     }
 
-    fn wake_driver(&self) -> Result<(), AgentControlError> {
+    /// Starts one driver, or latches its wake behind maintenance or an aborted activity.
+    ///
+    /// A maintenance task never reads the queue and an aborted activity converges without
+    /// restarting, so both latch the wake for replay at their convergence boundary; a live
+    /// driver claims queued work itself, so a wake landing on a healthy running activity is
+    /// not latched (a rejected step then leaves the work parked until the next wake, and
+    /// pre-abort work parked by a `keep_inbox` cancel stays parked). A `disposed` cancel never
+    /// latches, so teardown waits on no model turn. `wake_after_abort` is the `send`
+    /// classification captured before the inbox insertion, so a reentrant cancel from a
+    /// splice observer cannot reclassify it.
+    fn wake_driver(&self, wake_after_abort: bool) -> Result<(), AgentControlError> {
         let (activity, status_changed) = {
             let mut state = self.state.lock();
             match &mut state.phase {
-                Phase::Maintenance { wake_requested, .. } => {
-                    *wake_requested = true;
+                Phase::Maintenance {
+                    signal,
+                    wake_requested,
+                    ..
+                } => {
+                    if !cancelled_by_disposal(signal) {
+                        *wake_requested = true;
+                    }
                     return Ok(());
                 }
                 Phase::Running {
                     signal,
                     wake_requested,
+                    drained,
                     ..
                 } => {
-                    let disposed = signal
-                        .reason()
-                        .as_ref()
-                        .and_then(|reason| reason.get("kind"))
-                        .and_then(serde_json::Value::as_str)
-                        == Some("disposed");
-                    if !disposed {
+                    if (wake_after_abort || *drained) && !cancelled_by_disposal(signal) {
                         *wake_requested = true;
                     }
                     return Ok(());
@@ -245,6 +280,7 @@ impl LoopController {
                         turn: last_turn,
                         step: 0,
                         wake_requested: false,
+                        drained: false,
                         activity,
                     };
                     (activity, true)
@@ -303,7 +339,7 @@ impl LoopController {
                 .upgrade()
                 .is_some_and(|agent| agent.inbox().has_pending())
         {
-            let _ = self.wake_driver();
+            let _ = self.wake_driver(false);
         }
         let mut state = self.state.lock();
         state.completed_activity = state.completed_activity.max(activity);
@@ -341,7 +377,7 @@ impl LoopController {
                 .upgrade()
                 .is_some_and(|agent| agent.inbox().has_pending())
         {
-            let _ = self.wake_driver();
+            let _ = self.wake_driver(false);
         }
         let mut state = self.state.lock();
         state.completed_activity = state.completed_activity.max(activity);
@@ -351,6 +387,16 @@ impl LoopController {
     }
 }
 
+/// Whether an activity's cancellation reason is the `disposed` cause that never latches a wake.
+fn cancelled_by_disposal(signal: &AbortSignal) -> bool {
+    signal
+        .reason()
+        .as_ref()
+        .and_then(|reason| reason.get("kind"))
+        .and_then(serde_json::Value::as_str)
+        == Some("disposed")
+}
+
 impl AgentController for LoopController {
     fn send(
         &self,
@@ -358,7 +404,10 @@ impl AgentController for LoopController {
         target: InboxTarget,
         wakeup: bool,
     ) -> Result<(), AgentControlError> {
-        let resolved_target = {
+        // Waking input cannot join an aborted activity, so it starts the next turn. The
+        // classification is captured before the insertion so a reentrant cancel from a
+        // splice observer cannot reclassify it.
+        let (resolved_target, wake_after_abort) = {
             let state = self.state.lock();
             if matches!(state.phase, Phase::Disposed { .. }) {
                 return Err(AgentControlError::Disposed(self.agent_id()));
@@ -370,11 +419,12 @@ impl AgentController for LoopController {
                 Phase::Idle { .. } | Phase::Disposed { .. } => false,
             };
             let wake_after_abort = wakeup && !matches!(state.phase, Phase::Idle { .. }) && aborted;
-            if wake_after_abort {
+            let resolved_target = if wake_after_abort {
                 InboxTarget::NextTurn
             } else {
                 target
-            }
+            };
+            (resolved_target, wake_after_abort)
         };
         let agent = self
             .agent
@@ -385,7 +435,7 @@ impl AgentController for LoopController {
             .splice(resolved_target, f64::INFINITY, 0.0, vec![message])
             .map_err(|error| AgentControlError::Inbox(error.to_string()))?;
         if wakeup {
-            self.wake_driver()?;
+            self.wake_driver(wake_after_abort)?;
         }
         Ok(())
     }
@@ -415,7 +465,7 @@ impl AgentController for LoopController {
                 wake_requested,
                 ..
             } => {
-                if !options.keep_inbox || !signal.is_aborted() {
+                if !options.keep_inbox {
                     *wake_requested = false;
                 }
                 signal.abort_with_reason(
@@ -714,11 +764,34 @@ mod tests {
         assert!(!loop_agent.agent.inbox().has_pending());
     }
 
+    /// A driver that claims once, reports the inbox drained, then waits: the wait stands in
+    /// for the window between the loop's final pending check and the driver's exit.
+    fn draining_driver(
+        started: mpsc::UnboundedSender<usize>,
+        drained: mpsc::UnboundedSender<bool>,
+        releases: Arc<Semaphore>,
+    ) -> DriverTask {
+        let count = Arc::new(AtomicUsize::new(0));
+        Arc::new(move |agent, controller| {
+            let index = count.fetch_add(1, Ordering::AcqRel) + 1;
+            let started = started.clone();
+            let drained = drained.clone();
+            let releases = releases.clone();
+            Box::pin(async move {
+                let _ = agent.inbox().claim(InboxTarget::NextTurn, index as u64);
+                let _ = started.send(index);
+                let _ = drained.send(controller.inbox_pending_or_drained());
+                if let Ok(permit) = releases.acquire().await {
+                    permit.forget();
+                }
+            })
+        })
+    }
+
     #[tokio::test]
-    async fn latches_live_wake_that_arrives_after_the_driver_claims() {
+    async fn a_live_wake_is_left_to_the_running_driver_and_parks_when_it_exits() {
         let context = Context::new();
-        let session =
-            Session::create(&SessionId::new("live-wake-latch"), None, None).expect("session");
+        let session = Session::create(&SessionId::new("live-wake"), None, None).expect("session");
         let (started_tx, mut started_rx) = mpsc::unbounded_channel();
         let releases = Arc::new(Semaphore::new(0));
         let loop_agent = LoopAgent::new(
@@ -732,17 +805,67 @@ mod tests {
 
         loop_agent.agent.followup(message("first")).expect("first");
         assert_eq!(started_rx.recv().await, Some(1));
+        // The driver is live and not aborted: it owns the queue, so the wake is not latched.
+        // This driver exits without claiming again (a rejected step behaves the same way),
+        // which leaves the work parked until the next wake.
         loop_agent
             .agent
-            .steer(message("after final claim"))
-            .expect("late steer");
+            .steer(message("while running"))
+            .expect("live steer");
+        releases.add_permits(1);
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), started_rx.recv())
+                .await
+                .is_err(),
+            "a live wake must not replay a driver at convergence"
+        );
+        assert!(loop_agent.agent.inbox().has_pending());
+
+        loop_agent.agent.followup(message("wake it")).expect("wake");
+        assert_eq!(started_rx.recv().await, Some(2));
+        releases.add_permits(1);
+        loop_agent.agent.when_idle().expect("idle 2").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_wake_landing_after_the_drained_check_replays_at_convergence() {
+        let context = Context::new();
+        let session =
+            Session::create(&SessionId::new("drained-wake"), None, None).expect("session");
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel();
+        let (drained_tx, mut drained_rx) = mpsc::unbounded_channel();
+        let releases = Arc::new(Semaphore::new(0));
+        let loop_agent = LoopAgent::new(
+            &context,
+            &session,
+            AgentOptions::default(),
+            None,
+            draining_driver(started_tx, drained_tx, releases.clone()),
+        )
+        .expect("loop agent");
+
+        loop_agent.agent.followup(message("first")).expect("first");
+        assert_eq!(started_rx.recv().await, Some(1));
+        assert_eq!(
+            drained_rx.recv().await,
+            Some(false),
+            "the claimed inbox is empty"
+        );
+        // The driver already observed an empty inbox and is exiting: it can no longer claim
+        // this wake, so the wake latches and replays once the driver converges.
+        loop_agent
+            .agent
+            .steer(message("in the gap"))
+            .expect("gap steer");
         releases.add_permits(1);
         assert_eq!(
             tokio::time::timeout(Duration::from_secs(1), started_rx.recv())
                 .await
-                .expect("latched wake must start a replacement driver"),
+                .expect("a wake landing after the drained check must replay a driver"),
             Some(2)
         );
+        assert_eq!(drained_rx.recv().await, Some(false));
         releases.add_permits(1);
         loop_agent.agent.when_idle().expect("idle").await.unwrap();
         assert!(!loop_agent.agent.inbox().has_pending());

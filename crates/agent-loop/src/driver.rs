@@ -362,7 +362,7 @@ impl DefaultAgentDriver {
             StepEndReason::Completed => json!({"kind": "completed"}),
             StepEndReason::MaxTokens => json!({"kind": "max-tokens"}),
         };
-        if agent.inbox().has_pending() {
+        if controller.inbox_pending_or_drained() {
             Ok(TurnOutcome::Continue(reason))
         } else {
             Ok(TurnOutcome::Stopped(reason))
