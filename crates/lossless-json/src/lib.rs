@@ -665,36 +665,48 @@ impl<'a> JsonRef<'a> {
     #[must_use]
     pub fn to_utf16(self) -> Option<Vec<u16>> {
         let encoded = self.raw.strip_prefix('"')?.strip_suffix('"')?;
-        let mut characters = encoded.chars();
-        let mut units = Vec::new();
-        while let Some(character) = characters.next() {
-            if character != '\\' {
-                units.extend(character.encode_utf16(&mut [0; 2]).iter().copied());
-                continue;
-            }
-            let escaped = match characters.next()? {
-                '"' => '"',
-                '\\' => '\\',
-                '/' => '/',
-                'b' => '\u{8}',
-                'f' => '\u{c}',
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
+        // Every UTF-16 unit occupies at most one UTF-8 byte, so this never reallocates.
+        let mut units = Vec::with_capacity(encoded.len());
+        let mut rest = encoded;
+        // Escapes reach here mostly one at a time, so each pass copies the whole literal run
+        // between them instead of walking its characters individually.
+        loop {
+            let Some(index) = rest.find('\\') else {
+                units.extend(rest.encode_utf16());
+                return Some(units);
+            };
+            units.extend(rest[..index].encode_utf16());
+            let escapes = &rest[index + 1..];
+            match escapes.chars().next()? {
+                '"' => units.push(u16::from(b'"')),
+                '\\' => units.push(u16::from(b'\\')),
+                '/' => units.push(u16::from(b'/')),
+                'b' => units.push(0x8),
+                'f' => units.push(0xc),
+                'n' => units.push(u16::from(b'\n')),
+                'r' => units.push(u16::from(b'\r')),
+                't' => units.push(u16::from(b'\t')),
                 'u' => {
+                    // The four hex digits decode to their raw unit, so a lone surrogate survives.
+                    let mut digits = escapes[1..].chars();
                     let mut unit = 0u16;
                     for _ in 0..4 {
                         unit = unit.checked_mul(16)?
-                            + u16::try_from(characters.next()?.to_digit(16)?).ok()?;
+                            + u16::try_from(digits.next()?.to_digit(16)?).ok()?;
                     }
                     units.push(unit);
+                    let consumed = 1 + escapes[1..]
+                        .chars()
+                        .take(4)
+                        .map(char::len_utf8)
+                        .sum::<usize>();
+                    rest = &escapes[consumed..];
                     continue;
                 }
                 _ => return None,
-            };
-            units.extend(escaped.encode_utf16(&mut [0; 2]).iter().copied());
+            }
+            rest = &escapes[1..];
         }
-        Some(units)
     }
 
     /// Traverses this value once without constructing a recursive JSON tree.
@@ -709,11 +721,45 @@ impl<'a> JsonRef<'a> {
     /// Returns an object's named own value. Keys are compared as UTF-16 units.
     #[must_use]
     pub fn get(self, key: &str) -> Option<Self> {
-        let units = key.encode_utf16().collect::<Vec<_>>();
-        self.object_entries()?
-            .into_iter()
-            .rev()
-            .find_map(|(key, value)| (key.to_utf16()? == units).then_some(value))
+        self.raw.strip_prefix('{')?;
+        let plain = key
+            .bytes()
+            .all(|byte| byte != b'"' && byte != b'\\' && byte >= 0x20);
+        let mut units = None;
+        let mut found = None;
+        let mut offset = 1;
+        loop {
+            skip_whitespace(self.raw, &mut offset);
+            if self.raw.as_bytes()[offset] == b'}' {
+                return found;
+            }
+            let start = offset;
+            offset = string_end(self.raw, offset);
+            let candidate = &self.raw[start..offset];
+            skip_whitespace(self.raw, &mut offset);
+            offset += 1;
+            skip_whitespace(self.raw, &mut offset);
+            let value_start = offset;
+            offset = value_end(self.raw, value_start);
+            // A body without escapes spells the same string in UTF-8 and UTF-16, so the source
+            // bytes settle the comparison. Anything else still decodes first, and the last match
+            // wins, exactly as comparing every decoded key would.
+            let matched = if plain && !candidate.as_bytes().contains(&b'\\') {
+                plain_key_matches(candidate, key)
+            } else {
+                let decoded = units.get_or_insert_with(|| key.encode_utf16().collect::<Vec<_>>());
+                Self { raw: candidate }.to_utf16()? == *decoded
+            };
+            if matched {
+                found = Some(Self {
+                    raw: &self.raw[value_start..offset],
+                });
+            }
+            skip_whitespace(self.raw, &mut offset);
+            if self.raw.as_bytes()[offset] == b',' {
+                offset += 1;
+            }
+        }
     }
 
     /// Resolves a JSON Pointer relative to this value.
@@ -806,30 +852,79 @@ fn skip_whitespace(raw: &str, offset: &mut usize) {
     }
 }
 
+/// Whether a source key body is exactly `key`'s JSON spelling.
+///
+/// Both sides are unescaped, so equal source bytes mean equal decoded strings.
+fn plain_key_matches(candidate: &str, key: &str) -> bool {
+    candidate.len() == key.len() + 2
+        && candidate.starts_with('"')
+        && candidate.ends_with('"')
+        && candidate.as_bytes()[1..=key.len()] == *key.as_bytes()
+}
+
 fn encode_utf16(units: &[u16]) -> String {
     let mut json = String::from("\"");
-    for character in char::decode_utf16(units.iter().copied()) {
-        match character {
-            Ok('"') => json.push_str("\\\""),
-            Ok('\\') => json.push_str("\\\\"),
-            Ok('\u{8}') => json.push_str("\\b"),
-            Ok('\u{c}') => json.push_str("\\f"),
-            Ok('\n') => json.push_str("\\n"),
-            Ok('\r') => json.push_str("\\r"),
-            Ok('\t') => json.push_str("\\t"),
-            Ok(character @ '\0'..='\u{1f}') => {
-                write!(json, "\\u{:04x}", u32::from(character))
-                    .expect("writing to a String is infallible");
-            }
-            Ok(character) => json.push(character),
-            Err(surrogate) => {
-                write!(json, "\\u{:04x}", surrogate.unpaired_surrogate())
-                    .expect("writing to a String is infallible");
-            }
+    let mut rest = units;
+    while let Some(index) = rest.iter().position(|unit| unit_needs_escape(*unit)) {
+        push_plain_units(&mut json, &rest[..index]);
+        let unit = rest[index];
+        // A high surrogate that pairs with the next unit is one astral scalar, not an escape;
+        // only an unpaired one is written back as its own `\uXXXX`.
+        if let Some(scalar) = paired_scalar(rest, index) {
+            json.push(scalar);
+            rest = &rest[index + 2..];
+            continue;
         }
+        match unit {
+            unit if unit == u16::from(b'"') => json.push_str("\\\""),
+            unit if unit == u16::from(b'\\') => json.push_str("\\\\"),
+            0x8 => json.push_str("\\b"),
+            0xc => json.push_str("\\f"),
+            0xa => json.push_str("\\n"),
+            0xd => json.push_str("\\r"),
+            0x9 => json.push_str("\\t"),
+            unit => write!(json, "\\u{unit:04x}").expect("writing to a String is infallible"),
+        }
+        rest = &rest[index + 1..];
     }
+    push_plain_units(&mut json, rest);
     json.push('"');
     json
+}
+
+/// Whether one UTF-16 unit is escaped by JSON, or cannot stand alone as a Rust scalar.
+fn unit_needs_escape(unit: u16) -> bool {
+    unit < 0x20
+        || unit == u16::from(b'"')
+        || unit == u16::from(b'\\')
+        || (0xd800..=0xdfff).contains(&unit)
+}
+
+/// The scalar a high surrogate and its low partner encode, when the pair is well formed.
+fn paired_scalar(units: &[u16], index: usize) -> Option<char> {
+    let high = *units.get(index)?;
+    let low = *units.get(index + 1)?;
+    if !(0xd800..=0xdbff).contains(&high) || !(0xdc00..=0xdfff).contains(&low) {
+        return None;
+    }
+    let scalar = 0x1_0000 + ((u32::from(high) - 0xd800) << 10) + (u32::from(low) - 0xdc00);
+    char::from_u32(scalar)
+}
+
+/// Appends a run that carries no escaped and no surrogate unit.
+fn push_plain_units(json: &mut String, units: &[u16]) {
+    if units.iter().all(|unit| *unit < 0x80) {
+        let bytes = units
+            .iter()
+            .map(|unit| u8::try_from(*unit).expect("an ASCII run holds ASCII units"))
+            .collect::<Vec<_>>();
+        json.push_str(std::str::from_utf8(&bytes).expect("ASCII units spell ASCII"));
+        return;
+    }
+    json.extend(
+        char::decode_utf16(units.iter().copied())
+            .map(|character| character.expect("a plain run holds no surrogate")),
+    );
 }
 
 fn string_end(raw: &str, start: usize) -> usize {
@@ -1337,6 +1432,137 @@ impl PartialEq<JsonValue> for f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utf16_decoding_matches_the_source_spelling_for_every_body() {
+        for (json, expected) in [
+            (
+                r#""plain""#,
+                vec![
+                    u16::from(b'p'),
+                    u16::from(b'l'),
+                    u16::from(b'a'),
+                    u16::from(b'i'),
+                    u16::from(b'n'),
+                ],
+            ),
+            (r#""""#, Vec::new()),
+            (r#""\u0041\u00e9""#, vec![0x41, 0xe9]),
+            (r#""\ud800""#, vec![0xd800]),
+            (r#""\ud83d\ude00""#, vec![0xd83d, 0xde00]),
+            (r#""😀""#, vec![0xd83d, 0xde00]),
+            (
+                r#""tab\there""#,
+                vec![
+                    u16::from(b't'),
+                    u16::from(b'a'),
+                    u16::from(b'b'),
+                    9,
+                    u16::from(b'h'),
+                    u16::from(b'e'),
+                    u16::from(b'r'),
+                    u16::from(b'e'),
+                ],
+            ),
+            (
+                r#""a\\b""#,
+                vec![u16::from(b'a'), u16::from(b'\\'), u16::from(b'b')],
+            ),
+        ] {
+            let value = JsonValue::parse(json.to_owned()).unwrap();
+            assert_eq!(value.as_ref().to_utf16(), Some(expected), "{json}");
+        }
+        let not_a_string = JsonValue::parse("12".to_owned()).unwrap();
+        assert_eq!(not_a_string.as_ref().to_utf16(), None);
+
+        // Assistant text is newline- and quote-heavy, so escapes interleave with long runs.
+        let text = "first line\nsecond \"quoted\" line\ttabbed\n\u{1f600} done\n";
+        let json = serde_json::to_string(text).unwrap();
+        let value = JsonValue::parse(json.clone()).unwrap();
+        assert_eq!(
+            value.as_ref().to_utf16(),
+            Some(text.encode_utf16().collect::<Vec<_>>()),
+            "{json}"
+        );
+        assert!(json.contains("\\n") && json.contains("\\\""), "{json}");
+
+        // A malformed escape still rejects the whole body.
+        for malformed in [r#""a\q""#, r#""a\u12""#, r#""a\u12g4""#, r#""a\"#] {
+            let value = JsonValue::parse(malformed.to_owned());
+            if let Ok(value) = value {
+                assert_eq!(value.as_ref().to_utf16(), None, "{malformed}");
+            }
+        }
+    }
+
+    #[test]
+    fn object_lookup_resolves_escaped_and_duplicate_keys_like_a_decoded_scan() {
+        // The last own key that decodes to the requested name wins, escaped spellings included.
+        let value = JsonValue::parse(r#"{"a":1,"\u0061":2,"b":3}"#.to_owned()).unwrap();
+        assert_eq!(value.as_ref().get("a").unwrap().as_raw(), "2");
+        assert_eq!(value.as_ref().get("b").unwrap().as_raw(), "3");
+        assert!(value.as_ref().get("c").is_none());
+
+        // A requested name that itself needs escaping still matches its decoded spelling.
+        let value = JsonValue::parse(r#"{"a\"b":7}"#.to_owned()).unwrap();
+        assert_eq!(value.as_ref().get("a\"b").unwrap().as_raw(), "7");
+        assert!(value.as_ref().get(r"a\b").is_none());
+
+        // Non-ASCII names compare as UTF-16 units on both sides.
+        let value = JsonValue::parse(r#"{"é":1,"😀":2}"#.to_owned()).unwrap();
+        assert_eq!(value.as_ref().get("é").unwrap().as_raw(), "1");
+        assert_eq!(value.as_ref().get("😀").unwrap().as_raw(), "2");
+        assert!(value.as_ref().get("e").is_none());
+
+        // Whitespace and nesting do not change the answer, and non-objects have no keys.
+        let value = JsonValue::parse("  { \"k\" : { \"inner\" : 1 } }  ".to_owned()).unwrap();
+        assert_eq!(
+            value
+                .as_ref()
+                .get("k")
+                .unwrap()
+                .get("inner")
+                .unwrap()
+                .as_raw(),
+            "1"
+        );
+        assert!(
+            JsonValue::parse("[1,2]".to_owned())
+                .unwrap()
+                .as_ref()
+                .get("k")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn utf16_encoding_escapes_exactly_like_ecmascript_json() {
+        let cases: Vec<(Vec<u16>, &str)> = vec![
+            (Vec::new(), r#""""#),
+            ("plain text".encode_utf16().collect(), r#""plain text""#),
+            (vec![u16::from(b'"')], r#""\"""#),
+            (vec![u16::from(b'\\')], r#""\\""#),
+            (vec![0x8, 0xc, 0xa, 0xd, 0x9], r#""\b\f\n\r\t""#),
+            (vec![0x1f, 0x0], r#""\u001f\u0000""#),
+            (vec![0xd800], r#""\ud800""#),
+            (vec![0xdfff], r#""\udfff""#),
+            (vec![0xdc00, 0xd800], r#""\udc00\ud800""#),
+            (vec![0xd83d, 0xde00], "\"😀\""),
+            (vec![0xd83d, 0xd83d], r#""\ud83d\ud83d""#),
+            (vec![0xd83d, 0xde00, 0xd800], "\"😀\\ud800\""),
+            (vec![0x41, 0xa, 0xd83d, 0xde00, 0x42], "\"A\\n😀B\""),
+            (vec![0xe9, 0x2764], "\"é❤\""),
+        ];
+        for (units, expected) in cases {
+            assert_eq!(encode_utf16(&units), expected, "encode {units:?}");
+            let value = JsonValue::parse(encode_utf16(&units)).unwrap();
+            assert_eq!(
+                value.as_ref().to_utf16(),
+                Some(units.clone()),
+                "decode {expected}"
+            );
+        }
+    }
 
     #[test]
     fn retains_lone_surrogates_as_json_strings_and_object_keys() {
