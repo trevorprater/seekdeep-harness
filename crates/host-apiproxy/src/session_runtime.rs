@@ -870,7 +870,7 @@ impl SessionApiProxyRuntime {
             .iter()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
-                    event: JsonValue::from_serialize(event)?.deserialize()?,
+                    event: crate::api::sessions::SessionEvent::from_durable(event)?,
                     view: self.history_view(event, &events, scope),
                 })
             })
@@ -1080,7 +1080,7 @@ impl SessionApiProxyRuntime {
             .iter()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
-                    event: JsonValue::from_serialize(event)?.deserialize()?,
+                    event: crate::api::sessions::SessionEvent::from_durable(event)?,
                     view: self.history_view(event, &events, scope),
                 })
             })

@@ -74,6 +74,40 @@ impl SessionEvent {
         Ok(parsed)
     }
 
+    /// Builds the wire envelope from one durable event without re-encoding its payload.
+    ///
+    /// Only the fields whose wire types differ are converted: the integer timestamp and source
+    /// sequences widen to the numbers a browser holds, and the surface operation becomes
+    /// retained JSON. Event data crosses as the lossless JSON it already is, so a history page
+    /// does not serialize and re-parse every event it serves.
+    ///
+    /// # Errors
+    ///
+    /// Returns a surface-operation serialization failure.
+    #[allow(clippy::cast_precision_loss)] // Epoch milliseconds and sequence numbers stay exact in f64.
+    pub fn from_durable(event: &seekdeep_core::session::SessionEvent) -> anyhow::Result<Self> {
+        #[allow(clippy::cast_precision_loss)] // Same bound as the caller: these values are exact.
+        fn number(value: u64) -> f64 {
+            value as f64
+        }
+        Ok(Self {
+            kind: event.event_type.clone(),
+            seq: event.seq,
+            time: event.time as f64,
+            data: event.data.clone(),
+            source_event_seqs: event
+                .source_event_seqs
+                .as_ref()
+                .map(|sources| sources.iter().copied().map(number).collect()),
+            surface_op: event
+                .surface_op
+                .as_ref()
+                .map(JsonValue::from_serialize)
+                .transpose()?,
+            ignorable: event.ignorable,
+        })
+    }
+
     /// Parses and normalizes the strict Session event envelope.
     ///
     /// # Errors
