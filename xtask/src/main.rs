@@ -1,7 +1,7 @@
 //! Repository gates that keep the source inventory and Rust parity evidence synchronized.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     fmt::Write as _,
     path::{Path, PathBuf},
     process::Command as ProcessCommand,
@@ -4913,6 +4913,10 @@ enum Status {
     Pending,
     Ported,
     Verified,
+    /// A source surface this port deliberately carries no counterpart for. The note records why.
+    /// A withdrawn surface that also names targets or evidence is ported, not withdrawn, and the
+    /// parity gate rejects that combination.
+    Withdrawn,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -4974,6 +4978,7 @@ fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
 
     let mut pending = Vec::new();
     let mut ported = Vec::new();
+    let mut withdrawn = Vec::new();
     let mut deferred = 0usize;
     for surface in &manifest.surfaces {
         if scope == Scope::Runtime
@@ -4986,6 +4991,10 @@ fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
         match surface.status {
             Status::Pending => pending.push(surface.source.as_str()),
             Status::Ported => ported.push(surface.source.as_str()),
+            Status::Withdrawn => {
+                verify_withdrawal(surface)?;
+                withdrawn.push(surface.source.as_str());
+            }
             Status::Verified => {
                 anyhow::ensure!(
                     !surface.targets.is_empty(),
@@ -5007,6 +5016,14 @@ fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
         }
     }
 
+    let untracked = untracked_self_realized(&manifest.surfaces, &tracked_files()?);
+    anyhow::ensure!(
+        untracked.is_empty(),
+        "verified parity surface(s) are realized by their own file, which this checkout does not \
+         track, so a fresh clone cannot satisfy them: {}",
+        untracked.join(", ")
+    );
+
     verify_rust_only()?;
     verify_deviation_string_ban()?;
     let scope_label = match scope {
@@ -5022,14 +5039,37 @@ fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
         anyhow::bail!(
-            "{scope_label} parity incomplete: {} pending, {} ported but unverified (deferred: {deferred}) (sample: {sample})",
+            "{scope_label} parity incomplete: {} pending, {} ported but unverified (withdrawn: {}, deferred: {deferred}) (sample: {sample})",
             pending.len(),
-            ported.len()
+            ported.len(),
+            withdrawn.len()
         );
     }
     println!(
-        "verified {} {scope_label} source surfaces at 100% parity (deferred: {deferred})",
-        manifest.surfaces.len() - deferred
+        "verified {} {scope_label} source surfaces at 100% parity (withdrawn: {}, deferred: {deferred})",
+        manifest.surfaces.len() - withdrawn.len() - deferred,
+        withdrawn.len()
+    );
+    Ok(())
+}
+
+/// Reject a withdrawn surface that records no reason, or that names the work realizing it.
+///
+/// A surface with targets or evidence is ported, so withdrawing it would hide finished work
+/// behind the one status the parity count excludes.
+fn verify_withdrawal(surface: &Surface) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        surface
+            .note
+            .as_deref()
+            .is_some_and(|note| !note.trim().is_empty()),
+        "withdrawn surface records no reason: {}",
+        surface.source
+    );
+    anyhow::ensure!(
+        surface.targets.is_empty() && surface.evidence.is_empty(),
+        "withdrawn surface names targets or evidence, so it is ported rather than withdrawn: {}",
+        surface.source
     );
     Ok(())
 }
@@ -5042,6 +5082,34 @@ fn is_localization(source: &str) -> bool {
     }
     let base = source.rsplit('/').next().unwrap_or(source);
     base.contains(".i18n.")
+}
+
+/// Files this checkout tracks, according to Git.
+///
+/// A parity target that exists only in one working copy passes an existence check and still
+/// fails a fresh clone, which is how the vendored compatibility packages stayed out of the
+/// repository: a machine-global ignore rule hid them from every `git add`.
+fn tracked_files() -> anyhow::Result<HashSet<String>> {
+    Ok(git_output(Path::new("."), &["ls-files"])?
+        .lines()
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Verified surfaces realized by their own file, when Git does not track that file.
+fn untracked_self_realized(surfaces: &[Surface], tracked: &HashSet<String>) -> Vec<String> {
+    surfaces
+        .iter()
+        .filter(|surface| surface.status == Status::Verified)
+        .filter(|surface| {
+            surface
+                .targets
+                .iter()
+                .any(|target| target == &surface.source)
+        })
+        .filter(|surface| !tracked.contains(&surface.source))
+        .map(|surface| surface.source.clone())
+        .collect()
 }
 
 fn read_manifest() -> anyhow::Result<Manifest> {
@@ -5257,21 +5325,77 @@ fn is_generated_output(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{collections::HashSet, path::Path};
 
     use super::{
-        classic_module_bundle, classic_web_bundle, client_loader_esm_wrapper,
-        client_modules_esm_wrapper, client_test_runtime_esm_declarations,
-        client_test_runtime_esm_wrapper, client_web_esm_declarations, client_web_esm_wrapper,
-        compatibility_declarations, compatibility_prelude, copy_ui_attachment_type_declarations,
+        Status, Surface, SurfaceKind, classic_module_bundle, classic_web_bundle,
+        client_loader_esm_wrapper, client_modules_esm_wrapper,
+        client_test_runtime_esm_declarations, client_test_runtime_esm_wrapper,
+        client_web_esm_declarations, client_web_esm_wrapper, compatibility_declarations,
+        compatibility_prelude, copy_ui_attachment_type_declarations,
         copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
         copy_wasm_package_assets, cordis_esm_wrapper, default_macos_platform_tag,
         is_allowed_non_rust_surface, is_generated_output, is_localization, module_factory,
         ui_attachment_esm_wrapper, ui_attachment_invariant_wrapper, ui_primitives_esm_wrapper,
         ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
-        ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, wasm_package_global,
-        watch_snapshot, write_wasm_package_compatibility_entries, write_web_frontend,
+        ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, untracked_self_realized,
+        verify_withdrawal, wasm_package_global, watch_snapshot,
+        write_wasm_package_compatibility_entries, write_web_frontend,
     };
+
+    #[test]
+    fn self_realized_parity_surfaces_must_be_tracked() {
+        let surface = |source: &str, status: Status, targets: &[&str]| Surface {
+            source: source.to_owned(),
+            kind: SurfaceKind::Documentation,
+            status,
+            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
+            evidence: vec!["evidence".to_owned()],
+            note: None,
+        };
+        let tracked = HashSet::from(["vendor/README.md".to_owned()]);
+        let surfaces = [
+            surface("vendor/README.md", Status::Verified, &["vendor/README.md"]),
+            surface("vendor/LICENSE", Status::Verified, &["vendor/LICENSE"]),
+            surface("vendor/pending.md", Status::Pending, &["vendor/pending.md"]),
+            surface(
+                "packages/core/src/index.ts",
+                Status::Verified,
+                &["crates/core/src/lib.rs"],
+            ),
+        ];
+        assert_eq!(
+            untracked_self_realized(&surfaces, &tracked),
+            ["vendor/LICENSE"]
+        );
+    }
+
+    #[test]
+    fn withdrawn_parity_surfaces_record_a_reason_and_no_work() {
+        let withdrawn = |note: Option<&str>, targets: &[&str], evidence: &[&str]| Surface {
+            source: "knip.json".to_owned(),
+            kind: SurfaceKind::Configuration,
+            status: Status::Withdrawn,
+            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
+            evidence: evidence.iter().map(|entry| (*entry).to_owned()).collect(),
+            note: note.map(str::to_owned),
+        };
+        assert!(
+            verify_withdrawal(&withdrawn(Some("knip reads TypeScript imports"), &[], &[])).is_ok()
+        );
+        for invalid in [
+            withdrawn(None, &[], &[]),
+            withdrawn(Some("   "), &[], &[]),
+            withdrawn(Some("reason"), &["knip.json"], &[]),
+            withdrawn(Some("reason"), &[], &["evidence"]),
+        ] {
+            assert!(
+                verify_withdrawal(&invalid).is_err(),
+                "the gate must reject this withdrawal of {}",
+                invalid.source
+            );
+        }
+    }
 
     #[test]
     fn localization_predicate_defers_only_chinese_and_translation_metadata() {
