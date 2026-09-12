@@ -102,26 +102,19 @@ fn stop_reason_error(result: &WorkflowResult) -> Option<String> {
 
 /// The source's `rendered.slice(0, maxChars)` and truncation notice, or the value unchanged.
 ///
-/// The source compares and slices JavaScript string units, so a byte count clips value text the
-/// source keeps whole and misreports the remainder. A cap landing inside a surrogate pair keeps
-/// the pair intact, because a lone surrogate has no representation here.
+/// The source slices UTF-16 code units, so a cap between the two units of an astral character
+/// keeps its leading surrogate and the remainder still counts from the requested boundary. A
+/// native `str` cannot hold that half, so the head converts exactly as the source's own native
+/// boundary does (`bound_context_summary`).
 fn clip_utf16(rendered: &str, max_chars: usize) -> String {
-    let units = rendered.encode_utf16().count();
-    if units <= max_chars {
+    let units = rendered.encode_utf16().collect::<Vec<_>>();
+    if units.len() <= max_chars {
         return rendered.to_owned();
     }
-    let mut head = String::new();
-    let mut taken = 0usize;
-    for character in rendered.chars() {
-        taken += character.len_utf16();
-        if taken > max_chars {
-            break;
-        }
-        head.push(character);
-    }
+    let head = String::from_utf16_lossy(&units[..max_chars]);
     format!(
         "{head}\n… [truncated: {} more characters]",
-        units - max_chars
+        units.len() - max_chars
     )
 }
 
@@ -448,6 +441,20 @@ mod tests {
         assert!(
             rendered.contains(&format!("\n… [truncated: {remainder} more characters]")),
             "{rendered}"
+        );
+    }
+
+    #[test]
+    fn a_cap_inside_an_astral_character_keeps_the_source_boundary() {
+        let value = json!({ "blob": "\u{1f600}\u{1f600}\u{1f600}" });
+        let rendered_json = serde_json::to_string_pretty(&value).unwrap();
+        let units = rendered_json.encode_utf16().count();
+        // `{\n  "blob": "` is 13 units, so a 14-unit cap keeps the leading half of the first emoji.
+        let rendered = render_result("probe", 1, &value, 14);
+        assert!(rendered.contains('\u{fffd}'), "{rendered:?}");
+        assert!(
+            rendered.contains(&format!("\n… [truncated: {} more characters]", units - 14)),
+            "{rendered:?}"
         );
     }
 

@@ -20,7 +20,7 @@ pub enum FetchableKind {
 ///
 /// Returns a `WEB_INVALID_URL` or `WEB_BLOCKED_URL` error on rejection.
 pub fn validate_fetch_url(input: &str, max_url_length: f64) -> anyhow::Result<Url> {
-    if crate::numeric::exceeds(input.len(), max_url_length) {
+    if crate::numeric::exceeds(input.encode_utf16().count(), max_url_length) {
         anyhow::bail!(web_error(
             format!("URL exceeds the maximum length of {max_url_length}"),
             "WEB_INVALID_URL"
