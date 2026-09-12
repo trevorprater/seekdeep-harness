@@ -8,7 +8,14 @@
     "web_scrollbars": "6 passed: five-width sweep without horizontal wheel movement, mutation control against the source golden, 24 real cold sessions with source gutter and insets, pointer reveal and linger, group collapse, WebKit thumb styling and geometry golden",
     "web_details": "1 passed: real replayed turn, source handle golden, sidebar drag, reload and Session ownership switches",
     "web_model_selection": "4 passed: composer choice persists while a logged session keeps its route, unavailable route blocks composer and Host, declared reasoning levels against the source menu golden, closed reasoning fixture inventory",
-    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host; zero failure lines"
+    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host; zero failure lines",
+    "web_assembled_snapshots": "7 tests across 5 files passed: the pinned assembled-jsdom snapshot suites run under vitest against the port's built bundles",
+    "web_workspaces": "12 scenarios passed with the real Host and a cold registry: typed path pane navigation and miss fallback, hover card reachability and clipboard, row menu transit, archive echo and reload, same basename distinct identities, zero prompt requests; cold audit found 9 durable sessions and no model request beyond the pinned seed",
+    "web_settings": "8 passed: modal and real plugin inventory against source goldens, permission defaults preserving existing sessions and requiring the Full access confirmation, persisted dark preference during held plugin loading, theme gesture and OS override with reload and a second Host, busy Enter preference across reload, language switching and persistence, English browser default, closed fixture inventory",
+    "web_plugin_settings": "7 passed: three exposed namespaces against the source section golden, staged edit writing only on Save, Discard restoring without writing, invalid numeric draft rejection, Reset staging the composed default, Agent Loop writes reaching the real scheduler, closed fixture inventory",
+    "web_assembled": "Passed against a real Rust Host with persisted history: rendered conversation, reload and search all verified",
+    "web_models_settings": "8 passed: reference-free native-auth profile, deletion wording, write-only credential with derived profile reference, custom settings merge, custom route and model declaration, route identity and protocol edit, identified deletion and credential removal, closed fixture inventory with no prompt traffic",
+    "web_onboarding": "7 passed: welcome version with a write-only official credential and immediate readiness, configured reload staying interactive while settings responses are held, real model edits persisting capacities, closed fixture inventories, setup-card dismissal preserving an independent draft, another provider ending onboarding without an official credential"
   },
   "snapshot_cross_check": {
     "method": "Every apps/web/tests/snapshots/**/*.expected.md golden in the source checkout compared with the .actual artifact the keyless run wrote, after applying the identity renames AGENTS.md requires (dsh to seekdeep, deepseek-ai to seekdeep-ai, DSH_ to SEEKDEEP_)",
@@ -97,5 +104,6 @@
     "chat_output": "9,598 characters with the plugin and 9,582 without; the 16-character difference is exactly the Chat and Trajectory tab labels it provides",
     "conclusion": "The trajectory Definitions cost about 1.4 s of a 4.5 s cold open, roughly 30 per cent, and contribute nothing to the Chat pane the user is looking at. The module profile shows the same shape as ui-conversation: per-event JSON scanning and UTF-16 conversion.",
     "why_the_obvious_fix_is_not_taken": "Registering those Definitions lazily on first Trajectory use would route through rebuild_registry, which re-folds the entire stored window with every Definition, so the first Trajectory open would pay the whole 3-4.5 s again. Capturing this saving needs an assembler capability that folds the stored window for one newly registered Definition, plus a background fold after the first paint. That is a product trade, not a localized fix: the Chat pane would appear about 1.4 s sooner, and the ledger would either fill in behind it or stall the first Trajectory open."
-  }
+  },
+  "gates_note": "Every web gate this repository exposes has now been run against the current tree: 14 gates, all passing. No feature bug was found by exercising them."
 }
