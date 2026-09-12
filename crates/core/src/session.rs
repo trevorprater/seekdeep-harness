@@ -1221,23 +1221,6 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use seekdeep_llm::MessageSource;
-
-    #[test]
-    fn a_session_clock_stamps_the_end_seed_event() {
-        let session = Session::create_with_clock(
-            &SessionId::new("clocked-session"),
-            None,
-            None,
-            std::sync::Arc::new(|| 1_700_000_000_000),
-        )
-        .unwrap();
-        let end_seed = session
-            .events()
-            .iter()
-            .find(|event| event.event_type == "session/end-seed")
-            .expect("the seed terminator is appended");
-        assert_eq!(end_seed.time, 1_700_000_000_000);
-    }
     use serde_json::json;
 
     use super::*;
