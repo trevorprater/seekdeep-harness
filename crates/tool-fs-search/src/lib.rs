@@ -706,20 +706,21 @@ impl SearchRuntime {
                     return Ok(path);
                 }
                 #[cfg(debug_assertions)]
-                {
-                    return self
-                        .subprocess
-                        .resolve_executable("rg", None, None)
-                        .await
-                        .map_err(|error| error.to_string());
-                }
+                let resolved = self
+                    .subprocess
+                    .resolve_executable("rg", None, None)
+                    .await
+                    .map_err(|error| error.to_string());
                 #[cfg(not(debug_assertions))]
-                {
-                    Err(
-                        "the bundled ripgrep asset is missing beside the SeekDeep executable"
-                            .to_owned(),
-                    )
+                let resolved = Err::<String, String>(
+                    "the bundled ripgrep asset is missing beside the SeekDeep executable (a checkout build stages it with `cargo xtask host-assets --release`)"
+                        .to_owned(),
+                );
+                if let Err(reason) = &resolved {
+                    // The tool reports a fixed failure code; say once why searches cannot start.
+                    tracing::warn!("tool-fs-search: ripgrep is unavailable: {reason}");
                 }
+                resolved
             })
             .await
     }

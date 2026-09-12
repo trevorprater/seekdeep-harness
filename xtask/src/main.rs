@@ -59,9 +59,11 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
-    /// Stage the compiled Node code-runtime beside the built Host binaries
-    /// (`target/debug/code-runtime-node`, or the release directory with `--release`).
-    NodeRuntime {
+    /// Stage the Host's runtime assets beside the built Host binaries: the compiled Node
+    /// code-runtime closure and a ripgrep binary (`target/debug`, or the release directory
+    /// with `--release`).
+    #[command(alias = "node-runtime")]
+    HostAssets {
         #[arg(long)]
         release: bool,
     },
@@ -434,7 +436,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebKeyless { source, scenario } => {
             web_settings::run_keyless(&source, scenario.as_deref())
         }
-        Command::NodeRuntime { release } => {
+        Command::HostAssets { release } => {
             let staged = node_runtime::stage(
                 &cargo_metadata()?,
                 if release { "release" } else { "debug" },
