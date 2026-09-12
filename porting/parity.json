@@ -86634,7 +86634,14 @@
     {
       "source": "scripts/client-bundle-purity.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/client_bundle_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/client-bundle-purity.spec.ts (pinned source: 13 passed)",
+        "cargo test -p seekdeep-repository-tools --test client_bundle_parity (4 passed)"
+      ]
     },
     {
       "source": "scripts/client-tsconfig.spec.ts",
@@ -86807,7 +86814,14 @@
     {
       "source": "scripts/dev-web.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/tests/client_build_dev_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/dev-web.spec.ts (pinned source: 2 passed)",
+        "cargo test -p xtask --test client_build_dev_parity (1 passed)"
+      ]
     },
     {
       "source": "scripts/dev-web.ts",
@@ -87043,7 +87057,14 @@
     {
       "source": "scripts/gen-doc-graphs.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/doc_graphs_source_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/gen-doc-graphs.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test doc_graphs_source_parity (1 passed)"
+      ]
     },
     {
       "source": "scripts/gen-doc-graphs.ts",
@@ -87124,7 +87145,14 @@
     {
       "source": "scripts/gen-third-party-notices.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/notices_vendor_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/gen-third-party-notices.spec.ts (pinned source: 26 passed)",
+        "cargo test -p seekdeep-repository-tools --test notices_vendor_parity (14 passed)"
+      ]
     },
     {
       "source": "scripts/gen-third-party-notices.ts",
@@ -87306,7 +87334,14 @@
     {
       "source": "scripts/oxlint-contract.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/run_oxlint_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/oxlint-contract.spec.ts (pinned source: 13 passed)",
+        "cargo test -p seekdeep-repository-tools --test run_oxlint_parity (6 passed)"
+      ]
     },
     {
       "source": "scripts/package-graph.ts",
@@ -87401,15 +87436,13 @@
     {
       "source": "scripts/project-doc-site.spec.ts",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/repository-tools/tests/doc_site_projection_parity.rs",
-        "crates/repository-tools/tests/doc_site_configuration_parity.rs",
-        "crates/repository-tools/tests/doc_source_links.rs"
+        "crates/repository-tools/tests/doc_site_projection_parity.rs"
       ],
       "evidence": [
-        "Source-differential Markdown, frontmatter, locale, image, route, navigation, and closed-manifest-schema checks passed",
-        "Canonical publication data matches all 166 source locale routes and per-locale section metadata"
+        "pnpm exec vitest run scripts/project-doc-site.spec.ts (pinned source: 38 passed)",
+        "cargo test -p seekdeep-repository-tools --test doc_site_projection_parity (6 passed)"
       ],
       "note": "Native ports and direct pinned-source comparisons are implemented and passing; retain pending until the integrated website milestone acceptance is complete."
     },
@@ -87983,7 +88016,14 @@
     {
       "source": "scripts/test-invariants.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/tests/test_host_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/test-invariants.spec.ts (pinned source: 13 passed)",
+        "cargo test -p seekdeep-invariants --test test_host_parity (12 passed)"
+      ]
     },
     {
       "source": "scripts/test-invariants.ts",
@@ -88800,7 +88840,14 @@
     {
       "source": "scripts/vitest-environment.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/run_gates_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/vitest-environment.compat.spec.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep-repository-tools --test run_gates_parity (13 passed)"
+      ]
     },
     {
       "source": "scripts/wine-windows-gates.sh",
