@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "credentials-local-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-credentials-local";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-credentials-local";
 
 /// Reserves the package's invariant identity.
 ///

@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "host-apiproxy-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-host-apiproxy";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-host-apiproxy";
 
 /// Registers package ownership for carrier-local schema/correlation invariants.
 ///

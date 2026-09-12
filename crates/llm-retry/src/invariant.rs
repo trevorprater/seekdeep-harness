@@ -14,7 +14,7 @@ use seekdeep_llm::MAX_TIMER_DELAY_MS;
 
 use crate::history::provider_for_open_step;
 
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-llm-retry";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-llm-retry";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// Registers complete validation for loaded and newly appended retry events.

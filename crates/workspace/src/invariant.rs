@@ -10,7 +10,7 @@ use seekdeep_storage_domain::DomainChanged;
 
 use crate::{WORKSPACE_REGISTRY, WorkspaceId};
 
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-workspace";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-workspace";
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "workspace-invariant";

@@ -8,7 +8,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 use crate::{SETTINGS, SETTINGS_UPDATED_EVENT, SettingsNamespace};
 
 /// Full package identity reserved in the invariant registry.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-settings";
+pub const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-settings";
 /// Stable companion name.
 pub const INVARIANT_NAME: &str = "settings-invariant";
 

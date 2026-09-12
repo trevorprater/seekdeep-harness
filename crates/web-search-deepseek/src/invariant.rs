@@ -5,7 +5,7 @@ use std::sync::Arc;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 /// Package name reserved by this companion.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-web-search-deepseek";
+pub const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-web-search-deepseek";
 
 /// Cordis companion plugin name.
 pub const NAME: &str = "web-search-deepseek-invariant";

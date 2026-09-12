@@ -6,13 +6,13 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Product-renamed package identities reserved by the utility companions.
 pub const UTILITY_INVARIANT_PACKAGES: [&str; 7] = [
-    "@deepseek-ai/seekdeep-atomic-write",
-    "@deepseek-ai/seekdeep-brand",
-    "@deepseek-ai/seekdeep-home-paths",
-    "@deepseek-ai/seekdeep-launch-environment",
-    "@deepseek-ai/seekdeep-native-command",
-    "@deepseek-ai/seekdeep-output-retention",
-    "@deepseek-ai/seekdeep-timeout",
+    "@seekdeep-ai/seekdeep-atomic-write",
+    "@seekdeep-ai/seekdeep-brand",
+    "@seekdeep-ai/seekdeep-home-paths",
+    "@seekdeep-ai/seekdeep-launch-environment",
+    "@seekdeep-ai/seekdeep-native-command",
+    "@seekdeep-ai/seekdeep-output-retention",
+    "@seekdeep-ai/seekdeep-timeout",
 ];
 
 /// Registers every utility package's explained empty runtime invariant.

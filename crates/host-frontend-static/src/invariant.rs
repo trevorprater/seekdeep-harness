@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "host-frontend-static-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-host-frontend-static";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-host-frontend-static";
 
 /// Registers the explained-empty invariant companion.
 ///

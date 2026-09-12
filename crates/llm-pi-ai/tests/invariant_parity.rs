@@ -16,7 +16,7 @@ async fn reserves_exact_renamed_package_identity_and_releases_it() {
     assert!(
         duplicate
             .to_string()
-            .contains("@deepseek-ai/seekdeep-llm-pi-ai")
+            .contains("@seekdeep-ai/seekdeep-llm-pi-ai")
     );
     registration.dispose().await.unwrap();
     register_invariant(&registry)

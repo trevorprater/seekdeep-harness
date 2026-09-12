@@ -151,7 +151,7 @@ async fn async_observer_rejection_is_detached_and_invariant_failure_is_rethrown_
             &context,
             "llm/adapters-updated",
             |_, _| {
-                Err(InvariantError::new("@deepseek-ai/seekdeep-test", "registry incoherent").into())
+                Err(InvariantError::new("@seekdeep-ai/seekdeep-test", "registry incoherent").into())
             },
             EventOptions::default(),
         )

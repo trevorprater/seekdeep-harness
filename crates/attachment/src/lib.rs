@@ -270,7 +270,7 @@ pub fn register_invariant(
     registry: &Arc<InvariantRegistry>,
 ) -> anyhow::Result<InvariantRegistration> {
     registry.register(
-        "@deepseek-ai/seekdeep-attachment",
+        "@seekdeep-ai/seekdeep-attachment",
         InvariantInstaller::noop(),
     )
 }
@@ -445,6 +445,6 @@ mod tests {
                 .expect("registry"),
         );
         let _registration = register_invariant(&registry).expect("register");
-        assert!(registry.is_registered("@deepseek-ai/seekdeep-attachment"));
+        assert!(registry.is_registered("@seekdeep-ai/seekdeep-attachment"));
     }
 }

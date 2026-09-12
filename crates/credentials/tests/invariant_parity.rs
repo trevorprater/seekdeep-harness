@@ -72,7 +72,7 @@ async fn fails_an_update_event_emitted_without_a_live_service() {
     assert!(
         error
             .to_string()
-            .contains("invariant violated by \"@deepseek-ai/seekdeep-credentials\"")
+            .contains("invariant violated by \"@seekdeep-ai/seekdeep-credentials\"")
     );
     assert!(
         error

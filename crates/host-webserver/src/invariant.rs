@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "host-webserver-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-host-webserver";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-host-webserver";
 
 /// Registers ownership of route-registration symmetry.
 ///

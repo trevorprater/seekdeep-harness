@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "client-connection-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-client-connection";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-client-connection";
 
 /// Reserves package ownership with an intentionally empty installer.
 ///

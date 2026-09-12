@@ -10,7 +10,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 use crate::{FinishReason, LLM, LlmStream, LlmStreamMiddleware, StreamChunk};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-llm";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-llm";
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "llm-invariant";

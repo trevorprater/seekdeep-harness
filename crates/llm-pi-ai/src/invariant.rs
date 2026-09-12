@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Companion plugin identity.
 pub const INVARIANT_NAME: &str = "llm-pi-ai-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-llm-pi-ai";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-llm-pi-ai";
 
 /// Reserves package identity; the adapter owns no independent mutable relation.
 ///

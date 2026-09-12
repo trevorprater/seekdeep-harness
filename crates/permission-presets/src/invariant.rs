@@ -14,7 +14,7 @@ use seekdeep_invariants::{
 use crate::index::PERMISSION_PRESETS;
 
 /// Package name reserved by this companion.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-permission-presets";
+pub const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-permission-presets";
 
 /// Cordis companion plugin name.
 pub const NAME: &str = "permission-presets-invariant";

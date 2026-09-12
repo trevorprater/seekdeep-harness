@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-token-meter";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-token-meter";
 
 /// Reserves token-meter ownership in the invariant registry.
 ///

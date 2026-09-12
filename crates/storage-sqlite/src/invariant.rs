@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "storage-sqlite-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-storage-sqlite";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-storage-sqlite";
 
 /// Registers the explained-empty invariant companion.
 ///

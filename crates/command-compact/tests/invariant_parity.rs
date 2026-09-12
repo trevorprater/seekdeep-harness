@@ -8,7 +8,7 @@ use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 async fn registers_the_package_owned_noop_installer() {
     assert_eq!(NAME, "command-compact-invariant");
     assert_eq!(INJECT, &["invariants"]);
-    assert_eq!(PACKAGE_NAME, "@deepseek-ai/seekdeep-command-compact");
+    assert_eq!(PACKAGE_NAME, "@seekdeep-ai/seekdeep-command-compact");
 
     let context = Context::new();
     let registry =

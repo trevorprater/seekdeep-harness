@@ -685,6 +685,6 @@ async fn invariant_companion_registers_once() {
     let config = InvariantConfig::default();
     let registry = Arc::new(InvariantRegistry::new(&ctx, &config).expect("invariants"));
     let _registration = seekdeep_jobs_local::register_invariant(&registry).expect("register");
-    assert!(registry.is_registered("@deepseek-ai/seekdeep-jobs-local"));
+    assert!(registry.is_registered("@seekdeep-ai/seekdeep-jobs-local"));
     assert!(seekdeep_jobs_local::register_invariant(&registry).is_err());
 }

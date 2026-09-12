@@ -309,7 +309,7 @@ impl LocalJobState {
     fn ensure_owner_cleanup(self: &Arc<Self>, owner: &Arc<Agent>) {
         let owner_id = owner.id().clone();
         let agents = self.context.get(AGENTS).unwrap_or_else(|| {
-            panic!("background job ownership requires the agent registry (load @deepseek-ai/seekdeep-agent)")
+            panic!("background job ownership requires the agent registry (load @seekdeep-ai/seekdeep-agent)")
         });
         if agents
             .get(&owner_id)
@@ -542,7 +542,7 @@ impl JobRegistry for LocalJobRegistry {
         let owner = spec.owner.clone();
         assert!(
             self.0.serves_owner(owner.as_ref()),
-            "background jobs unavailable: no job controller serves this agent (load @deepseek-ai/seekdeep-tool-jobs in its composition)"
+            "background jobs unavailable: no job controller serves this agent (load @seekdeep-ai/seekdeep-tool-jobs in its composition)"
         );
         assert!(
             !spec.kind.is_empty(),

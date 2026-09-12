@@ -44,7 +44,7 @@ pub const INJECT: &[&str] = &["storage"];
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "storage-domain-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-storage-domain";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-storage-domain";
 
 /// Stable domain-layer failure vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

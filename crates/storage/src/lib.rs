@@ -33,7 +33,7 @@ pub const INJECT: &[&str] = &[];
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "storage-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-storage";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-storage";
 
 /// Stable storage failure vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

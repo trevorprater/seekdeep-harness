@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "session-persistence-sqlite-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-session-persistence-sqlite";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-session-persistence-sqlite";
 
 /// Registers the explained-empty invariant companion.
 ///

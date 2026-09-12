@@ -6,7 +6,7 @@ use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRe
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "anonymous-user-id-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-anonymous-user-id";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-anonymous-user-id";
 
 /// Registers the explained-empty invariant companion.
 ///

@@ -39004,7 +39004,7 @@
         "crates/attachment/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-attachment proves the exact @deepseek-ai/seekdeep-attachment reservation identity",
+        "cargo test -p seekdeep-attachment proves the exact @seekdeep-ai/seekdeep-attachment reservation identity",
         "cargo clippy -p seekdeep-attachment --all-targets --all-features -- -D warnings"
       ]
     },
@@ -75077,7 +75077,7 @@
         "crates/settings-file/tests/file_parity.rs"
       ],
       "evidence": [
-        "Rust companion reserves the renamed @deepseek-ai/seekdeep-settings-file package identity with the explained no-op installer",
+        "Rust companion reserves the renamed @seekdeep-ai/seekdeep-settings-file package identity with the explained no-op installer",
         "lifecycle test proves readiness, duplicate refusal, disposal, and replacement registration",
         "cargo clippy -p seekdeep-settings-file --all-targets --all-features -- -D warnings passed"
       ]
@@ -83593,7 +83593,7 @@
         "crates/util/src/invariants.rs"
       ],
       "evidence": [
-        "companions_reserve_and_release_every_package proves the exact @deepseek-ai/seekdeep-atomic-write ownership identity and reversible registration"
+        "companions_reserve_and_release_every_package proves the exact @seekdeep-ai/seekdeep-atomic-write ownership identity and reversible registration"
       ]
     },
     {
@@ -83870,7 +83870,7 @@
         "crates/util/src/invariants.rs"
       ],
       "evidence": [
-        "companions_reserve_and_release_every_package proves the exact @deepseek-ai/seekdeep-launch-environment ownership identity and reversible registration"
+        "companions_reserve_and_release_every_package proves the exact @seekdeep-ai/seekdeep-launch-environment ownership identity and reversible registration"
       ]
     },
     {

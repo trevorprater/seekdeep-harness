@@ -482,7 +482,7 @@ async fn installed_invariant_rejects_live_append_and_invalid_late_history() {
     let registry = InvariantRegistry::install(&context, &InvariantConfig::default()).unwrap();
     let registration = register_invariant(&registry).unwrap();
     registration.await_ready().await.unwrap();
-    assert!(registry.is_registered("@deepseek-ai/seekdeep-llm-retry"));
+    assert!(registry.is_registered("@seekdeep-ai/seekdeep-llm-retry"));
     let session = sessions
         .create(
             &context,
@@ -500,7 +500,7 @@ async fn installed_invariant_rejects_live_append_and_invalid_late_history() {
         .unwrap_err();
     assert!(error.to_string().contains("failed request provider mock"));
     registration.dispose().await.unwrap();
-    assert!(!registry.is_registered("@deepseek-ai/seekdeep-llm-retry"));
+    assert!(!registry.is_registered("@seekdeep-ai/seekdeep-llm-retry"));
     context.fiber().dispose().await.unwrap();
 
     let late_context = seekdeep_cordis::Context::new();

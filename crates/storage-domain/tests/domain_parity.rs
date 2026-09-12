@@ -844,7 +844,7 @@ async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
         assert!(
             error
                 .to_string()
-                .contains("@deepseek-ai/seekdeep-storage-domain"),
+                .contains("@seekdeep-ai/seekdeep-storage-domain"),
             "{error:#}"
         );
     }

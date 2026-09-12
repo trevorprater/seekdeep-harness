@@ -37,7 +37,7 @@ pub const NAME: &str = "storage-json";
 pub const INJECT: &[&str] = &["storage"];
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "storage-json-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-storage-json";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-storage-json";
 
 /// Explicit file-tree root configuration.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

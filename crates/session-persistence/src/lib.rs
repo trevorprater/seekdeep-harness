@@ -26,7 +26,7 @@ pub const DEFAULT_WRITE_BATCH_MAX_DELAY_MS: u64 = 200;
 pub const MAX_WRITE_BATCH_DELAY_MS: u64 = 2_147_483_647;
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "session-persistence-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-session-persistence";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-session-persistence";
 
 /// Object-safe persistence implementation published through Cordis.
 #[derive(Clone)]

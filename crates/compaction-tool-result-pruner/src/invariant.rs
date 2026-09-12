@@ -5,7 +5,7 @@ use std::sync::Arc;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 /// Package name reserved by this companion.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-compaction-tool-result-pruner";
+pub const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-compaction-tool-result-pruner";
 
 /// Cordis companion plugin name.
 pub const NAME: &str = "compaction-tool-result-pruner-invariant";

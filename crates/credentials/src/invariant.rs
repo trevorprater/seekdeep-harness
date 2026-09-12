@@ -9,7 +9,7 @@ use crate::{CREDENTIALS, CredentialRef};
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "credentials-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-credentials";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-credentials";
 
 /// Registers the committed-update lifecycle check.
 ///

@@ -727,9 +727,9 @@ async fn reader_catch_up_eager_observation_service_reload_and_invariant_reservat
     let registry = InvariantRegistry::install(&context, &InvariantConfig::default()).unwrap();
     let reservation = seekdeep_token_meter::invariant::register_invariant(&registry).unwrap();
     reservation.await_ready().await.unwrap();
-    assert!(registry.is_registered("@deepseek-ai/seekdeep-token-meter"));
+    assert!(registry.is_registered("@seekdeep-ai/seekdeep-token-meter"));
     reservation.dispose().await.unwrap();
-    assert!(!registry.is_registered("@deepseek-ai/seekdeep-token-meter"));
+    assert!(!registry.is_registered("@seekdeep-ai/seekdeep-token-meter"));
 
     second.dispose().await.unwrap();
     context.fiber().dispose().await.unwrap();

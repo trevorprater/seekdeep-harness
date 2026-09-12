@@ -21,7 +21,7 @@ struct Harness {
 #[tokio::test]
 async fn invariant_reserves_renamed_identity_and_releases_for_replacement() {
     assert_eq!(INVARIANT_NAME, "settings-file-invariant");
-    assert_eq!(PACKAGE_NAME, "@deepseek-ai/seekdeep-settings-file");
+    assert_eq!(PACKAGE_NAME, "@seekdeep-ai/seekdeep-settings-file");
     let context = Context::new();
     let registry = Arc::new(InvariantRegistry::new(&context, &InvariantConfig::default()).unwrap());
     let registration = register_invariant(&registry).unwrap();

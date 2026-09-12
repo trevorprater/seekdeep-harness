@@ -19,7 +19,7 @@ pub const DIRECTORY_PICKER: ServiceKey<DirectoryPickerService> = ServiceKey::new
 
 /// Stable invariant companion name.
 pub const INVARIANT_NAME: &str = "host-directory-picker-invariant";
-const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-host-directory-picker";
+const PACKAGE_NAME: &str = "@seekdeep-ai/seekdeep-host-directory-picker";
 
 /// One directory row: a listing child or breadcrumb ancestor.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

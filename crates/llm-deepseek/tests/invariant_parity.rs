@@ -10,7 +10,7 @@ async fn reserves_and_releases_package_identity() {
     let registry = InvariantRegistry::install(&context, &InvariantConfig::default()).unwrap();
     let registration = register_invariant(&registry).unwrap();
     registration.await_ready().await.unwrap();
-    assert!(registry.is_registered("@deepseek-ai/seekdeep-llm-deepseek"));
+    assert!(registry.is_registered("@seekdeep-ai/seekdeep-llm-deepseek"));
     registration.dispose().await.unwrap();
-    assert!(!registry.is_registered("@deepseek-ai/seekdeep-llm-deepseek"));
+    assert!(!registry.is_registered("@seekdeep-ai/seekdeep-llm-deepseek"));
 }
