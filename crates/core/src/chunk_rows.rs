@@ -564,11 +564,9 @@ fn expand_row(
 fn has_exact_json_keys(object: JsonRef<'_>, keys: &[&str]) -> bool {
     object.object_entries().is_some_and(|entries| {
         keys.iter().all(|key| object.get(key).is_some())
-            && entries.iter().all(|(key, _)| {
-                key.deserialize::<String>()
-                    .ok()
-                    .is_some_and(|key| keys.contains(&key.as_str()))
-            })
+            && entries
+                .iter()
+                .all(|(key, _)| keys.iter().any(|wanted| key.text_equals(wanted)))
     })
 }
 

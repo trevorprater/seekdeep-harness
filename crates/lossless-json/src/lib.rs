@@ -718,13 +718,32 @@ impl<'a> JsonRef<'a> {
         }
     }
 
+    /// Whether this string decodes to exactly `other`.
+    ///
+    /// Comparing decoded text is what a `String` round trip would do, without the allocation, and
+    /// a lone surrogate never equals a `&str` because no `&str` spells one.
+    #[must_use]
+    pub fn text_equals(self, other: &str) -> bool {
+        let Some(body) = self
+            .raw
+            .strip_prefix('"')
+            .and_then(|raw| raw.strip_suffix('"'))
+        else {
+            return false;
+        };
+        // Unescaped bodies spell the same text, so equal source bytes settle the comparison.
+        if !body.as_bytes().contains(&b'\\') && needs_no_escape(other) {
+            return body == other;
+        }
+        self.to_utf16()
+            .is_some_and(|units| units == other.encode_utf16().collect::<Vec<_>>())
+    }
+
     /// Returns an object's named own value. Keys are compared as UTF-16 units.
     #[must_use]
     pub fn get(self, key: &str) -> Option<Self> {
         self.raw.strip_prefix('{')?;
-        let plain = key
-            .bytes()
-            .all(|byte| byte != b'"' && byte != b'\\' && byte >= 0x20);
+        let plain = needs_no_escape(key);
         let mut units = None;
         let mut found = None;
         let mut offset = 1;
@@ -850,6 +869,12 @@ fn skip_whitespace(raw: &str, offset: &mut usize) {
     {
         *offset += 1;
     }
+}
+
+/// Whether a text spells itself inside JSON, so no escape separates it from its source bytes.
+fn needs_no_escape(text: &str) -> bool {
+    text.bytes()
+        .all(|byte| byte != b'"' && byte != b'\\' && byte >= 0x20)
 }
 
 /// Whether a source key body is exactly `key`'s JSON spelling.
@@ -1533,6 +1558,33 @@ mod tests {
                 .get("k")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn text_equality_matches_a_string_round_trip() {
+        for (json, other, expected) in [
+            (r#""plain""#, "plain", true),
+            (r#""plain""#, "other", false),
+            (r#""\u0070lain""#, "plain", true),
+            (r#""a\nb""#, "a\nb", true),
+            (r#""é😀""#, "é😀", true),
+            (r#""\u00e9""#, "é", true),
+            (r#""\ud83d\ude00""#, "😀", true),
+            // No `&str` spells a lone surrogate, so a `String` round trip fails and so does this.
+            (r#""\ud800""#, "\u{fffd}", false),
+            (r#""a""#, "a\"b", false),
+            (r#""""#, "", true),
+        ] {
+            let value = JsonValue::parse(json.to_owned()).unwrap();
+            assert_eq!(
+                value.as_ref().text_equals(other),
+                expected,
+                "{json} vs {other:?}"
+            );
+        }
+        // A non-string never carries text.
+        let number = JsonValue::parse("12".to_owned()).unwrap();
+        assert!(!number.as_ref().text_equals("12"));
     }
 
     #[test]
