@@ -399,7 +399,9 @@ fn read_report(
             }
         }
     }
-    let chars = serde_json::to_string(&report).map_or(0, |value| value.chars().count());
+    // The workflow script validates `serialized.length`, which counts UTF-16 code units, so an
+    // astral-heavy report must not pass this second boundary on a smaller scalar count.
+    let chars = serde_json::to_string(&report).map_or(0, |value| value.encode_utf16().count());
     if chars as u64 > max_chars {
         anyhow::bail!("Ralph workflow returned an oversized handoff ({chars} > {max_chars})");
     }
