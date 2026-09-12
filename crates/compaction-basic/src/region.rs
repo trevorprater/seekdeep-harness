@@ -48,6 +48,9 @@ pub type RegionMeasure = Arc<
     dyn Fn(&Arc<Session>) -> anyhow::Result<seekdeep_token_meter::TokenMeasurement> + Send + Sync,
 >;
 
+/// Injectable compaction-identity source, so a seeded run reproduces the durable start event.
+pub type CompactionIdSource = Arc<dyn Fn() -> CompactionId + Send + Sync + 'static>;
+
 /// Effective pricing and summarization dependencies for one region transaction.
 #[derive(Clone)]
 pub struct RegionDependencies {
@@ -57,6 +60,8 @@ pub struct RegionDependencies {
     pub summarize: RegionSummarize,
     /// Optional measurement carrier; production calls the concrete meter.
     pub measure: Option<RegionMeasure>,
+    /// Optional compaction-identity source; production draws a fresh UUID per transaction.
+    pub compaction_id: Option<CompactionIdSource>,
 }
 
 impl RegionDependencies {
@@ -247,7 +252,10 @@ pub async fn compact_surface_region(
         Some(turn)
     };
 
-    let compaction_id = CompactionId::new(uuid::Uuid::new_v4().to_string());
+    let compaction_id = dependencies.compaction_id.as_ref().map_or_else(
+        || CompactionId::new(uuid::Uuid::new_v4().to_string()),
+        |next| next(),
+    );
     let start_event = append_event(
         append.as_ref(),
         session,

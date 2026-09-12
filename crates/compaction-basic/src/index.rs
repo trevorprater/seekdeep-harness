@@ -105,6 +105,7 @@ pub struct BasicCompactionEngine {
     append: Option<CompactionAppend>,
     manual_flush: Option<ManualFlush>,
     measure: Option<RegionMeasure>,
+    compaction_id: Option<crate::region::CompactionIdSource>,
     warned_pressure_targets: Mutex<HashSet<String>>,
     overflow_retries: Mutex<HashMap<usize, u64>>,
     overflow_agents: Mutex<HashMap<usize, Weak<Agent>>>,
@@ -125,6 +126,8 @@ pub struct BasicCompactionInternals {
     pub manual_flush: Option<ManualFlush>,
     /// Optional token-measurement carrier used to inject stability changes.
     pub measure: Option<RegionMeasure>,
+    /// Optional compaction-identity source used to reproduce the durable start event.
+    pub compaction_id: Option<crate::region::CompactionIdSource>,
 }
 
 impl BasicCompactionEngine {
@@ -180,6 +183,7 @@ impl BasicCompactionEngine {
             append: internals.append,
             manual_flush: internals.manual_flush,
             measure: internals.measure,
+            compaction_id: internals.compaction_id,
             warned_pressure_targets: Mutex::new(HashSet::new()),
             overflow_retries: Mutex::new(HashMap::new()),
             overflow_agents: Mutex::new(HashMap::new()),
@@ -325,6 +329,7 @@ impl BasicCompactionEngine {
                 meter: meter.clone(),
                 summarize: summarize.clone(),
                 measure: self.measure.clone(),
+                compaction_id: self.compaction_id.clone(),
             };
         }
         let ctx = self.context.clone();
@@ -340,6 +345,7 @@ impl BasicCompactionEngine {
             meter: meter.clone(),
             summarize,
             measure: self.measure.clone(),
+            compaction_id: self.compaction_id.clone(),
         }
     }
 }

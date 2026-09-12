@@ -146,6 +146,7 @@ impl Harness {
                 append,
                 manual_flush,
                 measure: None,
+                compaction_id: None,
             },
         )
         .unwrap();
