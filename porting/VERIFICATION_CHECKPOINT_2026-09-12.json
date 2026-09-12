@@ -1,0 +1,49 @@
+{
+  "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+  "scope": "Built Web client and real Rust Host through the xtask browser gates, plus the web payload and transport work on this branch",
+  "gates_run": {
+    "web_navigation": "7 pinned navigation assertions passed: seeded-session open by message content, trajectory ledger and record inspector, Session Header and /export download, overview drag focus, closed default details column for bash and file-path rows, bash terminal card, exact fixture inventory",
+    "web_startup": "3 passed: compressed cold blank session stays out of the sidebar against the source golden; first workspace connection preserves Hero, workspace chip, scroll body and composer nodes; auto-selected blank-session history keeps the Hero visible and never settles",
+    "web_composer": "10 passed: 14-line cap and single scrollport, wheel scroll with caret, caret reveal after scrolling away, real clipboard paste, trailing-newline bottom, exact source draft geometry golden, scrollbar reservation across Chat and Trajectory, 800px shrink, CSS control shift, exact source tab geometry golden",
+    "web_scrollbars": "6 passed: five-width sweep without horizontal wheel movement, mutation control against the source golden, 24 real cold sessions with source gutter and insets, pointer reveal and linger, group collapse, WebKit thumb styling and geometry golden",
+    "web_details": "1 passed: real replayed turn, source handle golden, sidebar drag, reload and Session ownership switches",
+    "web_model_selection": "4 passed: composer choice persists while a logged session keeps its route, unavailable route blocks composer and Host, declared reasoning levels against the source menu golden, closed reasoning fixture inventory",
+    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host; zero failure lines"
+  },
+  "snapshot_cross_check": {
+    "method": "Every apps/web/tests/snapshots/**/*.expected.md golden in the source checkout compared with the .actual artifact the keyless run wrote, after applying the identity renames AGENTS.md requires (dsh to seekdeep, deepseek-ai to seekdeep-ai, DSH_ to SEEKDEEP_)",
+    "goldens": 103,
+    "produced": 70,
+    "identical": 68,
+    "mismatched": 2,
+    "not_produced_by_this_suite": 33,
+    "open_leads": [
+      "steering/mid-steer and steering/settled differ from the source goldens in model reasoning text and, for mid-steer, in the Ask question waiting row and Running status. The owning keyless scenario reports success, so the comparison the suite performs is either lenient for these goldens or narrower than a byte compare. Diagnostics for a steering failure and hang in this directory are dated 2026-09-09, three days before this run. Not attributed."
+    ]
+  },
+  "differential_ui_check": {
+    "method": "Visible control inventory captured in Chromium for the built port and for the pinned source harness, then compared as sets",
+    "boot_controls": {
+      "port": 24,
+      "source": 26
+    },
+    "settings_controls": {
+      "port": 39,
+      "source": 41
+    },
+    "shared_settings_controls": 28,
+    "differences": "All boot and settings differences are data or user configuration, not UI surface: session titles and counts, selected model id, and the access-mode, agent-mode and busy-enter labels. The port renders Full access, Code mode and Steer because ~/.seekdeep/settings.yaml sets permission.defaultPreset: danger-full-access, agent-presets.default: code and ui-conversation.busyEnter: steer; the source home sets none of those and shows its own defaults. No port default differs.",
+    "console_errors": "Zero across boot, session open, settings, tool details, session search and the trajectory view."
+  },
+  "payload_and_transport_work_verified_here": [
+    "Shipped WebAssembly carries no DWARF: the 46 browser artifacts fall from 419 MiB to 69.7 MiB, and the largest artifact (5.7 MiB) is below the browser's 8 MiB synchronous compile limit. The Chromium fixture that maps a real wasm panic frame to Rust source through client_bg.wasm.map still passes.",
+    "Cold page load 20.9 MB and reload 1.2 MB; Host CPU per page load 2.06 s cold, then 0.15 s once the encoded body is replayed for a revision-addressed target.",
+    "Lossless JSON string conversion decodes and encodes runs instead of characters: to_utf16 1,925 ms to 46 ms and encode_utf16 below the sampling threshold on one cold session open."
+  ],
+  "remaining": [
+    "A cold session open of an 8 MB history is 4.3 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so the cost is the client: 36,196 assistant/chunk events are each marshalled through JSON text into WASM and back.",
+    "Folding a Definition's run of update Matches in one call was implemented and measured at no change in open time, then reverted; the patch is preserved outside the repository. The same is true of routing container values to the browser's JSON parser instead of a serde tree.",
+    "The 33 source goldens this suite does not produce belong to scenarios driven by other xtask gates (web-assembled, web-workspaces, web-settings, web-models-settings, web-plugin-settings, web-onboarding, web-assembled-snapshots), which were not run here.",
+    "Full workspace Clippy, full workspace tests and cargo xtask parity were not run in this checkpoint; no repository-wide parity claim is made."
+  ]
+}
