@@ -872,9 +872,10 @@ impl ClientSession {
         match response {
             Ok(ClientRpcResult::Success(Some(page))) => {
                 if page.entries.is_empty() {
-                    self.state.borrow_mut().has_more = page.has_more;
                     if let Err(error) = self.conversation.borrow_mut().prepend(&[], page.has_more) {
                         (self.options.report)(error.to_string());
+                    } else {
+                        self.state.borrow_mut().has_more = page.has_more;
                     }
                 } else {
                     let base_seq = self.state.borrow().base_seq;
@@ -885,7 +886,16 @@ impl ClientSession {
                             .iter()
                             .map(SessionHistoryEntry::conversation_input)
                             .collect::<Vec<_>>();
+                        // The page becomes the new base only once the conversation registry
+                        // accepts it: a rejected event must leave the page retryable and the
+                        // assembler unfed, so both holders advance at the same commit point.
+                        if let Err(error) = self
+                            .conversation
+                            .borrow_mut()
+                            .prepend(&inputs, page.has_more)
                         {
+                            (self.options.report)(error.to_string());
+                        } else {
                             let mut state = self.state.borrow_mut();
                             let mut events = page
                                 .entries
@@ -903,13 +913,6 @@ impl ClientSession {
                             state.views = views;
                             state.base_seq = page.entries[0].event.seq;
                             state.has_more = page.has_more;
-                        }
-                        if let Err(error) = self
-                            .conversation
-                            .borrow_mut()
-                            .prepend(&inputs, page.has_more)
-                        {
-                            (self.options.report)(error.to_string());
                         }
                     } else {
                         (self.options.report)(format!(
