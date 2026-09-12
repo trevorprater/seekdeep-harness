@@ -123,7 +123,7 @@ fn extract_read_body(text: &str) -> Option<&str> {
 ]*</path>
 <type>file</type>
 <content>
-([sS]*)
+([\s\S]*)
 </content>$",
         )
         .expect("read body envelope regex is constant")
@@ -335,6 +335,16 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extracts_a_multiline_envelope_body() {
+        // The source matches the body with JavaScript's dotall idiom. A Rust
+        // class of [sS] accepts only the literal letters, so a real
+        // multi-line body has to round-trip here.
+        let envelope =
+            "<path>/f.txt</path>\n<type>file</type>\n<content>\n1\talpha\n2\tbeta\n</content>";
+        assert_eq!(extract_read_body(envelope), Some("1\talpha\n2\tbeta"));
+    }
 
     fn raw(file_path: &str, offset: Option<f64>, limit: Option<f64>) -> ReadArgsRaw {
         ReadArgsRaw {
