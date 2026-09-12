@@ -105,5 +105,6 @@
     "conclusion": "The trajectory Definitions cost about 1.4 s of a 4.5 s cold open, roughly 30 per cent, and contribute nothing to the Chat pane the user is looking at. The module profile shows the same shape as ui-conversation: per-event JSON scanning and UTF-16 conversion.",
     "why_the_obvious_fix_is_not_taken": "Registering those Definitions lazily on first Trajectory use would route through rebuild_registry, which re-folds the entire stored window with every Definition, so the first Trajectory open would pay the whole 3-4.5 s again. Capturing this saving needs an assembler capability that folds the stored window for one newly registered Definition, plus a background fold after the first paint. That is a product trade, not a localized fix: the Chat pane would appear about 1.4 s sooner, and the ledger would either fill in behind it or stall the first Trajectory open."
   },
-  "gates_note": "Every web gate this repository exposes has now been run against the current tree: 14 gates, all passing. No feature bug was found by exercising them."
+  "gates_note": "Every web gate this repository exposes has now been run against the current tree: 14 gates, all passing. No feature bug was found by exercising them.",
+  "idle_explained": "The 393 ms idle bucket in a cold open is predominantly the history round trip: the Host's response latency is 335 ms and the client cannot fold the window before the whole document arrives. The slice yields are not the cost, because the defer is a browser timer and 18 slices at 2,048 events cost about 4 ms each."
 }
