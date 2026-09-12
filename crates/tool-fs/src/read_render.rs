@@ -175,8 +175,21 @@ fn append_to_line_buffer(buffer: &mut String, segment: &str, cap: usize) {
     }
     buffer.push_str(segment);
     if buffer.len() > cap {
-        buffer.truncate(cap);
+        buffer.truncate(floor_char_boundary(buffer, cap));
     }
+}
+
+/// Largest byte offset at or below the cap that a UTF-8 boundary allows.
+///
+/// The source caps lines in UTF-16 code units and cannot split a character.
+/// Truncating a Rust String at a raw byte offset can, so the offset is
+/// walked back to the start of the straddling character.
+fn floor_char_boundary(value: &str, cap: usize) -> usize {
+    let mut boundary = cap.min(value.len());
+    while boundary > 0 && !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    boundary
 }
 
 /// Formats a read outcome as one OpenCode-style line-numbered text block body.
@@ -375,6 +388,25 @@ mod tests {
         let err = build_window(["one\n".to_owned()], &window(5, 10), "/f").expect_err("range");
         let fs = err.downcast::<FsError>().expect("FsError");
         assert_eq!(fs.code, FsErrorCode::FsNotFound);
+    }
+
+    #[test]
+    fn long_multibyte_lines_do_not_split_a_character() {
+        // The buffered line cap lands on a byte offset that can fall inside a
+        // multi-byte character; truncating there must not panic or split it.
+        let line = "\u{e9}".repeat(4000);
+        let result = build_window(
+            [format!("{line}\n")],
+            &ReadWindow {
+                offset: 1,
+                limit: 10,
+                max_line_length: 2000,
+                max_bytes: 50 * 1024,
+            },
+            "/f",
+        )
+        .expect("window");
+        assert!(result.lines[0].text.chars().all(|c| c == '\u{e9}'));
     }
 
     #[test]
