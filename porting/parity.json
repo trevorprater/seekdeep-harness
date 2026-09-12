@@ -23856,29 +23856,30 @@
         "mechanical rename port (dsh to seekdeep)"
       ]
     },
-    {
+        {
       "source": "README.md",
       "kind": "documentation",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "README.md"
       ],
       "evidence": [
-        "2026-09-10 documentation audit: the target omits the source Run and Run from source sections, leaving published guide links to #run and #run-from-source unresolved"
-      ],
-      "note": "Restore the source run, contribution, support, and license entry points with verified Rust build and launch instructions. The current port-introduction paragraph is not complete documentation parity."
+        "mechanical documentation rename port of the root README, restoring the source Developer preview, Run, Run from npm, Run from source, Community and support, Contributing, Development, and License sections for the Rust port",
+        "launch instructions are the shipping entry points: the installed @seekdeep-ai/seekdeep bin for npx, and pnpm install plus pnpm run build plus pnpm seekdeep web from a checkout",
+        "README.md#run and README.md#run-from-source resolve, restoring four published doc links in docs/user/develop/basic/index.md and publish.md in both languages"
+      ]
     },
-    {
+        {
       "source": "README.zh.md",
       "kind": "documentation",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "README.zh.md"
       ],
       "evidence": [
-        "2026-09-10 documentation audit: the root Chinese README omits the source run, contribution, support, and license sections"
-      ],
-      "note": "Restore the complete bilingual root README contract alongside the English Rust build and launch instructions."
+        "Chinese counterpart carries the same heading structure, code fences, and link targets as README.md and retains its English backlink",
+        "pnpm run verify-translation-pairing: 953 pair(s) checked across all in-scope documentation, all consistent"
+      ]
     },
     {
       "source": "THIRD_PARTY_NOTICES.md",

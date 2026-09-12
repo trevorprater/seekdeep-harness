@@ -409,3 +409,116 @@ fn turn_end_projects_only_error_reason_with_display_safe_message() {
     );
     assert_eq!(snapshot[1]["error"], "API key is invalid");
 }
+
+/// An event set that folds this Definition's runs when asked, counting the folds it served.
+struct FoldableEvents {
+    definitions: Vec<Rc<AssemblerNodeDefinition>>,
+    folds: bool,
+    folded: std::rc::Rc<std::cell::Cell<usize>>,
+}
+
+impl AssemblerEventDefinitions for FoldableEvents {
+    fn entries(&self) -> Vec<Rc<AssemblerNodeDefinition>> {
+        self.definitions.clone()
+    }
+
+    fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>> {
+        None
+    }
+
+    fn batches_updates(&self, definition: &Rc<AssemblerNodeDefinition>) -> bool {
+        self.folds && definition.kind == TRAJECTORY_ASSISTANT_KIND
+    }
+
+    fn update_many(
+        &self,
+        _definition: &Rc<AssemblerNodeDefinition>,
+        context: &seekdeep_client_runtime::ConversationNodeContext,
+        batch: &[Rc<ConversationMatch>],
+    ) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+        self.folded.set(self.folded.get() + 1);
+        seekdeep_client_ui_trajectory::update_assistant_batch(context, batch)
+    }
+}
+
+/// A streaming run: one step, many chunk Matches of every kind, then the final message.
+fn streaming_window() -> Vec<ConversationEventInput> {
+    let mut window = vec![at(1, "step/start", json!({"turn": 1, "step": 1}))];
+    let mut seq = 2;
+    for index in 0..6 {
+        for (chunk, text) in [
+            ("text-delta", format!("line {index}\n")),
+            (
+                "reasoning-delta",
+                format!("thinking about line {index} at some length\n"),
+            ),
+            ("tool-call-delta", format!("file{index}.rs")),
+        ] {
+            window.push(at(
+                seq,
+                "assistant/chunk",
+                json!({
+                    "turn": 1,
+                    "step": 1,
+                    "chunk": {
+                        "type": chunk,
+                        "index": 0,
+                        "id": "call",
+                        "name": "bash",
+                        "text": text,
+                        "argumentsDelta": text,
+                    },
+                }),
+            ));
+            seq += 1;
+        }
+    }
+    window.push(assistant_message(
+        seq,
+        "done",
+        &json!({"inputTokens": 3, "outputTokens": 4}),
+    ));
+    window
+}
+
+fn publish(window: &[ConversationEventInput], folds: bool) -> (String, usize) {
+    let folded = std::rc::Rc::new(std::cell::Cell::new(0));
+    let mut assembler = ConversationNodeAssembler::new(
+        Rc::new(FoldableEvents {
+            definitions: trajectory_assistant_definitions()
+                .into_iter()
+                .map(Rc::new)
+                .collect(),
+            folds,
+            folded: folded.clone(),
+        }),
+        Rc::new(Views),
+    );
+    assembler.replace_window(window, false).unwrap();
+    assembler.flush().unwrap();
+    let published = assembler
+        .snapshot("trajectory")
+        .expect("the trajectory view published a snapshot")
+        .as_raw()
+        .to_owned();
+    (published, folded.get())
+}
+
+#[test]
+fn a_folded_run_publishes_exactly_what_separate_chunk_updates_publish() {
+    let window = streaming_window();
+    let (sequential, single_folds) = publish(&window, false);
+    let (batched, batch_folds) = publish(&window, true);
+
+    assert_eq!(single_folds, 0, "an unbatched run never folds");
+    assert!(
+        batch_folds > 0 && batch_folds < window.len(),
+        "the run folded in {batch_folds} calls over {} events",
+        window.len()
+    );
+    assert_eq!(
+        batched, sequential,
+        "folding a chunk run must publish exactly what separate updates publish"
+    );
+    assert!(!batched.is_empty(), "the run published a node");
+}

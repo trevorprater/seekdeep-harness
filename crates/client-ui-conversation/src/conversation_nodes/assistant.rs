@@ -123,16 +123,13 @@ fn reset_for_retry(previous: &AssistantState) -> AssistantState {
     }
 }
 
-fn update_assistant(
-    context: &ConversationNodeContext,
+/// Applies one accepted Match to a decoded state, reporting whether it changed anything.
+fn apply_assistant(
+    state: &mut AssistantState,
     accepted: &Rc<ConversationMatch>,
-) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
-    let Some(previous) = context.state.as_deref() else {
-        return Ok(None);
-    };
-    let mut state = decode(previous)?;
+) -> Result<bool, ConversationAssemblerError> {
     match accepted.event.event_type.as_str() {
-        "assistant/chunk" => update_chunk(&mut state, accepted)?,
+        "assistant/chunk" => update_chunk(state, accepted)?,
         "assistant/message" => {
             state.blocks = message_blocks(&accepted.event.data)?
                 .into_iter()
@@ -142,8 +139,62 @@ fn update_assistant(
             state.final_event = Some(EventEvidence::from(accepted.as_ref()));
             state.usage = accepted.event.data.get_value("usage").cloned();
         }
-        "llm/retry" => state = reset_for_retry(&state),
-        _ => return Ok(context.state.clone()),
+        "llm/retry" => {
+            let retried = reset_for_retry(state);
+            *state = retried;
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn update_assistant(
+    context: &ConversationNodeContext,
+    accepted: &Rc<ConversationMatch>,
+) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+    let Some(previous) = context.state.as_deref() else {
+        return Ok(None);
+    };
+    let mut state = decode(previous)?;
+    if !apply_assistant(&mut state, accepted)? {
+        return Ok(context.state.clone());
+    }
+    encode(&state).map(Some)
+}
+
+/// The assistant Definition's batch fold, or `None` for every other kind.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn conversation_batch_update(
+    kind: &str,
+) -> Option<seekdeep_client_runtime::NativeBatchUpdateCallback> {
+    (kind == ASSISTANT_STEP_KIND).then(|| {
+        Rc::new(update_assistant_batch) as seekdeep_client_runtime::NativeBatchUpdateCallback
+    })
+}
+
+/// Folds a run of accepted Matches through one decode and one encode.
+///
+/// A message streams thousands of chunks, and folding the run keeps the accumulated state from
+/// being decoded and encoded once per chunk.
+///
+/// # Errors
+///
+/// Returns a state decode, chunk fold, or encode failure.
+pub fn update_assistant_batch(
+    context: &ConversationNodeContext,
+    batch: &[Rc<ConversationMatch>],
+) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+    let Some(previous) = context.state.as_deref() else {
+        return Ok(None);
+    };
+    let mut state = decode(previous)?;
+    let mut changed = false;
+    for accepted in batch {
+        changed |= apply_assistant(&mut state, accepted)?;
+    }
+    if !changed {
+        return Ok(context.state.clone());
     }
     encode(&state).map(Some)
 }

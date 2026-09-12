@@ -245,16 +245,13 @@ fn initial_state(
     }
 }
 
-fn update_assistant(
-    context: &ConversationNodeContext,
+/// Applies one accepted Match to a decoded state, reporting whether it changed anything.
+fn apply_assistant(
+    state: &mut AssistantState,
     accepted: &Rc<ConversationMatch>,
-) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
-    let Some(previous) = context.state.as_deref() else {
-        return Ok(None);
-    };
-    let mut state = decode(previous)?;
+) -> Result<bool, ConversationAssemblerError> {
     match accepted.event.event_type.as_str() {
-        "assistant/chunk" => update_chunk(&mut state, accepted)?,
+        "assistant/chunk" => update_chunk(state, accepted)?,
         "assistant/message" => {
             state.blocks = message_blocks(&accepted.event.data)?
                 .into_iter()
@@ -272,10 +269,64 @@ fn update_assistant(
             }
         }
         "step/end" => state.step_end = Some(EventState::from(accepted.event.as_ref())),
-        "llm/retry" => state = retry_state(&state, &accepted.event.data)?,
-        _ => return Ok(context.state.clone()),
+        "llm/retry" => {
+            let next = retry_state(state, &accepted.event.data)?;
+            *state = next;
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn update_assistant(
+    context: &ConversationNodeContext,
+    accepted: &Rc<ConversationMatch>,
+) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+    let Some(previous) = context.state.as_deref() else {
+        return Ok(None);
+    };
+    let mut state = decode(previous)?;
+    if !apply_assistant(&mut state, accepted)? {
+        return Ok(context.state.clone());
     }
     encode(&state).map(Some)
+}
+
+/// Folds a run of accepted Matches through one decode and one encode.
+///
+/// A run of chunks of one assistant message otherwise pays a full decode and encode of the
+/// accumulated state per chunk, which grows with the message.
+///
+/// # Errors
+///
+/// Returns a state decode, chunk fold, or encode failure.
+pub fn update_assistant_batch(
+    context: &ConversationNodeContext,
+    batch: &[Rc<ConversationMatch>],
+) -> Result<Option<Rc<Value>>, ConversationAssemblerError> {
+    let Some(previous) = context.state.as_deref() else {
+        return Ok(None);
+    };
+    let mut state = decode(previous)?;
+    let mut changed = false;
+    for accepted in batch {
+        changed |= apply_assistant(&mut state, accepted)?;
+    }
+    if !changed {
+        return Ok(context.state.clone());
+    }
+    encode(&state).map(Some)
+}
+
+/// The assistant Definition's batch fold, or `None` for every other kind.
+#[cfg(target_arch = "wasm32")]
+#[must_use]
+pub fn trajectory_batch_update(
+    kind: &str,
+) -> Option<seekdeep_client_runtime::NativeBatchUpdateCallback> {
+    (kind == TRAJECTORY_ASSISTANT_KIND).then(|| {
+        Rc::new(update_assistant_batch) as seekdeep_client_runtime::NativeBatchUpdateCallback
+    })
 }
 
 #[allow(clippy::too_many_lines)] // Exhaustive source chunk state machine stays centralized.

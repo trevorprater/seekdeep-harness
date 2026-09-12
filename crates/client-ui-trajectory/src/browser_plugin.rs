@@ -6,8 +6,8 @@ use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use crate::{
     DURATION_PERSISTENCE_KEY, INJECT, LOCALE_NAMESPACE, TRAJECTORY_EN, TRAJECTORY_ZH,
-    trajectory_event_definitions, trajectory_runtime_module, trajectory_view_component,
-    trajectory_view_definition,
+    trajectory_batch_update, trajectory_event_definitions, trajectory_runtime_module,
+    trajectory_view_component, trajectory_view_definition,
 };
 
 /// Applies the browser trajectory plugin to a caller-bound Client Context.
@@ -31,10 +31,17 @@ pub fn apply_client_ui_trajectory(ctx: JsValue) -> Result<(), JsValue> {
     let duration = create_duration_store(&runtime)?;
 
     for definition in trajectory_event_definitions() {
+        // The assistant Definition folds a run of chunk Matches in one call, so a message with
+        // thousands of chunks decodes and encodes its state once instead of per chunk.
+        let batch = trajectory_batch_update(&definition.kind);
         call_method(
             &events,
             "register",
-            &[seekdeep_client_runtime::native_conversation_node_definition_to_js(definition)?],
+            &[
+                seekdeep_client_runtime::native_conversation_node_definition_to_js_with_batch(
+                    definition, batch,
+                )?,
+            ],
         )?;
     }
     call_method(

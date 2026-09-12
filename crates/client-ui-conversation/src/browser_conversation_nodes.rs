@@ -4,7 +4,7 @@ use js_sys::{Array, Function, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue};
 
 use crate::{
-    conversation_chat_view_definition, conversation_event_definitions,
+    conversation_batch_update, conversation_chat_view_definition, conversation_event_definitions,
     conversation_unknown_fallback_definition,
 };
 
@@ -18,10 +18,17 @@ pub fn register_conversation_nodes_browser(context: JsValue) -> Result<(), JsVal
     let events = required(&context, "conversationEvents", "ui-conversation context")?;
     let views = required(&context, "conversationViews", "ui-conversation context")?;
     for definition in conversation_event_definitions() {
+        // A streamed message folds its run of chunk Matches in one call, so the accumulated
+        // state decodes and encodes once per run instead of once per chunk.
+        let batch = conversation_batch_update(&definition.kind);
         call_method(
             &events,
             "register",
-            &[seekdeep_client_runtime::native_conversation_node_definition_to_js(definition)?],
+            &[
+                seekdeep_client_runtime::native_conversation_node_definition_to_js_with_batch(
+                    definition, batch,
+                )?,
+            ],
         )?;
     }
     call_method(

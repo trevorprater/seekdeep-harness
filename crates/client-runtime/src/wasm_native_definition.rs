@@ -214,6 +214,33 @@ pub(crate) const VIEW_SNAPSHOT_CODEC: &str =
 pub fn native_conversation_node_definition_to_js(
     definition: AssemblerNodeDefinition,
 ) -> Result<JsValue, JsValue> {
+    native_conversation_node_definition_to_js_with_batch(definition, None)
+}
+
+/// Folds a run of update Matches of one Context in one call, without a boundary crossing per
+/// Match.
+///
+/// A Definition that supplies one folds the whole run itself: it decodes its state once, applies
+/// every Match against the state the previous one left, and encodes once. Such a Definition must
+/// not read the Context's Match collection past the run's start, because the caller trims the
+/// collection to that prefix before the call; Definitions without one keep the per-Match
+/// crossing.
+pub type NativeBatchUpdateCallback = Rc<
+    dyn Fn(
+        &ConversationNodeContext,
+        &[Rc<ConversationMatch>],
+    ) -> Result<Option<Rc<crate::ConversationValue>>, ConversationAssemblerError>,
+>;
+
+/// Wraps a native Definition whose run of update Matches may fold in one call.
+///
+/// # Errors
+///
+/// Returns a Definition face construction failure.
+pub fn native_conversation_node_definition_to_js_with_batch(
+    definition: AssemblerNodeDefinition,
+    batch_update: Option<NativeBatchUpdateCallback>,
+) -> Result<JsValue, JsValue> {
     let definition = Rc::new(definition);
     let value = Object::new();
     set(&value, "kind", &JsValue::from_str(&definition.kind))?;
@@ -337,6 +364,24 @@ pub fn native_conversation_node_definition_to_js(
                 .into());
             }
             let tail = mirror.borrow_mut().split_off(prefix);
+            // A Definition that folds the run itself answers once for the whole batch, so the
+            // state never crosses per Match; the collection it sees is the run's prefix.
+            if let Some(batch_update) = &batch_update {
+                let prefix_context = ConversationNodeContext {
+                    key: context.key.clone(),
+                    kind: context.kind.clone(),
+                    id: context.id.clone(),
+                    matches: mirror.clone(),
+                    start: context.start.clone(),
+                    state: context.state.clone(),
+                    current: context.current.clone(),
+                };
+                let folded = batch_update(&prefix_context, &tail).map_err(assembler_error)?;
+                for accepted in tail {
+                    mirror.borrow_mut().push(accepted);
+                }
+                return state_handle_to_js(&context.key, folded);
+            }
             let mut state = context.state.clone();
             let mut outcome = Ok(());
             for accepted in tail {
