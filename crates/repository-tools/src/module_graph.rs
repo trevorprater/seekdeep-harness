@@ -112,7 +112,7 @@ pub fn render_module_graph(packages: &[PackageGraphNode]) -> String {
         String::new(),
         "# Module dependency graph".to_owned(),
         String::new(),
-        "Inter-package dependencies among the `@seekdeep-ai/seekdeep-*` harness packages, derived from each package's `peerDependencies` (the canonical runtime-dependency signal) and grouped by the `packages/<group>/<pkg>` hierarchy. An edge `a --> b` means package `a` depends on package `b`. Names have the `@seekdeep-ai/seekdeep-` prefix stripped.".to_owned(),
+        "Inter-package dependencies among the `@seekdeep-ai/seekdeep-*` harness packages that still carry a compatibility manifest, derived from each package's `peerDependencies` (the canonical runtime-dependency signal) and grouped by the `packages/<group>/<pkg>` hierarchy. An edge `a --> b` means package `a` depends on package `b`; a peer whose manifest the crate migration replaced contributes no node or edge. Names have the `@seekdeep-ai/seekdeep-` prefix stripped.".to_owned(),
         String::new(),
         "```mermaid".to_owned(),
         "flowchart TD".to_owned(),

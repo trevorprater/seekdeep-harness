@@ -107,6 +107,36 @@ fn missing_or_cyclic_dependencies_fail_with_remaining_key_order() {
 }
 
 #[test]
+fn a_peer_whose_manifest_the_crate_migration_removed_does_not_block_layers() {
+    let root = tempfile::tempdir().unwrap();
+    package(
+        &root,
+        "core",
+        "consumer",
+        "@seekdeep-ai/seekdeep-consumer",
+        &["@seekdeep-ai/seekdeep-migrated"],
+    );
+    package(
+        &root,
+        "core",
+        "leaf",
+        "@seekdeep-ai/seekdeep-leaf",
+        &[
+            "@seekdeep-ai/seekdeep-consumer",
+            "@seekdeep-ai/seekdeep-migrated",
+        ],
+    );
+    let graph = collect_package_graph(root.path(), &[], "probe").unwrap();
+    assert_eq!(
+        graph
+            .iter()
+            .map(|node| node.short.as_str())
+            .collect::<Vec<_>>(),
+        ["consumer", "leaf"]
+    );
+}
+
+#[test]
 fn mermaid_helpers_match_javascript_utf16_and_quote_rules() {
     assert_eq!(graph_node_id("pkg", "a-b/c.d"), "pkg_a_b_c_d");
     assert_eq!(graph_node_id("pkg", "fish😀"), "pkg_fish__");

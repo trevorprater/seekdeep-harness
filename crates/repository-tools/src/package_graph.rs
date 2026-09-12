@@ -1,6 +1,6 @@
 //! Dependency-safe workspace package graph discovery and Mermaid helpers.
 
-use std::{collections::HashSet, path::Path};
+use std::path::Path;
 
 use indexmap::IndexMap;
 use serde_json::Value;
@@ -105,6 +105,13 @@ pub fn escape_mermaid_label(value: &str) -> String {
     value.replace('"', "\\\"")
 }
 
+/// Orders every package after the in-repository dependencies it still has.
+///
+/// A node is ready once none of its dependencies is still unplaced, so a dependency that is
+/// not a node at all counts as satisfied. The crate migration replaces a package's
+/// compatibility manifest with its crate manifest, which removes the node while leaving
+/// peers that name it, and every such peer would otherwise wait forever on a package that
+/// can never be placed and be reported as a cycle.
 fn topological_sort(
     packages: Vec<PackageGraphNode>,
     group_order: &[String],
@@ -114,7 +121,6 @@ fn topological_sort(
         .into_iter()
         .map(|package| (package.short.clone(), package))
         .collect::<IndexMap<_, _>>();
-    let mut placed = HashSet::new();
     let mut output = Vec::new();
     while !remaining.is_empty() {
         let mut ready = remaining
@@ -123,7 +129,7 @@ fn topological_sort(
                 package
                     .dependencies
                     .iter()
-                    .all(|dependency| placed.contains(dependency))
+                    .all(|dependency| !remaining.contains_key(dependency))
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -135,7 +141,6 @@ fn topological_sort(
             );
         }
         for package in ready {
-            placed.insert(package.short.clone());
             remaining.shift_remove(&package.short);
             output.push(package);
         }
