@@ -37407,13 +37407,8 @@
     {
       "source": "knip.json",
       "kind": "configuration",
-      "status": "verified",
-      "targets": [
-        "knip.json"
-      ],
-      "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+      "status": "withdrawn",
+      "note": "knip derives unused files, exports, and dependencies from TypeScript import sites. This port carries its behavior in Rust crates, so the tool reports the workspace dependency declarations, whose consumers are Rust, as unused (212) and cannot resolve the package-entry or source-root imports. verify-runtime-closure, verify-package-invariants, verify-package-paths, verify-vendored-links, and check-workspace-constraints gate the dependency graph instead."
     },
     {
       "source": "lefthook.yml",

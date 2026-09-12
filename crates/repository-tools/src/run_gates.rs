@@ -348,7 +348,7 @@ pub fn gates_for_mode(mode: GateMode, environment: &GateEnvironment) -> anyhow::
         GateMode::CiWindowsBlocking => Ok(ci_windows_blocking_gates(environment)),
         GateMode::CiWindowsComplete => ci_windows_complete_gates(environment),
         GateMode::CiWindowsObservational => Ok(ci_windows_observational_gates(environment)),
-        GateMode::NodeCompat => node_compat_gates(environment),
+        GateMode::NodeCompat => Ok(node_compat_gates(environment)),
         GateMode::CheckAll => Ok(check_all_gates(environment)),
         GateMode::DocSync => Ok(doc_sync_leaf_gates(environment, DocSyncOptions::default())),
     }
@@ -473,7 +473,6 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
         "verify-module-graph",
         "module graph",
     ));
-    gates.push(pnpm_script(environment, "knip", "knip"));
     gates.push(script_with(
         environment,
         "build",
@@ -505,16 +504,14 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
 
 /// Gates that exercise the port on a specific Node release.
 ///
-/// The source's Node-compatibility suites were TypeScript specs that booted the
-/// JavaScript harness; the port's behavior lives in the Rust crates, so the mode checks
-/// the aggregate typecheck, which is the JavaScript that remains, and adds the builds on
-/// the primary Node release. Skipping the typecheck is no longer an option: it compiled
-/// every TypeScript aggregate when that cost minutes, and now it resolves two empty
-/// solutions in under a second.
-fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
+/// The source's Node-compatibility suites were TypeScript specs that booted the JavaScript
+/// harness; the port's behavior lives in the Rust crates, so the mode checks the aggregate
+/// typecheck, which resolves the two empty solutions, and adds the builds on the primary Node
+/// release.
+fn node_compat_gates(environment: &GateEnvironment) -> Vec<Gate> {
     let mut gates = vec![pnpm_script(environment, "typecheck", "typecheck")];
     if environment.node_major != 22 {
-        return Ok(gates);
+        return gates;
     }
     gates.push(script_with(
         environment,
@@ -532,7 +529,7 @@ fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>>
         &["build"],
         IndexMap::new(),
     ));
-    Ok(gates)
+    gates
 }
 
 fn ci_static_gates(environment: &GateEnvironment, owns_build: bool) -> Vec<Gate> {
@@ -568,7 +565,6 @@ fn ci_static_gates(environment: &GateEnvironment, owns_build: bool) -> Vec<Gate>
         "verify-module-graph",
         "module graph",
     ));
-    gates.push(pnpm_script(environment, "knip", "knip"));
     gates
 }
 
@@ -826,7 +822,6 @@ fn hygiene_leaf_gates(environment: &GateEnvironment, artifact_needs: &[&str]) ->
             "rescope-vendor:check",
             "vendor rescope",
         ),
-        pnpm_script(environment, "knip", "knip"),
         script_with(
             environment,
             "publint",

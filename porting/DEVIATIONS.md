@@ -45,3 +45,11 @@ These port at full parity; they are listed so removal never creeps beyond DEV-00
 3. **String ban.** `deepseeksvc` must not appear in this repository outside this file. Candidate `cargo xtask` check once the in-flight xtask work settles.
 
 Invariant: a default-configuration `seekdeep` process opens no non-loopback network connection except to explicitly configured provider endpoints.
+
+## Withdrawn tooling surfaces
+
+A source surface whose entire behavior is a JavaScript tool configuration has no counterpart once the port carries that behavior in Rust. `porting/parity.json` records those surfaces as `withdrawn`. The parity gate accepts the status only with a non-empty `note`, only when the surface names no targets or evidence, and it reports the count separately from the verified total, so work that exists cannot be filed as withdrawn.
+
+| Surface | Why the port carries no counterpart | Replacement gates |
+|---------|-------------------------------------|-------------------|
+| `knip.json` | knip derives unused files, exports, and dependencies from TypeScript import sites. The port's consumers are Rust crates, so knip reports the workspace dependency declarations as unused (212 of them) and resolves neither the package-entry nor the source-root imports. | `verify-runtime-closure`, `verify-package-invariants`, `verify-package-paths`, `verify-vendored-links`, `check-workspace-constraints` |
