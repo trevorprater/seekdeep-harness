@@ -51,14 +51,14 @@ fn round_trips_arbitrary_session_ids_and_replaces_mentions() {
     assert_eq!(punctuation.references.len(), 2);
 
     assert_eq!(
-        parse_session_reference_text("what is a dsh-session: URI?").unwrap(),
+        parse_session_reference_text("what is a seekdeep-session: URI?").unwrap(),
         ParsedSessionReferenceText {
-            text: "what is a dsh-session: URI?".to_owned(),
+            text: "what is a seekdeep-session: URI?".to_owned(),
             references: vec![],
         }
     );
     assert_eq!(
-        parse_session_reference_text("see dsh-session:%%%")
+        parse_session_reference_text("see seekdeep-session:%%%")
             .unwrap()
             .references,
         vec![] as Vec<SessionReferenceInput>
@@ -72,15 +72,15 @@ fn rejects_malformed_explicit_references_and_bare_candidates() {
         SessionReferenceErrorCode::SessionReferenceInvalidReference
     );
     assert_eq!(
-        code_of(&parse_session_reference_text("see dsh-session:IiJ").unwrap_err()),
+        code_of(&parse_session_reference_text("see seekdeep-session:IiJ").unwrap_err()),
         SessionReferenceErrorCode::SessionReferenceInvalidReference
     );
     assert_eq!(
-        code_of(&parse_session_reference_text("@[bad](dsh-session:%%%)").unwrap_err()),
+        code_of(&parse_session_reference_text("@[bad](seekdeep-session:%%%)").unwrap_err()),
         SessionReferenceErrorCode::SessionReferenceInvalidReference
     );
     assert_eq!(
-        code_of(&decode_session_reference_uri("dsh-session:IiJ").unwrap_err()),
+        code_of(&decode_session_reference_uri("seekdeep-session:IiJ").unwrap_err()),
         SessionReferenceErrorCode::SessionReferenceInvalidReference
     );
 }

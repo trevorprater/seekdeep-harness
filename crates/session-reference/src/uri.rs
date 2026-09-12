@@ -10,7 +10,7 @@ use crate::config::{SessionReferenceError, SessionReferenceErrorCode};
 use crate::types::SessionReferenceInput;
 
 /// URI scheme reserved for `SeekDeep` Harness session snapshots.
-pub const SESSION_REFERENCE_SCHEME: &str = "dsh-session:";
+pub const SESSION_REFERENCE_SCHEME: &str = "seekdeep-session:";
 
 /// Encodes any session-id string as a canonical lossless URI.
 ///
@@ -118,7 +118,7 @@ pub fn parse_session_reference_text(
 
 fn mention_regex() -> &'static Regex {
     static REGEX: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"@\[((?:\\.|[^\\\]])*)\]\((dsh-session:[^\s)]*)\)|(dsh-session:[A-Za-z0-9_-]+)")
+        Regex::new(r"@\[((?:\\.|[^\\\]])*)\]\((seekdeep-session:[^\s)]*)\)|(seekdeep-session:[A-Za-z0-9_-]+)")
             .expect("session-reference mention regex")
     });
     &REGEX
