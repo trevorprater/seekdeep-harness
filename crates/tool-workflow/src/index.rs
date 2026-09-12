@@ -374,12 +374,16 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                     }
                     let bridge_run = Arc::clone(&run);
                     let signal = exec.signal();
-                    tokio::spawn(async move {
+                    let bridge = tokio::spawn(async move {
                         signal.cancelled().await;
                         bridge_run.cancel(Some("parent step aborted"));
                     });
 
                     let result = run.result().await;
+                    // The bridge holds a run handle; leaving it waiting for a signal that a
+                    // settled run never sends keeps the task and its run state alive for the
+                    // process, one per call. `tool-ralph` retires its equivalent the same way.
+                    bridge.abort();
                     let error = stop_reason_error(&result);
                     if let Some(error) = error {
                         run.dispose().await;
