@@ -593,7 +593,7 @@ pub fn target_identity(text: &str) -> String {
     text.replace("DeepSeek Harness", "SeekDeep Harness")
         .replace("@deepseek-ai/", "@seekdeep-ai/")
         .replace("dsh-", "seekdeep-")
-        .replace("dsh_base", "seekdeep_base")
+        .replace("dsh_", "seekdeep_")
         .replace("dsh shared", "seekdeep shared")
         .replace("DSH Base", "SeekDeep Base")
         .replace("DSH_*", "SEEKDEEP_*")
