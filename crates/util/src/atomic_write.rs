@@ -226,11 +226,45 @@ where
         delay = delay.saturating_mul(2).min(maximum_delay);
     }
 
+    let mut guard = LockFileGuard::new(lock_path.clone());
     let result = operation().await.map_err(FileLockError::Operation);
-    match tokio::fs::remove_file(&lock_path).await {
+    let released = tokio::fs::remove_file(&lock_path).await;
+    guard.disarm();
+    match released {
         Ok(()) => result,
         Err(error) if error.kind() == io::ErrorKind::NotFound => result,
         Err(error) => Err(FileLockError::Release(error)),
+    }
+}
+
+/// Removes the acquired lock file when the cycle ends, including when its future is dropped.
+///
+/// The source's `finally` runs before its promise settles, but a dropped Rust future runs no
+/// further code, so a cancelled settings, credentials, or Codex-auth write would leave
+/// `<filename>.lock` behind. Contenders never remove or steal an existing lock, so every later
+/// write to that document would then time out until someone deleted the file by hand.
+struct LockFileGuard {
+    path: PathBuf,
+    armed: bool,
+}
+
+impl LockFileGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path, armed: true }
+    }
+
+    /// Stops cleanup once the lock is released, so a contender that acquires the name next keeps
+    /// its own lock file.
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for LockFileGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = std::fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -463,5 +497,36 @@ mod tests {
         .await;
         assert!(matches!(result, Err(FileLockError::Acquire(_))));
         assert!(!called.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_cycle_releases_the_lock_for_the_next_writer() {
+        let temporary = tempdir().unwrap();
+        let target = temporary.path().join("settings.yaml");
+        let lock = temporary.path().join("settings.yaml.lock");
+        let entered = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&entered);
+        let write = with_file_lock(&target, move || {
+            let flag = Arc::clone(&flag);
+            async move {
+                flag.store(true, Ordering::SeqCst);
+                std::future::pending::<()>().await;
+                Ok::<(), std::io::Error>(())
+            }
+        });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), write)
+                .await
+                .is_err(),
+            "the abandoned write must not settle"
+        );
+        assert!(
+            entered.load(Ordering::SeqCst),
+            "the cycle acquired the lock"
+        );
+        assert!(!lock.exists(), "a cancelled cycle must not strand its lock");
+        with_file_lock(&target, || async { Ok::<(), std::io::Error>(()) })
+            .await
+            .unwrap();
     }
 }

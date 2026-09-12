@@ -658,9 +658,7 @@ impl PreparedTimer for TokioPreparedTimer {
 
     fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
-        if !self.firing.load(Ordering::Acquire)
-            && let Some(task) = self.task.lock().take()
-        {
+        if let Some(task) = self.task.lock().take() {
             task.abort();
         }
     }

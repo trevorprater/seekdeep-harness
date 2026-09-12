@@ -100,16 +100,35 @@ fn stop_reason_error(result: &WorkflowResult) -> Option<String> {
     }
 }
 
+/// The source's `rendered.slice(0, maxChars)` and truncation notice, or the value unchanged.
+///
+/// The source compares and slices JavaScript string units, so a byte count clips value text the
+/// source keeps whole and misreports the remainder. A cap landing inside a surrogate pair keeps
+/// the pair intact, because a lone surrogate has no representation here.
+fn clip_utf16(rendered: &str, max_chars: usize) -> String {
+    let units = rendered.encode_utf16().count();
+    if units <= max_chars {
+        return rendered.to_owned();
+    }
+    let mut head = String::new();
+    let mut taken = 0usize;
+    for character in rendered.chars() {
+        taken += character.len_utf16();
+        if taken > max_chars {
+            break;
+        }
+        head.push(character);
+    }
+    format!(
+        "{head}\n… [truncated: {} more characters]",
+        units - max_chars
+    )
+}
+
 /// Renders the run's outcome text: meta name, agent count, and capped JSON value.
 fn render_result(name: &str, agents_started: u64, value: &Value, max_chars: usize) -> String {
     let rendered = serde_json::to_string_pretty(value).unwrap_or_else(|_| "null".to_owned());
-    let clipped = if rendered.chars().count() > max_chars {
-        let head: String = rendered.chars().take(max_chars).collect();
-        let remainder = rendered.chars().count() - max_chars;
-        format!("{head}… [truncated: {remainder} more characters]")
-    } else {
-        rendered
-    };
+    let clipped = clip_utf16(&rendered, max_chars);
     let agent_word = if agents_started == 1 {
         "agent"
     } else {
@@ -408,4 +427,37 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     )?;
     tools.register(context, definition)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::render_result;
+
+    #[test]
+    fn an_oversized_value_keeps_the_source_notice_and_remainder() {
+        let value = json!({ "blob": "x".repeat(500) });
+        let rendered_json = serde_json::to_string_pretty(&value).unwrap();
+        let remainder = rendered_json.encode_utf16().count() - 40;
+        let rendered = render_result("probe", 1, &value, 40);
+        assert!(
+            rendered.starts_with("workflow \"probe\" completed (1 agent).\nReturn value:\n"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains(&format!("\n… [truncated: {remainder} more characters]")),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn a_value_within_the_cap_renders_whole_with_plural_agents() {
+        let rendered = render_result("probe", 2, &json!({ "ok": true }), 50_000);
+        assert!(
+            rendered.ends_with("completed (2 agents).\nReturn value:\n{\n  \"ok\": true\n}"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("truncated"), "{rendered}");
+    }
 }

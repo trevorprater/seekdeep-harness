@@ -53,8 +53,14 @@ impl std::fmt::Debug for RetryInternals {
     }
 }
 
-impl Default for RetryInternals {
-    fn default() -> Self {
+impl RetryInternals {
+    /// The process boundary's entropy: fresh jitter and a fresh retry id per call.
+    ///
+    /// The retry policy sits inside the determinism perimeter, so it draws no entropy of its own.
+    /// A seeded scheduler injects [`RetryInternals::new`], and only the plugin the process boots
+    /// takes this seam, which keeps a run driven by injected seams reproducible.
+    #[must_use]
+    pub fn ambient() -> Self {
         Self {
             random: Arc::new(|| {
                 let bytes = uuid::Uuid::new_v4().into_bytes();
@@ -64,9 +70,7 @@ impl Default for RetryInternals {
             random_retry_id: Arc::new(|| RetryId::new(uuid::Uuid::new_v4().to_string())),
         }
     }
-}
 
-impl RetryInternals {
     /// Creates deterministic timing and identity seams for tests or embedding.
     #[must_use]
     pub fn new(
@@ -155,10 +159,10 @@ fn retry_policy_key(policy: &ResolvedRetryPolicy) -> RetryPolicyKey {
     RetryPolicyKey::new(raw)
 }
 
-/// Builds the default runtime plugin.
+/// Builds the runtime plugin over the process boundary's entropy.
 #[must_use]
 pub fn plugin() -> Plugin {
-    plugin_with_internals(RetryInternals::default())
+    plugin_with_internals(RetryInternals::ambient())
 }
 
 /// Builds a runtime plugin over deterministic process-local seams.
@@ -438,6 +442,19 @@ mod tests {
     use seekdeep_llm::resolve_retry_policy;
 
     use super::*;
+
+    #[test]
+    fn the_boundary_seam_supplies_fresh_entropy_per_draw() {
+        let first = RetryInternals::ambient();
+        let second = RetryInternals::ambient();
+        assert_ne!((first.random_retry_id)(), (second.random_retry_id)());
+        assert_ne!((first.random_retry_id)(), (first.random_retry_id)());
+        let jitter = (first.random)();
+        assert!(
+            (0.0..=1.0).contains(&jitter),
+            "jitter out of range: {jitter}"
+        );
+    }
 
     #[test]
     fn policy_key_matches_javascript_json_stringification() {
