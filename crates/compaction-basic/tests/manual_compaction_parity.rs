@@ -117,6 +117,15 @@ impl Harness {
     }
 
     fn with_internals(append: Option<CompactionAppend>, manual_flush: Option<ManualFlush>) -> Self {
+        Self::with_compaction_id(append, manual_flush, None)
+    }
+
+    /// Builds a harness whose compactions draw their identity from the seam.
+    fn with_compaction_id(
+        append: Option<CompactionAppend>,
+        manual_flush: Option<ManualFlush>,
+        compaction_id: Option<seekdeep_compaction_basic::region::CompactionIdSource>,
+    ) -> Self {
         let context = Context::new();
         let store = SessionStore::install(&context).unwrap();
         let meter = seekdeep_token_meter::install(&context, TokenMeterConfig::default()).unwrap();
@@ -146,7 +155,7 @@ impl Harness {
                 append,
                 manual_flush,
                 measure: None,
-                compaction_id: None,
+                compaction_id,
             },
         )
         .unwrap();
@@ -340,6 +349,41 @@ async fn uncompactable_history_returns_none_without_a_bracket() {
     assert!(harness.state.calls.lock().is_empty());
     assert!(compact_events(&session).is_empty());
     harness.dispose().await;
+}
+
+#[tokio::test]
+async fn an_injected_compaction_id_reaches_the_durable_start_event() {
+    let harness = Harness::with_compaction_id(
+        None,
+        None,
+        Some(Arc::new(|| {
+            seekdeep_compaction::CompactionId::new("seeded-compaction".to_owned())
+        })),
+    );
+    let session = harness.closed("seeded-identity", 2, 7);
+    let result = harness
+        .engine
+        .compact_now(
+            &manual_context(
+                session.clone(),
+                true,
+                AbortSignal::default(),
+                Arc::new(AtomicUsize::new(0)),
+            ),
+            &AbortSignal::default(),
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.compaction_id.as_str(), "seeded-compaction");
+    let events = session.events();
+    let start = events
+        .iter()
+        .rev()
+        .find(|event| event.event_type == "compaction/start")
+        .unwrap();
+    assert_eq!(start.data["compactionId"], "seeded-compaction");
 }
 
 #[tokio::test]
