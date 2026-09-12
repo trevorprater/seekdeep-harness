@@ -39,13 +39,19 @@
     "Shipped WebAssembly carries no DWARF: the 46 browser artifacts fall from 419 MiB to 69.7 MiB, and the largest artifact (5.7 MiB) is below the browser's 8 MiB synchronous compile limit. The Chromium fixture that maps a real wasm panic frame to Rust source through client_bg.wasm.map still passes.",
     "Cold page load 20.9 MB and reload 1.2 MB; Host CPU per page load 2.06 s cold, then 0.15 s once the encoded body is replayed for a revision-addressed target.",
     "Lossless JSON string conversion decodes and encodes runs instead of characters: to_utf16 1,925 ms to 46 ms and encode_utf16 below the sampling threshold on one cold session open.",
-    "A Definition's run of update Matches folds in one call: one decode, every Match applied against the state the previous one left, one encode. Measured per plugin module over one cold open of the same session, ui-conversation 1,545 ms to 1,380 ms, ui-trajectory 1,244 ms to 1,074 ms, client total 4,970 ms to 4,630 ms and the open 4,856 ms to 4,528 ms, two runs per side holding to about 0.2%. Verified afterwards by the same keyless run and navigation gate listed above."
+    "A Definition's run of update Matches folds in one call: one decode, every Match applied against the state the previous one left, one encode. Measured per plugin module over one cold open of the same session, ui-conversation 1,545 ms to 1,380 ms, ui-trajectory 1,244 ms to 1,074 ms, client total 4,970 ms to 4,630 ms and the open 4,856 ms to 4,528 ms, two runs per side holding to about 0.2%. Verified afterwards by the same keyless run and navigation gate listed above.",
+    "A literal ASCII run decodes to UTF-16 one unit per byte instead of dispatching on each character's encoded width. `extend_desugared` under `JsonRef::to_utf16` falls from 266 ms to 62-76 ms per cold open, ui-conversation from 1,380 ms to 1,354 ms and ui-trajectory from 1,073 ms to 1,049 ms."
   ],
   "remaining": [
-    "A cold session open of an 8 MB history is 4.53 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so the cost is the client: 36,196 assistant/chunk events are each marshalled through JSON text into WASM and back. Per module over one open: ui-conversation 1,380 ms, ui-trajectory 1,074 ms, client-runtime 610 ms, and about 950 ms of idle or program time.",
+    "A cold session open of an 8 MB history is 4.59 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so the cost is the client: 36,196 assistant/chunk events are each marshalled through JSON text into WASM and back. Per module over one open: ui-conversation 1,339 ms, ui-trajectory 1,049 ms, client-runtime 635 ms, frames carrying no script URL 465 ms, idle 393 ms, program 171 ms. Every remaining item measured is 1-2% of the open, so the gap is not reachable by further localized work.",
     "Routing container values to the browser's own JSON parser instead of materializing a serde tree first was implemented and measured at no change in open time, then reverted.",
     "The 33 source goldens this suite does not produce belong to scenarios driven by other xtask gates (web-assembled, web-workspaces, web-settings, web-models-settings, web-plugin-settings, web-onboarding, web-assembled-snapshots), which were not run here.",
     "Full workspace Clippy, full workspace tests and cargo xtask parity were not run in this checkpoint; no repository-wide parity claim is made."
   ],
-  "measurement_note": "Wall clock at the 5-10% level is not measurable on this machine while another session compiles: the same committed source measured 4.29-4.62 s and later 4.63-5.04 s. Changes of this size are resolved by per-plugin-module profile self-time instead, where two runs of the same build hold to about 0.2%."
+  "measurement_note": "Wall clock at the 5-10% level is not measurable on this machine while another session compiles: the same committed source measured 4.29-4.62 s and later 4.63-5.04 s. Changes of this size are resolved by per-plugin-module profile self-time instead, where two runs of the same build hold to about 0.2%.",
+  "feature_probe": {
+    "commands_palette": "The Commands button and a leading slash in the composer both open the command listbox (compact, export, feedback, record); zero page errors",
+    "theme": "Selecting Dark in Settings flips data-ds-dark-theme from false to true",
+    "session_open": "9,598 characters of conversation render from a cold 8 MB history with no console error"
+  }
 }
