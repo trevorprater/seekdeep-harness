@@ -21,6 +21,7 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
+use indexmap::IndexMap;
 use parking_lot::{Mutex, RwLock};
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
@@ -250,6 +251,7 @@ pub struct WebServer {
     shutdown: AbortSignal,
     accept_task: Mutex<Option<JoinHandle<()>>>,
     connections: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    encoded: Mutex<EncodedBodies>,
 }
 
 impl std::fmt::Debug for WebServer {
@@ -280,6 +282,7 @@ impl WebServer {
             shutdown: AbortSignal::default(),
             accept_task: Mutex::new(None),
             connections: Arc::new(Mutex::new(Vec::new())),
+            encoded: Mutex::new(EncodedBodies::default()),
         });
         let run_server = server.clone();
         *server.accept_task.lock() = Some(tokio::spawn(async move {
@@ -507,6 +510,7 @@ impl WebServer {
 
     async fn dispatch(&self, request: WebRequest) -> WebResponse {
         let path = request.uri().path().to_owned();
+        let target = request.uri().to_string();
         let gzip = accepts_encoding(
             request
                 .headers()
@@ -545,7 +549,10 @@ impl WebServer {
             return response(StatusCode::NOT_FOUND, Bytes::new());
         };
         match handler(request).await {
-            Ok(response) if gzip => compress(response).await,
+            Ok(response) if gzip => {
+                let key = replay_key(&target, &response);
+                compress(&self.encoded, key, response).await
+            }
             Ok(response) => response,
             Err(error) => {
                 tracing::warn!(%error, "webserver: request handler failed");
@@ -707,12 +714,74 @@ fn gzip(bytes: &[u8]) -> std::io::Result<Vec<u8>> {
     encoder.finish()
 }
 
+/// Total encoded bytes one server replays before evicting the least recently used entry.
+///
+/// A revision-addressed target always carries the same bytes, so encoding it again on the next
+/// load spends CPU to reproduce a result the server already has.
+const ENCODED_BYTES_BUDGET: usize = 48 * 1024 * 1024;
+
+/// Bounded, least-recently-used store of already-encoded response bodies.
+#[derive(Default)]
+struct EncodedBodies {
+    entries: Mutex<IndexMap<String, Bytes>>,
+    bytes: usize,
+}
+
+impl EncodedBodies {
+    fn get(&mut self, key: &str) -> Option<Bytes> {
+        let entries = self.entries.get_mut();
+        let index = entries.get_index_of(key)?;
+        entries.move_index(index, entries.len().saturating_sub(1));
+        entries.get(key).cloned()
+    }
+
+    fn insert(&mut self, key: String, body: Bytes) {
+        if body.len() > ENCODED_BYTES_BUDGET {
+            return;
+        }
+        let entries: &mut IndexMap<String, Bytes> = self.entries.get_mut();
+        if let Some(previous) = entries.shift_remove(&key) {
+            self.bytes = self.bytes.saturating_sub(previous.len());
+        }
+        self.bytes += body.len();
+        entries.insert(key, body);
+        while self.bytes > ENCODED_BYTES_BUDGET {
+            let Some((_, evicted)) = entries.shift_remove_index(0) else {
+                self.bytes = 0;
+                break;
+            };
+            self.bytes = self.bytes.saturating_sub(evicted.len());
+        }
+    }
+}
+
+/// The replay key for one response, present only when its bytes can never change.
+///
+/// Only a content-addressed target may be replayed: the key carries the request target and the
+/// body length, and an immutable `cache-control` is the promise that both identify the bytes.
+fn replay_key(target: &str, response: &WebResponse) -> Option<String> {
+    let immutable = response
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.contains("immutable"));
+    if !immutable {
+        return None;
+    }
+    let size = response.body().size_hint().exact()?;
+    Some(format!("{target}|{size}"))
+}
+
 /// Compresses a complete response body when the peer accepts gzip and every byte is already in
 /// hand.
 ///
 /// Streamed bodies (a `StreamBody` reports no exact length) and media types that do not benefit
 /// pass through untouched, so event streams keep flowing frame by frame.
-async fn compress(response: WebResponse) -> WebResponse {
+async fn compress(
+    encoded: &Mutex<EncodedBodies>,
+    key: Option<String>,
+    response: WebResponse,
+) -> WebResponse {
     if response.headers().contains_key(header::CONTENT_ENCODING) {
         return response;
     }
@@ -732,7 +801,13 @@ async fn compress(response: WebResponse) -> WebResponse {
     {
         return response;
     }
-    let (mut parts, body) = response.into_parts();
+    if let Some(key) = &key
+        && let Some(cached) = encoded.lock().get(key)
+    {
+        let (parts, _) = response.into_parts();
+        return encoded_response(parts, cached);
+    }
+    let (parts, body) = response.into_parts();
     let Ok(collected) = body.collect().await else {
         tracing::warn!("webserver: response body failed to buffer for compression");
         return Response::from_parts(
@@ -746,19 +821,11 @@ async fn compress(response: WebResponse) -> WebResponse {
     let source = original.clone();
     match tokio::task::spawn_blocking(move || gzip(&source)).await {
         Ok(Ok(compressed)) => {
-            parts
-                .headers
-                .insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-            parts
-                .headers
-                .append(header::VARY, HeaderValue::from_static("accept-encoding"));
-            parts.headers.remove(header::CONTENT_LENGTH);
-            Response::from_parts(
-                parts,
-                Full::new(Bytes::from(compressed))
-                    .map_err(|never| match never {})
-                    .boxed_unsync(),
-            )
+            let compressed = Bytes::from(compressed);
+            if let Some(key) = key {
+                encoded.lock().insert(key, compressed.clone());
+            }
+            encoded_response(parts, compressed)
         }
         Ok(Err(error)) => {
             tracing::warn!(%error, "webserver: response compression failed");
@@ -779,6 +846,24 @@ async fn compress(response: WebResponse) -> WebResponse {
             )
         }
     }
+}
+
+/// Rebuilds a response around one encoded body, keeping its status and other headers.
+fn encoded_response(parts: hyper::http::response::Parts, compressed: Bytes) -> WebResponse {
+    let mut response = Response::from_parts(
+        parts,
+        Full::new(compressed)
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+    response
+        .headers_mut()
+        .append(header::VARY, HeaderValue::from_static("accept-encoding"));
+    response.headers_mut().remove(header::CONTENT_LENGTH);
+    response
 }
 
 /// Creates an empty successful upgrade negotiation response.

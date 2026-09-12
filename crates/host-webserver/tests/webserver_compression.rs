@@ -1,7 +1,13 @@
 //! Response compression: which complete bodies the Host webserver encodes, and which it leaves
 //! alone.
 
-use std::{io::Read as _, sync::Arc};
+use std::{
+    io::Read as _,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use bytes::Bytes;
 use flate2::read::GzDecoder;
@@ -16,6 +22,29 @@ use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt as _},
     net::TcpStream,
 };
+
+/// Serves one body on the first request and a same-length different body afterwards, so a
+/// replayed response is distinguishable from a re-encoded one.
+fn switching(cache_control: &'static str, first: char, next: char) -> WebHandler {
+    let calls = Arc::new(AtomicUsize::new(0));
+    Arc::new(move |_request| {
+        let calls = calls.clone();
+        Box::pin(async move {
+            let nth = calls.fetch_add(1, Ordering::SeqCst);
+            let body = if nth == 0 { first } else { next }.to_string().repeat(2048);
+            let mut response = response(StatusCode::OK, Bytes::from(body.into_bytes()));
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static("text/javascript; charset=utf-8"),
+            );
+            response.headers_mut().insert(
+                header::CACHE_CONTROL,
+                header::HeaderValue::from_static(cache_control),
+            );
+            Ok(response) as anyhow::Result<WebResponse>
+        }) as WebHandlerFuture
+    })
+}
 
 fn typed(content_type: &'static str, body: String) -> WebHandler {
     let body = Arc::new(body);
@@ -186,4 +215,38 @@ async fn an_event_stream_still_flows_frame_by_frame() {
     let body = String::from_utf8_lossy(body);
     assert!(body.contains("data: first\n\n"), "{body:?}");
     assert!(body.contains("data: second\n\n"), "{body:?}");
+}
+
+#[tokio::test]
+async fn only_an_immutable_target_replays_its_encoded_body() {
+    let server = install(vec![
+        (
+            "/immutable.js",
+            switching("public, max-age=31536000, immutable", 'a', 'b'),
+        ),
+        ("/mutable.js", switching("no-cache", 'a', 'b')),
+    ])
+    .await
+    .unwrap();
+
+    // A content-addressed target encodes once and replays, so the same bytes come back even
+    // after the route would answer differently.
+    for expected in ["a".repeat(2048), "a".repeat(2048)] {
+        let response = request(server.port(), "/immutable.js", Some("gzip"))
+            .await
+            .unwrap();
+        let (headers, body) = split(&response);
+        assert!(headers.contains("content-encoding: gzip"), "{headers}");
+        assert_eq!(gunzip(body), expected);
+    }
+
+    // A target that is allowed to change is never replayed.
+    for expected in ["a".repeat(2048), "b".repeat(2048)] {
+        let response = request(server.port(), "/mutable.js", Some("gzip"))
+            .await
+            .unwrap();
+        let (headers, body) = split(&response);
+        assert!(headers.contains("content-encoding: gzip"), "{headers}");
+        assert_eq!(gunzip(body), expected);
+    }
 }

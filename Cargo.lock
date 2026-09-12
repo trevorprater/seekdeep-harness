@@ -7549,6 +7549,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.11.0",
  "hyper-util",
+ "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-cordis",
  "seekdeep-invariants",
