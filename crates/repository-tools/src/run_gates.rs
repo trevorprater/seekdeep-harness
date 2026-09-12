@@ -506,15 +506,13 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
 /// Gates that exercise the port on a specific Node release.
 ///
 /// The source's Node-compatibility suites were TypeScript specs that booted the
-/// JavaScript harness; the port's behavior lives in the Rust crates, so the mode keeps
-/// the aggregate typecheck and the web build, which are the JavaScript that remains.
+/// JavaScript harness; the port's behavior lives in the Rust crates, so the mode checks
+/// the aggregate typecheck, which is the JavaScript that remains, and adds the builds on
+/// the primary Node release. Skipping the typecheck is no longer an option: it compiled
+/// every TypeScript aggregate when that cost minutes, and now it resolves two empty
+/// solutions in under a second.
 fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
-    let include_typecheck = !flag_enabled(environment, "SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK")?;
-    let mut gates = if include_typecheck {
-        vec![pnpm_script(environment, "typecheck", "typecheck")]
-    } else {
-        Vec::new()
-    };
+    let mut gates = vec![pnpm_script(environment, "typecheck", "typecheck")];
     if environment.node_major != 22 {
         return Ok(gates);
     }
@@ -523,11 +521,7 @@ fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>>
         "build",
         "build",
         None,
-        if include_typecheck {
-            &["typecheck"]
-        } else {
-            &[]
-        },
+        &["typecheck"],
         IndexMap::new(),
     ));
     gates.push(script_with(
@@ -822,19 +816,6 @@ fn positive_int_arg(
         );
     }
     Ok(Some(format!("{flag}={raw}")))
-}
-
-fn flag_enabled(environment: &GateEnvironment, name: &str) -> anyhow::Result<bool> {
-    let Some(raw) = environment.variable(name).filter(|raw| !raw.is_empty()) else {
-        return Ok(false);
-    };
-    if raw != "1" {
-        anyhow::bail!(
-            "run-gates: {name} must be 1 when set, got {}.",
-            serde_json::to_string(raw)?
-        );
-    }
-    Ok(true)
 }
 
 fn hygiene_leaf_gates(environment: &GateEnvironment, artifact_needs: &[&str]) -> Vec<Gate> {
