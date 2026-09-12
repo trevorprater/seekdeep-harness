@@ -35,14 +35,12 @@
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

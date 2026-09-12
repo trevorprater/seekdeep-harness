@@ -58,7 +58,6 @@
     "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
@@ -71,7 +70,6 @@
     "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
     "@types/react": "~18.3.1",
     "@seekdeep-ai/cordis": "workspace:^"
   },

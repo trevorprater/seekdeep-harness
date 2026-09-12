@@ -36,7 +36,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -49,7 +48,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

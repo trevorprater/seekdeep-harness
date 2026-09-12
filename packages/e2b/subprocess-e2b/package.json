@@ -34,8 +34,6 @@
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-e2b": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -44,8 +42,6 @@
   "devDependencies": {
     "@seekdeep-ai/seekdeep-e2b": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

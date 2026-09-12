@@ -42,7 +42,6 @@
   "devDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-loader-smoke": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

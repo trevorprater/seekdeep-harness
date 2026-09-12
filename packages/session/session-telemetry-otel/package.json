@@ -41,22 +41,18 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-command-feedback": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-telemetry": "workspace:^",
-    "@seekdeep-ai/seekdeep-anonymous-user-id": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-command-feedback": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-telemetry": "workspace:^",
-    "@seekdeep-ai/seekdeep-anonymous-user-id": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

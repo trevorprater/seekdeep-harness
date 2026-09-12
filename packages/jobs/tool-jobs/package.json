@@ -35,22 +35,16 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-output-retention": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-output-retention": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs-local": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",

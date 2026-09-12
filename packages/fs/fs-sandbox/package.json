@@ -35,16 +35,12 @@
     "@seekdeep-ai/seekdeep-fs": "workspace:^",
     "@seekdeep-ai/seekdeep-fs-local": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/seekdeep-fs": "workspace:^",
     "@seekdeep-ai/seekdeep-fs-local": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

@@ -34,7 +34,6 @@
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-session-query": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
@@ -50,8 +49,6 @@
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence-sqlite": "workspace:^",
     "@seekdeep-ai/seekdeep-session-query": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }

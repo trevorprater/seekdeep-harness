@@ -47,14 +47,12 @@
   "peerDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
     "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
-    "@seekdeep-ai/seekdeep-host-webserver": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
     "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
-    "@seekdeep-ai/seekdeep-host-webserver": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },

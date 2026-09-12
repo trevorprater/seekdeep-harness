@@ -32,7 +32,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@seekdeep-ai/seekdeep-host-directory-picker": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {

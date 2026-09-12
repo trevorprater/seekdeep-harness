@@ -37,7 +37,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@seekdeep-ai/seekdeep-host-directory-picker": "workspace:^",
     "@seekdeep-ai/seekdeep-native-command": "workspace:^",
     "koffi": "^3.1.0"
   },

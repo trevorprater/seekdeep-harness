@@ -32,11 +32,9 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
@@ -46,8 +44,6 @@
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
     "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
@@ -55,7 +51,6 @@
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent-in-process-driver": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent-spawn-in-process": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow-worker-thread": "workspace:^",

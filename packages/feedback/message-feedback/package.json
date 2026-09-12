@@ -53,8 +53,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
@@ -69,11 +67,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-json": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }

@@ -32,27 +32,20 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
     "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }

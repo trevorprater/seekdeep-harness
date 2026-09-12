@@ -32,10 +32,7 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-shell": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^"
   },
@@ -43,11 +40,7 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-shell": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^"
   }

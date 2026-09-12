@@ -42,14 +42,12 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-attachment": "workspace:^",
     "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
     "@seekdeep-ai/seekdeep-host-apiproxy": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
     "@seekdeep-ai/seekdeep-session-title": "workspace:^",
@@ -69,7 +67,6 @@
     "@seekdeep-ai/cordis": "workspace:^",
     "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-registry": "workspace:^",
     "@types/react": "~18.3.1"

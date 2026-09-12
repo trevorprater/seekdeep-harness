@@ -34,7 +34,6 @@
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-web": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
@@ -45,14 +44,10 @@
     "turndown": "^7.2.4"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@types/turndown": "^5.0.6",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-spill-local": "workspace:^",
-    "@seekdeep-ai/seekdeep-spill-policy": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tool-call-timeout-policy": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-web": "workspace:^",

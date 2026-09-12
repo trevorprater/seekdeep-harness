@@ -37,8 +37,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-lsp": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -51,9 +49,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-lsp": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",
     "typescript": "^6.0.3",
     "typescript-language-server": "^5.0.0"

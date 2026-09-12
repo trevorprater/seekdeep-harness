@@ -36,8 +36,6 @@
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -46,15 +44,11 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-loader-smoke": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
-    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

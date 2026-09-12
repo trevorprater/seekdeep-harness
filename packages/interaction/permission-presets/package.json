@@ -41,11 +41,8 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-shell": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^",
@@ -57,11 +54,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-shell": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^",

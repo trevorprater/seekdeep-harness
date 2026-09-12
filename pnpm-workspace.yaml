@@ -72,5 +72,8 @@ minimumReleaseAgeExclude:
   - node-addon-require-builtin-win32-x64-msvc@0.1.4
   - node-addon-require-builtin@0.1.4
 
-patchedDependencies:
-  node-pty@1.1.0: patches/node-pty@1.1.0.patch
+# No workspace package consumes node-pty any more: the Rust subprocess and terminal
+# crates own the PTY path and ship their own spawn helper, so the source's patched
+# node-pty has no dependency to apply to, and pnpm rejects an unused patch. The patch
+# file stays as the behavioral reference the Rust helper is verified against.
+patchedDependencies: {}

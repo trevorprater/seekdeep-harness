@@ -41,13 +41,11 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-user-questions": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
@@ -61,15 +59,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
-    "@seekdeep-ai/seekdeep-code-runtime": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-user-questions": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"

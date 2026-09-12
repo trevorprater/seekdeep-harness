@@ -32,7 +32,6 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-launch-environment": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-web": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
@@ -41,7 +40,6 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-launch-environment": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-web": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"

@@ -42,7 +42,6 @@
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm-deepseek": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-title": "workspace:^",
     "@seekdeep-ai/seekdeep-session-title-llm": "workspace:^",

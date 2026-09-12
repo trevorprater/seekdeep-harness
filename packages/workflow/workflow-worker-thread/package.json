@@ -37,7 +37,6 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
@@ -51,8 +50,6 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
     "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
@@ -60,7 +57,6 @@
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent": "workspace:^",
     "@seekdeep-ai/seekdeep-subagent-spawn-in-process": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",

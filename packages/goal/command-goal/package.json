@@ -39,7 +39,6 @@
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-goal": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",

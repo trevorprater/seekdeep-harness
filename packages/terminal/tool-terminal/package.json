@@ -35,12 +35,8 @@
     "@seekdeep-ai/schemastery": "workspace:^"
   },
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-terminal": "workspace:^",
-    "@seekdeep-ai/seekdeep-output-retention": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
@@ -48,17 +44,9 @@
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-include": "workspace:^",
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-terminal": "workspace:^",
-    "@seekdeep-ai/seekdeep-terminal-bash": "workspace:^",
-    "@seekdeep-ai/seekdeep-output-retention": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
-    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs": "workspace:^",
     "@seekdeep-ai/seekdeep-jobs-local": "workspace:^",
     "@seekdeep-ai/seekdeep-tool-jobs": "workspace:^",

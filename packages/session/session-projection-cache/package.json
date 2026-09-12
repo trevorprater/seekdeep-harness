@@ -38,18 +38,13 @@
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

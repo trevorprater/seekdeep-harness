@@ -37,7 +37,6 @@
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-title": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -51,7 +50,6 @@
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-session-title": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

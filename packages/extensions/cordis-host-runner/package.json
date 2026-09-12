@@ -54,11 +54,9 @@
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-scope": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^"
@@ -66,11 +64,9 @@
   "devDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
     "@seekdeep-ai/cordis-plugin-timer": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-scope": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^"

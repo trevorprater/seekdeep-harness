@@ -45,14 +45,11 @@
   },
   "dependencies": {
     "@seekdeep-ai/seekdeep-cmdline": "workspace:^",
-    "@seekdeep-ai/seekdeep-code-runtime-worker-thread": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^",
     "commander": "^15.0.0"
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-default-model": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
@@ -60,8 +57,6 @@
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent-default-model": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",

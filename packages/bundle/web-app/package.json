@@ -82,40 +82,28 @@
     "@seekdeep-ai/seekdeep-client-ui-trajectory": "workspace:^",
     "@seekdeep-ai/seekdeep-client-ui-workspace": "workspace:^",
     "@seekdeep-ai/seekdeep-cmdline": "workspace:^",
-    "@seekdeep-ai/seekdeep-code-runtime-worker-thread": "workspace:^",
     "@seekdeep-ai/seekdeep-cordis-client-runner": "workspace:^",
     "@seekdeep-ai/seekdeep-cordis-host-runner": "workspace:^",
     "@seekdeep-ai/seekdeep-web-frontend": "workspace:^",
-    "@seekdeep-ai/seekdeep-host-frontend-static": "workspace:^",
     "@seekdeep-ai/seekdeep-host-apiproxy": "workspace:^",
     "@seekdeep-ai/seekdeep-host-directory-picker-auto": "workspace:^",
     "@seekdeep-ai/seekdeep-host-directory-picker-browse": "workspace:^",
     "@seekdeep-ai/seekdeep-host-directory-picker-native": "workspace:^",
     "@seekdeep-ai/seekdeep-host-plugin-inventory": "workspace:^",
-    "@seekdeep-ai/seekdeep-host-webserver": "workspace:^",
     "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection-cache": "workspace:^",
     "@seekdeep-ai/seekdeep-session-log-export": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
-    "@seekdeep-ai/seekdeep-storage-json": "workspace:^",
-    "@seekdeep-ai/seekdeep-workspace": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^",
     "commander": "^15.0.0"
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-shell-env": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-shell-env": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

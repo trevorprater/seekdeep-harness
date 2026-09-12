@@ -85912,18 +85912,20 @@
         "mechanical rename port (dsh to seekdeep)"
       ]
     },
-    {
+        {
       "source": "pnpm-lock.yaml",
       "kind": "configuration",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "pnpm-lock.yaml"
       ],
       "evidence": [
-        "2026-09-10 frozen-install audit: corrected the node-pty patch hash to the existing SEEKDEEP_NODE_PTY_SPAWN_HELPER patch bytes; the root install still rejects stale Client connection dependency specifiers",
+        "pnpm install --frozen-lockfile exits 0 against the retained workspace, which is the installation step every CI job runs first",
+        "pnpm install --lockfile-only regenerated the importers from the retained manifests: 177 importers from 235, and 134 registry entries left the closure with the manifests that declared them while no retained entry changed version",
+        "the manifests dropped 863 workspace specifiers that named packages the crate migration replaced, so the workspace resolves without a member that no compatibility manifest provides",
+        "pnpm-workspace.yaml no longer configures the node-pty patch: the Rust subprocess and terminal crates own the PTY path, and pnpm rejects a patch no dependency applies",
         "The website importer supports an isolated frozen installation of its pinned third-party dependencies"
-      ],
-      "note": "Reconcile the root workspace lockfile with the active Rust compatibility package manifests before claiming the source installation command works."
+      ]
     },
     {
       "source": "pnpm-workspace.yaml",

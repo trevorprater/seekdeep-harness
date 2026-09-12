@@ -39,10 +39,8 @@
     "@seekdeep-ai/cordis-plugin-hmr": "workspace:^",
     "@seekdeep-ai/cordis-plugin-include": "workspace:^",
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
-    "@seekdeep-ai/seekdeep-launch-environment": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-home-paths": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -56,10 +54,8 @@
     "@seekdeep-ai/cordis-plugin-include": "workspace:^",
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
     "@seekdeep-ai/cordis-plugin-timer": "workspace:^",
-    "@seekdeep-ai/seekdeep-launch-environment": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-home-paths": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@types/js-yaml": "^4.0.9",
     "@seekdeep-ai/cordis": "workspace:^"
   }

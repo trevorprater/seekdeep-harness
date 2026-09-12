@@ -51,11 +51,9 @@
   },
   "devDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
     "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-user-questions": "workspace:^",
     "@types/react": "~18.3.1"

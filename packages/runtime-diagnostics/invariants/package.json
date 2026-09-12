@@ -1,6 +1,6 @@
 {
-  "name": "@seekdeep-ai/seekdeep-goal-round-driver",
-  "description": "Race-fenced same-session goal-round driver",
+  "name": "@seekdeep-ai/seekdeep-invariants",
+  "description": "Registry service for package-owned SeekDeep Harness runtime invariants",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
-    "directory": "packages/goal/goal-round-driver"
+    "directory": "packages/runtime-diagnostics/invariants"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -32,19 +32,12 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-goal": "workspace:^",
-    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
-    "@seekdeep-ai/seekdeep-goal": "workspace:^",
-    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm": "workspace:^",
-    "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }
 }

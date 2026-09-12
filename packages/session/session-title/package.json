@@ -57,8 +57,6 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence-sqlite": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   }

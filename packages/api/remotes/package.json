@@ -59,7 +59,6 @@
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-api-gateway": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-credentials": "workspace:^",
@@ -71,12 +70,10 @@
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-registry": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-api-gateway": "workspace:^",
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-credentials": "workspace:^",
@@ -88,7 +85,6 @@
     "@seekdeep-ai/seekdeep-llm": "workspace:^",
     "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
     "@seekdeep-ai/seekdeep-session": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
     "@seekdeep-ai/seekdeep-settings": "workspace:^",
     "@seekdeep-ai/seekdeep-typert-registry": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"

@@ -54,7 +54,6 @@
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
     "@seekdeep-ai/seekdeep-attachment": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
@@ -69,15 +68,11 @@
     "@seekdeep-ai/seekdeep-commands": "workspace:^",
     "@seekdeep-ai/seekdeep-compaction": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "react": "^18.2.0"
   },
   "devDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",
-    "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
     "@seekdeep-ai/seekdeep-attachment": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^",
@@ -95,13 +90,9 @@
     "@seekdeep-ai/seekdeep-compaction": "workspace:^",
     "@seekdeep-ai/seekdeep-goal": "workspace:^",
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
-    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
     "@seekdeep-ai/seekdeep-permission-presets": "workspace:^",
     "@seekdeep-ai/seekdeep-plan-mode": "workspace:^",
     "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
-    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
-    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
-    "@seekdeep-ai/seekdeep-tool-todo": "workspace:^",
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@types/react": "~18.3.1",
     "react": "^18.2.0"
