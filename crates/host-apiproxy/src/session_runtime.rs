@@ -868,10 +868,11 @@ impl SessionApiProxyRuntime {
         );
         let entries = events
             .iter()
+            .copied()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
                     event: crate::api::sessions::SessionEvent::from_durable(event)?,
-                    view: self.history_view(event, &events, scope),
+                    view: self.history_view(event, events.iter().copied(), scope),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -1078,10 +1079,11 @@ impl SessionApiProxyRuntime {
         );
         let entries = events
             .iter()
+            .copied()
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
                     event: crate::api::sessions::SessionEvent::from_durable(event)?,
-                    view: self.history_view(event, &events, scope),
+                    view: self.history_view(event, events.iter().copied(), scope),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -1126,10 +1128,10 @@ impl SessionApiProxyRuntime {
         })
     }
 
-    fn history_view(
+    fn history_view<'a>(
         &self,
         event: &SessionEvent,
-        page: &[SessionEvent],
+        page: impl DoubleEndedIterator<Item = &'a SessionEvent>,
         scope: Option<seekdeep_scope::ScopeKey>,
     ) -> Option<ToolEventView> {
         let tools = self.tools.as_ref()?;
@@ -1210,7 +1212,7 @@ impl SessionApiProxyRuntime {
                         .agents
                         .get(session.id())
                         .map(|agent| agent.scope_key());
-                    let view = runtime.history_view(&event, &session.events_shared(), scope);
+                    let view = runtime.history_view(&event, session.events_shared().iter(), scope);
                     let Ok(wire_event) = JsonValue::from_serialize(&*event)?.deserialize()
                     else {
                         tracing::warn!(session = %session.id(), "API Proxy could not encode a committed Session event");
@@ -2122,11 +2124,12 @@ fn paginate_history(
     events: &[SessionEvent],
     before_seq: Option<u64>,
     max_messages: u64,
-) -> (Vec<SessionEvent>, bool) {
+) -> (Vec<&SessionEvent>, bool) {
+    // The page borrows the loaded window: copying it here would deep-copy every event of a
+    // whole session, and a page only ever selects a suffix of it.
     let window = events
         .iter()
         .filter(|event| before_seq.is_none_or(|before| event.seq < before))
-        .cloned()
         .collect::<Vec<_>>();
     let maximum = usize::try_from(max_messages).unwrap_or(usize::MAX);
     let mut count = 0;
@@ -2159,8 +2162,11 @@ fn paginate_history(
     )
 }
 
-fn backscan_call(page: &[SessionEvent], call_id: &JsonString) -> Option<(String, JsonValue)> {
-    page.iter().rev().find_map(|event| {
+fn backscan_call<'a>(
+    page: impl DoubleEndedIterator<Item = &'a SessionEvent>,
+    call_id: &JsonString,
+) -> Option<(String, JsonValue)> {
+    page.rev().find_map(|event| {
         if event.event_type != "tool/call"
             || event
                 .data
