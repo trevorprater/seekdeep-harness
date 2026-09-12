@@ -25,7 +25,7 @@ process.stdout.write(JSON.stringify(projectCordisCatalog(process.cwd(), CORDIS_C
     );
     let model: CordisCatalogModel = serde_json::from_slice(&output.stdout).unwrap();
     run_with_stack(move || {
-        let docs = render_source_doc_graphs(source, &model).unwrap();
+        let docs = render_source_doc_graphs(source, source, &model).unwrap();
         assert_eq!(docs.len(), 8);
         for doc in docs {
             assert_eq!(

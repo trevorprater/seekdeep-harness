@@ -107,6 +107,60 @@ pub struct GraphCommandReport {
     pub stale: Vec<String>,
 }
 
+/// Repository-relative documentation directory for every package in a graph.
+///
+/// A graph's input is the pinned source's package list, so each node's own `relative`
+/// path names a directory in that checkout. A ported package keeps its README either in
+/// the retained `packages/<group>/<package>` directory or in the `crates/<package>`
+/// crate that replaces it, so every link resolves against the repository the document is
+/// written to rather than the checkout the graph was read from. Linking to the directory
+/// that owns the README keeps one documented page per package, matching how the
+/// repository's authored documentation links packages; a package with no README anywhere
+/// stays a plain name instead of a dead link.
+#[derive(Clone, Debug, Default)]
+pub struct PackageLinks(IndexMap<String, String>);
+
+impl PackageLinks {
+    /// Resolves each package's documentation directory inside `repo_root`.
+    #[must_use]
+    pub fn resolve(repo_root: &Path, packages: &[PackageGraphNode]) -> Self {
+        let directories = packages
+            .iter()
+            .filter_map(|package| {
+                let directory = readme_directory(repo_root, &package.relative).or_else(|| {
+                    readme_directory(repo_root, &format!("crates/{}", package.short))
+                })?;
+                Some((package.short.clone(), directory))
+            })
+            .collect();
+        Self(directories)
+    }
+
+    fn get(&self, short: &str) -> Option<&str> {
+        self.0.get(short).map(String::as_str)
+    }
+}
+
+/// Returns `directory` or its target-identity rewrite, whichever owns a README.
+///
+/// The pinned source keeps its own identity in directory names, and the port renames them,
+/// so a path can differ between the checkout the graph was read from and the repository the
+/// document is written to. The written document renders the rewritten identity either way.
+fn readme_directory(repo_root: &Path, directory: &str) -> Option<String> {
+    let rewritten = target_identity(directory);
+    if has_readme(repo_root, directory) {
+        Some(directory.to_owned())
+    } else if rewritten != directory && has_readme(repo_root, &rewritten) {
+        Some(rewritten)
+    } else {
+        None
+    }
+}
+
+fn has_readme(repo_root: &Path, directory: &str) -> bool {
+    repo_root.join(directory).join("README.md").is_file()
+}
+
 /// Renders graphs from current manifests/configs and a semantic source program.
 ///
 /// # Errors
@@ -123,9 +177,14 @@ pub fn render_doc_graphs(
 
 /// Renders the pinned source's complete graph inputs with target product identities.
 ///
+/// `repo_root` is the repository the documents are written to, which owns the package
+/// documentation directories every link resolves against; `source_root` is the pinned
+/// checkout the graph inputs are read from.
+///
 /// # Errors
 /// Returns manifest, configuration, compiler, or completeness failures.
 pub fn render_source_doc_graphs(
+    repo_root: &Path,
     source_root: &Path,
     model: &CordisCatalogModel,
 ) -> anyhow::Result<Vec<GraphDoc>> {
@@ -136,7 +195,7 @@ pub fn render_source_doc_graphs(
         "gen-doc-graphs",
         "@deepseek-ai/dsh-",
     )?;
-    render_graph_set(source_root, source_root, model, &packages, policy)
+    render_graph_set(repo_root, source_root, model, &packages, policy)
 }
 
 fn render_graph_set(
@@ -146,14 +205,20 @@ fn render_graph_set(
     packages: &[PackageGraphNode],
     policy: DocGraphPolicy,
 ) -> anyhow::Result<Vec<GraphDoc>> {
+    let directories = PackageLinks::resolve(repo_root, packages);
     let mut docs = vec![GraphDoc {
         rel: "docs/capability-seams.md".to_owned(),
-        content: render_capability_seams(packages, &model.services, &policy.service_roles)?,
+        content: render_capability_seams(
+            packages,
+            &directories,
+            &model.services,
+            &policy.service_roles,
+        )?,
     }];
     for example in &policy.app_examples {
         docs.push(GraphDoc {
             rel: example.rel.clone(),
-            content: render_app_composition(repo_root, example)?,
+            content: render_app_composition(source_root, example)?,
         });
     }
     let mut project = TypeScriptProject::new(source_root)?;
@@ -161,7 +226,7 @@ fn render_graph_set(
     let relations = collect_event_relations(&mut project, &sources)?;
     docs.push(GraphDoc {
         rel: "docs/event-producer-consumer.md".to_owned(),
-        content: render_event_relations(packages, &model.events, &relations)?,
+        content: render_event_relations(packages, &directories, &model.events, &relations)?,
     });
     docs.push(GraphDoc {
         rel: "docs/agent-lifecycle.md".to_owned(),
@@ -288,6 +353,7 @@ pub fn assert_service_roles_complete(
 /// Returns missing or stale service-role classifications.
 pub fn render_capability_seams(
     packages: &[PackageGraphNode],
+    directories: &PackageLinks,
     services: &[ServiceEntry],
     roles: &[ServiceRole],
 ) -> anyhow::Result<String> {
@@ -344,10 +410,10 @@ pub fn render_capability_seams(
             "| `ctx.{}` | `{}` | {} | {} | {} | {} | {} |",
             role.key,
             role.mode,
-            package_link(&by_short, &role.pkg),
-            package_list(&role.implementations, &by_short),
-            package_list(&role.consumers, &by_short),
-            package_list(&role.companions, &by_short),
+            package_link(&by_short, directories, &role.pkg),
+            package_list(&role.implementations, &by_short, directories),
+            package_list(&role.consumers, &by_short, directories),
+            package_list(&role.companions, &by_short, directories),
             role.note.replace('|', "\\|").replace('\n', "<br>")
         ));
     }
@@ -466,6 +532,7 @@ pub fn render_app_composition(root: &Path, example: &AppExample) -> anyhow::Resu
 /// Returns all declared Host events that lack a resolved dispatcher.
 pub fn render_event_relations(
     packages: &[PackageGraphNode],
+    directories: &PackageLinks,
     events: &[EventEntry],
     relations: &EventRelations,
 ) -> anyhow::Result<String> {
@@ -486,8 +553,8 @@ pub fn render_event_relations(
             event.mode.as_str(),
             event.source,
             event.source.split(':').next().unwrap_or(&event.source),
-            relation_packages(&relation.dispatchers, &by_short),
-            listener_packages(&relation.listeners, &by_short)
+            relation_packages(&relation.dispatchers, &by_short, directories),
+            listener_packages(&relation.listeners, &by_short, directories)
         ));
     }
     let mut undispatched = events
@@ -536,8 +603,8 @@ pub fn render_event_relations(
             let relation = &relations[event];
             lines.push(format!(
                 "| `{event}` | {} | {} |",
-                relation_packages(&relation.dispatchers, &by_short),
-                listener_packages(&relation.listeners, &by_short)
+                relation_packages(&relation.dispatchers, &by_short, directories),
+                listener_packages(&relation.listeners, &by_short, directories)
             ));
         }
     }
@@ -616,22 +683,33 @@ fn generated_header(title: &str) -> Vec<String> {
 fn footer(lines: &mut Vec<String>, mode: &str) {
     lines.extend([format!("Maintenance mode: {mode}."), String::new()]);
 }
-fn package_link(packages: &IndexMap<&str, &PackageGraphNode>, name: &str) -> String {
+fn package_link(
+    packages: &IndexMap<&str, &PackageGraphNode>,
+    directories: &PackageLinks,
+    name: &str,
+) -> String {
     packages
         .get(name)
         .or_else(|| packages.get(target_identity(name).as_str()))
         .map_or_else(
             || format!("`{name}`"),
-            |package| format!("[`{}`](../{})", package.short, package.relative),
+            |package| match directories.get(&package.short) {
+                Some(directory) => format!("[`{}`](../{directory})", package.short),
+                None => format!("`{}`", package.short),
+            },
         )
 }
-fn package_list(names: &[String], packages: &IndexMap<&str, &PackageGraphNode>) -> String {
+fn package_list(
+    names: &[String],
+    packages: &IndexMap<&str, &PackageGraphNode>,
+    directories: &PackageLinks,
+) -> String {
     if names.is_empty() {
         "-".to_owned()
     } else {
         names
             .iter()
-            .map(|name| package_link(packages, name))
+            .map(|name| package_link(packages, directories, name))
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -639,6 +717,7 @@ fn package_list(names: &[String], packages: &IndexMap<&str, &PackageGraphNode>) 
 fn relation_packages(
     map: &IndexMap<String, IndexSet<String>>,
     packages: &IndexMap<&str, &PackageGraphNode>,
+    directories: &PackageLinks,
 ) -> String {
     let mut ordered = map.iter().collect::<Vec<_>>();
     ordered.sort_by(|(left, _), (right, _)| locale_compare(left, right));
@@ -649,7 +728,7 @@ fn relation_packages(
             sort_utf16(&mut methods);
             format!(
                 "{} ({})",
-                package_link(packages, package),
+                package_link(packages, directories, package),
                 methods
                     .into_iter()
                     .map(|method| format!("`{method}`"))
@@ -667,6 +746,7 @@ fn relation_packages(
 fn listener_packages(
     names: &IndexSet<String>,
     packages: &IndexMap<&str, &PackageGraphNode>,
+    directories: &PackageLinks,
 ) -> String {
     let mut names = names.iter().collect::<Vec<_>>();
     sort_utf16(&mut names);
@@ -675,7 +755,7 @@ fn listener_packages(
     } else {
         names
             .into_iter()
-            .map(|name| package_link(packages, name))
+            .map(|name| package_link(packages, directories, name))
             .collect::<Vec<_>>()
             .join(", ")
     }
