@@ -90096,23 +90096,13 @@
     {
       "source": "website/.vitepress/config.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/repository-tools/src/doc_site/config.rs",
-        "crates/repository-tools/src/doc_site/prepare.rs",
-        "crates/docs-site-runtime/src/lib.rs",
-        "crates/docs-site-runtime/src/wasm.rs",
-        "website/.vitepress/config.mjs",
-        "website/.vitepress/theme/index.mjs",
-        "website/site.css",
-        "crates/docs-site-runtime/tests/built_parity.rs",
-        "crates/docs-site-runtime/tests/built-parity.mjs"
+        "crates/repository-tools/tests/doc_site_configuration_parity.rs"
       ],
       "evidence": [
-        "Rust/WASM release build and strict WASM Clippy passed",
-        "Built runtime matched 26 Node source cases and seven real Chromium 149.0.7827.55 scenarios, including serializable edit callbacks and listener/timer disposal",
-        "pnpm docs:build completed server rendering and 2314 internal fragment checks",
-        "Live Chinese search ranked the persistence page first; locale switching, canonical edit links, light/dark wordmark, screenshots, and Mermaid rendering were verified"
+        "cargo test -p seekdeep-repository-tools --test doc_site_configuration_parity (2 passed)",
+        "the parity test reads the pinned website/.vitepress/config.ts and website/docs.ts from the SOURCE_SNAPSHOT checkout and asserts every materialized locale, navigation, search, and public-dir setting matches"
       ],
       "note": "Rust owns configuration, dependency preparation, edit-link validation, interpolation escaping, watcher selection, and sidebar behavior. Thin VitePress adapters initialize the shared WASM runtime before hydration and preserve serialized callback access. The website milestone remains pending its remaining acceptance checks."
     },
@@ -90130,16 +90120,13 @@
     {
       "source": "website/docs.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "website/docs.json",
-        "crates/repository-tools/src/doc_site.rs",
-        "crates/repository-tools/src/doc_site/config.rs"
+        "crates/repository-tools/tests/doc_site_configuration_parity.rs"
       ],
       "evidence": [
-        "Canonical publication manifest matches the pinned source pages and sections after the product rename",
-        "Native materialized VitePress configuration matches source locale, navigation, sidebar, collapse, search, and chrome settings",
-        "Built website contains all 166 locale pages and preserves Chinese and English home redirects"
+        "cargo test -p seekdeep-repository-tools --test doc_site_configuration_parity (2 passed)",
+        "the parity test reads the pinned website/.vitepress/config.ts and website/docs.ts from the SOURCE_SNAPSHOT checkout and asserts every materialized locale, navigation, search, and public-dir setting matches"
       ],
       "note": "The maintained publication allowlist is JSON data validated by Rust closed enums and required fields. Remaining integrated website acceptance is still in progress."
     },
