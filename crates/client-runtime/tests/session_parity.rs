@@ -178,7 +178,12 @@ impl AssemblerViewBuilder for MessageBuilder {
 }
 
 fn conversation() -> ConversationNodeAssembler {
-    let definition = Rc::new(AssemblerNodeDefinition {
+    conversation_with_rejection(None)
+}
+
+/// A registry that rejects one event type, so a page carrying it fails to prepend.
+fn conversation_with_rejection(reject: Option<&'static str>) -> ConversationNodeAssembler {
+    let registered = Rc::new(AssemblerNodeDefinition {
         kind: "message".to_owned(),
         target: Some("chat".to_owned()),
         match_event: Rc::new(|event| {
@@ -224,6 +229,29 @@ fn conversation() -> ConversationNodeAssembler {
             })))
         })),
     });
+    let definition = match reject {
+        Some(event_type) => {
+            let inner = registered.match_event.clone();
+            Rc::new(AssemblerNodeDefinition {
+                match_event: Rc::new(move |event| {
+                    if event.event_type == event_type {
+                        return Err(ConversationAssemblerError::new(format!(
+                            "{event_type} is rejected by this definition"
+                        )));
+                    }
+                    inner(event)
+                }),
+                kind: registered.kind.clone(),
+                target: registered.target.clone(),
+                start: registered.start.clone(),
+                update: registered.update.clone(),
+                publication: registered.publication.clone(),
+                build_location_data: registered.build_location_data.clone(),
+                build_view_node: registered.build_view_node.clone(),
+            })
+        }
+        None => registered,
+    };
     let view = Rc::new(AssemblerViewDefinition {
         target: "chat".to_owned(),
         create: Rc::new(|| {
@@ -426,6 +454,50 @@ fn live_events_buffer_during_open_drop_overlap_and_repair_gaps_with_one_tail_pul
     scheduler.flush();
     assert_eq!(transport.history_requests.borrow().len(), 2);
     assert_eq!(chat_order(&session).len(), 6);
+}
+
+#[test]
+fn a_rejected_page_leaves_the_history_base_retryable() {
+    let mut pool = LocalPool::new();
+    let scheduler = Rc::new(ManualScheduler::default());
+    let transport = Rc::new(ScriptedTransport::default());
+    transport.histories.borrow_mut().extend([
+        successful_page(page(&[3, 4], true)),
+        successful_page(SessionHistoryPage {
+            entries: vec![
+                entry(1, "poisoned", json!({})),
+                entry(2, "poisoned", json!({})),
+            ],
+            has_more: true,
+            projections: None,
+        }),
+        successful_page(SessionHistoryPage {
+            entries: vec![entry(1, "poisoned", json!({}))],
+            has_more: true,
+            projections: None,
+        }),
+    ]);
+    let mut session_options = options(scheduler, Rc::new(PoolSpawner(pool.spawner())));
+    session_options.conversation = Some(conversation_with_rejection(Some("poisoned")));
+    let session = ClientSession::new(SessionId::new("s1"), transport.clone(), session_options);
+    pool.run_until(session.open());
+    let opened = chat_order(&session).len();
+    pool.run_until(session.load_older());
+    assert_eq!(
+        chat_order(&session).len(),
+        opened,
+        "a rejected page must not reach the assembler"
+    );
+    pool.run_until(session.load_older());
+    assert_eq!(
+        transport
+            .history_requests
+            .borrow()
+            .last()
+            .and_then(|request| request.before_seq),
+        Some(3),
+        "the base must not advance past a page the conversation rejected"
+    );
 }
 
 #[test]
