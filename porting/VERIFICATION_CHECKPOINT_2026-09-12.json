@@ -79,5 +79,23 @@
       "port": "607 characters until 3,837 ms, then 9,598 characters at 4,538 ms"
     },
     "conclusion": "The two implementations ship comparable payloads and the port ships fewer events than the source. Both publish the window atomically, so the port shows an empty conversation pane for about 3.9 s where the source shows content at once. The gap is a per-event constant in the client, not a payload, pagination or publication-strategy difference."
+  },
+  "trajectory_share": {
+    "method": "The same session opened in the built port with the trajectory plugin enabled and disabled through a launcher patch overlay that sets disabled on the ui-trajectory row",
+    "enabled": {
+      "open_ms": 4520,
+      "ui_conversation_ms": 1339,
+      "ui_trajectory_ms": 1049,
+      "client_runtime_ms": 635
+    },
+    "disabled": {
+      "open_ms": 3004,
+      "ui_conversation_ms": 1340,
+      "ui_trajectory_ms": 0,
+      "client_runtime_ms": 457
+    },
+    "chat_output": "9,598 characters with the plugin and 9,582 without; the 16-character difference is exactly the Chat and Trajectory tab labels it provides",
+    "conclusion": "The trajectory Definitions cost about 1.4 s of a 4.5 s cold open, roughly 30 per cent, and contribute nothing to the Chat pane the user is looking at. The module profile shows the same shape as ui-conversation: per-event JSON scanning and UTF-16 conversion.",
+    "why_the_obvious_fix_is_not_taken": "Registering those Definitions lazily on first Trajectory use would route through rebuild_registry, which re-folds the entire stored window with every Definition, so the first Trajectory open would pay the whole 3-4.5 s again. Capturing this saving needs an assembler capability that folds the stored window for one newly registered Definition, plus a background fold after the first paint. That is a product trade, not a localized fix: the Chat pane would appear about 1.4 s sooner, and the ledger would either fill in behind it or stall the first Trajectory open."
   }
 }
