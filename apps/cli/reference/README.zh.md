@@ -81,4 +81,4 @@ seekdeep web --help
 
 ## 源码执行
 
-请在仓库根目录中，于全新 checkout 之后及产物需要更新时单独运行 `pnpm run build`，然后使用 `pnpm seekdeep <args...>`。`package.json` 中的脚本不会构建，而是通过 `node --import tsx/esm` 启动 `apps/cli/src/bin.ts`，并转发所有参数。Typert Host 产物缺失时，profile 启动会因不含构建指引的模块解析错误而失败。这些 Host 产物存在后，如果前端或 Client plugin 组合包缺失，启动会失败并提示运行 `pnpm run build`。启动器不会检查产物是否为最新，因此已有的陈旧组合包可能继续运行旧版浏览器代码，直至重新构建。该进程会继承启动环境；当支持环境代理的 Node 版本必须遵循 `HTTP_PROXY` 和 `HTTPS_PROXY` 时，请设置 `NODE_USE_ENV_PROXY=1`。安装形式会直接启动构建后的 `apps/cli/lib/bin.js`，不会重新构建仓库。
+请在仓库根目录中先运行 `pnpm install`，再于全新 checkout 之后及产物变化时运行 `pnpm run build`；该步骤会编译 Host 所提供服务的 Client plugin 组合包与 Web 前端。随后使用 `pnpm seekdeep <args...>` 运行交付的入口点：`package.json` 中的脚本通过 `cargo run --package seekdeep` 运行 Rust 二进制文件，并转发所有参数，因此全新 checkout 会在首次使用时构建它。迭代 Web 应用时，`pnpm run dev:web` 会在源文件变化后重新构建 Client plugin 组合包。该进程会继承启动环境；当支持环境代理的 Node 版本必须遵循 `HTTP_PROXY` 和 `HTTPS_PROXY` 时，请设置 `NODE_USE_ENV_PROXY=1`。
