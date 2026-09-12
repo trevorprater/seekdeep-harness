@@ -14,7 +14,7 @@ use std::{
 use futures::FutureExt;
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_agent::Agent;
+use seekdeep_agent::{AGENTS, Agent};
 use seekdeep_code_runtime::{
     CODE_RUNTIME, CodeBindingErrorClass, CodeBindingFailure, CodeBindingFunction,
     CodeBindingNamespace, CodeJsonString, CodeJsonValue, CodeRunFailureKind, CodeRunRequest,
@@ -2817,16 +2817,27 @@ impl RunCodeScheduler {
         let (sender, receiver) = mpsc::unbounded_channel();
         let driver_sender = sender.clone();
         let driver_signal = signal.clone();
+        // Nested sub-dispatches run on this task, so the initiating agent's scope
+        // is re-entered here: the task-local binding does not survive the spawn,
+        // and an authority-scoped tool rejects a caller it cannot attribute.
+        let driver_agent = outer.agent.clone();
+        let driver_registry = runtime.context.get(AGENTS);
         let driver = tokio::spawn(async move {
-            run_code_driver(
+            let run = run_code_driver(
                 runtime,
                 outer,
                 driver_signal,
                 max_parallel,
                 receiver,
                 driver_sender,
-            )
-            .await
+            );
+            match (driver_registry, driver_agent) {
+                (Some(agents), Some(agent)) => match agents.scope_initiator(agent, run).await {
+                    Ok(result) => result,
+                    Err(error) => Err(anyhow::Error::new(error)),
+                },
+                _ => run.await,
+            }
         });
         Self {
             sender,
