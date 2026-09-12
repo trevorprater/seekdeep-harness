@@ -780,8 +780,26 @@ fn normalize_line_endings(value: &str) -> String {
     value.replace("\r\n", "\n")
 }
 
+/// UTF-16 code units the source's `slice(0, 4096)` samples before judging the line ending.
+const CRLF_SAMPLE_UNITS: usize = 4096;
+
+/// The sampled prefix of `value`, always ending on a character boundary.
+///
+/// The source slices UTF-16 code units, which never throws; indexing bytes panics whenever the
+/// sample ends inside a multibyte character, which a CJK or accented file hits routinely.
+fn crlf_sample(value: &str) -> &str {
+    let mut units = 0usize;
+    for (index, character) in value.char_indices() {
+        if units >= CRLF_SAMPLE_UNITS {
+            return &value[..index];
+        }
+        units += character.len_utf16();
+    }
+    value
+}
+
 fn detects_crlf(value: &str) -> bool {
-    let sample = &value[..value.len().min(4096)];
+    let sample = crlf_sample(value);
     let crlf = sample.matches("\r\n").count();
     let lf = sample.matches('\n').count().saturating_sub(crlf);
     crlf > lf
@@ -972,4 +990,21 @@ pub fn plugin() -> Plugin {
             Ok(())
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CRLF_SAMPLE_UNITS, crlf_sample, detects_crlf};
+
+    #[test]
+    fn crlf_detection_samples_multibyte_text_without_splitting_a_character() {
+        let cjk = "\u{4e2d}".repeat(5000);
+        assert!(cjk.len() > CRLF_SAMPLE_UNITS, "the bytes outrun the sample");
+        assert_eq!(crlf_sample(&cjk).chars().count(), CRLF_SAMPLE_UNITS);
+        assert!(!detects_crlf(&cjk));
+
+        assert!(detects_crlf(&"x\r\n".repeat(3000)));
+        assert!(!detects_crlf(&"x\n".repeat(3000)));
+        assert_eq!(crlf_sample("ab\r\n"), "ab\r\n");
+    }
 }

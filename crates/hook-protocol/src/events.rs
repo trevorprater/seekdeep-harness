@@ -47,13 +47,30 @@ pub fn summarize_stderr(stderr: &str, max_chars: usize) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    if trimmed.len() > max_chars {
-        let mut capped: String = trimmed.chars().take(max_chars).collect();
-        capped.push('\u{2026}');
-        Some(capped)
+    if trimmed.encode_utf16().count() > max_chars {
+        Some(cap_utf16(trimmed, max_chars))
     } else {
         Some(trimmed.to_owned())
     }
+}
+
+/// `value` capped at `max_chars` UTF-16 code units plus the truncation mark.
+///
+/// The source compares and slices JavaScript string units, so a byte count marks a multibyte
+/// stderr as over the cap and appends an ellipsis to text it kept whole. A cap landing inside a
+/// surrogate pair keeps the pair intact, because a lone surrogate has no representation here.
+fn cap_utf16(value: &str, max_chars: usize) -> String {
+    let mut capped = String::new();
+    let mut units = 0usize;
+    for character in value.chars() {
+        units += character.len_utf16();
+        if units > max_chars {
+            break;
+        }
+        capped.push(character);
+    }
+    capped.push('\u{2026}');
+    capped
 }
 
 fn dialect_str(dialect: HookDialect) -> &'static str {
@@ -394,6 +411,25 @@ mod tests {
         assert_eq!(
             summarize_stderr("x".repeat(600).as_str(), 500),
             Some(format!("{}\u{2026}", "x".repeat(500)))
+        );
+    }
+
+    #[test]
+    fn summarize_stderr_counts_source_string_units() {
+        let accented = "\u{e9}".repeat(400);
+        assert_eq!(
+            summarize_stderr(&accented, 500),
+            Some(accented),
+            "400 two-byte characters stay under a 500-character cap"
+        );
+        assert_eq!(
+            summarize_stderr(&"\u{e9}".repeat(600), 500),
+            Some(format!("{}\u{2026}", "\u{e9}".repeat(500)))
+        );
+        assert_eq!(
+            summarize_stderr(&"\u{1f600}".repeat(4), 3),
+            Some("\u{1f600}\u{2026}".to_owned()),
+            "a cap inside a surrogate pair keeps the pair intact"
         );
     }
 }
