@@ -10,7 +10,7 @@ The [documentation standard](../../../../docs/AGENTS.md) assigns limitations to 
 
 ## Decision
 
-Every package manifest under `packages/<group>/<pkg>/package.json` has a sibling README with the canonical `## Known Limitations and Deferred Work` section. Its bullets record durable consumer gaps and non-obvious maintainer constraints owned by that package; ordinary cleanup remains in its source TODO or owning Agent Note. The [`verify-package-readme-limitations` gate](../../../../scripts/verify-package-readme-limitations.ts) derives the package set from manifests, rejects missing READMEs, and requires exactly one canonical h2 with at least one top-level bullet. Near-miss headings such as “Limitations,” “Deferred,” “What is NOT here,” or “Non-goals” fail.
+Every package manifest under `packages/<group>/<pkg>/package.json` has a sibling README with the canonical `## Known Limitations and Deferred Work` section. Its bullets record durable consumer gaps and non-obvious maintainer constraints owned by that package; ordinary cleanup remains in its source TODO or owning Agent Note. The [`verify-package-readme-limitations` gate](../../../../crates/repository-tools/src/bin/verify-package-readme-limitations.rs) derives the package set from manifests, rejects missing READMEs, and requires exactly one canonical h2 with at least one top-level bullet. Near-miss headings such as “Limitations,” “Deferred,” “What is NOT here,” or “Non-goals” fail.
 
 A package with nothing to declare is listed in `NO_LIMITATIONS` and omits the section. Adding a limitation requires removing the entry; renames and removals fail because every entry must name a scanned package.
 

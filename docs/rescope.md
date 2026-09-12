@@ -41,7 +41,7 @@ Subpath exports keep their path: `@cordisjs/plugin-loader/repository` becomes `@
 
 ## Applying, verifying, and reverting
 
-[`scripts/rescope-vendor.ts`](../scripts/rescope-vendor.ts) owns the mapping above and performs the rename, so no reference is renamed by hand:
+[`scripts/rescope-vendor.ts`](../crates/repository-tools/src/bin/rescope-vendor.rs) owns the mapping above and performs the rename, so no reference is renamed by hand:
 
 ```sh
 pnpm run rescope-vendor            # report what would change
