@@ -81,10 +81,16 @@ impl SessionHeader {
     /// Creates minimal current-version metadata.
     #[must_use]
     pub fn new(id: SessionId) -> Self {
+        Self::new_with_created_at(id, now_millis())
+    }
+
+    /// Creates minimal current-version metadata stamped at `created_at`.
+    #[must_use]
+    pub fn new_with_created_at(id: SessionId, created_at: u64) -> Self {
         Self {
             version: SESSION_FORMAT_VERSION,
             id,
-            created_at: now_millis(),
+            created_at,
             cwd: None,
             parent_session: None,
             seed_length: None,
@@ -423,9 +429,13 @@ struct SessionInner {
     appending: bool,
 }
 
+/// Durable timestamp source for a session's header and appended events.
+pub type SessionClock = Arc<dyn Fn() -> u64 + Send + Sync + 'static>;
+
 /// An event-sourced append-only agent session.
 pub struct Session {
     header: SessionHeader,
+    clock: SessionClock,
     first_live_seq: u64,
     inner: Mutex<SessionInner>,
     append_gate: ReentrantMutex<()>,
@@ -454,7 +464,22 @@ impl Session {
         seed: Option<Vec<SessionEvent>>,
         header: Option<SessionHeader>,
     ) -> Result<Arc<Self>, SessionError> {
-        let header = header.unwrap_or_else(|| SessionHeader::new(id.clone()));
+        Self::create_with_clock(id, seed, header, Arc::new(now_millis))
+    }
+
+    /// Creates a detached session whose durable timestamps come from `clock`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SessionError`] for invalid metadata, event envelopes, or surface transitions.
+    pub fn create_with_clock(
+        id: &SessionId,
+        seed: Option<Vec<SessionEvent>>,
+        header: Option<SessionHeader>,
+        clock: SessionClock,
+    ) -> Result<Arc<Self>, SessionError> {
+        let header =
+            header.unwrap_or_else(|| SessionHeader::new_with_created_at(id.clone(), clock()));
         header.validate(id)?;
         let first_live_seq = u64::try_from(seed.as_ref().map_or(0, Vec::len)).map_err(|_| {
             invalid("session seed length exceeds the supported event sequence range")
@@ -482,7 +507,7 @@ impl Session {
                     seq: u64::try_from(inner.log.len()).map_err(|_| {
                         invalid("session log length exceeds the supported event sequence range")
                     })?,
-                    time: i64::try_from(now_millis()).unwrap_or(i64::MAX),
+                    time: i64::try_from(clock()).unwrap_or(i64::MAX),
                     data: Value::Object(serde_json::Map::new()).into(),
                     source_event_seqs: None,
                     surface_op: None,
@@ -496,6 +521,7 @@ impl Session {
         }
         Ok(Arc::new(Self {
             header,
+            clock,
             first_live_seq,
             inner: Mutex::new(inner),
             append_gate: ReentrantMutex::new(()),
@@ -604,7 +630,7 @@ impl Session {
                 seq: u64::try_from(inner.log.len()).map_err(|_| {
                     invalid("session log length exceeds the supported event sequence range")
                 })?,
-                time: i64::try_from(now_millis()).unwrap_or(i64::MAX),
+                time: i64::try_from((self.clock)()).unwrap_or(i64::MAX),
                 data,
                 source_event_seqs: options.source_event_seqs,
                 surface_op: options.surface_op,
@@ -1195,6 +1221,23 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use seekdeep_llm::MessageSource;
+
+    #[test]
+    fn a_session_clock_stamps_the_end_seed_event() {
+        let session = Session::create_with_clock(
+            &SessionId::new("clocked-session"),
+            None,
+            None,
+            std::sync::Arc::new(|| 1_700_000_000_000),
+        )
+        .unwrap();
+        let end_seed = session
+            .events()
+            .iter()
+            .find(|event| event.event_type == "session/end-seed")
+            .expect("the seed terminator is appended");
+        assert_eq!(end_seed.time, 1_700_000_000_000);
+    }
     use serde_json::json;
 
     use super::*;
