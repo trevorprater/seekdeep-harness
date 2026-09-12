@@ -3159,13 +3159,26 @@ impl RunCodeDriver {
                 let body_execution = execution.clone();
                 self.commits.push_back(entry);
                 self.in_flight += 1;
+                // The sub-dispatch runs on its own task, and the initiating-agent
+                // binding is task-local, so it is re-entered here as well: a tool
+                // reached from inside a program has to attribute its caller.
+                let dispatch_agent = body_execution.agent.clone();
+                let dispatch_registry = self.runtime.context.get(AGENTS);
                 tokio::spawn(async move {
-                    let outcome = runtime.dispatch_scheduled(&body_execution).await;
-                    let _ = sender.send(RunDriverMessage::Settled {
-                        id,
-                        execution: body_execution,
-                        outcome: Box::new(outcome),
-                    });
+                    let dispatch = async move {
+                        let outcome = runtime.dispatch_scheduled(&body_execution).await;
+                        let _ = sender.send(RunDriverMessage::Settled {
+                            id,
+                            execution: body_execution,
+                            outcome: Box::new(outcome),
+                        });
+                    };
+                    match (dispatch_registry, dispatch_agent) {
+                        (Some(agents), Some(agent)) => {
+                            let _ = agents.scope_initiator(agent, dispatch).await;
+                        }
+                        _ => dispatch.await,
+                    }
                 });
             }
             ScheduledToolPreparation::PostResult { execution, result } => {
