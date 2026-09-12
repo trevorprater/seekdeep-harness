@@ -131,7 +131,9 @@
     # session-log records onto OTLP/HTTP logs with no session-telemetry/record redaction
     # rule, so exports are the raw captured copy. The deployment stance, env
     # seams, and follow-ups are pinned in the default-off Agent Note.
-    # SEEKDEEP_TELEMETRY_OTLP_URL overrides the production endpoint. A non-empty
+    # SEEKDEEP_TELEMETRY_OTLP_URL names the collector and is required for any mode
+    # other than DISABLED: DEV-001 removes the source's default collector URL, so
+    # enabling telemetry without choosing a collector fails at boot. A non-empty
     # SEEKDEEP_TELEMETRY_DISABLED — any value, including '0'/'false' — opts the
     # process out (the launchers patch the row disabled; config cannot disable
     # a row). Exports carry the harness home's anonymous user id ($SEEKDEEP_HOME/.anonymous-user-id,
@@ -151,7 +153,7 @@
         mode: !!js process.env.SEEKDEEP_TELEMETRY_MODE || 'DISABLED'
         shutdownTimeoutMillis: 3000
         exporter:
-          url: !!js process.env.SEEKDEEP_TELEMETRY_OTLP_URL ?? 'https://harness-telemetry.deepseeksvc.com/v1/logs'
+          url: !!js process.env.SEEKDEEP_TELEMETRY_OTLP_URL
           compression: gzip
           timeoutMillis: 1000
         processor:

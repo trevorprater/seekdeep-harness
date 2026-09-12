@@ -5006,6 +5006,7 @@ fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
     }
 
     verify_rust_only()?;
+    verify_deviation_string_ban()?;
     let scope_label = match scope {
         Scope::All => "all",
         Scope::Runtime => "runtime",
@@ -5169,6 +5170,34 @@ fn is_allowed_non_rust_surface(path: &str) -> bool {
     )
 }
 
+/// Rejects the source product's collector host outside the deviation register.
+///
+/// DEV-001 registers the removed telemetry collector constant, and its
+/// enforcement requires that the host name appears only in the register itself
+/// so a default `DeepSeek` collector cannot return unnoticed.
+fn verify_deviation_string_ban() -> anyhow::Result<()> {
+    const BANNED: &str = "deepseeksvc";
+    const REGISTER: &str = "porting/DEVIATIONS.md";
+    // This module must name the host to ban it; the gate is build tooling and
+    // never ships as a runtime surface.
+    const ENFORCER: &str = "xtask/src/main.rs";
+    let mut violations = Vec::new();
+    for path in source_files(Path::new("."))? {
+        if path == REGISTER || path == ENFORCER {
+            continue;
+        }
+        if std::fs::read_to_string(&path).is_ok_and(|contents| contents.contains(BANNED)) {
+            violations.push(path);
+        }
+    }
+    anyhow::ensure!(
+        violations.is_empty(),
+        "DEV-001 string ban: {BANNED:?} appears outside {REGISTER}: {}",
+        violations.join(", ")
+    );
+    Ok(())
+}
+
 /// Pinned TypeScript workspaces the Rust Typert analyzer parses as test
 /// input: data for the analyzer, not an implementation.
 fn is_analysis_fixture(path: &Path) -> bool {
@@ -5236,8 +5265,7 @@ mod tests {
         copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
         copy_wasm_package_assets, cordis_esm_wrapper, default_macos_platform_tag,
         is_allowed_non_rust_surface, is_generated_output, is_localization, module_factory,
-        ui_attachment_esm_wrapper,
-        ui_attachment_invariant_wrapper, ui_primitives_esm_wrapper,
+        ui_attachment_esm_wrapper, ui_attachment_invariant_wrapper, ui_primitives_esm_wrapper,
         ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
         ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, wasm_package_global,
         watch_snapshot, write_wasm_package_compatibility_entries, write_web_frontend,

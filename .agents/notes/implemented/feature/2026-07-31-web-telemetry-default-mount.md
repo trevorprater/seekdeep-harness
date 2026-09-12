@@ -16,7 +16,7 @@ The shared seekdeep base bundle (`packages/bundle/base/cordis.patch.yml`) mounts
 |---|---|---|
 | Mount surface | `packages/bundle/base/cordis.patch.yml` | One capability row for every profile that loads the shared base |
 | Sharing mode | `SEEKDEEP_TELEMETRY_MODE`, default `DISABLED`; explicit `FULL` or `FEEDBACK_ONLY` opts in | A fresh profile makes no telemetry network request, while internal deployments retain both upload policies |
-| Endpoint | `SEEKDEEP_TELEMETRY_OTLP_URL`, default `https://harness-telemetry.deepseeksvc.com/v1/logs` | Internal collector; the env override serves local/dev runs |
+| Endpoint | `SEEKDEEP_TELEMETRY_OTLP_URL`, no default | DEV-001 removes the source's collector constant, so the collector is deployment-owned and any mode other than `DISABLED` without an explicit URL fails at boot |
 | Hard opt-out | any non-empty `SEEKDEEP_TELEMETRY_DISABLED` (including `0`/`false`) disables the row | The launcher patch takes effect before load-time transport validation and overrides every configured mode |
 | Cadence | `processor.scheduledDelayMillis: 10000` (10s/batch) in uploading modes | Streaming while the session runs, never exit-time-only; a crash loses at most the last unexported interval |
 | Exit-drain bound | `exporter.timeoutMillis: 1000` + `maxExportBatchSize: 2048` (== maxQueueSize) + `exportTimeoutMillis: 1500` + `shutdownTimeoutMillis: 3000` | Ordinary unreachable-collector failure releases in ~1s: timeoutMillis is the per-attempt socket timeout and retry deadline, while one queue-sized batch avoids sequential drain multiplication. The SEEKDEEP-owned 3s outer bound covers the SDK's preceding unbounded `forceFlush()` wait when the transport Promise never obtains a socket. |

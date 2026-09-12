@@ -16,7 +16,7 @@ Status: implemented
 |---|---|---|
 | 挂载面 | `packages/bundle/base/cordis.patch.yml` | 每个加载共享基础组合包的 profile 都使用同一个能力配置行 |
 | 共享模式 | `SEEKDEEP_TELEMETRY_MODE`，默认 `DISABLED`；显式设置 `FULL` 或 `FEEDBACK_ONLY` 即启用 | 新 profile 不发出遥测网络请求，内部部署仍可使用两种上传策略 |
-| endpoint | `SEEKDEEP_TELEMETRY_OTLP_URL`，缺省 `https://harness-telemetry.deepseeksvc.com/v1/logs` | 内部 collector；env 覆盖供本地/联调 |
+| endpoint | `SEEKDEEP_TELEMETRY_OTLP_URL`，无缺省值 | DEV-001 移除了源项目的 collector 常量，collector 由部署方指定；除 `DISABLED` 外的模式缺少显式 URL 时在启动阶段失败 |
 | 硬性退出 | `SEEKDEEP_TELEMETRY_DISABLED` 非空（含 `0`/`false`）即禁用该配置行 | 启动器 patch 在加载期传输校验之前生效，并覆盖所有已配置模式 |
 | 上报节奏 | 上传模式中为 `processor.scheduledDelayMillis: 10000`（10s/批） | 在会话运行期间流式上报，而非仅在退出时上报；崩溃至多丢失最后一个尚未导出间隔内的数据 |
 | 退出 drain 上界 | `exporter.timeoutMillis: 1000` + `maxExportBatchSize: 2048`（与 maxQueueSize 相等） + `exportTimeoutMillis: 1500` + `shutdownTimeoutMillis: 3000` | collector 不可达的常规故障会在约 1s 内放行：timeoutMillis 是单次 socket 超时与重试 deadline，使用与队列等大的单批可避免依次排空导致耗时倍增。由 SEEKDEEP 管理的 3s 外层上限覆盖 SDK 先执行的无界 `forceFlush()` 等待，即传输 Promise 始终无法取得 socket 的情况。 |
