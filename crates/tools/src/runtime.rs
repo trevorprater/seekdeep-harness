@@ -4610,6 +4610,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run_code_sub_dispatches_carry_the_initiating_agent() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let root = Context::new();
+        let prompt = SystemPrompt::new(&root, SystemPromptConfig::default()).expect("prompt");
+        let agents = Arc::new(seekdeep_agent::AgentRegistry::new(root.clone()));
+        agents.provide(&root).expect("agents");
+        let _worker = install_worker_runtime(
+            &root,
+            &WorkerThreadCodeRuntimeConfig {
+                compute_ms: Some(5_000.0),
+                max_wall_ms: Some(5_000.0),
+                max_output_bytes: Some(1_000_000.0),
+                max_old_generation_size_mb: Some(64.0),
+            },
+        )
+        .expect("worker runtime");
+        let runtime = ToolRuntime::new_with_system_prompt(
+            &root,
+            &prompt,
+            ToolRuntimeConfig {
+                mode: ToolPresentationMode::Code,
+                ..ToolRuntimeConfig::default()
+            },
+        )
+        .expect("tools runtime");
+
+        // The probe reports whether the initiating agent is in scope on the task
+        // that actually runs a sub-dispatch, which is the property the driver and
+        // dispatch scopes exist to preserve.
+        let attributed = Arc::new(AtomicBool::new(false));
+        let probe_registry = agents.clone();
+        let probe_seen = attributed.clone();
+        let mut probe = definition("probe", Value::Null);
+        probe.execute = Arc::new(move |_arguments, _| {
+            let registry = probe_registry.clone();
+            let seen = probe_seen.clone();
+            Box::pin(async move {
+                seen.store(
+                    registry.current_initiator().ok().flatten().is_some(),
+                    Ordering::SeqCst,
+                );
+                Ok(json!("probed").into())
+            })
+        });
+        runtime.register(&root, probe).expect("register probe");
+
+        let agent = agent_with_cwd(&root, "dispatch-attribution", None);
+        let run = runtime.execute(ToolExecutionInput {
+            call_id: CallId::new("attribution"),
+            root_call_id: None,
+            name: RUN_CODE_NAME.to_owned(),
+            arguments: json!({
+                "code": "return await tools.probe({});",
+                "description": "Probe initiating-agent attribution",
+            })
+            .into(),
+            agent: Some(agent.clone()),
+            agent_scope: None,
+            agent_session: None,
+            parent: None,
+            signal: AbortSignal::default(),
+        });
+        agents
+            .scope_initiator(agent, run)
+            .await
+            .expect("initiator scope");
+
+        assert!(
+            attributed.load(Ordering::SeqCst),
+            "a sub-dispatch must run with the initiating agent in scope"
+        );
+    }
+
+    #[tokio::test]
     async fn typed_waterfalls_wrap_in_source_order_and_observers_are_contained() {
         let root = Context::new();
         let runtime =
