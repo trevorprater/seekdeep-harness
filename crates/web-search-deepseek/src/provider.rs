@@ -41,7 +41,7 @@ pub const DEEPSEEK_DEFAULT_MAX_TOKENS: u64 = 4096;
 pub const DEEPSEEK_DEFAULT_MAX_USES: u64 = 5;
 
 /// Attribution header sent on every request. Bump with the package version.
-const USER_AGENT: &str = "deepseek-harness/0.0.1";
+const USER_AGENT: &str = "seekdeep-harness/0.0.1";
 
 /// Resolves the current `DeepSeek` API key for one search operation.
 pub type ResolveApiKey =

@@ -23,7 +23,7 @@ pub const EXA_DEFAULT_BASE_URL: &str = "https://api.exa.ai";
 pub const EXA_DEFAULT_HIGHLIGHTS_PER_RESULT: f64 = 1.0;
 
 /// Attribution header sent on every request. Bump with the package version.
-const USER_AGENT: &str = "deepseek-harness/0.0.1";
+const USER_AGENT: &str = "seekdeep-harness/0.0.1";
 
 /// Retrieval mode sent as Exa's `type`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

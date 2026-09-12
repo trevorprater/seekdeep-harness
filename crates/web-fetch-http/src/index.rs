@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::provider::{HttpFetchLimits, HttpFetchProvider};
 
 /// Default User-Agent: an explicit product agent, never a browser disguise.
-pub const DEFAULT_USER_AGENT: &str = "deepseek-harness/0.0.1 (+https://github.com/deepseek-ai)";
+pub const DEFAULT_USER_AGENT: &str = "seekdeep-harness/0.0.1 (+https://github.com/deepseek-ai)";
 
 /// Cordis plugin name used by loader diagnostics.
 pub const NAME: &str = "web-fetch-http";

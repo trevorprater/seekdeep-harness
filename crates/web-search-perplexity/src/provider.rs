@@ -27,7 +27,7 @@ pub const PERPLEXITY_DEFAULT_MODEL: &str = "sonar";
 pub const PERPLEXITY_DEFAULT_MAX_TOKENS: f64 = 1024.0;
 
 /// Attribution header sent on every request. Bump with the package version.
-const USER_AGENT: &str = "deepseek-harness/0.0.1";
+const USER_AGENT: &str = "seekdeep-harness/0.0.1";
 
 /// Recency filter values Perplexity accepts for `search_recency_filter`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
