@@ -5114,31 +5114,22 @@ fn classify(path: &str) -> SurfaceKind {
     }
 }
 
+/// Rejects tracked non-Rust files that would implement product behavior.
+///
+/// The gate reads tracked paths rather than walking the working tree so that
+/// installed dependency trees and build output cannot fail it on a developer
+/// machine while it passes in a clean checkout.
 fn verify_rust_only() -> anyhow::Result<()> {
     let forbidden = ["ts", "tsx", "js", "mjs", "cjs", "py", "c", "cpp"];
     let mut violations = Vec::new();
-    for entry in walkdir::WalkDir::new(".")
-        .into_iter()
-        .filter_entry(|entry| {
-            !entry
-                .path()
-                .components()
-                .any(|part| matches!(part.as_os_str().to_str(), Some(".git" | "target")))
-                && !is_generated_output(entry.path())
-                && !is_analysis_fixture(entry.path())
-        })
-    {
-        let entry = entry?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let path = entry.path();
-        if path
+    for path in source_files(Path::new("."))? {
+        if Path::new(&path)
             .extension()
             .and_then(|value| value.to_str())
             .is_some_and(|extension| forbidden.contains(&extension))
+            && !is_allowed_non_rust_surface(&path)
         {
-            violations.push(path.display().to_string());
+            violations.push(path);
         }
     }
     anyhow::ensure!(
@@ -5147,6 +5138,35 @@ fn verify_rust_only() -> anyhow::Result<()> {
         violations.join(", ")
     );
     Ok(())
+}
+
+/// Non-Rust surfaces the Rust-only gate tolerates: test data, and the
+/// foreign-language bindings that delegate all behavior to compiled Rust.
+fn is_allowed_non_rust_surface(path: &str) -> bool {
+    if is_analysis_fixture(Path::new(path))
+        || is_generated_output(Path::new(path))
+        || matches!(
+            classify(path),
+            SurfaceKind::Fixture | SurfaceKind::Test | SurfaceKind::Snapshot
+        )
+    {
+        return true;
+    }
+    matches!(
+        path.strip_prefix("./").unwrap_or(path),
+        // Node host shims for the compiled WebAssembly code runtime.
+        "crates/code-runtime-worker-thread/node/loader.mjs"
+            | "crates/code-runtime-worker-thread/node/plugin-loader.cjs"
+            | "crates/code-runtime-worker-thread/node/wasm-runtime.cjs"
+            // npm entry points for the Landlock native helper.
+            | "native/landlock-run/packages/entry/index.d.ts"
+            | "native/landlock-run/packages/entry/index.js"
+            // Repository tooling and documentation-site configuration.
+            | "scripts/coverage-uncovered-locations.cjs"
+            | "website/.vitepress/config.mjs"
+            | "website/.vitepress/theme/index.mjs"
+            | "xtask/src/remote_contracts/fiber_registry_cases.js"
+    )
 }
 
 /// Pinned TypeScript workspaces the Rust Typert analyzer parses as test
@@ -5215,7 +5235,8 @@ mod tests {
         compatibility_declarations, compatibility_prelude, copy_ui_attachment_type_declarations,
         copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
         copy_wasm_package_assets, cordis_esm_wrapper, default_macos_platform_tag,
-        is_generated_output, is_localization, module_factory, ui_attachment_esm_wrapper,
+        is_allowed_non_rust_surface, is_generated_output, is_localization, module_factory,
+        ui_attachment_esm_wrapper,
         ui_attachment_invariant_wrapper, ui_primitives_esm_wrapper,
         ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
         ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, wasm_package_global,
@@ -6967,6 +6988,32 @@ mod tests {
             "packages/client/lib/client.js"
         )));
         assert!(!is_generated_output(Path::new("apps/web/src/main.js")));
+    }
+
+    #[test]
+    fn rust_only_gate_tolerates_test_data_and_named_bindings() {
+        for tolerated in [
+            "crates/tools/tests/fixtures/strip-source-units.mjs",
+            "crates/cordis/tests/fixtures/wasm-file-fetch.mjs",
+            "crates/docs-site-runtime/tests/built-parity.mjs",
+            "crates/llm-pi-ai/tests/lossless_text/source.mjs",
+            "packages/typert/generator/tests/fixtures/type-model/cordis.d.ts",
+            "crates/code-runtime-worker-thread/node/loader.mjs",
+            "crates/code-runtime-worker-thread/node/plugin-loader.cjs",
+            "crates/code-runtime-worker-thread/node/wasm-runtime.cjs",
+            "native/landlock-run/packages/entry/index.js",
+            "website/.vitepress/config.mjs",
+            "xtask/src/remote_contracts/fiber_registry_cases.js",
+        ] {
+            assert!(is_allowed_non_rust_surface(tolerated), "{tolerated}");
+        }
+        for rejected in [
+            "crates/llm-retry/src/runtime.ts",
+            "crates/core/src/session.js",
+            "apps/seekdeep/src/helper.mjs",
+        ] {
+            assert!(!is_allowed_non_rust_surface(rejected), "{rejected}");
+        }
     }
 
     #[test]
