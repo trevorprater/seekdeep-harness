@@ -672,10 +672,10 @@ impl<'a> JsonRef<'a> {
         // between them instead of walking its characters individually.
         loop {
             let Some(index) = rest.find('\\') else {
-                units.extend(rest.encode_utf16());
+                extend_units(&mut units, rest);
                 return Some(units);
             };
-            units.extend(rest[..index].encode_utf16());
+            extend_units(&mut units, &rest[..index]);
             let escapes = &rest[index + 1..];
             match escapes.chars().next()? {
                 '"' => units.push(u16::from(b'"')),
@@ -869,6 +869,21 @@ fn skip_whitespace(raw: &str, offset: &mut usize) {
     {
         *offset += 1;
     }
+}
+
+/// Appends one literal run's UTF-16 units.
+///
+/// A run of ASCII copies one unit per byte without the width dispatch that encoding a character
+/// costs, which is what most of a session's text is.
+fn extend_units(units: &mut Vec<u16>, run: &str) {
+    if run.is_ascii() {
+        units.reserve(run.len());
+        for byte in run.as_bytes() {
+            units.push(u16::from(*byte));
+        }
+        return;
+    }
+    units.extend(run.encode_utf16());
 }
 
 /// Whether a text spells itself inside JSON, so no escape separates it from its source bytes.
