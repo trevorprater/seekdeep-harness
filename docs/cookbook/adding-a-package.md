@@ -36,7 +36,7 @@ In-package relative imports use explicit `.ts` specifiers in source (for example
 
 A `packages/client/*` package additionally extends `tsconfig.base.client.json` instead of `tsconfig.base.json`, and a client plugin package declares `seekdeep.client` in package.json, exports `./client`, and calls the shared tsdown preset (`packages/client/tsdown.client.ts`) — see [packages/client/AGENTS.md](../../packages/client/AGENTS.md) for the client-side contract.
 
-Covered automatically by globs or package-manifest discovery — no edits needed: root `package.json` workspaces, `scripts/publint-all.ts`, `tsdown.config.ts`, `.oxlintrc.json`, `scripts/check-workspace-constraints.ts`.
+Covered automatically by globs or package-manifest discovery — no edits needed: root `package.json` workspaces, the `publint-all` and `check-workspace-constraints` binaries, `.oxlintrc.json`.
 
 ## 3. Decide the package topology
 
