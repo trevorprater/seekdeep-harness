@@ -43,6 +43,8 @@
     "A literal ASCII run decodes to UTF-16 one unit per byte instead of dispatching on each character's encoded width. `extend_desugared` under `JsonRef::to_utf16` falls from 266 ms to 62-76 ms per cold open, ui-conversation from 1,380 ms to 1,354 ms and ui-trajectory from 1,073 ms to 1,049 ms."
   ],
   "remaining": [
+    "The client's per-event cost is the whole gap, and no localized item measured over rounds 4-6 exceeds 1-2% of an open. Closing it means changing what crosses the wasm boundary per event, which has no counterpart in the source: the source keeps session data as JavaScript values and converts nothing.",
+    "The steering keyless scenario times out under CPU contention: its 10 s poll is generous for the source and tight for a client that renders about ten times slower. It passes in isolation and in an undisturbed full run, so it is load-induced flakiness rather than a port defect, and it is a consequence of the gap above.",
     "A cold session open of an 8 MB history is 4.59 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so the cost is the client: 36,196 assistant/chunk events are each marshalled through JSON text into WASM and back. Per module over one open: ui-conversation 1,339 ms, ui-trajectory 1,049 ms, client-runtime 635 ms, frames carrying no script URL 465 ms, idle 393 ms, program 171 ms. Every remaining item measured is 1-2% of the open, so the gap is not reachable by further localized work.",
     "Routing container values to the browser's own JSON parser instead of materializing a serde tree first was implemented and measured at no change in open time, then reverted.",
     "The 33 source goldens this suite does not produce belong to scenarios driven by other xtask gates (web-assembled, web-workspaces, web-settings, web-models-settings, web-plugin-settings, web-onboarding, web-assembled-snapshots), which were not run here.",
@@ -53,5 +55,29 @@
     "commands_palette": "The Commands button and a leading slash in the composer both open the command listbox (compact, export, feedback, record); zero page errors",
     "theme": "Selecting Dark in Settings flips data-ds-dark-theme from false to true",
     "session_open": "9,598 characters of conversation render from a cold 8 MB history with no console error"
+  },
+  "differential_client_cost": {
+    "method": "The same visible session opened in the built port and in the pinned source harness, capturing each history payload and profiling the browser",
+    "history_payload": {
+      "source_harness": {
+        "events": 42606,
+        "assistant_chunks": 42360,
+        "decoded_mb": 7.4
+      },
+      "port": {
+        "events": 36592,
+        "assistant_chunks": 36196,
+        "decoded_mb": 8.0
+      }
+    },
+    "per_event_us": {
+      "source_harness": 11,
+      "port": 124
+    },
+    "content_arrival": {
+      "source_harness": "65,137 characters of conversation at 465 ms after the click",
+      "port": "607 characters until 3,837 ms, then 9,598 characters at 4,538 ms"
+    },
+    "conclusion": "The two implementations ship comparable payloads and the port ships fewer events than the source. Both publish the window atomically, so the port shows an empty conversation pane for about 3.9 s where the source shows content at once. The gap is a per-event constant in the client, not a payload, pagination or publication-strategy difference."
   }
 }
