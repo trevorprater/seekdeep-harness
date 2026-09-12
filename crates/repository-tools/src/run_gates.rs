@@ -458,7 +458,6 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
     gates.push(lint_gate(environment, &["typert-contracts"]));
     gates.push(pnpm_script(environment, "duplication", "duplication"));
     gates.extend(coverage_gates(environment)?);
-    gates.extend(node_compat_smoke_gates(environment, false));
     gates.push(snapshot_gate(environment, &["build"]));
     gates.extend(doc_sync_leaf_gates(
         environment,
@@ -504,6 +503,11 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
     Ok(gates)
 }
 
+/// Gates that exercise the port on a specific Node release.
+///
+/// The source's Node-compatibility suites were TypeScript specs that booted the
+/// JavaScript harness; the port's behavior lives in the Rust crates, so the mode keeps
+/// the aggregate typecheck and the web build, which are the JavaScript that remains.
 fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
     let include_typecheck = !flag_enabled(environment, "SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK")?;
     let mut gates = if include_typecheck {
@@ -512,7 +516,6 @@ fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>>
         Vec::new()
     };
     if environment.node_major != 22 {
-        gates.extend(node_compat_smoke_gates(environment, false));
         return Ok(gates);
     }
     gates.push(script_with(
@@ -535,72 +538,7 @@ fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>>
         &["build"],
         IndexMap::new(),
     ));
-    gates.extend(node_compat_smoke_gates(environment, true));
     Ok(gates)
-}
-
-fn node_compat_smoke_gates(environment: &GateEnvironment, cli_smoke: bool) -> Vec<Gate> {
-    let mut gates = vec![
-        pnpm_exec(
-            environment,
-            "source-worker-smoke",
-            &[
-                "vitest",
-                "run",
-                "packages/workflow/workflow-worker-thread/tests/source-worker.compat.spec.ts",
-            ],
-            Some("source worker smoke"),
-            &[],
-            IndexMap::new(),
-        ),
-        pnpm_exec(
-            environment,
-            "jsonl-zstd-smoke",
-            &[
-                "vitest",
-                "run",
-                "packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts",
-            ],
-            Some("JSONL Zstandard smoke"),
-            &[],
-            IndexMap::new(),
-        ),
-        pnpm_exec(
-            environment,
-            "seekdeep-source-launch-smoke",
-            &[
-                "vitest",
-                "run",
-                "apps/cli/tests/source-launch.compat.spec.ts",
-            ],
-            Some("seekdeep source-launch smoke"),
-            &[],
-            IndexMap::new(),
-        ),
-        pnpm_exec(
-            environment,
-            "vitest-jsdom-smoke",
-            &["vitest", "run", "scripts/vitest-environment.compat.spec.ts"],
-            Some("Vitest jsdom smoke"),
-            &[],
-            IndexMap::new(),
-        ),
-    ];
-    if cli_smoke {
-        gates.push(pnpm_exec(
-            environment,
-            "cli-lazy-search-startup-smoke",
-            &[
-                "vitest",
-                "run",
-                "apps/cli/tests/lazy-search-startup.compat.spec.ts",
-            ],
-            Some("CLI lazy-search startup smoke"),
-            &["build:web"],
-            environment_map(&[("SEEKDEEP_REQUIRE_BUILT_CLI_SMOKE", Some("1"))]),
-        ));
-    }
-    gates
 }
 
 fn ci_static_gates(environment: &GateEnvironment, owns_build: bool) -> Vec<Gate> {
