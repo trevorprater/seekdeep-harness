@@ -162,5 +162,38 @@
     },
     "protocol_note": "matchMany is a port-internal hook: the producer is crates/client-runtime/src/wasm_native_definition.rs and the only consumer is the adapter's prematch, with no JavaScript or TypeScript implementor anywhere in the tree. The second argument and the returned rows changed representation from JSON text to UTF-8 bytes; a Definition that answers with a string is still accepted.",
     "evidence": "cargo test -p seekdeep-client-runtime green across its suites; conversation_nodes_parity 8, assistant_fold_parity 1 and trajectory assistant_definition_parity 6 pass; web-assembled-snapshots 7 passed and web-keyless 151 assertions with exit 0 on this tree; clippy --all-targets --all-features and cargo fmt --all -- --check clean."
+  },
+  "measurement_instrument_correction": {
+    "what_was_wrong": "Every browser measurement in the rounds above found the session row with getByText(title).first() and then treated the open as finished when document.body.innerText.length passed 2,500. Two defects followed. The click resolved to the row's title span, which the hover-card overlay covers often enough that Playwright's actionability check refused it or the synthetic pointer sequence never reached the row's handler, so many runs measured the page after a click that opened nothing - and the app's own auto-open of the most recent session then filled the time. Worse, the body-text threshold is satisfied by the sidebar alone, so an open that never happened still looked settled. Session age also mattered: a session that is still running carries the same title with a minute-based age and never settles.",
+    "what_the_instrument_does_now": "./open.mjs selects a row by title plus a day-or-hour age label, clicks it with the real mouse, and requires more than 1,500 characters inside the chat region before it returns - the sidebar cannot satisfy that. /tmp/seekdeep-measure/compare.mjs measures the same way for both implementations and reports first content and settle time from a stable-text rule.",
+    "consequence": "The per-round open times reported for the assistant fold, the Definition lookup, and the boundary crossings do not identify the session they came from, so they are not comparable with each other or with the source. They are superseded by the measurement below."
+  },
+  "canonical_open_measurement": {
+    "session": "The settled seeded session in ~/.seekdeep, verified from the Host: 34,501 events of which 34,288 are assistant/chunk, 7.6 MB of decoded history over the wire (POST /api/session.history answered 6,890,434 bytes in 0.50 s for the same session).",
+    "method": "Chromium, 1512x950, nine seconds after first paint, then a real mouse click on that row; first content is the first poll where the chat region holds more than 1,500 characters, settle is the first time the body text has not changed for 1.5 s.",
+    "port": {
+      "first_content_ms": [
+        546,
+        543,
+        537
+      ],
+      "settle_ms": [
+        2089,
+        2086,
+        2081
+      ],
+      "rendered_chars": 3832
+    },
+    "source_harness": {
+      "first_content_ms": [
+        634
+      ],
+      "settle_ms": [
+        2283
+      ],
+      "rendered_chars": 65189
+    },
+    "ab_of_this_branch": "The three performance commits on this branch (the assistant fold, the Definition lookup, and the UTF-16-free boundary crossing) were re-measured against the tree before them, rebuilt and served from the same Host: first content 555/575 ms before and 546/543/537 ms after, settle 2,099/2,117 ms before and 2,089/2,086/2,081 ms after. On this session the three commits do not move the open measurably.",
+    "caveat": "The source harness renders 65,189 characters of the same session where the port renders 3,832, because the port's Chat pane is virtualized. The two figures therefore describe different amounts of rendering work and are not a like-for-like speed comparison; the comparison worth making is the port against itself, which the A/B above does."
   }
 }
