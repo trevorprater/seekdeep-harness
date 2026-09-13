@@ -106,7 +106,7 @@ jobs:
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: native/landlock-run/package.json
 
@@ -188,7 +188,7 @@ jobs:
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           package_json_file: native/landlock-run/package.json
 
