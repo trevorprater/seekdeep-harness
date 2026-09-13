@@ -161,6 +161,13 @@ pub trait ScheduleClock: std::fmt::Debug + Send + Sync {
     fn now_millis(&self) -> i64;
 }
 
+/// The host wall clock: the production decision clock, and the clock catalog generation
+/// registers the tools with.
+#[must_use]
+pub fn system_clock() -> Arc<dyn ScheduleClock> {
+    Arc::new(SystemScheduleClock)
+}
+
 #[derive(Debug)]
 struct SystemScheduleClock;
 
@@ -201,7 +208,7 @@ impl ScheduleRuntime {
     /// Constructs an inactive runtime; `start` begins the first preflight.
     #[must_use]
     pub fn new(context: &Context, agent: Arc<Agent>) -> Arc<Self> {
-        Self::new_with_clock(context, agent, Arc::new(SystemScheduleClock))
+        Self::new_with_clock(context, agent, system_clock())
     }
 
     /// The decision clock every durable due-time and the schedule tools sample.

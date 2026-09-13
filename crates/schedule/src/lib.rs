@@ -23,7 +23,7 @@ pub use invariant::{NAME, register_invariant};
 pub use persistence::{SchedulePersistenceError, flush_schedule_persistence};
 pub use runtime::{
     DueDecision, MAX_TIMER_DELAY_MS, ScheduleClock, ScheduleMessageFactory, ScheduleRuntime,
-    due_decision,
+    due_decision, system_clock,
 };
 pub use tools::{
     ScheduleCreateArgs, corrupt_log_error, input_error, internal_error, persistence_error,

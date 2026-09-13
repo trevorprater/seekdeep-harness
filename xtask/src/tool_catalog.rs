@@ -250,7 +250,13 @@ fn mount_schedule(context: Context) -> BoxFuture<'static, anyhow::Result<Option<
         let agent = scoped_agent(&context, "tool-catalog-schedule")?;
         let scope = agent.scope_key();
         let agent_context = agent.context().clone();
-        seekdeep_schedule::register_schedule_tools(&context, &agent_context, agent, || {})?;
+        seekdeep_schedule::register_schedule_tools(
+            &context,
+            &agent_context,
+            agent,
+            seekdeep_schedule::system_clock(),
+            || {},
+        )?;
         Ok(Some(scope))
     })
 }
