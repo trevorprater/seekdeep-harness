@@ -5,15 +5,15 @@ use std::sync::Arc;
 use seekdeep_agent::{
     AGENTS, Agent, AgentOptions, AgentRegistry, AgentStatus, Inbox, NoopInboxNotifications,
 };
+use seekdeep_cordis::Context;
 use seekdeep_core::session::{AppendOptions, Session, SessionHeader, SessionId};
+use seekdeep_goal::{Config as GoalConfig, GoalService};
 use seekdeep_llm::{AbortSignal, CallId};
 use seekdeep_scope::ScopeKey;
-use seekdeep_tools::ToolExecutionInput;
-use seekdeep_cordis::Context;
-use seekdeep_goal::{Config as GoalConfig, GoalService};
 use seekdeep_system_prompt::{SystemPromptConfig, install as install_system_prompt};
 use seekdeep_tool_goal::wrapup::render_wrapup_context;
 use seekdeep_tool_goal::{Config, apply, config_schema};
+use seekdeep_tools::ToolExecutionInput;
 use seekdeep_tools::{ToolPresentationMode, ToolRuntime, ToolRuntimeConfig};
 use serde_json::json;
 
@@ -97,10 +97,10 @@ fn registers_three_goal_tools() {
     }
 }
 
-
 fn goal_agent(context: &Context, id: &str) -> Arc<Agent> {
     let id = SessionId::new(id);
-    let session = Session::create(&id, None, Some(SessionHeader::new(id.clone()))).expect("session");
+    let session =
+        Session::create(&id, None, Some(SessionHeader::new(id.clone()))).expect("session");
     let inbox =
         Arc::new(Inbox::new(session.clone(), Arc::new(NoopInboxNotifications)).expect("inbox"));
     Arc::new(Agent::new(
@@ -135,7 +135,9 @@ async fn get_goal_resolves_for_a_live_agent_without_an_initiator_scope() {
         .session()
         .append("turn/start", json!({ "turn": 1 }), AppendOptions::default())
         .expect("turn start");
-    let outcome = tools.execute(goal_input(&agent, "get_goal", json!({}))).await;
+    let outcome = tools
+        .execute(goal_input(&agent, "get_goal", json!({})))
+        .await;
     let rendered = format!("{outcome:?}");
     assert!(
         !rendered.contains("GOAL_TOOL_DRIVER_REQUIRED"),
@@ -155,7 +157,11 @@ async fn create_goal_without_an_initiator_scope_names_the_unmet_condition() {
         .append("turn/start", json!({ "turn": 1 }), AppendOptions::default())
         .expect("turn start");
     let outcome = tools
-        .execute(goal_input(&agent, "create_goal", json!({ "objective": "probe" })))
+        .execute(goal_input(
+            &agent,
+            "create_goal",
+            json!({ "objective": "probe" }),
+        ))
         .await;
     let rendered = format!("{outcome:?}");
     assert!(
