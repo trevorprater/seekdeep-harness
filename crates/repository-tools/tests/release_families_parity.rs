@@ -146,6 +146,30 @@ fn payload_policy_and_installed_entry_are_family_specific() {
             .validate_payload(&vendor, &[])
             .is_err()
     );
+    let cli = member("apps/cli", "@seekdeep-ai/seekdeep", serde_json::json!({}));
+    assert!(
+        ReleaseFamily::SeekDeep
+            .validate_payload(&cli, &["package/lib/index.js".to_owned()])
+            .is_err(),
+        "the packed CLI carries the executable its bin declares"
+    );
+    assert!(
+        ReleaseFamily::SeekDeep
+            .validate_payload(
+                &cli,
+                &[
+                    "package/lib/index.js".to_owned(),
+                    "package/lib/bin.js".to_owned()
+                ]
+            )
+            .is_ok()
+    );
+    assert!(
+        ReleaseFamily::SeekDeep
+            .validate_payload(&seekdeep, &["package/lib/index.js".to_owned()])
+            .is_ok(),
+        "only the member the installed entry names carries an executable"
+    );
     assert_eq!(
         ReleaseFamily::SeekDeep
             .installed_entry()

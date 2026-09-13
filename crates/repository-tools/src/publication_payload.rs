@@ -43,6 +43,12 @@ pub fn is_forbidden_publication_file(file: &str) -> bool {
         || normalized.ends_with(".js.map")
 }
 
+/// Whether a packed payload carries `path`, normalized the way the payload checks read it.
+#[must_use]
+pub fn payload_carries(files: &[String], path: &str) -> bool {
+    files.iter().any(|file| payload_path(file) == path)
+}
+
 /// Rejects source and map members in a packed npm tarball.
 ///
 /// # Errors

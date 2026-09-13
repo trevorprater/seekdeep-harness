@@ -8,7 +8,7 @@ use std::{
 use regex::Regex;
 use serde_json::Value;
 
-use crate::publication_payload::validate_tarball_payload;
+use crate::publication_payload::{payload_carries, validate_tarball_payload};
 
 const WORKSPACE_ROOT_PACKAGE: &str = "@seekdeep-ai/seekdeep-root";
 const PACKAGE_SCOPE: &str = "@seekdeep-ai/";
@@ -216,7 +216,21 @@ impl ReleaseFamily {
     /// Returns forbidden `SeekDeep` members or empty vendor payloads.
     pub fn validate_payload(self, member: &ReleaseMember, files: &[String]) -> anyhow::Result<()> {
         match self {
-            Self::SeekDeep => validate_tarball_payload(files, &member.name),
+            Self::SeekDeep => {
+                validate_tarball_payload(files, &member.name)?;
+                let entry = Self::SeekDeep
+                    .installed_entry()
+                    .expect("the seekdeep family installs an executable");
+                if member.name == entry.package_name {
+                    anyhow::ensure!(
+                        payload_carries(files, &entry.bin_path),
+                        "{} packs no {} for its installed executable",
+                        member.name,
+                        entry.bin_path
+                    );
+                }
+                Ok(())
+            }
             Self::Vendor if files.is_empty() => {
                 anyhow::bail!("{} packed an empty tarball", member.name)
             }
