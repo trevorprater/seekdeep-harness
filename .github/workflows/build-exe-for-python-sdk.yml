@@ -228,6 +228,10 @@ jobs:
             "$image" \
             bash -euxo pipefail -c '
               export PATH="$CARGO_HOME/bin:$SEEKDEEP_RUST_BIN:$PATH"
+              # The host-built wasm-bindgen links against a newer glibc than the container
+              # ships, so the container builds its own copy under the cached target directory.
+              cargo install --locked wasm-bindgen-cli --version 0.2.127 --root "$PWD/target/manylinux/tools"
+              export PATH="$PWD/target/manylinux/tools/bin:$PATH"
               cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
               cargo build --locked -p seekdeep-python-runtime-smoke --bin smoke-python-runtime --example python_runtime_sdk_interrupt
             '

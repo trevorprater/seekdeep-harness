@@ -71,5 +71,8 @@
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-primitives --artifact seekdeep_client_ui_primitives --module-id @seekdeep-ai/seekdeep-client-ui-primitives --out-dir packages/client/ui-primitives/lib"
   }
 }

@@ -204,6 +204,9 @@ fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_
         "rustup which --toolchain 1.93.1 cargo",
         // The container sees the cached CARGO_HOME, where the host installed wasm-bindgen.
         "export PATH=\"$CARGO_HOME/bin:$SEEKDEEP_RUST_BIN:$PATH\"",
+        // The container's glibc is older than the host's, so it builds its own wasm-bindgen.
+        "cargo install --locked wasm-bindgen-cli --version 0.2.127 --root \"$PWD/target/manylinux/tools\"",
+        "export PATH=\"$PWD/target/manylinux/tools/bin:$PATH\"",
     ] {
         assert!(script.contains(expected), "{expected}");
     }
