@@ -702,6 +702,28 @@ pub async fn read_for_edit(
     Ok((normalize_line_endings(&decoded), endings))
 }
 
+/// Removes a private staging directory when its publish path ends, including by cancellation.
+///
+/// The publish future can be dropped mid-operation, so the directory must be released from
+/// `Drop` rather than by code that follows the awaited commit.
+struct StagingDirGuard {
+    path: Option<PathBuf>,
+}
+
+impl StagingDirGuard {
+    fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+}
+
+impl Drop for StagingDirGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            let _ = std::fs::remove_dir_all(path);
+        }
+    }
+}
+
 /// Atomically replaces a file through a private, synced staging file.
 ///
 /// # Errors
@@ -743,6 +765,7 @@ pub async fn write_file_atomic(
             }
         }
     };
+    let staging_guard = StagingDirGuard::new(staging_dir.clone());
     let temp_path = staging_dir.join(format!("{}.tmp", basename(absolute_path)));
     let result = async {
         #[cfg(unix)]
@@ -841,6 +864,6 @@ pub async fn write_file_atomic(
         Ok::<(), FsError>(())
     }
     .await;
-    let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+    drop(staging_guard);
     result
 }
