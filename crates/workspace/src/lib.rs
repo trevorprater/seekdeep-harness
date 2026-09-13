@@ -219,8 +219,12 @@ impl WorkspaceRegistry {
     }
 
     /// Closes the owned workspace domain after draining accepted writes.
-    pub fn close(&self) -> BoxFuture<'static, anyhow::Result<()>> {
-        self.domain.close()
+    ///
+    /// The close runs through the operation queue, so a mutation accepted before it settles
+    /// first. Closing the domain directly would let its close marker run ahead of a queued
+    /// write and fail that write as closed.
+    pub fn close(self: &Arc<Self>) -> BoxFuture<'static, anyhow::Result<()>> {
+        self.enqueue(|registry| registry.domain.close())
     }
 
     /// Creates or reuses the workspace for one existing canonical directory.
