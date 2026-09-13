@@ -167,6 +167,60 @@ async fn serves_assets_spa_fallback_taps_traversal_and_method_gate() {
     context.fiber().dispose().await.expect("dispose server");
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn symlinks_are_served_inside_the_dist_root_and_forbidden_outside_it() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let dist = temporary.path().join("dist");
+    std::fs::create_dir(&dist).expect("dist");
+    let index = dist.join("index.html");
+    std::fs::write(&index, "<head></head><body>shell</body>").expect("index");
+    std::fs::write(dist.join("app.js"), "export {}").expect("app");
+    std::fs::write(temporary.path().join("secret.txt"), "outside").expect("secret");
+    std::os::unix::fs::symlink(dist.join("app.js"), dist.join("inside.js")).expect("inside link");
+    std::os::unix::fs::symlink(temporary.path().join("secret.txt"), dist.join("escape.txt"))
+        .expect("escape link");
+    std::os::unix::fs::symlink(
+        temporary.path().join("missing.txt"),
+        dist.join("dangling.txt"),
+    )
+    .expect("dangling link");
+
+    let context = Context::new();
+    let server = WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::Loopback,
+            port: 0,
+        },
+    )
+    .await
+    .expect("server");
+    let _frontend =
+        install(&context, FrontendStaticConfig { dist_index: index }).expect("frontend");
+
+    let inside = raw_request(server.port(), "GET", "/inside.js")
+        .await
+        .expect("inside");
+    assert_eq!(status(&inside), 200);
+    assert_eq!(body(&inside), b"export {}");
+    let escape = raw_request(server.port(), "GET", "/escape.txt")
+        .await
+        .expect("escape");
+    assert_eq!(status(&escape), 403);
+    assert!(body(&escape).is_empty());
+    let dangling = raw_request(server.port(), "GET", "/dangling.txt")
+        .await
+        .expect("dangling");
+    assert_eq!(status(&dangling), 200);
+    assert!(
+        std::str::from_utf8(body(&dangling))
+            .expect("body")
+            .contains("shell")
+    );
+    context.fiber().dispose().await.expect("dispose server");
+}
+
 #[tokio::test]
 async fn invalid_percent_encoding_is_a_bad_request_and_head_has_no_wire_body() {
     let temporary = tempfile::tempdir().expect("tempdir");

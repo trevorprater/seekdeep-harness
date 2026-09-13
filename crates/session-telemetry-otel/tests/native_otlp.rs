@@ -85,6 +85,7 @@ async fn native_pipeline_emits_otlp_json_with_resource_scopes_headers_and_gzip()
             exporter: json!({
                 "url": endpoint,
                 "headers": {"authorization": "Bearer native-test"},
+                "userAgent": "seekdeep-native-test/1.0",
                 "compression": "gzip",
                 "timeoutMillis": 5_000
             }),
@@ -132,6 +133,7 @@ async fn native_pipeline_emits_otlp_json_with_resource_scopes_headers_and_gzip()
         .expect("collector deadline")
         .expect("collector capture");
     assert_eq!(capture.headers["authorization"], "Bearer native-test");
+    assert_eq!(capture.headers["user-agent"], "seekdeep-native-test/1.0");
     assert_eq!(capture.headers["content-encoding"], "gzip");
     assert_eq!(capture.headers["content-type"], "application/json");
     let resource_logs = capture.body["resourceLogs"]

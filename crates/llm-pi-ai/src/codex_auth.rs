@@ -139,10 +139,17 @@ impl CodexOAuthRefresher {
             .filter(|value| !value.is_empty());
         let expires_in = value.get("expires_in").and_then(Value::as_f64);
         let (Some(access), Some(refresh), Some(expires_in)) = (access, refresh, expires_in) else {
-            anyhow::bail!(
-                "OpenAI Codex token refresh response missing fields: {}",
-                serde_json::to_string(&value)?
-            );
+            // The response carries credentials; name the missing fields, never the body.
+            let missing = [
+                ("access_token", access.is_none()),
+                ("refresh_token", refresh.is_none()),
+                ("expires_in", expires_in.is_none()),
+            ]
+            .into_iter()
+            .filter_map(|(name, missing)| missing.then_some(name))
+            .collect::<Vec<_>>()
+            .join(", ");
+            anyhow::bail!("OpenAI Codex token refresh response missing fields: {missing}");
         };
         let account_id = access_token_account_id(access)
             .ok_or_else(|| anyhow::anyhow!("Failed to extract accountId from token"))?;

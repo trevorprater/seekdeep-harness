@@ -1332,11 +1332,12 @@ impl JsonlSessionPersistence {
         );
         let temporary = directory.join(format!(".session-{}.tmp", Uuid::new_v4()));
         let write_result = async {
-            let mut file = fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&temporary)
-                .await?;
+            let mut options = fs::OpenOptions::new();
+            options.create_new(true).write(true);
+            // Source: `open(tmp, 'wx', 0o600)` — a session log is readable by its owner only.
+            #[cfg(unix)]
+            options.mode(0o600);
+            let mut file = options.open(&temporary).await?;
             let header_content = format!("{}\n", header_line(header)?);
             match self.compression {
                 JsonlCompression::None => file.write_all(header_content.as_bytes()).await?,
@@ -1393,7 +1394,13 @@ impl JsonlSessionPersistence {
         }
         #[cfg(not(windows))]
         {
-            fs::create_dir_all(directory).await?;
+            // Source: `mkdir(dir, { recursive: true, mode: 0o700 })` — directories the store
+            // creates are owner-only; directories that already exist keep their mode.
+            let mut builder = fs::DirBuilder::new();
+            builder.recursive(true);
+            #[cfg(unix)]
+            builder.mode(0o700);
+            builder.create(directory).await?;
             if let Some(parent) = parent
                 && parent.exists()
             {

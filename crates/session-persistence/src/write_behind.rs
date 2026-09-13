@@ -118,14 +118,14 @@ impl SessionWriteBehind {
         let actor_has_work = has_work.clone();
         let write: WriteFn = Arc::new(move |events| Box::pin(write(events)));
         let report: FailureFn = Arc::new(report_background_failure);
-        let actor_runtime = Arc::clone(&runtime);
-        runtime.spawn_actor(Box::pin(run_actor(
+        let spawner = Arc::clone(&runtime);
+        spawner.spawn_actor(Box::pin(run_actor(
             receiver,
             actor_has_work,
             max_delay,
             write,
             report,
-            actor_runtime,
+            runtime,
         )));
         Self { sender, has_work }
     }

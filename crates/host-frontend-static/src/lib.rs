@@ -57,7 +57,16 @@ where
     if target == dist_root || target == dist_index {
         return index_response(render_index().await?);
     }
-    match tokio::fs::read(&target).await {
+    // The lexical check above cannot see a symlink below the root that points outside it;
+    // follow links before reading and refuse a target that leaves the resolved root.
+    let Ok(resolved) = tokio::fs::canonicalize(&target).await else {
+        return index_response(render_index().await?);
+    };
+    let resolved_root = tokio::fs::canonicalize(dist_root).await?;
+    if !(resolved == resolved_root || resolved.starts_with(&resolved_root)) {
+        return Ok(response(StatusCode::FORBIDDEN, Bytes::new()));
+    }
+    match tokio::fs::read(&resolved).await {
         Ok(body) => typed_response(
             StatusCode::OK,
             mime_for(target.extension().and_then(|extension| extension.to_str())),

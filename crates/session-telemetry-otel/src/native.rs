@@ -163,9 +163,12 @@ fn exporter(config: &Value) -> anyhow::Result<LogExporter> {
     {
         builder = builder.with_timeout(timeout);
     }
-    if let Some(headers) = object.get("headers") {
-        builder = builder.with_headers(string_map(headers, "exporter.headers")?);
-    }
+    // `with_headers` installs the whole map, so the configured headers and the user agent
+    // are merged before the single call; the source's exporter receives them together.
+    let mut headers = match object.get("headers") {
+        Some(headers) => string_map(headers, "exporter.headers")?,
+        None => HashMap::new(),
+    };
     if let Some(compression) = object.get("compression") {
         match compression.as_str() {
             Some("none") => {}
@@ -179,10 +182,10 @@ fn exporter(config: &Value) -> anyhow::Result<LogExporter> {
         let user_agent = user_agent.as_str().ok_or_else(|| {
             anyhow::anyhow!("session-telemetry-otel: exporter.userAgent must be a string")
         })?;
-        builder = builder.with_headers(HashMap::from([(
-            "user-agent".to_owned(),
-            user_agent.to_owned(),
-        )]));
+        headers.insert("user-agent".to_owned(), user_agent.to_owned());
+    }
+    if !headers.is_empty() {
+        builder = builder.with_headers(headers);
     }
     builder.build().map_err(|error| {
         anyhow::anyhow!("session-telemetry-otel: cannot create OTLP exporter: {error}")
