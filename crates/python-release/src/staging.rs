@@ -38,7 +38,16 @@ pub fn copy_package(source: &Path, destination: &Path) -> anyhow::Result<()> {
 fn ignored(name: &str) -> bool {
     matches!(
         name,
-        ".venv" | ".pytest_cache" | "__pycache__" | "dist" | "node_modules" | "code-runtime-node"
+        ".venv"
+            | ".pytest_cache"
+            | "__pycache__"
+            | "dist"
+            | "node_modules"
+            | "code-runtime-node"
+            // The executable pipeline stages the ripgrep closures next to the runtime
+            // executable inside the source package; the wheel copies exactly one from the
+            // executable's side, so staged copies never pre-empt that directory.
+            | "ripgrep"
     ) || name.strip_suffix(".pyc").is_some()
         || name.starts_with("seekdeep-jsonrpc-agent-pkg-")
         || name.starts_with("seekdeep-python-sdk-ffi-")

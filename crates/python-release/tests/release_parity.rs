@@ -166,6 +166,41 @@ fn platform_manifest_is_nonempty_and_has_exact_string_fields() {
     }
 }
 
+/// The executable pipeline stages ripgrep closures inside the source package (next to
+/// the runtime executable and under the Node carrier); the wheel copies exactly one from
+/// the executable's side, so those staged copies must neither pre-empt that directory
+/// nor leak into the wheel.
+#[test]
+fn staging_the_runtime_ignores_ripgrep_closures_left_in_the_source_package() {
+    let root = fixture();
+    let platform = load_platforms(&root.path().join("python/sdk-runtime/platforms.json")).unwrap()
+        ["linux-x64"]
+        .clone();
+    let executable_path = root.path().join(&platform.executable);
+    executable(&executable_path);
+    let package_runtime = root
+        .path()
+        .join("python/sdk-runtime/src/deepseek_harness_runtime/runtime");
+    for staged in ["ripgrep/linux-x64", "node/native/ripgrep"] {
+        let directory = package_runtime.join(staged);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("rg"), b"staged by the executable pipeline").unwrap();
+    }
+    let staged = root.path().join("staged-runtime");
+    staging::stage_runtime(
+        root.path(),
+        &staged,
+        "1.2.3",
+        &executable_path,
+        &platform.executable,
+    )
+    .unwrap();
+    let runtime = staged.join("src/deepseek_harness_runtime/runtime");
+    assert!(runtime.join("ripgrep/ripgrep-manifest.json").is_file());
+    assert!(!runtime.join("ripgrep/linux-x64").exists());
+    assert!(!runtime.join("node/native/ripgrep").exists());
+}
+
 #[test]
 fn generated_hook_uses_its_validated_import_time_platform_snapshot() {
     let root = fixture();
