@@ -251,7 +251,11 @@ impl OutputCollector {
         if let Some(mut file) = state.spill_file.take()
             && file.seal().is_err()
         {
-            state.spill_path = None;
+            // A failed seal leaves nothing able to write the file, so unlink it rather than
+            // dropping the path, which would leave the spill file with no referent.
+            if let Some(path) = state.spill_path.take() {
+                let _ = self.io.remove(&path);
+            }
         }
     }
 
