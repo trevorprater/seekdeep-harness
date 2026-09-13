@@ -135,6 +135,52 @@ async fn bounded_reads_and_diff_basis_enforce_exclusive_limits_and_text_rules() 
 }
 
 #[tokio::test]
+async fn dropping_the_publish_future_releases_its_staging_directory() {
+    let root = tempfile::tempdir().expect("root");
+    let path = root.path().join("cancelled/file.txt");
+    let parent = path.parent().unwrap().to_path_buf();
+    let target = path.to_str().unwrap().to_owned();
+    let handle =
+        tokio::spawn(async move { write_file_atomic(&target, "payload", None, None, None).await });
+
+    let staging_entries = |directory: &std::path::Path| {
+        std::fs::read_dir(directory)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmpdir"))
+                    .count()
+            })
+            .unwrap_or(0)
+    };
+
+    // Wait for the private staging directory, then drop the operation mid-publish.
+    let mut observed = false;
+    for _ in 0..2_000 {
+        if staging_entries(&parent) > 0 {
+            observed = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    }
+    handle.abort();
+    let _ = handle.await;
+    assert!(
+        observed,
+        "the publish should create an observable staging directory before it completes"
+    );
+
+    // The guard releases the directory from Drop, so no staging directory may outlive cancellation.
+    for _ in 0..200 {
+        if staging_entries(&parent) == 0 {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    }
+    panic!("a cancelled publish left its staging directory behind");
+}
+
+#[tokio::test]
 async fn atomic_write_creates_parents_preserves_mode_cleans_staging_and_guards_create() {
     let root = tempfile::tempdir().expect("root");
     let path = root.path().join("nested/file.txt");
