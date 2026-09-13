@@ -2,16 +2,41 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use futures::stream::BoxStream;
+use icu_collator::{Collator, CollatorBorrowed, CollatorPreferences, options::CollatorOptions};
+use icu_locale::Locale;
 use seekdeep_fs::types::{FsError, FsErrorCode, FsKind, FsTargetKey, FsVersion};
 use seekdeep_llm::AbortSignal;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 const BINARY_SAMPLE_BYTES: usize = 8192;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// Orders two names the way the source's `localeCompare` does.
+///
+/// Node resolves that against the runtime's default locale, so the collator reads the system
+/// locale and falls back to `en-US`, matching the directory browser's comparator.
+fn locale_compare(left: &str, right: &str) -> std::cmp::Ordering {
+    static COLLATOR: OnceLock<CollatorBorrowed<'static>> = OnceLock::new();
+    COLLATOR
+        .get_or_init(|| {
+            let locale = sys_locale::get_locale()
+                .and_then(|locale| locale.parse::<Locale>().ok())
+                .unwrap_or_else(|| "en-US".parse().expect("fallback locale is valid"));
+            Collator::try_new(
+                CollatorPreferences::from(&locale),
+                CollatorOptions::default(),
+            )
+            .expect("compiled ICU collation data includes the active locale")
+        })
+        .compare(left, right)
+}
 
 /// A resolved local path: the absolute path shown to callers and its realpath identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -312,7 +337,7 @@ pub async fn list_directory(
     {
         names.push(entry.file_name().to_string_lossy().into_owned());
     }
-    names.sort();
+    names.sort_by(|left, right| locale_compare(left, right));
     for name in names {
         ensure_not_aborted(signal, "list")?;
         let child_target = resolve_local_target(target.target_key.as_str(), &name).await?;
@@ -866,4 +891,15 @@ pub async fn write_file_atomic(
     .await;
     drop(staging_guard);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::locale_compare;
+
+    #[test]
+    fn locale_compare_orders_letters_case_insensitively() {
+        // ICU primary strength orders 'a' before 'B', where byte order puts 'B' first.
+        assert_eq!(locale_compare("a", "B"), std::cmp::Ordering::Less);
+    }
 }
