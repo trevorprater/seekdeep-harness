@@ -112,9 +112,25 @@ fn resolve_goal_tool(
             .as_ref()
             .is_some_and(|live| Arc::ptr_eq(live, agent))
     });
-    if !live || !running || (require_initiator && !initiator) {
+    let mut unmet = Vec::new();
+    if !live {
+        unmet.push("the calling agent is not the live agent registered under its id");
+    }
+    if !running {
+        unmet.push("the calling agent is not running");
+    }
+    if require_initiator && !initiator {
+        unmet.push("the calling agent is not the current initiator");
+    }
+    if !unmet.is_empty() {
+        // Name the unmet conditions: the caller cannot tell them apart from the outside, and
+        // which one fails decides whether the fault is the caller's driver scope or the bridge
+        // that dispatched the call.
         return reject(
-            "goal tools require the exact live calling agent inside its active driver",
+            format!(
+                "goal tools require the exact live calling agent inside its active driver: {}",
+                unmet.join("; ")
+            ),
             "GOAL_TOOL_DRIVER_REQUIRED",
         );
     }
