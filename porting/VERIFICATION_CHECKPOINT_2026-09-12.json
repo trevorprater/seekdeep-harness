@@ -202,5 +202,15 @@
       "trajectory_tab": "Switching to the Trajectory tab renders 816 rows and 26,997 characters within about one second, stable over twenty seconds, with no console error.",
       "app_startup": "A cold page with no session selected: shell at 193 ms, composer usable at 750 ms, three long tasks totalling 207 ms. No session opens by itself, so the earlier reading of a startup that never painted was an expectation of content the app does not load at the root route."
     }
+  },
+  "session_size_scaling": {
+    "why": "The objective is about the browser experience, and the sessions a working user accumulates grow without bound. Two settled sessions of the same workspace were measured with the corrected instrument.",
+    "small": "session-c7280f5e, 34,501 events, 7.6 MB of history: first content 540 ms, main-thread work 665 ms, and the three Busiest modules are ui-conversation 110 ms, ui-trajectory 99 ms, client-runtime 85 ms.",
+    "large": "session-d40b4793, 58,574 events, 15.1 MB of history (the Host answers it in 0.45 s): first content 6,952 ms and 7,206 ms to settle, main-thread work 6,561 ms, with ui-conversation 1,879 ms, ui-trajectory 1,538 ms, client-runtime 928 ms.",
+    "finding": "1.7 times the events costs about 15 times the per-event work, and the growth is inside the two UI plugins rather than in transport, which the Host serves in under half a second.",
+    "inside_ui_conversation": "Of its 1,879 ms: push_plain_units 221 ms and encode_utf16 192 ms (code units to JSON text), extend_units 181 ms (JSON text to code units), value_end 146 ms and skip_to_escape 143 ms (parsing that text), match_from_js 73 ms and event_from_js 35 ms, with dlmalloc malloc and free 110 ms.",
+    "diagnosis": "The batch fold decodes its state's JSON text, re-encodes each message's whole accumulated text and parses it again, once per fold. A longer message therefore costs its own length once per batch, so the work is quadratic in message length and the per-event cost rises with the session. The assistant fold in round 12 removed the per-chunk form of this cost; the per-batch form remains, and it is what a large session pays.",
+    "next_target": "Give the fold an incremental representation: keep a block's encoded JSON text and append only each delta's encoding to it, and avoid reparsing text the crate produced, so a batch costs the delta rather than the message. crates/lossless-json/src/string.rs already caches the encoded text per JsonString; push_utf16 invalidates that cache today.",
+    "instrument_note": "compare.mjs settles on unchanged text for 1.5 s, which fires during a loading pause: it reported the 58,574-event session as contentAtMs null with 562 characters. The chat-region signal in open.mjs is the reliable one; the stability rule needs the content gate in front of it."
   }
 }
