@@ -10504,10 +10504,12 @@ dependencies = [
  "seekdeep-loader",
  "seekdeep-shell-env",
  "seekdeep-system-prompt",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "url",
 ]
 
 [[package]]
