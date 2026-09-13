@@ -1,4 +1,7 @@
 //! Required keyless real Codex 0.147.0 integration against loopback Responses.
+//!
+//! Like the source, the tests run the package's own pinned `codex` launcher: it leads the child
+//! `PATH`, so another Codex on the host never answers for it.
 
 #![cfg(unix)]
 
@@ -16,7 +19,10 @@ use seekdeep_subagent_codex::{Config, apply};
 use seekdeep_subprocess_local::LocalSubprocessRuntime;
 use serde_json::{Map, Value, json};
 
-use support::responses_fixture::{Behavior, ResponsesFixture, response_input_texts};
+use support::{
+    codex_package::{PINNED_CODEX_VERSION_LINE, codex_launcher, codex_path},
+    responses_fixture::{Behavior, ResponsesFixture, response_input_texts},
+};
 
 struct RealHarness {
     context: Context,
@@ -73,7 +79,7 @@ impl RealHarness {
                 "XDG_CONFIG_HOME".to_owned(),
                 root.path().join("xdg").to_string_lossy().into_owned(),
             ),
-            ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
+            ("PATH".to_owned(), codex_path()),
             ("HTTP_PROXY".to_owned(), String::new()),
             ("HTTPS_PROXY".to_owned(), String::new()),
             ("ALL_PROXY".to_owned(), String::new()),
@@ -179,14 +185,14 @@ fn advertised_functions(body: &Map<String, Value>) -> Vec<String> {
 
 #[tokio::test]
 async fn passes_exact_task_and_authentication_to_real_codex_and_returns_exact_text() {
-    let version = std::process::Command::new("codex")
+    let version = std::process::Command::new(codex_launcher())
         .arg("--version")
         .output()
         .unwrap();
     assert!(version.status.success());
     assert_eq!(
         String::from_utf8(version.stdout).unwrap().trim(),
-        "codex-cli 0.147.0"
+        PINNED_CODEX_VERSION_LINE
     );
     let sentinel = "REAL_CODEX_SENTINEL_0_147_0";
     let task = "Return the fixture sentinel exactly.";

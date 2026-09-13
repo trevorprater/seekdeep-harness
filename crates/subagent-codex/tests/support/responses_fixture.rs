@@ -224,7 +224,7 @@ pub(crate) fn response_input_texts(body: &Map<String, Value>) -> Vec<String> {
         .collect()
 }
 
-fn complete_events(text: &str) -> Vec<Value> {
+pub(crate) fn complete_events(text: &str) -> Vec<Value> {
     let completed = response_object(text);
     let message = completed["output"][0].clone();
     let part = message["content"][0].clone();

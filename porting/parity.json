@@ -78075,8 +78075,15 @@
     {
       "source": "packages/subagent/subagent-acp/tests/subagent-acp.e2e.ts",
       "kind": "test",
-      "status": "pending",
-      "note": "Credentialed real child model and filesystem-effect evidence requires explicit DeepSeek secret and quota authority."
+      "status": "ported",
+      "note": "Credentialed real child model and filesystem-effect evidence requires explicit DeepSeek secret and quota authority: run deliberately with DEEPSEEK_API_KEY=... cargo test -p seekdeep-acp-demo --test subagent_acp_e2e -- --ignored. The port lives in the acp-demo crate because the child is its compiled seekdeep-acp-demo bin (the source's acp-agent example), selected through seekdeep_loader_smoke::resolve_example_launch; the child's SEEKDEEP_HOME and SEEKDEEP_AGENTS_HOME are isolated under the temporary root.",
+      "targets": [
+        "crates/acp-demo/tests/subagent_acp_e2e.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-acp-demo --test subagent_acp_e2e (launch resolution passed keylessly; both credentialed round trips ignored)",
+        "cargo clippy -p seekdeep-acp-demo --tests --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/tests/subagent-acp.spec.ts",
@@ -78230,8 +78237,15 @@
     {
       "source": "packages/subagent/subagent-claude-code/tests/real-deepseek.e2e.ts",
       "kind": "test",
-      "status": "pending",
-      "note": "Credentialed DeepSeek nonce evidence requires explicit secret and quota authority; keyless product evidence does not substitute for it."
+      "status": "ported",
+      "note": "Credentialed DeepSeek nonce evidence requires explicit secret and quota authority: run deliberately with DEEPSEEK_API_KEY=... cargo test -p seekdeep-subagent-claude-code --test real_deepseek_e2e -- --ignored. The pinned @anthropic-ai/claude-agent-sdk 0.3.220 (Claude Code 2.1.220) platform CLI is resolved through the package's own node_modules link like import.meta.resolve; the nonce derives from the clock and process id instead of randomUUID.",
+      "targets": [
+        "crates/subagent-claude-code/tests/real_deepseek_e2e.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent-claude-code --test real_deepseek_e2e (2 keyless helper checks passed: official upstream guard, platform package layout; the credentialed round trip ignored)",
+        "cargo clippy -p seekdeep-subagent-claude-code --tests --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/real-product.spec.ts",
@@ -78239,12 +78253,16 @@
       "status": "verified",
       "targets": [
         "crates/subagent-claude-code/tests/real_product.rs",
-        "crates/subagent-claude-code/tests/support/messages_fixture.rs"
+        "crates/subagent-claude-code/tests/support/messages_fixture.rs",
+        "crates/subagent-claude-code/tests/support/sdk_package.rs",
+        "crates/subagent-claude-code/tests/support/spying_subprocess.rs"
       ],
       "evidence": [
         "pinned-source Claude Code unit and real-product Vitest suites passed 26/26",
-        "manual Rust native-product test passed against installed Claude Code 2.1.233 with exact fake key, task, host settings model, result, cancellation, and quiescence"
-      ]
+        "manual Rust native-product test passed against installed Claude Code 2.1.233 with exact fake key, task, host settings model, result, cancellation, and quiescence",
+        "2026-09-13: the suite runs keylessly like the source: the pinned @anthropic-ai/claude-agent-sdk 0.3.220 platform CLI (Claude Code 2.1.220) is resolved beside the SDK package and symlinked into a metacharacter-named PATH entry, a spying subprocess seat records spawns and handles; cargo test -p seekdeep-subagent-claude-code --test real_product (3 passed: settings inheritance with the exact task and fake key, real CLI failure mapped to error, cancellation quiescence)"
+      ],
+      "note": "The source deletes an ambient ANTHROPIC_MODEL/ANTHROPIC_SMALL_FAST_MODEL for the file; the port cannot unset process variables safely (unsafe is forbidden), so the settings-inheritance assertion relies on the developer shell leaving them unset, as CI does. The SDK init message's claude_code_version and the Windows batch-launcher branch have no counterpart: the port drives the CLI directly and the suite is unix-only."
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/subagent-claude-code.spec.ts",
@@ -78380,7 +78398,15 @@
     {
       "source": "packages/subagent/subagent-codex/tests/deepseek-responses-bridge.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/subagent-codex/tests/support/deepseek_responses_bridge.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent-codex --test real_deepseek_e2e (6 keyless bridge guards passed: route, single task, bearer credential, nonce, task text, official upstream; the credentialed round trip ignored)",
+        "cargo clippy -p seekdeep-subagent-codex --tests --all-features -- -D warnings"
+      ],
+      "note": "The forwarding path to DeepSeek runs only inside the ignored credentialed e2e, so the row stays ported until that run is authorized (DEEPSEEK_API_KEY plus quota authority). The SSE reply is close-delimited like the fixture's rather than chunked keep-alive; Codex consumes both identically."
     },
     {
       "source": "packages/subagent/subagent-codex/tests/loader-composition.e2e.ts",
@@ -78398,7 +78424,16 @@
     {
       "source": "packages/subagent/subagent-codex/tests/real-deepseek.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/subagent-codex/tests/real_deepseek_e2e.rs",
+        "crates/subagent-codex/tests/support/codex_package.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent-codex --test real_deepseek_e2e (the nonce round trip is #[ignore] and self-skips without DEEPSEEK_API_KEY; 6 keyless bridge guards passed)",
+        "cargo clippy -p seekdeep-subagent-codex --tests --all-features -- -D warnings"
+      ],
+      "note": "Credentialed DeepSeek nonce evidence requires explicit secret and quota authority: run deliberately with DEEPSEEK_API_KEY=... cargo test -p seekdeep-subagent-codex --test real_deepseek_e2e -- --ignored. The pinned codex 0.147.0 launcher is resolved from packages/subagent/subagent-codex/node_modules/.bin as in the source (real_product.rs now does the same); the nonce derives from the clock and process id instead of randomUUID because the workspace admits no ambient randomness."
     },
     {
       "source": "packages/subagent/subagent-codex/tests/real-product.spec.ts",
@@ -78406,12 +78441,14 @@
       "status": "verified",
       "targets": [
         "crates/subagent-codex/tests/real_product.rs",
-        "crates/subagent-codex/tests/support/responses_fixture.rs"
+        "crates/subagent-codex/tests/support/responses_fixture.rs",
+        "crates/subagent-codex/tests/support/codex_package.rs"
       ],
       "evidence": [
         "pinned-source Vitest: real-product spec passed inside the 54/54 combined run",
         "Rust required keyless tests drive installed official codex-cli 0.147.0 through the production provider",
-        "Rust observes exact Bearer auth and task, byte-exact output, denied command approval with no side effect, local cancellation, and zero live process trees"
+        "Rust observes exact Bearer auth and task, byte-exact output, denied command approval with no side effect, local cancellation, and zero live process trees",
+        "2026-09-13: the pinned @openai/codex 0.147.0 launcher is resolved from packages/subagent/subagent-codex/node_modules/.bin and leads the child PATH as in the source, so a host-installed Codex (0.154.0 on the development host) no longer answers; cargo test -p seekdeep-subagent-codex --test real_product (3 passed)"
       ]
     },
     {

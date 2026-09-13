@@ -111,6 +111,9 @@ url.workspace = true
 
 [dev-dependencies]
 regex.workspace = true
+seekdeep-loader-smoke = { path = "../loader-smoke" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subagent-acp = { path = "../subagent-acp" }
 seekdeep-goal = { path = "../goal" }
 seekdeep-jobs = { path = "../jobs" }
 seekdeep-shell = { path = "../shell" }
