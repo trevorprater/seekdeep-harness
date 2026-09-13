@@ -22,7 +22,8 @@ async fn main() -> ExitCode {
 
 async fn run() -> Result<()> {
     let command = env::args().nth(1);
-    let config = IssuePolicyConfig::bundled()?;
+    let config = IssuePolicyConfig::bundled()?
+        .for_actions_repository(env::var("GITHUB_REPOSITORY").ok().as_deref())?;
     match command.as_deref() {
         Some("pr") => {
             let event = read_event()?;

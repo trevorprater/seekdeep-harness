@@ -38,6 +38,29 @@ impl IssuePolicyConfig {
         ))
     }
 
+    /// Addresses the repository an Actions run is hosted in.
+    ///
+    /// The bundled identity names the published home of the policy; a workflow run in a
+    /// fork or another clone still validates and updates its own pull requests and Issues,
+    /// so `GITHUB_REPOSITORY` (`owner/name`, set by Actions) overrides the organization and
+    /// repository while the Project identities stay bundled.
+    ///
+    /// # Errors
+    ///
+    /// Returns a slug that is not `owner/name`.
+    pub fn for_actions_repository(mut self, slug: Option<&str>) -> Result<Self> {
+        let Some(slug) = slug.map(str::trim).filter(|slug| !slug.is_empty()) else {
+            return Ok(self);
+        };
+        let (organization, repository) = slug
+            .split_once('/')
+            .filter(|(owner, name)| !owner.is_empty() && !name.is_empty() && !name.contains('/'))
+            .ok_or_else(|| anyhow::anyhow!("GITHUB_REPOSITORY must be owner/name, got {slug:?}"))?;
+        organization.clone_into(&mut self.organization);
+        repository.clone_into(&mut self.repository);
+        Ok(self)
+    }
+
     /// Parse and validate one configuration document.
     ///
     /// # Errors
@@ -69,5 +92,34 @@ impl IssuePolicyConfig {
             "config.lifecycleActor 未设置"
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IssuePolicyConfig;
+
+    #[test]
+    fn an_actions_repository_slug_overrides_the_bundled_identity_only() {
+        let bundled = IssuePolicyConfig::bundled().unwrap();
+        let hosted = bundled
+            .clone()
+            .for_actions_repository(Some("someone/seekdeep-harness-fork"))
+            .unwrap();
+        assert_eq!(hosted.organization, "someone");
+        assert_eq!(hosted.repository, "seekdeep-harness-fork");
+        assert_eq!(hosted.project_number, bundled.project_number);
+        assert_eq!(hosted.project_title, bundled.project_title);
+        assert_eq!(
+            bundled.clone().for_actions_repository(None).unwrap(),
+            bundled
+        );
+        assert_eq!(
+            bundled.clone().for_actions_repository(Some(" ")).unwrap(),
+            bundled
+        );
+        for slug in ["nameonly", "/name", "owner/", "owner/name/extra"] {
+            assert!(bundled.clone().for_actions_repository(Some(slug)).is_err());
+        }
     }
 }

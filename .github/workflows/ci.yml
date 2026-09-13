@@ -327,7 +327,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: python-sdk-keyless
+          # Bumped once: the previous entry restored a V8 build directory without its
+          # prebuilt static library, and every later run failed to link `rusty_v8`.
+          key: python-sdk-keyless-v2
 
       - uses: actions/setup-python@v6.3.0
         with:

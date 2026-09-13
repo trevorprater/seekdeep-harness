@@ -49,12 +49,16 @@ fn policy_and_lifecycle_workflows_preserve_events_guards_and_trusted_rust_execut
     let lifecycle_pr_events = sequence(&lifecycle, &["on", "pull_request", "types"]);
     assert!(!lifecycle_pr_events.contains(&"ready_for_review"));
     assert!(lifecycle_pr_events.contains(&"review_requested"));
+    // The job skips where the issue app is not configured and otherwise keeps the source's
+    // review-state guard; the token exchange addresses the repository hosting the run.
     assert_eq!(
         lifecycle["jobs"]["lifecycle"]["if"].as_str(),
         Some(
-            "${{ github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested') }}"
+            "${{ vars.SEEKDEEP_ISSUE_APP_CLIENT_ID != '' && (github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested')) }}"
         )
     );
+    assert!(lifecycle_source.contains("owner: ${{ github.repository_owner }}"));
+    assert!(lifecycle_source.contains("repositories: ${{ github.event.repository.name }}"));
     assert!(lifecycle_source.contains("uses: dtolnay/rust-toolchain@1.93.1"));
     assert!(lifecycle_source.contains(
         "CARGO_INCREMENTAL=0 cargo run --quiet --locked -p seekdeep-issue-policy -- lifecycle"

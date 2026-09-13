@@ -36,7 +36,10 @@ concurrency:
 jobs:
   lifecycle:
     name: Issue lifecycle
-    if: ${{ github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested') }}
+    # The lifecycle automation acts through the repository's issue app; a repository that has
+    # not configured the app (a fork, a fresh clone) skips the job instead of failing at the
+    # token exchange.
+    if: ${{ vars.SEEKDEEP_ISSUE_APP_CLIENT_ID != '' && (github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested')) }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted policy
@@ -52,8 +55,8 @@ jobs:
         with:
           client-id: ${{ vars.SEEKDEEP_ISSUE_APP_CLIENT_ID }}
           private-key: ${{ secrets.SEEKDEEP_ISSUE_APP_PRIVATE_KEY }}
-          owner: seekdeep-harness
-          repositories: seekdeep-harness
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
       - name: Handle repository event
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
