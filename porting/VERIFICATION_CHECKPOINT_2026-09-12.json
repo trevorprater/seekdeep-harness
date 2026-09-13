@@ -52,9 +52,9 @@
     "A history page borrows the loaded window instead of deep-copying every event before selecting a suffix of it, and a tool result's backscan reads through an iterator so the live event stream keeps passing its session's own list. Measured on the real 6.9 MB history response by alternating the two builds over eight iterations: 239.4 ms to 236.9 ms with no overlap, and the transient copy of the whole window per request is gone."
   ],
   "remaining": [
-    "The client's remaining per-event cost is the wasm boundary itself: the frames carrying no script URL (TextDecoder.decode and encodeInto over the 8 MB body, plus the folded program time) are about 670 ms of a 2.5 s open, and client-runtime is 472-484 ms of it. Every session event is marshalled through JSON text into every plugin's own wasm instance and parsed there; the source keeps session data as JavaScript values and converts nothing.",
-    "A cold session open of an 8 MB history is 2.52-2.59 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so about 2.1 s is the client folding 36,196 assistant/chunk events. Per module over one open: client-runtime 472-484 ms, frames with no script URL about 670 ms, ui-conversation 294-308 ms, ui-trajectory 189-192 ms, idle about 335 ms.",
-    "Closing the rest means changing what crosses the wasm boundary per event - the JSON text of each event into each plugin's instance - which has no counterpart in the source. Localized work is now down to items of 5-10 per cent of an open."
+    "A cold session open of an 8 MB history is 2.03-2.08 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so about 1.7 s is the client folding 36,196 assistant/chunk events. Per module over one open: client-runtime 463-467 ms, ui-conversation 311-313 ms, ui-trajectory 193-194 ms, frames with no script URL 308 ms of which 143 ms is unattributed program time, idle about 335 ms.",
+    "What is left is the per-event work itself: matching 36k events against the registry's Definitions, building the view nodes they publish, and the React update the browser performs for the rendered conversation. None of it is a conversion that can be removed; it is work the source does in JavaScript without a wasm boundary.",
+    "Localized work is now down to items of 3-8 per cent of an open. Anything larger means changing the shape of what the client folds, not another hot function."
   ],
   "measurement_note": "Wall clock at the 5-10% level is not measurable on this machine while another session compiles: the same committed source measured 4.29-4.62 s and later 4.63-5.04 s. Changes of this size are resolved by per-plugin-module profile self-time instead, where two runs of the same build hold to about 0.2%. The fold above was measured that way and then confirmed by the cold-open total, where the same policy holds.",
   "feature_probe": {
@@ -145,5 +145,22 @@
       "cold_open_total": "2,596 and 2,605 before, 2,518 and 2,590 after"
     },
     "evidence": "crates/client-runtime/src/fast_hash.rs unit-tests the hasher; cargo test -p seekdeep-client-runtime is green across its suites; conversation_nodes_parity 8, assistant_fold_parity 1 and trajectory assistant_definition_parity 6 pass; web-keyless 151 assertions with exit 0 and web-assembled-snapshots 7 passed on this tree; clippy --all-targets --all-features and cargo fmt --all -- --check are clean."
+  },
+  "boundary_crossing_work_verified_here": {
+    "what_changed": "A window replacement hands every Definition the whole window as one JSON text, which is what lets a module parse its 36k events once instead of crossing the boundary per event. That text was a JavaScript string, so it left the assembler's module as UTF-16 and was encoded back to UTF-8 inside every module that read it, and the matcher's rows came back the same way. It now crosses as UTF-8 bytes in both directions. Reading a field of a face also created its member name as a JavaScript string on every read, inside the per-event path that decodes a match, a context, an event, or a location; those names are now created once per spelling.",
+    "per_frame_ms": {
+      "encodeInto": "191 before, 15 after",
+      "TextDecoder.decode": "169 before, 57 after",
+      "frames_with_no_script_url": "602 before, 308 after"
+    },
+    "per_module_ms": {
+      "cold_open_total": "2,518 and 2,590 before, 2,033 and 2,081 after",
+      "client_runtime": "472 and 484 before, 463 and 467 after",
+      "ui_conversation": "294 and 308 before, 311 and 313 after",
+      "ui_trajectory": "189 and 192 before, 193 and 194 after",
+      "first_content": "2,134 before, 1,721 after"
+    },
+    "protocol_note": "matchMany is a port-internal hook: the producer is crates/client-runtime/src/wasm_native_definition.rs and the only consumer is the adapter's prematch, with no JavaScript or TypeScript implementor anywhere in the tree. The second argument and the returned rows changed representation from JSON text to UTF-8 bytes; a Definition that answers with a string is still accepted.",
+    "evidence": "cargo test -p seekdeep-client-runtime green across its suites; conversation_nodes_parity 8, assistant_fold_parity 1 and trajectory assistant_definition_parity 6 pass; web-assembled-snapshots 7 passed and web-keyless 151 assertions with exit 0 on this tree; clippy --all-targets --all-features and cargo fmt --all -- --check clean."
   }
 }
