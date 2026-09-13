@@ -65,6 +65,32 @@ pub fn goal_tool_execution(
     ctx: &Context,
     exec: &ToolRunContext,
 ) -> Result<GoalToolExecution, HarnessError> {
+    resolve_goal_tool(ctx, exec, true)
+}
+
+/// Resolves a read-only goal query.
+///
+/// Reads do not require initiator authority. The documented workflow reads the goal before
+/// updating it, and a nested tool call - a program dispatching `get_goal` - runs without a
+/// current initiator, so requiring one makes the read unreachable. Liveness is still
+/// required: a stale handle must not read registry state its caller no longer owns.
+///
+/// # Errors
+///
+/// Returns a structured authority failure when no calling agent is present or the caller is
+/// not the exact live agent.
+pub fn goal_tool_read(
+    ctx: &Context,
+    exec: &ToolRunContext,
+) -> Result<GoalToolExecution, HarnessError> {
+    resolve_goal_tool(ctx, exec, false)
+}
+
+fn resolve_goal_tool(
+    ctx: &Context,
+    exec: &ToolRunContext,
+    require_initiator: bool,
+) -> Result<GoalToolExecution, HarnessError> {
     let Some(agent) = exec.agent.as_ref() else {
         return reject(
             "goal tools require a calling agent",
@@ -86,7 +112,7 @@ pub fn goal_tool_execution(
             .as_ref()
             .is_some_and(|live| Arc::ptr_eq(live, agent))
     });
-    if !live || !running || !initiator {
+    if !live || !running || (require_initiator && !initiator) {
         return reject(
             "goal tools require the exact live calling agent inside its active driver",
             "GOAL_TOOL_DRIVER_REQUIRED",

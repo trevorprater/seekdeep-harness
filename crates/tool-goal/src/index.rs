@@ -20,7 +20,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::authority::{
-    GoalToolAuthority, completion_authority, goal_tool_execution, require_direct_human,
+    GoalToolAuthority, completion_authority, goal_tool_execution, goal_tool_read,
+    require_direct_human,
 };
 use crate::wrapup::render_wrapup_context;
 
@@ -294,7 +295,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
             Arc::new(move |_args: GetGoalArgs, exec| {
                 let ctx = execute_ctx.clone();
                 Box::pin(preserve_goal_error(async move {
-                    let execution = goal_tool_execution(&ctx, &exec)?;
+                    let execution = goal_tool_read(&ctx, &exec)?;
                     let goals = ctx
                         .get(GOAL)
                         .ok_or_else(|| anyhow::anyhow!("tool-goal requires goals"))?;
