@@ -76,3 +76,41 @@ async fn serves_stored_endpoint_without_re_registration() {
     assert!(entry.take_requests().is_empty());
     assert_eq!(stored.take_requests().len(), 1);
 }
+
+
+#[tokio::test]
+async fn rejects_an_invalid_credential_reference_at_install() {
+    let context = Context::new();
+    let _runtime = WebRuntime::new(
+        &context,
+        &WebRuntimeConfig {
+            search_provider: Some(DEEPSEEK_PROVIDER_ID.to_owned()),
+            fetch_provider: None,
+        },
+    )
+    .expect("web runtime");
+    seekdeep_settings::SettingsService::install(&context, MemorySettings::new())
+        .await
+        .expect("settings");
+
+    // A reference that is a valid string but not a valid credential reference must not survive
+    // installation: the provider's options closure cannot report the failure, so accepting it
+    // here would abort the first search instead.
+    let fiber = install(
+        &context,
+        DeepSeekSearchConfig {
+            api_key_env: Some("BAD-NAME".to_owned()),
+            ..DeepSeekSearchConfig::default()
+        },
+    )
+    .expect("fiber");
+    let error = fiber
+        .await_settled()
+        .await
+        .expect_err("an invalid credential reference must be rejected at install");
+    assert!(error.to_string().contains("credential"), "{error}");
+
+    // The same install with a valid reference still settles.
+    let fiber = install(&context, DeepSeekSearchConfig::default()).expect("valid reference installs");
+    fiber.await_settled().await.expect("settled");
+}
