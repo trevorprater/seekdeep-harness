@@ -21,6 +21,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
 seekdeep-web = { path = "../web" }
+seekdeep-util = { path = "../util" }
 url.workspace = true
 
 [dev-dependencies]

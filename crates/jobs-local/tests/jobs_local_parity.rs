@@ -15,7 +15,7 @@ use seekdeep_cordis::Context;
 use seekdeep_core::session::{Session, SessionId};
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 use seekdeep_jobs::{
-    JobHooks, JobKillOutcome, JobOutcome, JobRegistry, JobStart, JobTerminalStatus,
+    JobHooks, JobId, JobKillOutcome, JobOutcome, JobRegistry, JobStart, JobTerminalStatus,
 };
 use seekdeep_jobs_local::{Config, LocalJobRegistry};
 use seekdeep_scope::{Scope, ScopeKey, create_scope};
@@ -230,9 +230,43 @@ async fn start_limits_each_owner_bucket() {
     assert_eq!(registry.start(first.spec).as_str(), "bash-1");
 
     let blocked = producer(None, "bash", "blocked", false, None, None);
-    let result = catch_unwind(AssertUnwindSafe(|| registry.start(blocked.spec)));
+    // Admission precedes the producer, as in the source: a blocked start launches nothing.
+    let invoked = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observed = Arc::clone(&invoked);
+    let JobStart {
+        kind,
+        label,
+        output_limit_bytes,
+        owner,
+        run,
+    } = blocked.spec;
+    let spec = JobStart {
+        kind,
+        label,
+        output_limit_bytes,
+        owner,
+        run: Box::new(move || {
+            observed.store(true, std::sync::atomic::Ordering::SeqCst);
+            run()
+        }),
+    };
+    let result = catch_unwind(AssertUnwindSafe(|| registry.start(spec)));
     let message = panic_message(&result.expect_err("must block"));
     assert!(message.contains("(limit: 1)"), "{message}");
+    assert!(!invoked.load(std::sync::atomic::Ordering::SeqCst));
+    // The refused start held no slot: settling the first job frees the bucket for a new one.
+    let wait = registry.wait(&JobId::new("bash-1"), 5_000.0, None, None);
+    settle_producer(
+        first.settle,
+        JobOutcome {
+            status: JobTerminalStatus::Completed,
+            detail: None,
+            output: None,
+        },
+    );
+    wait.await.unwrap();
+    let next = producer(None, "bash", "next", false, None, None);
+    assert_eq!(registry.start(next.spec).as_str(), "bash-2");
 }
 
 #[tokio::test]

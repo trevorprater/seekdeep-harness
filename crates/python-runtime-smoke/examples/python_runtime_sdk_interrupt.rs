@@ -104,10 +104,22 @@ for line in sys.stdin:
     let mut child = ChildGuard(Some(child));
     // A cold runner spends seconds starting Python and importing the SDK before the
     // fake runtime reports readiness; that budget is separate from the cleanup budget.
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let started = Instant::now();
+    let phase = if group {
+        "foreground group"
+    } else {
+        "owner only"
+    };
+    let deadline = started + Duration::from_secs(30);
     while !ready.is_file() {
         if Instant::now() >= deadline {
-            return Err(failure(&mut child, "runtime did not reach initialization"));
+            return Err(failure(
+                &mut child,
+                &format!(
+                    "{phase}: runtime did not reach initialization within {:?}",
+                    started.elapsed()
+                ),
+            ));
         }
         anyhow::ensure!(
             child.0.as_mut().expect("owned CLI").try_wait()?.is_none(),
@@ -136,21 +148,25 @@ for line in sys.stdin:
     let deadline = interrupted + Duration::from_secs(60);
     while child.0.as_mut().expect("owned CLI").try_wait()?.is_none() {
         if Instant::now() >= deadline {
-            let phase = format!(
-                "interrupted CLI did not finish SDK cleanup within {:?} (shutdown reached the runtime: {}, runtime still alive: {})",
+            let miss = format!(
+                "{phase}: interrupted CLI did not finish SDK cleanup within {:?} (ready after {:?}, shutdown reached the runtime: {}, runtime still alive: {})",
                 interrupted.elapsed(),
+                interrupted.duration_since(started),
                 closed.is_file(),
                 process_alive(runtime_pid.trim())?
             );
-            return Err(failure(&mut child, &phase));
+            return Err(failure(&mut child, &miss));
         }
         std::thread::sleep(Duration::from_millis(5));
     }
     let output = child.0.take().expect("owned CLI").wait_with_output()?;
     anyhow::ensure!(
         output.status.code() == Some(130),
-        "interrupt status {:?}: {}",
+        "{phase}: interrupt status {:?} after {:?} (ready after {:?}, shutdown reached the runtime: {}); stderr:\n{}",
         output.status,
+        interrupted.elapsed(),
+        interrupted.duration_since(started),
+        closed.is_file(),
         String::from_utf8_lossy(&output.stderr)
     );
     anyhow::ensure!(closed.is_file(), "SDK did not send runtime shutdown");

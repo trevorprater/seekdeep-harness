@@ -18,8 +18,8 @@ use crate::{
     ConversationLocationDataStore, ConversationLocationEvent, ConversationMatch,
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
     ConversationNodeDefinition, ConversationPreviousContext, ConversationPublication,
-    ConversationTimelineSnapshot, ConversationViewNode, ConversationViewRegistry, PrematchTable,
-    StepLocation, TurnLocation,
+    ConversationTimelineSnapshot, ConversationViewNode, ConversationViewRegistry, FnvBuildHasher,
+    PrematchTable, StepLocation, TurnLocation,
     wasm_session::json_to_js,
     wasm_session::render_js,
     wasm_value_bridge::{
@@ -39,7 +39,7 @@ type BrowserView = crate::ConversationViewDefinition<JsValue>;
 /// JavaScript once and every later callback receives the same face. A `Weak` pins the allocation,
 /// which keeps the pointer key unambiguous until the entry is pruned.
 struct FaceCache<T> {
-    entries: HashMap<usize, (Weak<T>, JsValue)>,
+    entries: HashMap<usize, (Weak<T>, JsValue), FnvBuildHasher>,
     /// Face object back to its entry key, so a native Definition recovers the engine value
     /// instead of re-parsing the face it was handed.
     faces: js_sys::WeakMap,
@@ -53,7 +53,7 @@ impl<T> FaceCache<T> {
 
     fn new() -> Self {
         Self {
-            entries: HashMap::new(),
+            entries: HashMap::default(),
             faces: js_sys::WeakMap::new(),
             prune_at: Self::PRUNE_ABOVE,
         }
@@ -168,7 +168,8 @@ thread_local! {
     static STORE_FACES: RefCell<FaceCache<ConversationLocationDataStore>> = RefCell::new(FaceCache::new());
     static NODE_FACES: RefCell<FaceCache<ConversationViewNode>> = RefCell::new(FaceCache::new());
     static VALUE_FACES: RefCell<FaceCache<crate::ConversationValue>> = RefCell::new(FaceCache::new());
-    static MATCH_LISTS: RefCell<HashMap<usize, MatchListEntry>> = RefCell::new(HashMap::new());
+    static MATCH_LISTS: RefCell<HashMap<usize, MatchListEntry, FnvBuildHasher>> =
+        RefCell::new(HashMap::default());
     static NODE_DATA_FACES: RefCell<RetainedFaces> = RefCell::new(RetainedFaces::new());
 }
 
@@ -202,14 +203,14 @@ fn value_face(value: &Rc<crate::ConversationValue>) -> Result<JsValue, JsValue> 
 /// Faces retained by Node key, so the next data of a streaming Node reuses the previous face's
 /// unchanged subtrees and grows its text by the appended suffix instead of re-marshalling.
 struct RetainedFaces {
-    entries: HashMap<String, (Rc<crate::ConversationValue>, JsValue)>,
+    entries: HashMap<String, (Rc<crate::ConversationValue>, JsValue), FnvBuildHasher>,
     prune_at: usize,
 }
 
 impl RetainedFaces {
     fn new() -> Self {
         Self {
-            entries: HashMap::new(),
+            entries: HashMap::default(),
             prune_at: FaceCache::<()>::PRUNE_ABOVE,
         }
     }
@@ -299,6 +300,7 @@ pub(crate) fn browser_event_definitions(
     Rc::new(BrowserEventDefinitions {
         registry,
         cache: RefCell::new(Vec::new()),
+        entries: RefCell::new(None),
     })
 }
 
@@ -308,12 +310,19 @@ pub(crate) fn browser_view_definitions(
     Rc::new(BrowserViewDefinitions {
         registry,
         cache: RefCell::new(Vec::new()),
+        entries: RefCell::new(None),
     })
 }
+
+/// A registry entry list and the Definitions adapted from it.
+type AdaptedEntries<Browser, Definition> = Option<(Rc<Vec<Rc<Browser>>>, Vec<Rc<Definition>>)>;
 
 struct BrowserEventDefinitions {
     registry: Rc<ConversationEventRegistry<JsValue>>,
     cache: RefCell<Vec<(Rc<BrowserNode>, Rc<AssemblerNodeDefinition>)>>,
+    /// The adapted Definitions of the registry's current entry list, so an unchanged registry
+    /// costs one comparison per window instead of re-adapting every Definition per event.
+    entries: RefCell<AdaptedEntries<BrowserNode, AssemblerNodeDefinition>>,
 }
 
 impl BrowserEventDefinitions {
@@ -346,10 +355,21 @@ impl BrowserEventDefinitions {
 impl AssemblerEventDefinitions for BrowserEventDefinitions {
     fn entries(&self) -> Vec<Rc<AssemblerNodeDefinition>> {
         let entries = self.registry.entries();
+        let mut adapted = self.entries.borrow_mut();
+        if let Some((known, current)) = adapted.as_ref()
+            && Rc::ptr_eq(known, &entries)
+        {
+            return current.clone();
+        }
         self.cache
             .borrow_mut()
             .retain(|(known, _)| entries.iter().any(|entry| Rc::ptr_eq(known, entry)));
-        entries.iter().map(|entry| self.adapt(entry)).collect()
+        let current = entries.iter().map(|entry| self.adapt(entry)).collect();
+        *adapted = Some((entries, current));
+        adapted
+            .as_ref()
+            .map(|(_, current)| current.clone())
+            .expect("the entry list was just stored")
     }
 
     fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>> {
@@ -411,15 +431,16 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
             faces.push(&event_face(event).map_err(adapter_error)?);
         }
         // The window also crosses as one JSON text, so a module parses it once instead of
-        // re-reading every face.
-        let text = serde_json::to_string(
+        // re-reading every face. It crosses as UTF-8 bytes: a JavaScript string would be encoded
+        // to UTF-16 on the way out and decoded again in every module that reads it.
+        let text = serde_json::to_vec(
             &events
                 .iter()
                 .map(|event| event.wire_value())
                 .collect::<Vec<_>>(),
         )
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
-        let text = JsValue::from_str(&text);
+        let text: JsValue = js_sys::Uint8Array::from(text.as_slice()).into();
         let mut table = PrematchTable::default();
         let mut covered = false;
         for node in self
@@ -429,15 +450,22 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
             .cloned()
             .chain(self.registry.fallback())
         {
-            let batch = Reflect::get(&node.payload, &JsValue::from_str("matchMany"))
-                .map_err(adapter_error)?;
+            let batch = Reflect::get(
+                &node.payload,
+                &crate::wasm_native_definition::member("matchMany"),
+            )
+            .map_err(adapter_error)?;
             let Some(batch) = batch.dyn_ref::<Function>() else {
                 continue;
             };
             let rows = batch
                 .call2(&node.payload, &faces, &text)
                 .map_err(adapter_error)?;
-            let rows = rows.as_string().ok_or_else(|| {
+            let rows = match rows.dyn_ref::<js_sys::Uint8Array>() {
+                Some(bytes) => String::from_utf8(bytes.to_vec()).ok(),
+                None => rows.as_string(),
+            }
+            .ok_or_else(|| {
                 ConversationAssemblerError::new(format!(
                     "Conversation Definition {} matchMany must return JSON text",
                     node.kind
@@ -500,14 +528,23 @@ impl PrematchRow {
 struct BrowserViewDefinitions {
     registry: Rc<ConversationViewRegistry<JsValue>>,
     cache: RefCell<Vec<(Rc<BrowserView>, Rc<AssemblerViewDefinition>)>>,
+    /// The adapted Definitions of the registry's current entry list, so an unchanged registry
+    /// costs one comparison per frame instead of re-adapting every Definition.
+    entries: RefCell<AdaptedEntries<BrowserView, AssemblerViewDefinition>>,
 }
 
 impl AssemblerViewDefinitions for BrowserViewDefinitions {
     fn entries(&self) -> Vec<Rc<AssemblerViewDefinition>> {
         let entries = self.registry.entries();
+        let mut adapted = self.entries.borrow_mut();
+        if let Some((known, current)) = adapted.as_ref()
+            && Rc::ptr_eq(known, &entries)
+        {
+            return current.clone();
+        }
         let mut cache = self.cache.borrow_mut();
         cache.retain(|(known, _)| entries.iter().any(|entry| Rc::ptr_eq(known, entry)));
-        entries
+        let current = entries
             .iter()
             .map(|definition| {
                 if let Some((_, adapted)) = cache
@@ -520,7 +557,13 @@ impl AssemblerViewDefinitions for BrowserViewDefinitions {
                 cache.push((definition.clone(), adapted.clone()));
                 adapted
             })
-            .collect()
+            .collect();
+        drop(cache);
+        *adapted = Some((entries, current));
+        adapted
+            .as_ref()
+            .map(|(_, current)| current.clone())
+            .expect("the entry list was just stored")
     }
 }
 
@@ -1268,7 +1311,7 @@ fn status_name(status: ConversationBoundaryStatus) -> &'static str {
 }
 
 fn optional_function(value: &JsValue, key: &str) -> Option<Function> {
-    let member = Reflect::get(value, &JsValue::from_str(key)).ok()?;
+    let member = Reflect::get(value, &crate::wasm_native_definition::member(key)).ok()?;
     if member.is_undefined() {
         return None;
     }
@@ -1289,7 +1332,7 @@ fn call_method(value: &JsValue, method: &str, arguments: &[JsValue]) -> Result<J
 }
 
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let member = Reflect::get(value, &JsValue::from_str(key))?;
+    let member = Reflect::get(value, &crate::wasm_native_definition::member(key))?;
     if member.is_undefined() || member.is_null() {
         Err(js_sys::Error::new(&format!("{owner} requires {key:?}")).into())
     } else {
@@ -1314,7 +1357,7 @@ fn required_u64(value: &JsValue, key: &str, owner: &str) -> Result<u64, JsValue>
 }
 
 fn set(object: &Object, key: &str, value: &JsValue) -> Result<(), JsValue> {
-    if Reflect::set(object, &JsValue::from_str(key), value)? {
+    if Reflect::set(object, &crate::wasm_native_definition::member(key), value)? {
         Ok(())
     } else {
         Err(js_sys::Error::new(&format!("failed to set Conversation member {key:?}")).into())

@@ -10255,6 +10255,7 @@ dependencies = [
  "seekdeep-lossless-json",
  "seekdeep-system-prompt",
  "seekdeep-tools",
+ "seekdeep-util",
  "seekdeep-web",
  "serde",
  "serde_json",

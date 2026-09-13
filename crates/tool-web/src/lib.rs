@@ -12,6 +12,7 @@ use seekdeep_tools::{
     ToolDefinition, ToolResult, ToolResultView, WebFetchResultView, WebResultView,
     WebSearchResultView, WebSource, define_tool,
 };
+use seekdeep_util::utf16::utf16_len;
 use seekdeep_web::{
     WEB, WebFetchBody, WebFetchRequest, WebFetchResult, WebRuntime, WebSearchRequest,
     WebSearchResult, WebSearchSource,
@@ -269,12 +270,17 @@ fn search_meta_from_result(result: &ToolResult) -> Option<SearchMeta> {
     })
 }
 
+/// Bounds fetched text to `max_units` UTF-16 units like the source's `slice`, reporting whether
+/// anything was cut; a cut inside an astral character stops before it (DEV-003) instead of
+/// handing the model a replacement character the page never contained.
 fn utf16_prefix(text: &str, max_units: usize) -> (String, bool) {
-    let units = text.encode_utf16().collect::<Vec<_>>();
-    if units.len() <= max_units {
+    if utf16_len(text) <= max_units {
         return (text.to_owned(), false);
     }
-    (String::from_utf16_lossy(&units[..max_units]), true)
+    (
+        seekdeep_util::utf16::utf16_prefix(text, max_units).to_owned(),
+        true,
+    )
 }
 
 fn exceeds_conversion_depth(html: &str) -> bool {
@@ -777,4 +783,19 @@ pub fn plugin() -> Plugin {
         })
     })
     .with_config_validator(normalize_config)
+}
+
+#[cfg(test)]
+mod utf16_prefix_tests {
+    use super::utf16_prefix;
+
+    #[test]
+    fn a_cap_inside_an_astral_character_cuts_before_it_without_a_replacement() {
+        let text = "ab\u{1F600}cd";
+        assert_eq!(utf16_prefix(text, 6), (text.to_owned(), false));
+        assert_eq!(utf16_prefix(text, 4), ("ab\u{1F600}".to_owned(), true));
+        // Three units would split the emoji: the kept prefix stops before it.
+        assert_eq!(utf16_prefix(text, 3), ("ab".to_owned(), true));
+        assert!(!utf16_prefix(text, 3).0.contains('\u{FFFD}'));
+    }
 }

@@ -168,7 +168,11 @@ pub async fn run(mut options: Options) -> anyhow::Result<()> {
         tokio::select! {
           biased;
           signal = tokio::signal::ctrl_c() => match signal {
-              Ok(()) => { let _ = cancel.send(true); work.await }
+              Ok(()) => {
+                  eprintln!("smoke-python-runtime: interrupt received; closing the adapter");
+                  let _ = cancel.send(true);
+                  work.await
+              }
               Err(error) => Err(error.into()),
           },
           result = &mut work => result,

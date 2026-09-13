@@ -173,10 +173,76 @@ struct Inner {
     counters: HashMap<String, u64>,
     #[allow(clippy::mutable_key_type)]
     owner_cleanups: HashMap<OwnerKey, EffectHandle>,
+    /// Slots taken by starts whose producer is running but whose job is not yet stored.
+    #[allow(clippy::mutable_key_type)]
+    reservations: HashMap<OwnerKey, usize>,
+    unowned_reservations: usize,
     listeners_closed: bool,
 }
 
+/// A slot taken for a job whose producer has not yet been tracked; dropping it before the job is
+/// stored (the producer unwound) gives the slot back.
+struct SlotReservation {
+    state: Arc<LocalJobState>,
+    owner: Option<Arc<Agent>>,
+    armed: bool,
+}
+
+impl SlotReservation {
+    /// Releases the reservation under the caller's lock, where the tracked job takes its place.
+    fn settle(mut self, inner: &mut Inner) {
+        inner.release(self.owner.as_ref());
+        self.armed = false;
+    }
+}
+
+impl Drop for SlotReservation {
+    fn drop(&mut self) {
+        if self.armed {
+            self.state.inner.lock().release(self.owner.as_ref());
+        }
+    }
+}
+
 impl Inner {
+    fn reserved_count(&self, owner: Option<&Arc<Agent>>) -> usize {
+        match owner {
+            Some(owner) => self
+                .reservations
+                .get(&OwnerKey(Arc::clone(owner)))
+                .copied()
+                .unwrap_or(0),
+            None => self.unowned_reservations,
+        }
+    }
+
+    fn reserve(&mut self, owner: Option<&Arc<Agent>>) {
+        match owner {
+            Some(owner) => {
+                *self
+                    .reservations
+                    .entry(OwnerKey(Arc::clone(owner)))
+                    .or_insert(0) += 1;
+            }
+            None => self.unowned_reservations += 1,
+        }
+    }
+
+    fn release(&mut self, owner: Option<&Arc<Agent>>) {
+        match owner {
+            Some(owner) => {
+                let key = OwnerKey(Arc::clone(owner));
+                if let Some(count) = self.reservations.get_mut(&key) {
+                    *count -= 1;
+                    if *count == 0 {
+                        self.reservations.remove(&key);
+                    }
+                }
+            }
+            None => self.unowned_reservations = self.unowned_reservations.saturating_sub(1),
+        }
+    }
+
     fn active_task_count(&self, owner: Option<&Arc<Agent>>) -> usize {
         self.store
             .values()
@@ -560,19 +626,32 @@ impl JobRegistry for LocalJobRegistry {
         if let Some(ref owner) = owner {
             self.0.ensure_owner_cleanup(owner);
         }
-        let hooks = (spec.run)();
-        let done_future = hooks.done();
-        let hooks = Arc::new(Mutex::new(hooks));
-        let id = {
+        // The source admits before it runs the producer, so a start past the owner's limit fails
+        // without launching anything. The slot is reserved in the same critical section as the
+        // count, so two concurrent starts of one owner cannot both pass, and it is given back if
+        // the producer unwinds before the job is tracked.
+        {
             let mut inner = self.0.inner.lock();
-            // Read the count and take the slot in one critical section: a check taken outside this
-            // lock can pass for two concurrent starts of the same owner, exceeding the cap.
-            let active = inner.active_task_count(owner.as_ref());
+            let active =
+                inner.active_task_count(owner.as_ref()) + inner.reserved_count(owner.as_ref());
             assert!(
                 active < self.0.max_concurrent_jobs_per_owner,
                 "background job limit reached for this owner (limit: {}); use job_kill to stop an unneeded job, wait for it to finish, then retry",
                 self.0.max_concurrent_jobs_per_owner
             );
+            inner.reserve(owner.as_ref());
+        }
+        let reservation = SlotReservation {
+            state: Arc::clone(&self.0),
+            owner: owner.clone(),
+            armed: true,
+        };
+        let hooks = (spec.run)();
+        let done_future = hooks.done();
+        let hooks = Arc::new(Mutex::new(hooks));
+        let id = {
+            let mut inner = self.0.inner.lock();
+            reservation.settle(&mut inner);
             let count = inner.counters.get(&spec.kind).copied().unwrap_or(0) + 1;
             inner.counters.insert(spec.kind.clone(), count);
             let id = JobId::new(format!("{}-{count}", spec.kind));
