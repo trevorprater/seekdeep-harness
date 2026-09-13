@@ -90,19 +90,22 @@ fn checked_listener_rolls_back_a_rejected_service_before_observers_or_lookup() {
     assert_eq!(context.service_slot_revision(VALUE), 0);
 }
 
-
 #[test]
 fn service_guards_refuse_in_registration_order() {
     let context = Context::new();
     context
-        .on_service_change_checked(|_| anyhow::bail!("first guard refused"))
+        .on_service_change_checked(|_| anyhow::bail!("guard 0 refused"))
         .unwrap();
-    // Four guards, not two: with a hash-ordered set, two entries can coincidentally iterate in
-    // registration order, which would let a broken implementation pass by luck.
-    for message in ["second", "third", "fourth"] {
-        let message = message.to_owned();
+    // Thirty-two guards, because the registry keys are UUIDv7 values minted at registration: they
+    // differ between runs, and a hash-ordered guard set therefore picks a different iteration order
+    // each time. With this many entries the first-registered guard is usually not the one iterated
+    // first, so the assertion below fails. It is not a deterministic falsifier - a hash map can
+    // happen to iterate in registration order, which is exactly how a four-guard version passed -
+    // but a run against the hash-ordered set surfaced "guard 14 refused" where registration order
+    // requires guard 0.
+    for index in 1..32 {
         context
-            .on_service_change_checked(move |_| anyhow::bail!("{message} guard refused"))
+            .on_service_change_checked(move |_| anyhow::bail!("guard {index} refused"))
             .unwrap();
     }
 
@@ -114,7 +117,7 @@ fn service_guards_refuse_in_registration_order() {
         matches!(
             error,
             seekdeep_cordis::CordisError::ServicePublication(ref message)
-                if message.contains("first guard refused")
+                if message.contains("guard 0 refused")
         ),
         "{error:?}"
     );
