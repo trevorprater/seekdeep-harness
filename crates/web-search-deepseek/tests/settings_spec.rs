@@ -77,7 +77,6 @@ async fn serves_stored_endpoint_without_re_registration() {
     assert_eq!(stored.take_requests().len(), 1);
 }
 
-
 #[tokio::test]
 async fn rejects_an_invalid_credential_reference_at_install() {
     let context = Context::new();
@@ -111,6 +110,7 @@ async fn rejects_an_invalid_credential_reference_at_install() {
     assert!(error.to_string().contains("credential"), "{error}");
 
     // The same install with a valid reference still settles.
-    let fiber = install(&context, DeepSeekSearchConfig::default()).expect("valid reference installs");
+    let fiber =
+        install(&context, DeepSeekSearchConfig::default()).expect("valid reference installs");
     fiber.await_settled().await.expect("settled");
 }

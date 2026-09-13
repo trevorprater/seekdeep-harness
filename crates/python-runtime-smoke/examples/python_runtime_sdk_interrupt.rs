@@ -63,12 +63,11 @@ fn failure(child: &mut ChildGuard, phase: &str) -> anyhow::Error {
     }
 }
 
+/// Writes the fake runtime the CLI drives: it ignores SIGINT itself, records its pid once
+/// initialized, and acknowledges the SDK's shutdown request so the teardown can be observed.
 #[cfg(unix)]
-fn check_interrupt(binary: &Path, python: &Path, group: bool) -> anyhow::Result<()> {
-    let temporary = tempfile::tempdir()?;
-    let executable = temporary.path().join("fake-runtime");
-    let ready = temporary.path().join("ready");
-    let closed = temporary.path().join("closed");
+fn write_fake_runtime(directory: &Path) -> anyhow::Result<std::path::PathBuf> {
+    let executable = directory.join("fake-runtime");
     std::fs::write(
         &executable,
         r"#!/usr/bin/env python3
@@ -85,6 +84,15 @@ for line in sys.stdin:
 ",
     )?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))?;
+    Ok(executable)
+}
+
+#[cfg(unix)]
+fn check_interrupt(binary: &Path, python: &Path, group: bool) -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let executable = write_fake_runtime(temporary.path())?;
+    let ready = temporary.path().join("ready");
+    let closed = temporary.path().join("closed");
     let mut command = Command::new(binary);
     if group {
         command.process_group(0);
