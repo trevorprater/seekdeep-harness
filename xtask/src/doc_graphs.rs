@@ -35,7 +35,7 @@ pub fn run(root: &Path, source: &Path, check: bool) -> anyhow::Result<bool> {
 #[cfg(test)]
 mod tests {
     use seekdeep_repository_tools::doc_graphs::{
-        DocGraphPolicy, GraphDoc, PackageLinks, assert_service_roles_complete,
+        DeclarationLinks, DocGraphPolicy, GraphDoc, PackageLinks, assert_service_roles_complete,
         parse_example_cordis, render_doc_graphs, render_event_relations, target_identity,
     };
     use seekdeep_typert_generator::{
@@ -189,10 +189,18 @@ mod tests {
         };
         let client = event("client/view", "packages/client/view/src/index.ts:1");
         let links = PackageLinks::default();
-        render_event_relations(&[], &links, &[client], &EventRelations::new()).unwrap();
+        render_event_relations(
+            &[],
+            &links,
+            &DeclarationLinks::default(),
+            &[client],
+            &EventRelations::new(),
+        )
+        .unwrap();
         let error = render_event_relations(
             &[],
             &links,
+            &DeclarationLinks::default(),
             &[
                 event("z/host", "packages/core/z/src/index.ts:1"),
                 event("a/host", "packages/core/a/src/index.ts:1"),

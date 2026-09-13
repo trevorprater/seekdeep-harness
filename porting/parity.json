@@ -27357,7 +27357,8 @@
       ],
       "evidence": [
         "mechanical documentation rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "Generated identities also rename the dotted client manifest key (dsh.client → seekdeep.client), which the migrated package manifests and the client-modules scanner use."
     },
     {
       "source": "docs/capability-seams.zh.md",
@@ -28235,7 +28236,8 @@
       ],
       "evidence": [
         "mechanical documentation rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "The Declared in column links the Rust file the parity manifest names for each pinned-source declaration site, with the source site named beside it: the source's TypeScript paths do not exist in this repository, and verify-md-links rejects dead targets. A checkout without the manifest reproduces the source's own form."
     },
     {
       "source": "docs/event-producer-consumer.zh.md",

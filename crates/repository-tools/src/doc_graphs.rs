@@ -141,6 +141,45 @@ impl PackageLinks {
     }
 }
 
+/// Repository-relative Rust file for every pinned-source declaration site in a graph.
+///
+/// Event declarations are read from the pinned source, whose TypeScript files the port does not
+/// carry. The parity manifest records which Rust file realizes each source file, so a
+/// declaration links to that file in the repository the document is written to; a source
+/// file the manifest has not verified stays a plain path instead of a dead link.
+#[derive(Clone, Debug, Default)]
+pub struct DeclarationLinks(IndexMap<String, String>);
+
+impl DeclarationLinks {
+    /// Reads `porting/parity.json` under `repo_root`; an absent or unreadable manifest maps
+    /// nothing.
+    #[must_use]
+    pub fn resolve(repo_root: &Path) -> Self {
+        let Ok(text) = std::fs::read_to_string(repo_root.join("porting/parity.json")) else {
+            return Self::default();
+        };
+        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
+            return Self::default();
+        };
+        let links = manifest["surfaces"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|surface| surface["status"] == "verified")
+            .filter_map(|surface| {
+                let source = surface["source"].as_str()?;
+                let target = surface["targets"].as_array()?.first()?.as_str()?;
+                Some((source.to_owned(), target.to_owned()))
+            })
+            .collect();
+        Self(links)
+    }
+
+    fn get(&self, source: &str) -> Option<&str> {
+        self.0.get(source).map(String::as_str)
+    }
+}
+
 /// Returns `directory` or its target-identity rewrite, whichever owns a README.
 ///
 /// The pinned source keeps its own identity in directory names, and the port renames them,
@@ -206,6 +245,7 @@ fn render_graph_set(
     policy: DocGraphPolicy,
 ) -> anyhow::Result<Vec<GraphDoc>> {
     let directories = PackageLinks::resolve(repo_root, packages);
+    let declarations = DeclarationLinks::resolve(repo_root);
     let mut docs = vec![GraphDoc {
         rel: "docs/capability-seams.md".to_owned(),
         content: render_capability_seams(
@@ -226,7 +266,13 @@ fn render_graph_set(
     let relations = collect_event_relations(&mut project, &sources)?;
     docs.push(GraphDoc {
         rel: "docs/event-producer-consumer.md".to_owned(),
-        content: render_event_relations(packages, &directories, &model.events, &relations)?,
+        content: render_event_relations(
+            packages,
+            &directories,
+            &declarations,
+            &model.events,
+            &relations,
+        )?,
     });
     docs.push(GraphDoc {
         rel: "docs/agent-lifecycle.md".to_owned(),
@@ -533,6 +579,7 @@ pub fn render_app_composition(root: &Path, example: &AppExample) -> anyhow::Resu
 pub fn render_event_relations(
     packages: &[PackageGraphNode],
     directories: &PackageLinks,
+    declarations: &DeclarationLinks,
     events: &[EventEntry],
     relations: &EventRelations,
 ) -> anyhow::Result<String> {
@@ -548,11 +595,10 @@ pub fn render_event_relations(
         let empty = EventRelation::default();
         let relation = relations.get(&event.name).unwrap_or(&empty);
         lines.push(format!(
-            "| `{}` | `{}` | [`{}`](../{}) | {} | {} |",
+            "| `{}` | `{}` | {} | {} | {} |",
             event.name,
             event.mode.as_str(),
-            event.source,
-            event.source.split(':').next().unwrap_or(&event.source),
+            declared_in(declarations, &event.source),
             relation_packages(&relation.dispatchers, &by_short, directories),
             listener_packages(&relation.listeners, &by_short, directories)
         ));
@@ -661,6 +707,7 @@ pub fn target_identity(text: &str) -> String {
         .replace("@deepseek-ai/", "@seekdeep-ai/")
         .replace("dsh-", "seekdeep-")
         .replace("dsh_", "seekdeep_")
+        .replace("dsh.client", "seekdeep.client")
         .replace("dsh shared", "seekdeep shared")
         .replace("DSH Base", "SeekDeep Base")
         .replace("DSH_*", "SEEKDEEP_*")
@@ -714,6 +761,18 @@ fn package_list(
             .join(", ")
     }
 }
+/// The declaration cell: the Rust file that realizes the pinned source's declaration site,
+/// with the source site named beside it. A site the manifest does not realize keeps the
+/// source generator's own form, a link to the source path, so a checkout without a manifest
+/// reproduces the pinned source's document byte for byte.
+fn declared_in(declarations: &DeclarationLinks, source: &str) -> String {
+    let file = source.split(':').next().unwrap_or(source);
+    match declarations.get(file) {
+        Some(target) => format!("[`{target}`](../{target}) from `{source}`"),
+        None => format!("[`{source}`](../{file})"),
+    }
+}
+
 fn relation_packages(
     map: &IndexMap<String, IndexSet<String>>,
     packages: &IndexMap<&str, &PackageGraphNode>,

@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 
 use indexmap::{IndexMap, IndexSet};
 use seekdeep_repository_tools::{
-    doc_graphs::{PackageLinks, render_event_relations, target_identity},
+    doc_graphs::{DeclarationLinks, PackageLinks, render_event_relations, target_identity},
     package_graph::PackageGraphNode,
 };
 use seekdeep_typert_generator::{
@@ -30,6 +30,7 @@ fn write_readme(root: &Path, directory: &str) {
 
 fn matrix(root: &Path, packages: &[PackageGraphNode]) -> String {
     let links = PackageLinks::resolve(root, packages);
+    let declarations = DeclarationLinks::resolve(root);
     let mut dispatchers = IndexMap::new();
     for package in packages {
         dispatchers.insert(package.short.clone(), IndexSet::from(["emit".to_owned()]));
@@ -53,7 +54,9 @@ fn matrix(root: &Path, packages: &[PackageGraphNode]) -> String {
     }];
     // The writer rewrites source identities into target ones across the whole document, so
     // the resolved path must be the rewritten one.
-    target_identity(&render_event_relations(packages, &links, &events, &relations).unwrap())
+    target_identity(
+        &render_event_relations(packages, &links, &declarations, &events, &relations).unwrap(),
+    )
 }
 
 #[test]
@@ -80,5 +83,40 @@ fn a_package_links_to_whichever_directory_owns_its_readme() {
     assert!(
         matrix.contains("[`subagent-seekdeep-sdk`](../packages/subagent/subagent-seekdeep-sdk)"),
         "{matrix}"
+    );
+}
+
+#[test]
+fn a_declaration_links_to_the_rust_file_the_parity_manifest_names_or_stays_plain() {
+    let root = tempfile::tempdir().unwrap();
+    write_readme(root.path(), "crates/ported");
+    let packages = [package("ported", "packages/g/ported")];
+    // Without a manifest the cell keeps the source generator's own form.
+    let plain = matrix(root.path(), &packages);
+    assert!(
+        plain.contains(
+            "| [`packages/g/ported/src/index.ts:1`](../packages/g/ported/src/index.ts) |"
+        ),
+        "{plain}"
+    );
+
+    fs::create_dir_all(root.path().join("porting")).unwrap();
+    fs::write(
+        root.path().join("porting/parity.json"),
+        serde_json::json!({
+            "surfaces": [
+                {"source": "packages/g/ported/src/index.ts", "status": "verified", "targets": ["crates/ported/src/lib.rs"]},
+                {"source": "packages/g/pending/src/index.ts", "status": "pending"}
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let linked = matrix(root.path(), &packages);
+    assert!(
+        linked.contains(
+            "| [`crates/ported/src/lib.rs`](../crates/ported/src/lib.rs) from `packages/g/ported/src/index.ts:1` |"
+        ),
+        "{linked}"
     );
 }
