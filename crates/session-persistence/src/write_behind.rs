@@ -2,7 +2,6 @@
 
 use std::{
     future::Future,
-    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -18,6 +17,39 @@ type WriteFuture = BoxFuture<'static, anyhow::Result<()>>;
 type WriteFn = Arc<dyn Fn(Vec<SessionEvent>) -> WriteFuture + Send + Sync>;
 type FailureFn = Arc<dyn Fn(&anyhow::Error) + Send + Sync>;
 
+/// Task and timer seams for the controller actor, so a seeded scheduler can drive its deadlines.
+pub trait WriteBehindRuntime: Send + Sync + 'static {
+    /// Runs the controller actor to completion on the host executor.
+    fn spawn_actor(&self, actor: BoxFuture<'static, ()>);
+    /// Produces the batching deadline the actor selects on.
+    fn sleep(&self, delay: Duration) -> BoxFuture<'static, ()>;
+    /// Runs one durable write and yields its outcome to the actor.
+    fn spawn_write(&self, write: WriteFuture) -> BoxFuture<'static, anyhow::Result<()>>;
+}
+
+/// The host executor's task spawn and timer.
+#[derive(Debug)]
+pub struct TokioWriteBehindRuntime;
+
+impl WriteBehindRuntime for TokioWriteBehindRuntime {
+    fn spawn_actor(&self, actor: BoxFuture<'static, ()>) {
+        tokio::spawn(actor);
+    }
+
+    fn sleep(&self, delay: Duration) -> BoxFuture<'static, ()> {
+        Box::pin(tokio::time::sleep(delay))
+    }
+
+    fn spawn_write(&self, write: WriteFuture) -> BoxFuture<'static, anyhow::Result<()>> {
+        Box::pin(async move {
+            tokio::spawn(write)
+                .await
+                .map_err(|error| anyhow::anyhow!("session write task failed: {error}"))
+                .and_then(std::convert::identity)
+        })
+    }
+}
+
 enum Command {
     Enqueue(SessionEvent),
     Flush(oneshot::Sender<anyhow::Result<()>>),
@@ -27,7 +59,7 @@ enum Command {
 struct ActiveWrite {
     batch: Vec<SessionEvent>,
     background: bool,
-    task: tokio::task::JoinHandle<anyhow::Result<()>>,
+    task: BoxFuture<'static, anyhow::Result<()>>,
 }
 
 /// One live session's pending events, fixed batching deadline, active durable
@@ -60,18 +92,41 @@ impl SessionWriteBehind {
         Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
         Report: Fn(&anyhow::Error) + Send + Sync + 'static,
     {
-        let (sender, receiver) = mpsc::unbounded_channel();
+        Self::new_with_runtime(
+            max_delay,
+            write,
+            report_background_failure,
+            Arc::new(TokioWriteBehindRuntime),
+        )
+    }
+
+    /// Starts one controller actor over injected task and timer seams.
+    #[must_use]
+    pub fn new_with_runtime<Write, Fut, Report>(
+        max_delay: Duration,
+        write: Write,
+        report_background_failure: Report,
+        runtime: Arc<dyn WriteBehindRuntime>,
+    ) -> Self
+    where
+        Write: Fn(Vec<SessionEvent>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
+        Report: Fn(&anyhow::Error) + Send + Sync + 'static,
+    {
+        let (sender, receiver) = mpsc::unbounded_channel::<Command>();
         let has_work = Arc::new(AtomicBool::new(false));
         let actor_has_work = has_work.clone();
         let write: WriteFn = Arc::new(move |events| Box::pin(write(events)));
         let report: FailureFn = Arc::new(report_background_failure);
-        tokio::spawn(run_actor(
+        let actor_runtime = Arc::clone(&runtime);
+        runtime.spawn_actor(Box::pin(run_actor(
             receiver,
             actor_has_work,
             max_delay,
             write,
             report,
-        ));
+            actor_runtime,
+        )));
         Self { sender, has_work }
     }
 
@@ -123,9 +178,10 @@ async fn run_actor(
     max_delay: Duration,
     write: WriteFn,
     report: FailureFn,
+    runtime: Arc<dyn WriteBehindRuntime>,
 ) {
     let mut pending = Vec::new();
-    let mut timer: Option<Pin<Box<tokio::time::Sleep>>> = None;
+    let mut timer: Option<BoxFuture<'static, ()>> = None;
     let mut active: Option<ActiveWrite> = None;
     let mut deadline_expired = false;
     let mut automatic_paused = false;
@@ -142,7 +198,7 @@ async fn run_actor(
                         break;
                     }
                     if active.is_none() {
-                        start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write);
+                        start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                     }
                     continue;
                 };
@@ -153,14 +209,14 @@ async fn run_actor(
                         has_work.store(true, Ordering::Release);
                         if !barriers.is_empty() {
                             if active.is_none() {
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write);
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                             }
                         } else if automatic_paused {
                             automatic_paused = false;
                             deadline_expired = false;
-                            timer = Some(Box::pin(tokio::time::sleep(max_delay)));
+                            timer = Some(runtime.sleep(max_delay));
                         } else if was_empty {
-                            timer = Some(Box::pin(tokio::time::sleep(max_delay)));
+                            timer = Some(runtime.sleep(max_delay));
                         }
                     }
                     Command::Flush(waiter) => {
@@ -173,7 +229,7 @@ async fn run_actor(
                                 resolve_barriers(&mut barriers, None);
                                 has_work.store(false, Ordering::Release);
                             } else {
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write);
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                             }
                         }
                     }
@@ -188,7 +244,7 @@ async fn run_actor(
                 if active.is_some() {
                     deadline_expired = true;
                 } else if !pending.is_empty() {
-                    start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write);
+                    start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                 }
             }
             result = wait_active(&mut active) => {
@@ -200,11 +256,11 @@ async fn run_actor(
                                 resolve_barriers(&mut barriers, None);
                                 has_work.store(false, Ordering::Release);
                             } else {
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write);
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                             }
                         } else if !pending.is_empty() && deadline_expired {
                             deadline_expired = false;
-                            start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write);
+                            start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                         } else if pending.is_empty() {
                             has_work.store(false, Ordering::Release);
                         }
@@ -222,7 +278,7 @@ async fn run_actor(
                         if !barriers.is_empty() {
                             if background {
                                 automatic_paused = false;
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write);
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
                             } else {
                                 resolve_barriers(&mut barriers, Some(&error.to_string()));
                             }
@@ -245,9 +301,10 @@ fn start_write(
     active: &mut Option<ActiveWrite>,
     pending: &mut Vec<SessionEvent>,
     background: bool,
-    timer: &mut Option<Pin<Box<tokio::time::Sleep>>>,
+    timer: &mut Option<BoxFuture<'static, ()>>,
     deadline_expired: &mut bool,
     write: &WriteFn,
+    runtime: &dyn WriteBehindRuntime,
 ) {
     debug_assert!(active.is_none());
     let batch = std::mem::take(pending);
@@ -257,11 +314,11 @@ fn start_write(
     *active = Some(ActiveWrite {
         batch,
         background,
-        task: tokio::spawn(operation),
+        task: runtime.spawn_write(operation),
     });
 }
 
-async fn wait_timer(timer: &mut Option<Pin<Box<tokio::time::Sleep>>>) {
+async fn wait_timer(timer: &mut Option<BoxFuture<'static, ()>>) {
     match timer {
         Some(timer) => timer.as_mut().await,
         None => futures::future::pending().await,
@@ -285,10 +342,7 @@ async fn wait_active(
     let Some(active_write) = active else {
         return futures::future::pending().await;
     };
-    let result = (&mut active_write.task)
-        .await
-        .map_err(|error| anyhow::anyhow!("session write task failed: {error}"))
-        .and_then(std::convert::identity);
+    let result = (&mut active_write.task).await;
     let finished = active.take().expect("active write exists after await");
     Some((finished.batch, finished.background, result))
 }
