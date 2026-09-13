@@ -122,13 +122,17 @@ pub fn catalog_source_entries(
 #[must_use]
 pub fn catalog_description(value: &str, max_length: usize) -> String {
     let normalized = WHITESPACE.replace_all(value, " ").trim().to_owned();
-    if normalized.chars().count() <= max_length {
+    // The source measures and slices with JavaScript string semantics, which count UTF-16 code
+    // units, so an astral character costs two.
+    if normalized.encode_utf16().count() <= max_length {
         normalized
     } else {
-        let truncated: String = normalized
-            .chars()
-            .take(max_length.saturating_sub(3))
-            .collect();
+        let truncated = String::from_utf16_lossy(
+            &normalized
+                .encode_utf16()
+                .take(max_length.saturating_sub(3))
+                .collect::<Vec<u16>>(),
+        );
         format!("{truncated}...")
     }
 }
@@ -825,6 +829,9 @@ mod tests {
         assert_eq!(catalog_description("a  b\n\tc", 10), "a b c");
         assert_eq!(catalog_description("exactly ten", 11), "exactly ten");
         assert_eq!(catalog_description("1234567890", 8), "12345...");
+        // An astral character costs two UTF-16 units, so a six-unit cap fits "a\u{1f600}" and
+        // not the following letter; a scalar-value count would keep the letter too.
+        assert_eq!(catalog_description("a\u{1f600}bcdef", 6), "a\u{1f600}...");
     }
 
     #[test]
