@@ -60,12 +60,6 @@
   "files": [
     "lib/index.js",
     "lib/invariant.js",
-    "lib/internal.js",
-    "lib/client.js",
-    "lib/client_bg.wasm",
-    "lib/highlight-backend.js",
-    "lib/markdown-backend.js",
-    "lib/katex/**/*",
     "lib/types/**/*.d.ts"
   ],
   "peerDependencies": {

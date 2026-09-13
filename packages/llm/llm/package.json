@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts"
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
     },
     "./invariant": {
       "types": "./lib/types/invariant.d.ts",
@@ -22,6 +23,7 @@
     }
   },
   "files": [
+    "lib/index.js",
     "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
@@ -33,9 +35,21 @@
     "@seekdeep-ai/seekdeep-brand": "workspace:^"
   },
   "peerDependencies": {
-    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
-  }
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/llm/llm"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts"
 }
