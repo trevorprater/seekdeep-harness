@@ -172,12 +172,21 @@ impl HttpFetchProvider {
         let truncated_by_chars =
             crate::numeric::exceeds(decoded.encode_utf16().count(), self.limits.max_body_chars);
         let content = if truncated_by_chars {
-            String::from_utf16_lossy(
-                &decoded
-                    .encode_utf16()
-                    .take(crate::numeric::floor_to_usize(self.limits.max_body_chars))
-                    .collect::<Vec<u16>>(),
-            )
+            let mut units = decoded
+                .encode_utf16()
+                .take(crate::numeric::floor_to_usize(self.limits.max_body_chars))
+                .collect::<Vec<u16>>();
+            // A cap that lands between the two units of an astral character would leave a
+            // lone high surrogate. The source keeps that unit; a Rust string cannot, and a
+            // replacement character would alter the text, so the cut moves before the pair
+            // (DEV-003).
+            if units
+                .last()
+                .is_some_and(|unit| (0xD800..=0xDBFF).contains(unit))
+            {
+                units.pop();
+            }
+            String::from_utf16_lossy(&units)
         } else {
             decoded
         };

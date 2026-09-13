@@ -723,10 +723,12 @@ fn accepts_encoding(header: Option<&str>, coding: &str) -> bool {
         let token = parameters.next().unwrap_or_default().trim();
         token.eq_ignore_ascii_case(coding)
             && !parameters.any(|parameter| {
+                // Parameter names are case-insensitive: `Q=0` rejects the coding too.
                 parameter
                     .trim()
-                    .strip_prefix("q=")
-                    .and_then(|quality| quality.trim().parse::<f32>().ok())
+                    .split_once('=')
+                    .filter(|(name, _)| name.trim().eq_ignore_ascii_case("q"))
+                    .and_then(|(_, quality)| quality.trim().parse::<f32>().ok())
                     .is_some_and(|quality| quality <= 0.0)
             })
     })

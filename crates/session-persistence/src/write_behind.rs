@@ -275,6 +275,17 @@ async fn run_actor(
                         if background {
                             report(&error);
                         }
+                        if commands_closed && barriers.is_empty() {
+                            // Every sender is gone and nothing waits on a barrier, so no
+                            // command, timer, or write can ever wake this actor again: the
+                            // retained batch is unrecoverable. Report the terminal failure
+                            // once and exit instead of parking forever with the events.
+                            if !background {
+                                report(&error);
+                            }
+                            has_work.store(false, Ordering::Release);
+                            break;
+                        }
                         if !barriers.is_empty() {
                             if background {
                                 automatic_paused = false;
@@ -379,6 +390,53 @@ mod tests {
             surface_op: None,
             ignorable: Some(true),
         }
+    }
+
+    /// A runtime that announces when its actor future completes.
+    struct ExitingRuntime {
+        exited: Arc<Notify>,
+    }
+
+    impl WriteBehindRuntime for ExitingRuntime {
+        fn spawn_actor(&self, actor: BoxFuture<'static, ()>) {
+            let exited = Arc::clone(&self.exited);
+            tokio::spawn(async move {
+                actor.await;
+                exited.notify_one();
+            });
+        }
+
+        fn sleep(&self, delay: Duration) -> BoxFuture<'static, ()> {
+            Box::pin(tokio::time::sleep(delay))
+        }
+
+        fn spawn_write(&self, write: WriteFuture) -> BoxFuture<'static, anyhow::Result<()>> {
+            write
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_final_drain_with_no_senders_reports_once_and_exits() {
+        let exited = Arc::new(Notify::new());
+        let failures = Arc::new(AtomicUsize::new(0));
+        let reported = Arc::clone(&failures);
+        let behind = SessionWriteBehind::new_with_runtime(
+            Duration::from_secs(60),
+            |_events| async { Err(anyhow::anyhow!("disk full")) },
+            move |_error| {
+                reported.fetch_add(1, Ordering::AcqRel);
+            },
+            Arc::new(ExitingRuntime {
+                exited: Arc::clone(&exited),
+            }),
+        );
+        behind.enqueue(&event(1)).unwrap();
+        assert!(behind.has_work());
+        drop(behind);
+        tokio::time::timeout(Duration::from_secs(5), exited.notified())
+            .await
+            .expect("the actor exits instead of parking with the unrecoverable batch");
+        assert_eq!(failures.load(Ordering::Acquire), 1);
     }
 
     /// A runtime whose deadlines resolve only when the test releases them.

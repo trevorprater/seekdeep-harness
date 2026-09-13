@@ -258,6 +258,24 @@ async fn truncates_decoded_body_past_char_cap() {
 }
 
 #[tokio::test]
+async fn a_cap_inside_a_surrogate_pair_cuts_before_the_pair() {
+    // A cap of two units on "a\u{1f600}b" lands between the astral character's two UTF-16
+    // units; the pair is dropped whole rather than replaced (DEV-003).
+    let server = MockServer::start(Arc::new(|_req: &CapturedRequest| {
+        respond(200, "text/plain", "a\u{1f600}b")
+    }))
+    .await;
+    let mut limits = default_limits();
+    limits.max_body_chars = 2.0;
+    let result = provider(limits)
+        .fetch(&req(&server.url), None)
+        .await
+        .expect("truncated");
+    assert_eq!(body_content(&result), "a");
+    assert!(result.truncated);
+}
+
+#[tokio::test]
 async fn counts_decoded_body_cap_in_utf16_units() {
     // "a\u{1f600}b" is four UTF-16 units but three scalar values, so a cap of three truncates
     // under the source's JavaScript string semantics and would not under a scalar-value count.

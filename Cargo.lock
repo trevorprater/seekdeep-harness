@@ -10487,6 +10487,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-schemastery",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "tokio",

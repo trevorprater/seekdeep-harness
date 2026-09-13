@@ -33,9 +33,17 @@ Verified absent at the pinned commit: analytics or crash-reporting SDKs (`sentry
 - **Rationale.** The SDK's string type cannot hold the code unit and its JSON writer would re-escape any backslash we emit; the escape text is a faithful, reversible encoding of the source's wire bytes, and the marker lets a consumer decode it deliberately.
 - **Affected surfaces.** `crates/session-telemetry-otel/src/native.rs` (conversion and marker), the native exporter tests, and the `packages/session/session-telemetry-otel/src/index.ts` parity row.
 
+## DEV-003: a fetch body cap inside a surrogate pair
+
+- **Source behavior.** `web-fetch-http` slices the decoded body to `maxBodyChars` UTF-16 code units with JavaScript string semantics; a cap landing between the two units of an astral character keeps the lone high surrogate at the end of the text.
+- **Ported behavior.** The port counts and cuts in UTF-16 units as well, but a Rust string cannot end in a lone surrogate: the cut moves one unit earlier, before the pair, so the kept text is one unit shorter than the source's and carries no replacement character.
+- **Observable delta.** Only a body cut exactly inside a surrogate pair differs: the source ends with an unpaired code unit, the port ends before the character. `truncated` is reported the same way.
+- **Rationale.** A replacement character would insert text the page never contained, and carrying an unpaired unit through the tool result would need a non-string body type for one edge; dropping the split character keeps the text a faithful prefix of the page.
+- **Affected surfaces.** `crates/web-fetch-http/src/provider.rs` (the cap) and its fetch specification tests.
+
 ## Explicit non-deviations
 
-These port at full parity; they are listed so removal never creeps beyond DEV-001 and DEV-002:
+These port at full parity; they are listed so removal never creeps beyond DEV-001, DEV-002, and DEV-003:
 
 - The telemetry capability: capture coordinator, `session-telemetry/record` redaction waterfall, and the OTel backend — a vendor-neutral OTLP/HTTP exporter whose whole configuration surface is preserved.
 - `anonymous-user-id` and both feedback packages; the `/feedback` acknowledgement and its sharing disclosure are user-facing surfaces.

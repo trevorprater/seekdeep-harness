@@ -57,17 +57,22 @@ impl WebRuntime {
     ///
     /// Returns duplicate-service or inactive-owner failures.
     pub fn new(context: &Context, config: &WebRuntimeConfig) -> anyhow::Result<Arc<Self>> {
+        // The launcher records `.env` selections in the launch snapshot and leaves the
+        // process environment untouched, so the selectors read the snapshot like the
+        // concrete providers do.
+        let environment = seekdeep_util::launch_environment::launch_environment_of(context);
+        let selector = |name: &str| environment.get(name).map(|entry| entry.value);
         let runtime = Arc::new(Self {
             search_providers: Arc::new(Mutex::new(IndexMap::new())),
             fetch_providers: Arc::new(Mutex::new(IndexMap::new())),
             search_provider_id: config
                 .search_provider
                 .clone()
-                .or_else(|| std::env::var("SEEKDEEP_WEB_SEARCH_PROVIDER").ok()),
+                .or_else(|| selector("SEEKDEEP_WEB_SEARCH_PROVIDER")),
             fetch_provider_id: config
                 .fetch_provider
                 .clone()
-                .or_else(|| std::env::var("SEEKDEEP_WEB_FETCH_PROVIDER").ok()),
+                .or_else(|| selector("SEEKDEEP_WEB_FETCH_PROVIDER")),
         });
         context.provide(WEB, runtime.clone())?;
         Ok(runtime)

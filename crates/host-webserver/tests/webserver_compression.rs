@@ -185,6 +185,7 @@ async fn compresses_complete_compressible_bodies_and_leaves_the_rest_alone() {
         None,
         Some("identity"),
         Some("gzip;q=0"),
+        Some("gzip; Q=0.0"),
         Some("br, deflate"),
     ] {
         let response = request(server.port(), "/bundle.js", encoding)
