@@ -748,6 +748,9 @@ pub struct Domain {
     table_handles: Mutex<HashMap<String, Weak<KvTable>>>,
     global: Option<Arc<Mutex<JsonValue>>>,
     sender: mpsc::UnboundedSender<QueueMessage>,
+    /// Held across a write's admission check and its enqueue, and across `close`'s flag
+    /// swap and its close message, so no admitted write can land behind the close.
+    admission: Mutex<()>,
     disposing: AtomicBool,
     closed: AtomicBool,
     close_state: Arc<CloseState>,
@@ -794,6 +797,7 @@ impl Domain {
                 table_handles: Mutex::new(HashMap::new()),
                 global: global.map(|value| Arc::new(Mutex::new(value))),
                 sender,
+                admission: Mutex::new(()),
                 disposing: AtomicBool::new(false),
                 closed: AtomicBool::new(false),
                 close_state: Arc::new(CloseState::default()),
@@ -912,7 +916,9 @@ impl Domain {
         T: Send + 'static,
         F: std::future::Future<Output = anyhow::Result<T>> + Send + 'static,
     {
+        let admission = self.admission.lock();
         if self.disposing.load(Ordering::Acquire) {
+            drop(admission);
             let name = self.name.clone();
             return async move {
                 Err(DomainError::new(
@@ -928,7 +934,9 @@ impl Domain {
             let _ = send.send(future.await);
         }
         .boxed();
-        if self.sender.send(QueueMessage::Job(job)).is_err() {
+        let enqueued = self.sender.send(QueueMessage::Job(job));
+        drop(admission);
+        if enqueued.is_err() {
             let name = self.name.clone();
             return async move {
                 Err(DomainError::new(
@@ -972,8 +980,11 @@ impl Domain {
 
     /// Rejects new writes, drains accepted writes, then closes the unit.
     pub fn close(&self) -> BoxFuture<'static, anyhow::Result<()>> {
-        if !self.disposing.swap(true, Ordering::AcqRel) {
-            let _ = self.sender.send(QueueMessage::Close);
+        {
+            let _admission = self.admission.lock();
+            if !self.disposing.swap(true, Ordering::AcqRel) {
+                let _ = self.sender.send(QueueMessage::Close);
+            }
         }
         let state = self.close_state.clone();
         async move { state.wait().await.map_err(anyhow::Error::new) }.boxed()

@@ -53,6 +53,12 @@ impl std::fmt::Debug for RetryInternals {
     }
 }
 
+/// Maps one 32-bit sample onto `[0, 1)` the way `Math.random()` never reaches 1: the
+/// divisor is 2^32, not `u32::MAX`, so the largest sample stays below the bound.
+fn unit_interval(sample: u32) -> f64 {
+    f64::from(sample) / 4_294_967_296.0
+}
+
 impl RetryInternals {
     /// The process boundary's entropy: fresh jitter and a fresh retry id per call.
     ///
@@ -65,7 +71,7 @@ impl RetryInternals {
             random: Arc::new(|| {
                 let bytes = uuid::Uuid::new_v4().into_bytes();
                 let sample = u32::from_be_bytes(bytes[..4].try_into().unwrap_or_default());
-                f64::from(sample) / f64::from(u32::MAX)
+                unit_interval(sample)
             }),
             random_retry_id: Arc::new(|| RetryId::new(uuid::Uuid::new_v4().to_string())),
         }
@@ -439,6 +445,12 @@ fn terminal_reply() -> EventReply {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_ambient_jitter_sample_stays_below_one() {
+        assert!(super::unit_interval(u32::MAX) < 1.0);
+        assert!((super::unit_interval(0) - 0.0).abs() < f64::EPSILON);
+    }
+
     use seekdeep_llm::resolve_retry_policy;
 
     use super::*;

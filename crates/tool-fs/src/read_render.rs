@@ -70,15 +70,36 @@ struct WindowAccumulator {
     truncated_by_bytes: bool,
 }
 
+/// The source measures line length in UTF-16 code units (`line.length`); a truncated
+/// line keeps the longest prefix of whole characters within that many units.
 fn truncate_line(line: &str, max_line_length: usize) -> String {
-    if line.chars().count() > max_line_length {
+    if utf16_units(line) > max_line_length {
         format!(
             "{}... (line truncated to {max_line_length} chars)",
-            line.chars().take(max_line_length).collect::<String>()
+            utf16_prefix(line, max_line_length)
         )
     } else {
         line.to_owned()
     }
+}
+
+fn utf16_units(text: &str) -> usize {
+    text.chars().map(char::len_utf16).sum()
+}
+
+/// The longest prefix of whole characters whose UTF-16 length stays within `units`.
+fn utf16_prefix(text: &str, units: usize) -> &str {
+    let mut used = 0;
+    let mut end = 0;
+    for (index, character) in text.char_indices() {
+        let width = character.len_utf16();
+        if used + width > units {
+            break;
+        }
+        used += width;
+        end = index + character.len_utf8();
+    }
+    &text[..end]
 }
 
 fn line_byte_size(line: &str, current_line_count: usize) -> usize {
@@ -147,7 +168,9 @@ pub fn build_window(
     display_path: &str,
 ) -> anyhow::Result<WindowResult> {
     let mut acc = WindowAccumulator::default();
-    let line_buffer_cap = request.max_line_length + 1;
+    // One whole character past the cap (two UTF-16 units at most) is enough for the
+    // truncation to notice an overlong line without ever splitting a surrogate pair.
+    let line_buffer_cap = request.max_line_length + 2;
     let mut line_buffer = String::new();
 
     for chunk in chunks {
@@ -169,27 +192,15 @@ pub fn build_window(
     finish(acc, request, display_path)
 }
 
+/// Keeps at most `cap` UTF-16 code units of a line in memory: enough to render the
+/// line's cap and its truncation notice, never a split character. Measuring bytes here
+/// would cut non-ASCII lines short of the cap before truncation ever saw them.
 fn append_to_line_buffer(buffer: &mut String, segment: &str, cap: usize) {
-    if buffer.len() >= cap {
+    let used = utf16_units(buffer);
+    if used >= cap {
         return;
     }
-    buffer.push_str(segment);
-    if buffer.len() > cap {
-        buffer.truncate(floor_char_boundary(buffer, cap));
-    }
-}
-
-/// Largest byte offset at or below the cap that a UTF-8 boundary allows.
-///
-/// The source caps lines in UTF-16 code units and cannot split a character.
-/// Truncating a Rust String at a raw byte offset can, so the offset is
-/// walked back to the start of the straddling character.
-fn floor_char_boundary(value: &str, cap: usize) -> usize {
-    let mut boundary = cap.min(value.len());
-    while boundary > 0 && !value.is_char_boundary(boundary) {
-        boundary -= 1;
-    }
-    boundary
+    buffer.push_str(utf16_prefix(segment, cap - used));
 }
 
 /// Formats a read outcome as one OpenCode-style line-numbered text block body.
@@ -337,6 +348,44 @@ fn json_line_number(value: JsonRef<'_>) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn line_caps_count_utf16_units_and_keep_whole_characters() {
+        let window = super::ReadWindow {
+            offset: 1,
+            limit: 10,
+            max_line_length: 1000,
+            max_bytes: usize::MAX,
+        };
+        let accented = "\u{e9}".repeat(1500);
+        let result = super::build_window(vec![accented], &window, "accents.txt").unwrap();
+        assert_eq!(
+            result.lines[0].text,
+            format!(
+                "{}... (line truncated to 1000 chars)",
+                "\u{e9}".repeat(1000)
+            )
+        );
+        let exact = "\u{e9}".repeat(1000);
+        let result = super::build_window(vec![exact.clone()], &window, "exact.txt").unwrap();
+        assert_eq!(result.lines[0].text, exact);
+        // A surrogate pair costs two units and is never split.
+        let emoji = "\u{1F600}".repeat(600);
+        let result = super::build_window(vec![emoji], &window, "emoji.txt").unwrap();
+        assert_eq!(
+            result.lines[0].text,
+            format!(
+                "{}... (line truncated to 1000 chars)",
+                "\u{1F600}".repeat(500)
+            )
+        );
+        let mixed = format!("{}\u{1F600}", "a".repeat(999));
+        let result = super::build_window(vec![mixed], &window, "mixed.txt").unwrap();
+        assert_eq!(
+            result.lines[0].text,
+            format!("{}... (line truncated to 1000 chars)", "a".repeat(999))
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -406,7 +455,13 @@ mod tests {
             "/f",
         )
         .expect("window");
-        assert!(result.lines[0].text.chars().all(|c| c == '\u{e9}'));
+        assert_eq!(
+            result.lines[0].text,
+            format!(
+                "{}... (line truncated to 2000 chars)",
+                "\u{e9}".repeat(2000)
+            )
+        );
     }
 
     #[test]

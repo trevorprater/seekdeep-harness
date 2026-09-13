@@ -576,6 +576,16 @@ impl HttpMcpClient {
                     };
                     buffer.extend_from_slice(&chunk);
                     consume_sse_notifications(&mut buffer, &signals);
+                    if buffer.len() > MAX_SSE_EVENT_BYTES {
+                        // A server that never terminates an event must not grow the
+                        // Host's memory without bound: drop the stream and reconnect.
+                        tracing::warn!(
+                            bytes = buffer.len(),
+                            "MCP notification stream sent an event larger than the buffer allows; reconnecting"
+                        );
+                        buffer.clear();
+                        break;
+                    }
                 }
                 if wait_sse_retry(&closed).await {
                     return;
@@ -740,6 +750,10 @@ async fn wait_sse_retry(closed: &AbortSignal) -> bool {
         () = tokio::time::sleep(Duration::from_millis(100)) => false,
     }
 }
+
+/// Largest unterminated server-sent event the notification stream buffers before it
+/// abandons the stream.
+const MAX_SSE_EVENT_BYTES: usize = 16 * 1024 * 1024;
 
 fn consume_sse_notifications(buffer: &mut Vec<u8>, signals: &McpClientSignals) {
     while let Some(end) = sse_event_end(buffer) {

@@ -167,7 +167,8 @@ pub fn select_distribution(
     let selected = entries
         .into_iter()
         .find(|entry| {
-            entry.version.starts_with(&prefix)
+            // `v2` must not match `v24.x`: the major ends at its dot.
+            entry.version.starts_with(&format!("{prefix}."))
                 && entry.files.iter().any(|file| file.starts_with(&platform))
         })
         .ok_or_else(|| {

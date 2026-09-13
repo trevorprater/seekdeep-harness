@@ -29,6 +29,7 @@ seekdeep-subprocess = { path = "../subprocess" }
 seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }
 tokio.workspace = true
+tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]

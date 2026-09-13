@@ -104,6 +104,7 @@ fn archive(root: &Path, target: &Target, variant: &str) -> (NodeDistribution, Pa
 fn source_major_resolution_preserves_index_order_platform_filtering_and_explicit_pins() {
     let target = Target::parse("node24-macos-arm64").unwrap();
     let index = json!([
+        {"version":"v240.1.0","files":["osx-arm64-tar"]},
         {"version":"v26.9.0","files":["osx-arm64-tar"]},
         {"version":"v24.99.0","files":["linux-x64"]},
         {"version":"v24.3.0","files":["osx-arm64-tar"]},
