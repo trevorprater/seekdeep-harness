@@ -12,7 +12,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 encoding_rs.workspace = true
 futures.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["gzip", "brotli", "deflate"] }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true

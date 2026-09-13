@@ -743,3 +743,31 @@ async fn plugin_rejects_invalid_limits_at_construction() {
             .contains("maxRedirects must be a non-negative integer")
     );
 }
+
+
+#[tokio::test]
+async fn decodes_a_gzip_encoded_response_body() {
+    // gzip("compressed body"), embedded so the test needs no compressor dependency.
+    const GZIP_BODY: &[u8] = &[
+        0x1f, 0x8b, 0x08, 0x00, 0xe2, 0xc0, 0xa6, 0x6a, 0x00, 0x03, 0x4b, 0xce, 0xcf, 0x2d, 0x28,
+        0x4a, 0x2d, 0x2e, 0x4e, 0x4d, 0x51, 0x48, 0xca, 0x4f, 0xa9, 0x04, 0x00, 0xb7, 0xb4, 0xfb,
+        0x38, 0x0f, 0x00, 0x00, 0x00,
+    ];
+    let server = MockServer::start(Arc::new(|_request: &CapturedRequest| {
+        MockResponse::Respond(ResponseSpec::new(
+            200,
+            vec![
+                ("content-type".to_owned(), "text/plain".to_owned()),
+                ("content-encoding".to_owned(), "gzip".to_owned()),
+            ],
+            GZIP_BODY.to_vec(),
+        ))
+    }))
+    .await;
+    let fetched = provider(default_limits())
+        .fetch(&req(&server.url), None)
+        .await
+        .expect("gzip response");
+    assert_eq!(fetched.status_code, 200);
+    assert_eq!(body_content(&fetched), "compressed body");
+}
