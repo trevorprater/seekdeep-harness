@@ -131,6 +131,23 @@ fn policy_parses_charset() {
     );
     assert_eq!(parse_charset(Some("text/plain")), None);
     assert_eq!(parse_charset(None), None);
+    // Only a parameter named exactly `charset` counts, and the first one wins.
+    assert_eq!(
+        parse_charset(Some("text/plain; foocharset=not-a-charset")),
+        None
+    );
+    assert_eq!(
+        parse_charset(Some("text/html;charset=UTF-8")).as_deref(),
+        Some("utf-8")
+    );
+    assert_eq!(
+        parse_charset(Some("text/html; Charset = \"ISO-8859-1\"")).as_deref(),
+        Some("iso-8859-1")
+    );
+    assert_eq!(
+        parse_charset(Some("text/plain; foo=bar; charset=latin1; charset=utf-8")).as_deref(),
+        Some("latin1")
+    );
 }
 
 #[test]

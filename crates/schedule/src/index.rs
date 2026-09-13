@@ -92,9 +92,15 @@ pub fn apply(ctx: &Context) -> anyhow::Result<()> {
                 let fiber = Fiber::active_child("schedule agent runtime");
                 let agent_context = agent.context().with_fiber(fiber.clone());
                 let installation = (|| -> anyhow::Result<()> {
-                    register_schedule_tools(&root, &agent_context, agent.clone(), move || {
-                        runtime_drive.request_drive();
-                    })?;
+                    register_schedule_tools(
+                        &root,
+                        &agent_context,
+                        agent.clone(),
+                        runtime.clock(),
+                        move || {
+                            runtime_drive.request_drive();
+                        },
+                    )?;
                     let runtime = runtime.clone();
                     let status_agent = agent.clone();
                     agent_context.events().on_sync(

@@ -204,6 +204,12 @@ impl ScheduleRuntime {
         Self::new_with_clock(context, agent, Arc::new(SystemScheduleClock))
     }
 
+    /// The decision clock every durable due-time and the schedule tools sample.
+    #[must_use]
+    pub fn clock(&self) -> Arc<dyn ScheduleClock> {
+        self.clock.clone()
+    }
+
     /// Constructs an inactive runtime with an injected decision clock.
     #[must_use]
     pub fn new_with_clock(

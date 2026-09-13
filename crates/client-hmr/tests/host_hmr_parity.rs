@@ -201,6 +201,75 @@ async fn sse_sends_graph_and_rebuilt_frames_and_route_is_owned() {
     context.root_fiber().restart().await.unwrap();
 }
 
+async fn open_events(port: u16) -> tokio::net::TcpStream {
+    let mut socket = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    socket
+        .write_all(
+            b"GET /plugins/events HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n",
+        )
+        .await
+        .unwrap();
+    let mut bytes = vec![0_u8; 8192];
+    let read = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut bytes))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&bytes[..read]).contains(": connected"));
+    socket
+}
+
+async fn wait_for_connections(service: &ClientHmrHostService, expected: usize) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while service.connection_count() != expected {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "connections stayed at {} instead of {expected}",
+            service.connection_count()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn closed_event_streams_leave_the_connection_list() {
+    let fixture = Fixture::new();
+    fixture.package("pkg-a", "v1");
+    let host = fixture.host(&["pkg-a"]);
+    let (context, web_server) = server().await;
+    let service = ClientHmrHostService::start(
+        host,
+        &web_server,
+        &ClientHmrConfig {
+            poll_interval_ms: 60_000,
+        },
+    )
+    .unwrap();
+    let first = open_events(web_server.port()).await;
+    let second = open_events(web_server.port()).await;
+    assert_eq!(service.connection_count(), 2);
+    // A disconnect releases its sender once the server drops the response body.
+    drop(second);
+    wait_for_connections(&service, 1).await;
+    // A HEAD probe opens no lasting subscription.
+    let mut probe = tokio::net::TcpStream::connect(("127.0.0.1", web_server.port()))
+        .await
+        .unwrap();
+    probe
+        .write_all(b"HEAD /plugins/events HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut bytes = Vec::new();
+    let _ = tokio::time::timeout(Duration::from_secs(2), probe.read_to_end(&mut bytes)).await;
+    assert!(String::from_utf8_lossy(&bytes).contains("text/event-stream"));
+    wait_for_connections(&service, 1).await;
+    drop(first);
+    wait_for_connections(&service, 0).await;
+    service.dispose().await.unwrap();
+    context.root_fiber().restart().await.unwrap();
+}
+
 #[tokio::test]
 async fn config_plugin_and_invariant_are_strict_and_reversible() {
     let plugin = client_hmr_host_plugin();

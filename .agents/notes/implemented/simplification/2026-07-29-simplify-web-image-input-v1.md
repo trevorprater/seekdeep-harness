@@ -24,7 +24,7 @@ The attachment seam exposes its limits plus storage-free `validateImage`, `saveI
 
 **Add a storage transaction or rollback protocol.** Storage-free validation prevents malformed later members from leaving earlier valid members unreferenced. Stronger all-or-nothing storage across independent content-addressed objects would require ownership or reclamation semantics that the current product path does not need.
 
-**Keep future-facing fields and methods as placeholders.** Output modalities, block alternative text, and active-model hanseekdeepake data had no current decision consumer. Adding them later with their first consumer preserves freedom to choose the correct contract.
+**Keep future-facing fields and methods as placeholders.** Output modalities, block alternative text, and active-model handshake data had no current decision consumer. Adding them later with their first consumer preserves freedom to choose the correct contract.
 
 **Estimate every image with one tile formula.** Visual pricing varies by provider, model, detail mode, and preprocessing. A hard-coded provider-neutral estimate would look authoritative while being wrong; provider usage is the authoritative accounting source.
 

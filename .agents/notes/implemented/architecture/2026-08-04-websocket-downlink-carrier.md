@@ -16,9 +16,9 @@ WebSocket carries only the host→browser downlink. All client→host unary call
 
 ## Upgrade and lifecycle boundaries
 
-`seekdeep-host-webserver` provides an exact upgrade-route registration point alongside ordinary routes, dispatches Node upgrade sockets by pathname only, contains raw-socket errors, and waits for surviving upgraded connections to close during server teardown; it knows nothing about Harness frames or WebSocket messages. `seekdeep-client-connection` owns the WebSocket hanseekdeepake, frame output, and stream cancellation, and reuses the `/api` Host/Origin trust fence before upgrade. An untrusted authority or cross-origin Origin is rejected before `ctx.apiProxy.events.*` starts.
+`seekdeep-host-webserver` provides an exact upgrade-route registration point alongside ordinary routes, dispatches Node upgrade sockets by pathname only, contains raw-socket errors, and waits for surviving upgraded connections to close during server teardown; it knows nothing about Harness frames or WebSocket messages. `seekdeep-client-connection` owns the WebSocket handshake, frame output, and stream cancellation, and reuses the `/api` Host/Origin trust fence before upgrade. An untrusted authority or cross-origin Origin is rejected before `ctx.apiProxy.events.*` starts.
 
-A browser abort or socket close cancels the corresponding host stream; plugin teardown also waits for that source iterator's cleanup. If a host stream throws midway, the carrier sends one existing `stream/error` frame and then closes the socket; the client treats that frame as connection loss rather than delivering it to a business sink. Each WebSocket reports open independently, and the existing readiness hanseekdeepake still waits until mux and host are both open and the `host.describe` HTTP call has succeeded before publishing connected.
+A browser abort or socket close cancels the corresponding host stream; plugin teardown also waits for that source iterator's cleanup. If a host stream throws midway, the carrier sends one existing `stream/error` frame and then closes the socket; the client treats that frame as connection loss rather than delivering it to a business sink. Each WebSocket reports open independently, and the existing readiness handshake still waits until mux and host are both open and the `host.describe` HTTP call has succeeded before publishing connected.
 
 ## Verification
 
@@ -30,7 +30,7 @@ Webserver contract tests pin upgrade-pathname dispatch, duplicate-registration r
 
 **Move unary calls and respond to a full-duplex WebSocket as well.** This would rewrite timeout, cancellation, HTTP-status, trust-fence, and request-correlation behavior without adding any benefit for the current downlink connection-slot problem. HTTP uplink is an explicitly retained boundary.
 
-**Keep a network SSE fallback.** Two carriers would let the production browser path silently fork because of proxy or hanseekdeepake differences and would leave the connection-limit problem in a supported branch. During prerelease, only WebSocket downlink ships; the existing reconnect behavior and connection state expose failures explicitly.
+**Keep a network SSE fallback.** Two carriers would let the production browser path silently fork because of proxy or handshake differences and would leave the connection-limit problem in a supported branch. During prerelease, only WebSocket downlink ships; the existing reconnect behavior and connection state expose failures explicitly.
 
 **Rely on HTTP/2 for greater connection concurrency.** The built-in development server uses plaintext Node HTTP/1.1, and a deployment's fronting proxy is not a product invariant. The physical downlink directly uses a browser primitive outside that connection pool.
 

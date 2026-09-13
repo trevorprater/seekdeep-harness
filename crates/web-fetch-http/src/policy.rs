@@ -82,21 +82,31 @@ pub fn classify_content_type(content_type: Option<&str>) -> Option<FetchableKind
 }
 
 /// Extracts the charset parameter from a response Content-Type, lower-cased.
+///
+/// Mirrors the source's `/;\s*charset\s*=\s*"?([^";]+)"?/i`: only a parameter whose whole
+/// name is `charset` counts, so `foocharset=` is not a charset, and the first such parameter
+/// wins.
 #[must_use]
 pub fn parse_charset(content_type: Option<&str>) -> Option<String> {
-    let content_type = content_type.unwrap_or_default();
-    let lower = content_type.to_ascii_lowercase();
-    let marker = "charset=";
-    let start = lower.find(marker)? + marker.len();
-    let rest = &lower[start..];
-    let rest = rest.trim_start();
-    let value = if let Some(stripped) = rest.strip_prefix('"') {
-        stripped.split('"').next().unwrap_or_default()
-    } else {
-        rest.split(';').next().unwrap_or_default().trim()
-    };
-    let value = value.trim();
-    (!value.is_empty()).then(|| value.to_owned())
+    let lower = content_type.unwrap_or_default().to_ascii_lowercase();
+    let mut rest = lower.as_str();
+    while let Some(separator) = rest.find(';') {
+        rest = &rest[separator + 1..];
+        let parameter = rest.trim_start();
+        let Some(after_name) = parameter.strip_prefix("charset") else {
+            continue;
+        };
+        let Some(after_equals) = after_name.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let value = after_equals.trim_start();
+        let value = value.strip_prefix('"').unwrap_or(value);
+        let value = value.split(['"', ';']).next().unwrap_or_default();
+        if !value.is_empty() {
+            return Some(value.to_owned());
+        }
+    }
+    None
 }
 
 /// Resolves a TextDecoder-equivalent encoding for a declared charset, defaulting to UTF-8.

@@ -121,7 +121,7 @@ The support boundary, stated honestly. Reload is coarse by design: fresh fiber, 
 | `seekdeep-client-runtime` | session object layer + slots service + store engine | plugin, declares `immediately` | keeps shrinking toward a pure session object layer |
 | `seekdeep-client-ui-theme` | theme tokens/service | plugin, declares `immediately`, plus the `./styles/*` source channel | Theme Registry (separate ruling) |
 | `seekdeep-client-i18n` | I18nService | plugin, declares `immediately` | per-deployment locale composition |
-| `seekdeep-client-hmr` | hot reload driver | plugin, declares `immediately` | rollback; reconnect hanseekdeepake |
+| `seekdeep-client-hmr` | hot reload driver | plugin, declares `immediately` | rollback; reconnect handshake |
 | ui-layout / ui-sidebar / ui-conversation / ui-trajectory | UI features | plugins, on-demand | conversation domain split; trajectory real implementation |
 
 ## Consequences

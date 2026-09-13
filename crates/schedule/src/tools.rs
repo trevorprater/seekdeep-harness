@@ -2,6 +2,7 @@
 //!
 //! The tool registrations themselves are ported separately.
 
+use crate::runtime::ScheduleClock;
 use crate::{
     domain::{MIN_EVERY_INTERVAL_SECONDS, ScheduleInputCode, ScheduleInputError},
     types::{AtInput, ScheduleId, SchedulePersistenceOperation, ScheduleToolError},
@@ -300,6 +301,7 @@ pub fn register_schedule_tools(
     root_ctx: &Context,
     tool_ctx: &Context,
     agent: Arc<Agent>,
+    clock: Arc<dyn ScheduleClock>,
     on_durable_change: impl Fn() + Send + Sync + 'static,
 ) -> anyhow::Result<EffectHandle> {
     let tools: Arc<ToolRuntime> = tool_ctx
@@ -307,8 +309,13 @@ pub fn register_schedule_tools(
         .ok_or_else(|| anyhow::anyhow!("schedule requires tools"))?;
     let on_durable_change = Arc::new(on_durable_change);
 
-    let create = schedule_create_definition(root_ctx, agent.clone(), on_durable_change.clone())?;
-    let list = schedule_list_definition(root_ctx, agent.clone(), on_durable_change.clone())?;
+    let create = schedule_create_definition(
+        root_ctx,
+        agent.clone(),
+        clock.clone(),
+        on_durable_change.clone(),
+    )?;
+    let list = schedule_list_definition(root_ctx, agent.clone(), clock, on_durable_change.clone())?;
     let delete = schedule_delete_definition(root_ctx, agent, on_durable_change.clone())?;
     let _ = tools.register(tool_ctx, create)?;
     let _ = tools.register(tool_ctx, list)?;
@@ -460,6 +467,7 @@ const DELETE_DESCRIPTION: &str = concat!(
 fn schedule_create_definition(
     root_ctx: &Context,
     agent: Arc<Agent>,
+    clock: Arc<dyn ScheduleClock>,
     on_durable_change: Arc<dyn Fn() + Send + Sync>,
 ) -> anyhow::Result<seekdeep_tools::ToolDefinition> {
     let root_ctx = root_ctx.clone();
@@ -481,6 +489,7 @@ fn schedule_create_definition(
             let agent = agent.clone();
             let root_ctx = root_ctx.clone();
             let on_durable_change = on_durable_change.clone();
+            let clock = clock.clone();
             Box::pin(async move {
                 if execution.agent.as_ref().is_none_or(|a| !Arc::ptr_eq(a, &agent)) {
                     return Ok(ScheduleCreateValue::Error(internal_error()));
@@ -491,6 +500,7 @@ fn schedule_create_definition(
                 let signal = execution.signal();
                 Ok(run_schedule_transaction(agent.clone(), move || {
                     let agent = agent.clone();
+                    let clock = clock.clone();
                     let root_ctx = root_ctx.clone();
                     let on_durable_change = on_durable_change.clone();
                     let args = args.clone();
@@ -515,12 +525,12 @@ fn schedule_create_definition(
                         };
                         let id = allocate_schedule_id(&folded);
                         let record: ScheduleRecord = if let Some(at) = &args.at {
-                            match create_at_schedule_record(id.clone(), &args.prompt, at, now_millis()) {
+                            match create_at_schedule_record(id.clone(), &args.prompt, at, clock.now_millis()) {
                                 Ok(record) => ScheduleRecord::At(record),
                                 Err(error) => return ScheduleCreateValue::Error(input_error(&error)),
                             }
                         } else if let Some(after_seconds) = args.after_seconds {
-                            match create_after_schedule_record(id.clone(), &args.prompt, after_seconds, now_millis()) {
+                            match create_after_schedule_record(id.clone(), &args.prompt, after_seconds, clock.now_millis()) {
                                 Ok(record) => ScheduleRecord::After(record),
                                 Err(error) => return ScheduleCreateValue::Error(input_error(&error)),
                             }
@@ -529,7 +539,7 @@ fn schedule_create_definition(
                                 id.clone(),
                                 &args.prompt,
                                 args.every_seconds.expect("validated selector"),
-                                now_millis(),
+                                clock.now_millis(),
                             ) {
                                 Ok(record) => ScheduleRecord::Every(record),
                                 Err(error) => return ScheduleCreateValue::Error(input_error(&error)),
@@ -559,7 +569,7 @@ fn schedule_create_definition(
                             ));
                         }
                         notify(&root_ctx, &on_durable_change);
-                        ScheduleCreateValue::View(schedule_view(&record, now_millis()))
+                        ScheduleCreateValue::View(schedule_view(&record, clock.now_millis()))
                     })
                 })
                 .await)
@@ -579,6 +589,7 @@ struct NoArgs {}
 fn schedule_list_definition(
     root_ctx: &Context,
     agent: Arc<Agent>,
+    clock: Arc<dyn ScheduleClock>,
     on_durable_change: Arc<dyn Fn() + Send + Sync>,
 ) -> anyhow::Result<seekdeep_tools::ToolDefinition> {
     let root_ctx = root_ctx.clone();
@@ -596,6 +607,7 @@ fn schedule_list_definition(
                 let agent = agent.clone();
                 let root_ctx = root_ctx.clone();
                 let on_durable_change = on_durable_change.clone();
+                let clock = clock.clone();
                 Box::pin(async move {
                     if execution
                         .agent
@@ -610,6 +622,7 @@ fn schedule_list_definition(
                         let root_ctx = root_ctx.clone();
                         let on_durable_change = on_durable_change.clone();
                         let signal = signal.clone();
+                        let clock = clock.clone();
                         Box::pin(async move {
                             if let Some(cancelled) = cancellation_placeholder(&signal) {
                                 return ScheduleListValue::Error(cancelled);
@@ -633,7 +646,7 @@ fn schedule_list_definition(
                                 Ok(folded) => folded,
                                 Err(error) => return ScheduleListValue::Error(error),
                             };
-                            let now = now_millis();
+                            let now = clock.now_millis();
                             ScheduleListValue::Views(
                                 folded
                                     .active
@@ -760,13 +773,4 @@ fn schedule_delete_definition(
             Some(present("Delete reminder", ToolCallKind::Other, Some(&args.id)))
         }))
     )
-}
-
-fn now_millis() -> i64 {
-    i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis()),
-    )
-    .unwrap_or(i64::MAX)
 }

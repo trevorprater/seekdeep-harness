@@ -241,9 +241,30 @@ fn truncate_with_notice(text: &JsonString, max_output_bytes: usize) -> Truncatio
                 omitted_bytes: omitted,
             };
             low = retained_bytes + 1;
+        } else if retained_bytes == 0 {
+            // The source's `high = retainedBytes - 1` goes negative here and ends the search;
+            // a saturating bound would revisit zero forever. Nothing fits, so the caller
+            // reports the exceeded budget.
+            break;
         } else {
-            high = retained_bytes.saturating_sub(1);
+            high = retained_bytes - 1;
         }
     }
     best
+}
+
+#[cfg(test)]
+mod truncation_tests {
+    use super::truncate_with_notice;
+    use seekdeep_llm::JsonString;
+
+    #[test]
+    fn a_budget_too_small_for_any_text_ends_the_search_with_everything_omitted() {
+        let text = JsonString::from("abcdefghij");
+        for budget in [0, 1, 8] {
+            let truncation = truncate_with_notice(&text, budget);
+            assert_eq!(truncation.omitted_bytes, 10, "budget {budget}");
+            assert_eq!(truncation.text.len_utf8(), 0, "budget {budget}");
+        }
+    }
 }

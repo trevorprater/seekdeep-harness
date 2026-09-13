@@ -69,7 +69,10 @@ struct HostLifecycle {
 pub struct ClientHmrHostService {
     modules: Arc<ClientModuleHost>,
     watched: Mutex<BTreeMap<String, WatchedBundle>>,
-    connections: Mutex<Vec<tokio::sync::mpsc::UnboundedSender<Bytes>>>,
+    /// Live event-stream subscribers by connection id; each stream removes its own entry when
+    /// it is dropped, so a reload, a disconnect, or a HEAD probe never leaves a sender behind.
+    connections: Mutex<Vec<(u64, tokio::sync::mpsc::UnboundedSender<Bytes>)>>,
+    next_connection: std::sync::atomic::AtomicU64,
     lifecycle: Mutex<HostLifecycle>,
 }
 
@@ -102,6 +105,7 @@ impl ClientHmrHostService {
             modules,
             watched: Mutex::new(BTreeMap::new()),
             connections: Mutex::new(Vec::new()),
+            next_connection: std::sync::atomic::AtomicU64::new(0),
             lifecycle: Mutex::new(HostLifecycle {
                 cancel: None,
                 task: None,
@@ -319,7 +323,13 @@ impl ClientHmrHostService {
         }
     }
 
-    fn connect(&self, method: &Method) -> seekdeep_host_webserver::WebResponse {
+    /// Live event-stream subscribers.
+    #[must_use]
+    pub fn connection_count(&self) -> usize {
+        self.connections.lock().len()
+    }
+
+    fn connect(self: &Arc<Self>, method: &Method) -> seekdeep_host_webserver::WebResponse {
         if method != Method::GET && method != Method::HEAD {
             return empty_response(StatusCode::METHOD_NOT_ALLOWED);
         }
@@ -330,13 +340,23 @@ impl ClientHmrHostService {
             "type": "graph",
             "graph": graph,
         }))));
-        self.connections.lock().push(sender);
-        let body = StreamBody::new(stream::unfold(receiver, |mut receiver| async move {
-            receiver
-                .recv()
-                .await
-                .map(|bytes| (Ok::<_, io::Error>(Frame::data(bytes)), receiver))
-        }))
+        let id = self
+            .next_connection
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.connections.lock().push((id, sender));
+        let guard = ConnectionGuard {
+            service: Arc::downgrade(self),
+            id,
+        };
+        let body = StreamBody::new(stream::unfold(
+            (receiver, guard),
+            |(mut receiver, guard)| async move {
+                receiver
+                    .recv()
+                    .await
+                    .map(|bytes| (Ok::<_, io::Error>(Frame::data(bytes)), (receiver, guard)))
+            },
+        ))
         .boxed_unsync();
         let mut response = Response::new(body);
         *response.status_mut() = StatusCode::OK;
@@ -359,7 +379,22 @@ impl ClientHmrHostService {
         let bytes = Bytes::copy_from_slice(frame.as_bytes());
         self.connections
             .lock()
-            .retain(|sender| sender.send(bytes.clone()).is_ok());
+            .retain(|(_, sender)| sender.send(bytes.clone()).is_ok());
+    }
+}
+
+/// Removes a subscriber's sender when its response body is dropped, the counterpart of the
+/// source's `res.on('close', () => connections.delete(res))`.
+struct ConnectionGuard {
+    service: std::sync::Weak<ClientHmrHostService>,
+    id: u64,
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        if let Some(service) = self.service.upgrade() {
+            service.connections.lock().retain(|(id, _)| *id != self.id);
+        }
     }
 }
 
