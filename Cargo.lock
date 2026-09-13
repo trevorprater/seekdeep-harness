@@ -9898,6 +9898,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-schemastery",
+ "seekdeep-scope",
  "seekdeep-system-prompt",
  "seekdeep-tools",
  "serde",
