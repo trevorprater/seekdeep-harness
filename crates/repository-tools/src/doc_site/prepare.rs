@@ -3,7 +3,12 @@ use std::{path::Path, process::Command};
 use anyhow::Context as _;
 use serde_json::{Value, json};
 
-use super::{DocsManifest, docs_source_files, site_configuration};
+use super::{DocsManifest, docs_source_files, project_docs, site_configuration};
+
+/// Environment switch: when set, `prepare_site` projects the documentation itself and
+/// records no projector, so a site build on a host that cannot run this executable (the
+/// Wine Windows gate drives Windows Node over a Linux checkout) consumes the projection.
+const PREPROJECT_ENV: &str = "SEEKDEEP_DOCS_PREPROJECT";
 
 /// Builds the Rust/WASM website callbacks and writes `VitePress` adapter inputs.
 ///
@@ -82,10 +87,16 @@ pub fn prepare_site(
         browser.join("docs-site.mjs"),
         "import init, * as runtime from './docs_site_runtime.js';\nawait init();\nglobalThis.__seekdeepDocsRuntime = runtime;\nexport const sidebarScrollbar = new runtime.SidebarScrollbar();\n",
     )?;
+    let projector = if std::env::var_os(PREPROJECT_ENV).is_some_and(|value| !value.is_empty()) {
+        project_docs(root, &root.join("website/.generated"), manifest, revision)?;
+        Value::Null
+    } else {
+        json!(std::env::current_exe()?)
+    };
     let state = json!({
         "config":configuration, "sources":sources,
         "root":root, "revision":revision, "editBranch":edit_branch,
-        "projector":std::env::current_exe()?, "runtime":native.join("docs_site_runtime.js")
+        "projector":projector, "runtime":native.join("docs_site_runtime.js")
     });
     std::fs::write(
         cache.join("site-config.json"),

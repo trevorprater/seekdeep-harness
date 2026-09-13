@@ -250,7 +250,9 @@ build_gate() {
 # compiled docs runtime, copied public assets). `docs:prepare` is a native Rust/WASM
 # build, so it runs on the host and its ignored outputs are copied into the tree.
 site_gate() {
-  (cd "$repo_root" && pnpm run docs:prepare > "$scratch/logs/site-prepare.log" 2>&1) || return $?
+  # SEEKDEEP_DOCS_PREPROJECT: the projector is a Linux executable Windows Node cannot spawn,
+  # so the host projects the docs during preparation and the config skips the spawn.
+  (cd "$repo_root" && SEEKDEEP_DOCS_PREPROJECT=1 pnpm run docs:prepare > "$scratch/logs/site-prepare.log" 2>&1) || return $?
   rm -rf "$scratch/tree/website/.cache"
   cp -R "$repo_root/website/.cache" "$scratch/tree/website/.cache"
   cd website

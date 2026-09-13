@@ -6,7 +6,12 @@ import { withMermaid } from 'vitepress-plugin-mermaid'
 const state = JSON.parse(readFileSync(new URL('../.cache/site-config.json', import.meta.url), 'utf8'))
 const runtime = createRequire(import.meta.url)(state.runtime)
 globalThis.__seekdeepDocsRuntime = runtime
-const project = () => execFileSync(state.projector, ['--root', state.root, '--repository-ref', state.revision], { stdio: 'inherit' })
+// A prepared state without a projector was projected by `docs:prepare` itself
+// (SEEKDEEP_DOCS_PREPROJECT), for a build host that cannot run the native executable.
+const project = () => {
+  if (!state.projector) return
+  execFileSync(state.projector, ['--root', state.root, '--repository-ref', state.revision], { stdio: 'inherit' })
+}
 project()
 
 const config = state.config
