@@ -10,7 +10,10 @@ use std::{
 use serde_json::{Value, json};
 
 use super::{Arch, BuildOptions, Host, Platform, Target};
-use crate::node_runtime::{self, AcquiredNode, CurlFetcher};
+use crate::{
+    node_runtime::{self, AcquiredNode, CurlFetcher},
+    ripgrep::{self, AcquiredRipgrep},
+};
 
 /// Source-compatible development entry path below the Node carrier root.
 pub const ENTRY_BIN: &str =
@@ -104,6 +107,7 @@ pub fn build_executables(
         .first()
         .ok_or_else(|| anyhow::anyhow!("host Node distribution is absent"))?;
     verify_host_node(host_node)?;
+    let ripgreps = acquire_ripgreps(&target_directory, &host_target, &options.targets)?;
     let host_artifacts = compile(&root, &target_directory, &host_target, options.skip_build)?;
     let compiled_node = compile_node_runtime(
         &root,
@@ -120,11 +124,12 @@ pub fn build_executables(
     ensure_owned_directory(&root, &runtime_directory)?;
     stage_python_bindings(&root, &runtime_directory, &host_target, &host_artifacts)?;
     stage_node_carrier(&root, &node_carrier, &host_target, &host_artifacts)?;
-    stage_node_assets(
+    stage_carrier_assets(
         &root,
+        &node_carrier,
         &compiled_node,
         host_node,
-        &node_carrier.join("native").join(node_runtime::DIRECTORY),
+        ripgrep_for(&ripgreps, &host_target)?,
     )?;
     ensure_owned_directory(&root, &output)?;
     for target in &options.targets {
@@ -141,6 +146,7 @@ pub fn build_executables(
             artifacts,
             &compiled_node,
             &nodes,
+            &ripgreps,
         )?;
     }
     report_and_sync(&products, &binding_libraries, &runtime_directory)?;
@@ -152,6 +158,7 @@ pub fn build_executables(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn stage_product(
     root: &Path,
     output: &Path,
@@ -160,6 +167,7 @@ fn stage_product(
     artifacts: &Artifacts,
     compiled_node: &Path,
     nodes: &[AcquiredNode],
+    ripgreps: &[AcquiredRipgrep],
 ) -> anyhow::Result<()> {
     let product = output.join(target.basename());
     copy_executable(&artifacts.runtime, &product)?;
@@ -185,7 +193,114 @@ fn stage_product(
             .join(target.platform_arch()),
         target,
     )?;
+    let ripgrep_assets = output.join(ripgrep::DIRECTORY).join(target.platform_arch());
+    stage_ripgrep_assets(root, ripgrep_for(ripgreps, target)?, &ripgrep_assets)?;
+    replace_ripgrep_assets(
+        root,
+        &ripgrep_assets,
+        &runtime_directory
+            .join(ripgrep::DIRECTORY)
+            .join(target.platform_arch()),
+        target,
+    )?;
     Ok(())
+}
+
+/// Stages the host's runtime closures beside the Node carrier's native executable.
+fn stage_carrier_assets(
+    root: &Path,
+    node_carrier: &Path,
+    compiled_node: &Path,
+    host_node: &AcquiredNode,
+    host_ripgrep: &AcquiredRipgrep,
+) -> anyhow::Result<()> {
+    let native = node_carrier.join("native");
+    stage_node_assets(
+        root,
+        compiled_node,
+        host_node,
+        &native.join(node_runtime::DIRECTORY),
+    )?;
+    stage_ripgrep_assets(root, host_ripgrep, &native.join(ripgrep::DIRECTORY))
+}
+
+fn acquire_ripgreps(
+    target_directory: &Path,
+    host: &Target,
+    targets: &[Target],
+) -> anyhow::Result<Vec<AcquiredRipgrep>> {
+    let mut wanted = vec![host.clone()];
+    for target in targets {
+        if !wanted.iter().any(|known| same_target(known, target)) {
+            wanted.push(target.clone());
+        }
+    }
+    let packages = wanted
+        .iter()
+        .map(ripgrep::RipgrepPackage::pinned)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let cache = std::env::var_os("SEEKDEEP_RIPGREP_CACHE")
+        .map_or_else(|| target_directory.join("ripgrep-packages"), PathBuf::from);
+    ripgrep::acquire_packages(&packages, &cache, &CurlFetcher)
+}
+
+fn ripgrep_for<'a>(
+    acquired: &'a [AcquiredRipgrep],
+    target: &Target,
+) -> anyhow::Result<&'a AcquiredRipgrep> {
+    acquired
+        .iter()
+        .find(|entry| same_target(&entry.package.target, target))
+        .ok_or_else(|| anyhow::anyhow!("ripgrep package for {} was not acquired", target.spec()))
+}
+
+fn stage_ripgrep_assets(
+    root: &Path,
+    acquired: &AcquiredRipgrep,
+    destination: &Path,
+) -> anyhow::Result<()> {
+    let parent = prepare_ripgrep_destination(root, destination)?;
+    let temporary = tempfile::tempdir_in(parent)?;
+    let staged = temporary.path().join("closure");
+    ripgrep::stage_package(acquired, &staged)?;
+    install_staged_assets(&staged, destination)?;
+    println!(
+        "build-exe-for-python-sdk: staged {} {} for {} at {}",
+        acquired.package.name(),
+        acquired.package.version,
+        acquired.package.target.platform_arch(),
+        destination.display()
+    );
+    Ok(())
+}
+
+fn replace_ripgrep_assets(
+    root: &Path,
+    source: &Path,
+    destination: &Path,
+    target: &Target,
+) -> anyhow::Result<()> {
+    let parent = prepare_ripgrep_destination(root, destination)?;
+    let temporary = tempfile::tempdir_in(parent)?;
+    let staged = temporary.path().join("closure");
+    ripgrep::copy_directory(source, &staged, target)?;
+    install_staged_assets(&staged, destination)
+}
+
+fn prepare_ripgrep_destination<'a>(root: &Path, destination: &'a Path) -> anyhow::Result<&'a Path> {
+    validate_output_ancestors(root, destination)?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("ripgrep output has no parent"))?;
+    ensure_owned_directory(root, parent)?;
+    if destination.exists() {
+        anyhow::ensure!(
+            destination.join(ripgrep::MANIFEST).is_file(),
+            "refusing to replace an unrecognized ripgrep directory: {}",
+            destination.display()
+        );
+    }
+    Ok(parent)
 }
 
 fn load_runtime_manifest(root: &Path) -> anyhow::Result<Value> {
@@ -375,7 +490,7 @@ fn stage_node_assets(
         &node.archive_sha256,
         &staged,
     )?;
-    install_node_assets(&staged, destination)?;
+    install_staged_assets(&staged, destination)?;
     println!(
         "build-exe-for-python-sdk: staged Node {} for {} at {}",
         node.distribution.version,
@@ -395,7 +510,7 @@ fn replace_node_assets(
     let temporary = tempfile::tempdir_in(parent)?;
     let staged = temporary.path().join("closure");
     node_runtime::copy_directory(source, &staged, target)?;
-    install_node_assets(&staged, destination)
+    install_staged_assets(&staged, destination)
 }
 
 fn prepare_node_asset_destination<'a>(
@@ -417,7 +532,7 @@ fn prepare_node_asset_destination<'a>(
     Ok(parent)
 }
 
-fn install_node_assets(staged: &Path, destination: &Path) -> anyhow::Result<()> {
+fn install_staged_assets(staged: &Path, destination: &Path) -> anyhow::Result<()> {
     if destination.exists() {
         fs::remove_dir_all(destination)?;
     }

@@ -99,10 +99,9 @@ pub fn verify_wheel(
                     path.display()
                 );
             }
-            verify_node_payload(
-                &mut archive,
-                &crate::runtime_binding_target(&platform.executable)?,
-            )?;
+            let target = crate::runtime_binding_target(&platform.executable)?;
+            verify_node_payload(&mut archive, &target)?;
+            verify_ripgrep_payload(&mut archive, &target)?;
         }
         Package::Sdk => {
             verify_sdk_payload(
@@ -131,6 +130,10 @@ fn verify_sdk_payload(
             .iter()
             .any(|name| name.contains("/runtime/code-runtime-node/")),
         "SDK wheel unexpectedly contains a compiled Node runtime"
+    );
+    anyhow::ensure!(
+        !names.iter().any(|name| name.contains("/runtime/ripgrep/")),
+        "SDK wheel unexpectedly contains a packaged ripgrep"
     );
     anyhow::ensure!(
         binding_files.is_empty(),
@@ -204,6 +207,59 @@ fn verify_node_payload(
         }
     }
     crate::node_runtime::verify_directory(&assets, target)?;
+    Ok(())
+}
+
+fn verify_ripgrep_payload(
+    archive: &mut zip::ZipArchive<File>,
+    target: &crate::executable::Target,
+) -> anyhow::Result<()> {
+    const PREFIX: &str = "deepseek_harness_runtime/runtime/ripgrep/";
+    let temporary = tempfile::tempdir()?;
+    let assets = temporary.path().join(crate::ripgrep::DIRECTORY);
+    fs::create_dir(&assets)?;
+    let mut found = BTreeSet::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let Some(relative) = entry.name().strip_prefix(PREFIX).map(str::to_owned) else {
+            continue;
+        };
+        if relative.is_empty() {
+            continue;
+        }
+        anyhow::ensure!(
+            !entry.is_dir()
+                && !relative.contains('/')
+                && !relative.contains('\\')
+                && relative != "..",
+            "runtime wheel contains an unsafe ripgrep asset path: {relative}"
+        );
+        anyhow::ensure!(
+            found.insert(relative.clone()),
+            "runtime wheel contains a duplicate ripgrep asset: {relative}"
+        );
+        let mode = entry.unix_mode().unwrap_or_default();
+        anyhow::ensure!(
+            mode & 0o170_000 != 0o120_000,
+            "runtime wheel contains a linked ripgrep asset: {relative}"
+        );
+        let destination = assets.join(&relative);
+        let mut output = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)?;
+        std::io::copy(&mut entry, &mut output)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            fs::set_permissions(&destination, fs::Permissions::from_mode(mode & 0o777))?;
+        }
+    }
+    anyhow::ensure!(
+        !found.is_empty(),
+        "runtime wheel carries no packaged ripgrep closure"
+    );
+    crate::ripgrep::verify_directory(&assets, target)?;
     Ok(())
 }
 

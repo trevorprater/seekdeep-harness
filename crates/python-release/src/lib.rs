@@ -15,6 +15,7 @@ pub mod executable;
 pub mod hook;
 /// Verified compiled Node runtime and official executable distributions.
 pub mod node_runtime;
+pub mod ripgrep;
 pub mod staging;
 pub mod wheel;
 

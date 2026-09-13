@@ -693,10 +693,23 @@ impl SearchRuntime {
         let executable = std::env::current_exe().ok()?;
         let directory = executable.parent()?;
         let name = if cfg!(windows) { "rg.exe" } else { "rg" };
-        [directory.join(name), directory.join("bin").join(name)]
-            .into_iter()
-            .find(|path| path.is_file())
-            .map(|path| path.to_string_lossy().into_owned())
+        // A release closure carries `ripgrep/<platform-arch>` (multi-target output) or a
+        // flat `ripgrep` directory; a bare binary beside the executable is accepted too.
+        let architecture = match std::env::consts::ARCH {
+            "x86_64" => "x64",
+            "aarch64" => "arm64",
+            other => other,
+        };
+        let platform_arch = format!("{}-{architecture}", std::env::consts::OS);
+        [
+            directory.join("ripgrep").join(platform_arch).join(name),
+            directory.join("ripgrep").join(name),
+            directory.join(name),
+            directory.join("bin").join(name),
+        ]
+        .into_iter()
+        .find(|path| path.is_file())
+        .map(|path| path.to_string_lossy().into_owned())
     }
 
     async fn rg_path(&self) -> anyhow::Result<String> {

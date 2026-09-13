@@ -6,6 +6,7 @@ use seekdeep_code_runtime_worker_thread::node_assets;
 use seekdeep_python_release::{
     executable::{Arch, Platform, Target},
     node_runtime::{NodeDistribution, NodeProvenance},
+    ripgrep::{self, RipgrepPackage, RipgrepProvenance},
 };
 use serde_json::json;
 use zip::write::SimpleFileOptions;
@@ -105,6 +106,54 @@ pub(crate) fn make_assets(directory: &Path, target: &Target) {
     };
     node_assets::write_manifest_with_node(directory, serde_json::to_value(provenance).unwrap())
         .unwrap();
+}
+
+/// Structural stand-in for a staged ripgrep closure of the pinned package for `target`.
+pub(crate) fn make_ripgrep_assets(directory: &Path, target: &Target) {
+    if directory.exists() {
+        fs::remove_dir_all(directory).unwrap();
+    }
+    fs::create_dir_all(directory).unwrap();
+    fs::write(directory.join("rg"), native_header(target, false)).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::set_permissions(directory.join("rg"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(directory.join("LICENSE"), "fixture ripgrep license\n").unwrap();
+    let package = RipgrepPackage::pinned(target).unwrap();
+    let provenance = RipgrepProvenance {
+        package: package.name(),
+        version: package.version.clone(),
+        target: target.platform_arch(),
+        archive: package.archive(),
+        archive_sha512: package.archive_sha512.clone(),
+        url: package.url(),
+        executable: "rg".to_owned(),
+        license: "LICENSE".to_owned(),
+    };
+    ripgrep::write_manifest(directory, provenance).unwrap();
+}
+
+pub(crate) fn zip_ripgrep_assets(archive: &mut zip::ZipWriter<fs::File>, directory: &Path) {
+    let mut files = fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    files.sort();
+    for file in files {
+        let relative = file.file_name().unwrap().to_str().unwrap();
+        let mode = if relative == "rg" { 0o755 } else { 0o644 };
+        archive
+            .start_file(
+                format!("deepseek_harness_runtime/runtime/ripgrep/{relative}"),
+                SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated)
+                    .unix_permissions(mode),
+            )
+            .unwrap();
+        archive.write_all(&fs::read(file).unwrap()).unwrap();
+    }
 }
 
 pub(crate) fn zip_assets(archive: &mut zip::ZipWriter<fs::File>, directory: &Path) {

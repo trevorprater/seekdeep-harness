@@ -193,6 +193,8 @@ pub fn stage_runtime(
         &runtime.join(crate::node_runtime::DIRECTORY),
         &target,
     )?;
+    let ripgrep = crate::ripgrep::adjacent_directory(executable, &target)?;
+    crate::ripgrep::copy_directory(&ripgrep, &runtime.join(crate::ripgrep::DIRECTORY), &target)?;
     let package = runtime
         .parent()
         .ok_or_else(|| anyhow::anyhow!("runtime package parent is absent"))?;

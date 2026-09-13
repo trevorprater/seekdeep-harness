@@ -341,6 +341,9 @@ fn runtime_wheel(
         .write_all(&node_fixture::native_header(target, true))
         .unwrap();
     node_fixture::zip_assets(&mut archive, assets);
+    let ripgrep = tempfile::tempdir().unwrap();
+    node_fixture::make_ripgrep_assets(ripgrep.path(), target);
+    node_fixture::zip_ripgrep_assets(&mut archive, ripgrep.path());
     archive.finish().unwrap();
 }
 

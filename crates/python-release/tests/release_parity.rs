@@ -75,6 +75,7 @@ fn executable(path: &Path) {
         )
         .unwrap();
         node_fixture::make_assets(&path.parent().unwrap().join("code-runtime-node"), &target);
+        node_fixture::make_ripgrep_assets(&path.parent().unwrap().join("ripgrep"), &target);
     }
     #[cfg(unix)]
     {
@@ -378,6 +379,9 @@ fn wheel_file(
             let directory = assets.path().join("code-runtime-node");
             node_fixture::make_assets(&directory, &target);
             node_fixture::zip_assets(&mut archive, &directory);
+            let ripgrep = assets.path().join("ripgrep");
+            node_fixture::make_ripgrep_assets(&ripgrep, &target);
+            node_fixture::zip_ripgrep_assets(&mut archive, &ripgrep);
         }
     }
     archive.finish().unwrap();
