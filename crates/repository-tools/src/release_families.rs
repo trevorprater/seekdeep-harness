@@ -218,10 +218,9 @@ impl ReleaseFamily {
         match self {
             Self::SeekDeep => {
                 validate_tarball_payload(files, &member.name)?;
-                let entry = Self::SeekDeep
-                    .installed_entry()
-                    .expect("the seekdeep family installs an executable");
-                if member.name == entry.package_name {
+                if let Some(entry) = Self::SeekDeep.installed_entry()
+                    && member.name == entry.package_name
+                {
                     anyhow::ensure!(
                         payload_carries(files, &entry.bin_path),
                         "{} packs no {} for its installed executable",
