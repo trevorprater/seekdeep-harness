@@ -381,6 +381,80 @@ mod tests {
         }
     }
 
+    /// A runtime whose deadlines resolve only when the test releases them.
+    #[derive(Default)]
+    struct ManualRuntime {
+        sleeps: AtomicUsize,
+        release: Arc<Notify>,
+    }
+
+    impl WriteBehindRuntime for ManualRuntime {
+        fn spawn_actor(&self, actor: BoxFuture<'static, ()>) {
+            tokio::spawn(actor);
+        }
+
+        fn sleep(&self, _delay: Duration) -> BoxFuture<'static, ()> {
+            self.sleeps.fetch_add(1, Ordering::AcqRel);
+            let release = Arc::clone(&self.release);
+            Box::pin(async move { release.notified().await })
+        }
+
+        fn spawn_write(&self, write: WriteFuture) -> BoxFuture<'static, anyhow::Result<()>> {
+            Box::pin(async move {
+                tokio::spawn(write)
+                    .await
+                    .map_err(|error| anyhow::anyhow!("session write task failed: {error}"))
+                    .and_then(std::convert::identity)
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn the_batching_deadline_comes_from_the_injected_runtime() {
+        let runtime = Arc::new(ManualRuntime::default());
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let sink = Arc::clone(&batches);
+        // A day-long window: only the injected deadline can release the batch.
+        let behind = SessionWriteBehind::new_with_runtime(
+            Duration::from_secs(86_400),
+            move |events| {
+                let sink = Arc::clone(&sink);
+                async move {
+                    sink.lock()
+                        .expect("batches")
+                        .push(events.iter().map(|event| event.seq).collect());
+                    Ok(())
+                }
+            },
+            |_| {},
+            Arc::clone(&runtime) as Arc<dyn WriteBehindRuntime>,
+        );
+        behind.enqueue(&event(1)).expect("enqueue");
+        for _ in 0..64 {
+            if runtime.sleeps.load(Ordering::Acquire) > 0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            runtime.sleeps.load(Ordering::Acquire),
+            1,
+            "the actor takes its batching deadline from the seam"
+        );
+        assert!(
+            batches.lock().expect("batches").is_empty(),
+            "no batch is written before the deadline resolves"
+        );
+        runtime.release.notify_one();
+        for _ in 0..64 {
+            if !batches.lock().expect("batches").is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![1_u64]]);
+    }
+
     #[tokio::test(start_paused = true)]
     async fn fixed_window_batches_events_and_flushes_immediately() {
         let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
