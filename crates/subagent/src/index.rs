@@ -7,10 +7,9 @@ use std::{
 
 use parking_lot::Mutex;
 use seekdeep_agent::Agent;
-use seekdeep_cordis::{Context, Fiber, Plugin, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
 use seekdeep_llm::{AbortSignal, ContentBlock, MessageId};
-use seekdeep_session_projection::SESSION_PROJECTIONS;
 use seekdeep_tools::assert_object_json_schema;
 
 use crate::activation_setup_registry::{
@@ -444,69 +443,18 @@ impl SubagentRuntime {
     }
 }
 
-#[derive(Default)]
-struct ProjectionBinding {
-    provider: Option<usize>,
-    fiber: Option<Arc<Fiber>>,
-}
-
+/// The source's `ctx.inject(['sessionProjections'], …)` unit child: both projections register
+/// once a registry's owner is active, follow a replaced registry, and release when it is
+/// withdrawn.
 fn install_optional_projections(context: &Context) -> anyhow::Result<()> {
-    let binding = Arc::new(Mutex::new(ProjectionBinding::default()));
-    reconcile_projections(context, &binding)?;
-    let watched_context = context.clone();
-    let watched_binding = binding.clone();
-    context.on_service_change_checked(move |name| {
-        if name == SESSION_PROJECTIONS.name() {
-            reconcile_projections(&watched_context, &watched_binding)?;
-        }
-        Ok(())
-    })?;
-    context.own(EffectHandle::new(
-        "subagent projection bindings",
-        move || {
-            Box::pin(async move {
-                let fiber = binding.lock().fiber.take();
-                if let Some(fiber) = fiber {
-                    fiber.dispose().await?;
-                }
-                Ok(())
-            })
-        },
-    ))?;
-    Ok(())
-}
-
-fn reconcile_projections(
-    context: &Context,
-    binding: &Arc<Mutex<ProjectionBinding>>,
-) -> anyhow::Result<()> {
-    let projections = context.get_relaxed(SESSION_PROJECTIONS);
-    let provider = projections
-        .as_ref()
-        .map(|service| Arc::as_ptr(service).cast::<()>() as usize);
-    let mut binding = binding.lock();
-    if binding.provider == provider {
-        return Ok(());
-    }
-    if let Some(fiber) = binding.fiber.take() {
-        futures::executor::block_on(fiber.dispose())?;
-    }
-    binding.provider = None;
-    if let Some(projections) = projections {
-        let fiber = Fiber::active_child("subagent projections");
-        let child = context.with_fiber(fiber.clone());
-        let result = (|| {
-            projections.register(&child, subagent_timing_projection_definition())?;
-            projections.register(&child, subagent_identity_projection_definition())?;
-            Ok::<(), anyhow::Error>(())
-        })();
-        if let Err(error) = result {
-            futures::executor::block_on(fiber.dispose()).ok();
-            return Err(error);
-        }
-        binding.provider = provider;
-        binding.fiber = Some(fiber);
-    }
+    seekdeep_session_projection::register_when_mounted(
+        context,
+        subagent_timing_projection_definition(),
+    )?;
+    seekdeep_session_projection::register_when_mounted(
+        context,
+        subagent_identity_projection_definition(),
+    )?;
     Ok(())
 }
 

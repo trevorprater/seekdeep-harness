@@ -394,6 +394,8 @@ async fn optional_registry_appearance_registers_three_units_and_disposal_removes
     meter.await_settled().await.unwrap();
     assert!(context.get(SESSION_PROJECTIONS).is_none());
     let projections = SessionProjectionRegistry::install(&context).unwrap();
+    // The three units register through inject-gated children, which activate asynchronously.
+    context.registry().await_quiescent().await;
     let session = sessions
         .create(
             &context,

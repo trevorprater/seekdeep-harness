@@ -16,7 +16,6 @@ use seekdeep_core::{
     session::{JsonRef, Session, SessionEvent, is_surface_event},
 };
 use seekdeep_llm::{BlockAssembler, Message, StreamChunk, TokenUsage};
-use seekdeep_session_projection::SESSION_PROJECTIONS;
 use serde_json::{Value, json};
 
 use crate::{
@@ -60,21 +59,6 @@ struct ReplayState {
 struct CachedState {
     session: Weak<Session>,
     state: ReplayState,
-}
-
-#[derive(Debug)]
-struct ProjectionBinding {
-    registry: Option<usize>,
-    handles: Vec<EffectHandle>,
-}
-
-impl ProjectionBinding {
-    fn new() -> Self {
-        Self {
-            registry: None,
-            handles: Vec::new(),
-        }
-    }
 }
 
 /// Replay-aware token measurement service.
@@ -278,56 +262,17 @@ fn install_scoped(context: &Context, _config: TokenMeterConfig) -> anyhow::Resul
         EventOptions::default(),
     )?;
 
-    let binding = Arc::new(Mutex::new(ProjectionBinding::new()));
-    reconcile_projections(context, &binding)?;
-    let watched_context = context.clone();
-    let watched_binding = binding;
-    context.on_service_change(move || {
-        if let Err(error) = reconcile_projections(&watched_context, &watched_binding) {
-            tracing::error!(%error, "token meter: projection dependency reconciliation failed");
-        }
-    })?;
-    Ok(service)
-}
-
-fn reconcile_projections(
-    context: &Context,
-    binding: &Arc<Mutex<ProjectionBinding>>,
-) -> anyhow::Result<()> {
-    let registry = context.get(SESSION_PROJECTIONS);
-    let identity = registry
-        .as_ref()
-        .map(|registry| Arc::as_ptr(registry) as usize);
-    let mut binding = binding.lock();
-    if binding.registry == identity {
-        return Ok(());
-    }
-    for handle in binding.handles.drain(..).rev() {
-        futures::executor::block_on(handle.dispose())?;
-    }
-    binding.registry = None;
-    let Some(registry) = registry else {
-        return Ok(());
-    };
-    let mut handles = Vec::new();
+    // The source registers its projections in a `ctx.inject(['sessionProjections'], …)` unit
+    // child: the registrations activate once a registry's owner is active, follow a replaced
+    // registry, and release when it is withdrawn.
     for definition in [
         token_usage_definition(),
         context_pressure_definition(),
         context_breakdown_definition(),
     ] {
-        match registry.register(context, definition) {
-            Ok(handle) => handles.push(handle),
-            Err(error) => {
-                for handle in handles.drain(..).rev() {
-                    let _ = futures::executor::block_on(handle.dispose());
-                }
-                return Err(error);
-            }
-        }
+        seekdeep_session_projection::register_when_mounted(context, definition)?;
     }
-    binding.registry = identity;
-    binding.handles = handles;
-    Ok(())
+    Ok(service)
 }
 
 fn validate_config_value(value: &Value) -> anyhow::Result<()> {

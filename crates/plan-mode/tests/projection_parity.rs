@@ -21,7 +21,7 @@ struct Harness {
 }
 
 impl Harness {
-    fn new(with_plan_mode: bool) -> Self {
+    async fn new(with_plan_mode: bool) -> Self {
         let context = Context::new();
         let sessions = SessionStore::install(&context).expect("sessions");
         let prompt = SystemPrompt::new(
@@ -47,6 +47,8 @@ impl Harness {
             .expect("plan mode");
             fiber
         });
+        // The projection registers through an inject-gated child, which activates asynchronously.
+        context.registry().await_quiescent().await;
         let session = sessions
             .create(
                 &context,
@@ -109,18 +111,18 @@ fn plan(snapshot: &ProjectionSnapshot) -> &seekdeep_core::session::JsonValue {
     snapshot.values.get("plan").expect("plan value")
 }
 
-#[test]
-fn empty_log_is_inactive_and_not_pending() {
-    let harness = Harness::new(true);
+#[tokio::test]
+async fn empty_log_is_inactive_and_not_pending() {
+    let harness = Harness::new(true).await;
     assert_eq!(
         plan(&harness.values()),
         &json!({"active": false, "pending": false})
     );
 }
 
-#[test]
-fn logged_selection_is_pending_until_mode_commit_and_repeats_are_stable() {
-    let harness = Harness::new(true);
+#[tokio::test]
+async fn logged_selection_is_pending_until_mode_commit_and_repeats_are_stable() {
+    let harness = Harness::new(true).await;
     run_plan_command(&harness.session, Some(""), 0, "plan");
     assert_eq!(
         plan(&harness.values()),
@@ -138,9 +140,9 @@ fn logged_selection_is_pending_until_mode_commit_and_repeats_are_stable() {
     );
 }
 
-#[test]
-fn off_missing_input_non_plan_and_matching_selection_fold_exactly() {
-    let harness = Harness::new(true);
+#[tokio::test]
+async fn off_missing_input_non_plan_and_matching_selection_fold_exactly() {
+    let harness = Harness::new(true).await;
     commit_plan_mode(&harness.session, true, 0);
     run_plan_command(&harness.session, Some(""), 0, "compact");
     assert_eq!(
@@ -169,9 +171,9 @@ fn off_missing_input_non_plan_and_matching_selection_fold_exactly() {
     );
 }
 
-#[test]
-fn message_argument_targets_plan_mode() {
-    let harness = Harness::new(true);
+#[tokio::test]
+async fn message_argument_targets_plan_mode() {
+    let harness = Harness::new(true).await;
     run_plan_command(
         &harness.session,
         Some(" sketch the refactor first"),
@@ -186,7 +188,7 @@ fn message_argument_targets_plan_mode() {
 
 #[tokio::test]
 async fn composition_and_hmr_control_the_projection_key() {
-    let absent = Harness::new(false);
+    let absent = Harness::new(false).await;
     assert!(!absent.values().values.contains_key("plan"));
 
     let fiber = Fiber::active_child("late-plan-mode-projection");
@@ -198,6 +200,7 @@ async fn composition_and_hmr_control_the_projection_key() {
         },
     )
     .unwrap();
+    absent.context.registry().await_quiescent().await;
     assert_eq!(
         plan(&absent.values()),
         &json!({"active": false, "pending": false})
@@ -233,6 +236,7 @@ async fn optional_projection_service_mounts_unmounts_and_rebinds_after_plan_mode
     let first_fiber = Fiber::active_child("projections-first");
     let first_context = context.with_fiber(first_fiber.clone());
     let first = SessionProjectionRegistry::install(&first_context).unwrap();
+    context.registry().await_quiescent().await;
     assert_eq!(
         first.snapshot(&session).unwrap().values["plan"],
         json!({"active": false, "pending": false})
@@ -249,6 +253,7 @@ async fn optional_projection_service_mounts_unmounts_and_rebinds_after_plan_mode
     let second_fiber = Fiber::active_child("projections-second");
     let second_context = context.with_fiber(second_fiber.clone());
     let second = SessionProjectionRegistry::install(&second_context).unwrap();
+    context.registry().await_quiescent().await;
     assert_eq!(
         second.snapshot(&session).unwrap().values["plan"],
         json!({"active": false, "pending": false})
@@ -257,11 +262,11 @@ async fn optional_projection_service_mounts_unmounts_and_rebinds_after_plan_mode
     controller_fiber.dispose().await.unwrap();
 }
 
-#[test]
-fn cold_replay_recovers_pending_from_the_log_alone() {
-    let hot = Harness::new(true);
+#[tokio::test]
+async fn cold_replay_recovers_pending_from_the_log_alone() {
+    let hot = Harness::new(true).await;
     run_plan_command(&hot.session, Some(""), 0, "plan");
-    let cold = Harness::new(true);
+    let cold = Harness::new(true).await;
     for event in hot.session.events() {
         if matches!(event.event_type.as_str(), "command/run" | "plan/mode") {
             cold.session

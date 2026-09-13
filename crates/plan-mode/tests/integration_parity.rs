@@ -152,6 +152,7 @@ impl Harness {
             },
         )
         .expect("plan mode");
+        context.registry().await_quiescent().await;
         for name in ["read", "write"] {
             let tool_name = name.to_owned();
             let definition = define_content_tool_fixture(ContentToolFixtureOptions::new(
@@ -398,6 +399,7 @@ async fn code_mode_assemblies(
         },
     )
     .unwrap();
+    context.registry().await_quiescent().await;
     let default = dependencies
         .system_prompt
         .assemble(assemble_context_for(&agent.agent, None))
@@ -935,6 +937,8 @@ async fn optional_command_service_mounts_unmounts_and_rebinds_with_its_own_lifec
     let first_fiber = Fiber::active_child("commands-first");
     let first_context = harness.context.with_fiber(first_fiber.clone());
     let first = seekdeep_commands::install(&first_context).unwrap();
+    // The command registers through an inject-gated child, which activates asynchronously.
+    harness.context.registry().await_quiescent().await;
     assert_eq!(
         first
             .list(&harness.agent.agent)
@@ -1049,11 +1053,14 @@ async fn optional_command_service_mounts_unmounts_and_rebinds_with_its_own_lifec
     let _ = harness.boundary().await;
     assert!(!fold_plan_mode(&harness.events(), harness.events().len()));
     first_fiber.dispose().await.unwrap();
+    // The withdrawn registry deactivates the command child asynchronously.
+    harness.context.registry().await_quiescent().await;
     assert!(first.list(&harness.agent.agent).is_empty());
 
     let second_fiber = Fiber::active_child("commands-second");
     let second_context = harness.context.with_fiber(second_fiber.clone());
     let second = seekdeep_commands::install(&second_context).unwrap();
+    harness.context.registry().await_quiescent().await;
     assert_eq!(
         second
             .list(&harness.agent.agent)

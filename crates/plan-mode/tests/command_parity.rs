@@ -63,7 +63,7 @@ struct Harness {
 }
 
 impl Harness {
-    fn new() -> Self {
+    async fn new() -> Self {
         let context = Context::new();
         let prompt = SystemPrompt::new(&context, SystemPromptConfig::default()).unwrap();
         prompt.provide(&context).unwrap();
@@ -78,6 +78,8 @@ impl Harness {
             },
         )
         .unwrap();
+        // The command registers through an inject-gated child, which activates asynchronously.
+        context.registry().await_quiescent().await;
         let id = SessionId::new("plan-command-agent");
         let session = Session::create(&id, None, None).unwrap();
         let inbox =
@@ -127,7 +129,7 @@ fn close_turn(agent: &Agent, turn: u64) {
 
 #[tokio::test]
 async fn idle_entry_and_exit_use_immediate_copy_and_unknown_commands_do_nothing() {
-    let harness = Harness::new();
+    let harness = Harness::new().await;
     assert_eq!(
         harness
             .commands
@@ -186,7 +188,7 @@ async fn idle_entry_and_exit_use_immediate_copy_and_unknown_commands_do_nothing(
 
 #[tokio::test]
 async fn message_entry_steers_trimmed_text_and_off_cancels_pending_without_logging_mode() {
-    let harness = Harness::new();
+    let harness = Harness::new().await;
     open_turn(&harness.agent, 1);
     let entered = harness
         .commands

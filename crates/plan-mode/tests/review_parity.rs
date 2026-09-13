@@ -146,6 +146,7 @@ impl Harness {
             },
         )
         .unwrap();
+        context.registry().await_quiescent().await;
         let questions =
             with_questions.then(|| seekdeep_user_questions::install(&context).expect("questions"));
         let mut options = CreateAgentOptions::new(SessionId::new(id));

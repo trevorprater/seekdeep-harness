@@ -16,9 +16,7 @@ use seekdeep_commands::{COMMANDS, CommandDefinition, CommandInvocation, CommandR
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, JsonRef, Session, SessionEvent};
 use seekdeep_llm::{ContentBlock, JsonString, MessageSource, UserMessage};
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
-};
+use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, GenericResultView, TOOLS, ToolCallKind,
@@ -230,8 +228,6 @@ pub struct PlanModeController {
     section: String,
     pending_intents: Mutex<HashMap<usize, PendingIntent>>,
     disposed: Arc<AtomicBool>,
-    command_effect: Mutex<Option<EffectHandle>>,
-    projection_effect: Mutex<Option<EffectHandle>>,
 }
 
 impl PlanModeController {
@@ -246,16 +242,13 @@ impl PlanModeController {
             section,
             pending_intents: Mutex::new(HashMap::new()),
             disposed: Arc::new(AtomicBool::new(false)),
-            command_effect: Mutex::new(None),
-            projection_effect: Mutex::new(None),
         });
         controller.register_pre_step(context)?;
         controller.register_system_prompt(context)?;
         controller.register_exit_tool(context)?;
         controller.register_dispose_effect(context)?;
-        controller.reconcile_projection(context)?;
-        controller.reconcile_command(context)?;
-        controller.register_optional_service_reconciliation(context)?;
+        Self::mount_projection_child(context)?;
+        controller.mount_command_child(context)?;
         Ok(controller)
     }
 
@@ -525,58 +518,31 @@ impl PlanModeController {
         )
     }
 
-    fn reconcile_projection(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        let registry = context.get(SESSION_PROJECTIONS);
-        let mut effect = self.projection_effect.lock();
-        match (registry, effect.is_some()) {
-            (Some(registry), false) => {
-                *effect = Some(registry.register(context, Self::projection_definition())?);
-            }
-            (None, true) => {
-                if let Some(stale) = effect.take() {
-                    // Service guards are synchronous, and registry removals are
-                    // synchronous effects wrapped by the common async handle.
-                    futures::executor::block_on(stale.dispose())?;
-                }
-            }
-            (Some(_), true) | (None, false) => {}
-        }
+    /// The source's `ctx.inject(['sessionProjections'], …)` unit child: the plan projection
+    /// registers once a registry's owner is active, follows a replaced registry, and releases
+    /// when it is withdrawn.
+    fn mount_projection_child(context: &Context) -> anyhow::Result<()> {
+        seekdeep_session_projection::register_when_mounted(context, Self::projection_definition())?;
         Ok(())
     }
 
-    fn reconcile_command(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        let present = context.get(COMMANDS).is_some();
-        let mut effect = self.command_effect.lock();
-        match (present, effect.is_some()) {
-            (true, false) => *effect = Some(self.register_command(context)?),
-            (false, true) => {
-                if let Some(stale) = effect.take() {
-                    // Remove the old service's contribution before a later
-                    // provider can publish the same command name.
-                    futures::executor::block_on(stale.dispose())?;
-                }
-            }
-            (true, true) | (false, false) => {}
-        }
-        Ok(())
-    }
-
-    fn register_optional_service_reconciliation(
-        self: &Arc<Self>,
-        context: &Context,
-    ) -> anyhow::Result<()> {
+    /// The source's `ctx.inject(['commands'], …)` unit child: the `/plan` command registers once
+    /// a command registry's owner is active, follows a replaced registry, and releases when it is
+    /// withdrawn.
+    fn mount_command_child(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
         let controller = Arc::downgrade(self);
-        let owner = context.clone();
-        context.on_service_change_checked(move |name| {
-            let Some(controller) = controller.upgrade() else {
-                return Ok(());
-            };
-            match name {
-                "commands" => controller.reconcile_command(&owner),
-                "sessionProjections" => controller.reconcile_projection(&owner),
-                _ => Ok(()),
-            }
-        })?;
+        let child = Plugin::new("plan-mode:command", [COMMANDS.name()], move |context, _| {
+            let controller = controller.clone();
+            Box::pin(async move {
+                let Some(controller) = controller.upgrade() else {
+                    return Ok(());
+                };
+                let effect = controller.register_command(&context)?;
+                context.own(effect)?;
+                Ok(())
+            })
+        });
+        context.plugin(child, Value::Null)?;
         Ok(())
     }
 
