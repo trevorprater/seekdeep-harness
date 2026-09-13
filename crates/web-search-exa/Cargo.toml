@@ -10,7 +10,7 @@ description = "Rust Exa-backed search provider for the SeekDeep web capability s
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["gzip", "brotli", "deflate"] }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
