@@ -1,0 +1,254 @@
+[
+  {
+    "name": "empty",
+    "program": ""
+  },
+  {
+    "name": "unchanged-javascript",
+    "program": "const result = { value: 3 }; // keep this comment\nreturn result;"
+  },
+  {
+    "name": "annotation-and-assertion",
+    "program": "interface Point { x: number }; const p: Point = { x: 1 } as Point; return await Promise.resolve(p.x);"
+  },
+  {
+    "name": "arrow-return-type",
+    "program": "const twice = (x: number): number => x * 2;\nreturn twice(3);"
+  },
+  {
+    "name": "ambient-enum",
+    "program": "declare enum E { A }; return 1"
+  },
+  {
+    "name": "ambient-namespace",
+    "program": "declare namespace N { const x: number }; return 1"
+  },
+  {
+    "name": "ambient-class",
+    "program": "declare class C { value: number; method(): void }; return 1"
+  },
+  {
+    "name": "ambient-function",
+    "program": "declare function f(x: number): string; return 1"
+  },
+  {
+    "name": "ambient-variable",
+    "program": "declare const x: number; return 1"
+  },
+  {
+    "name": "type-alias",
+    "program": "type Box<T> = { readonly value: T }; const b: Box<number> = { value: 1 }; return b;"
+  },
+  {
+    "name": "mapped-conditional-types",
+    "program": "type Wrap<T> = { [K in keyof T]?: T[K] extends string ? readonly T[K][] : never }; return 1;"
+  },
+  {
+    "name": "type-import",
+    "program": "type Stat = import('node:fs').Stats; return 1;"
+  },
+  {
+    "name": "generic-function",
+    "program": "function identity<T extends object>(value: T): T { return value }; return identity({ ok: true });"
+  },
+  {
+    "name": "generic-arrow",
+    "program": "const identity = <T,>(value: T): T => value; return identity(3);"
+  },
+  {
+    "name": "optional-and-rest-parameters",
+    "program": "function f(x?: number, ...rest: string[]): number { return x ?? rest.length }; return f(undefined, 'a');"
+  },
+  {
+    "name": "this-parameter",
+    "program": "function f(this: { value: number }, next: number) { return this.value + next }; return f.call({value:1}, 2);"
+  },
+  {
+    "name": "type-predicate",
+    "program": "function isNumber(value: unknown): value is number { return typeof value === 'number' }; return isNumber(1);"
+  },
+  {
+    "name": "assertion-function",
+    "program": "function check(value: unknown): asserts value is string { if (typeof value !== 'string') throw new Error('bad') }; return 1;"
+  },
+  {
+    "name": "non-null",
+    "program": "const x: { value?: number } = { value: 2 }; return x.value!;"
+  },
+  {
+    "name": "satisfies",
+    "program": "const x = { value: 2 } satisfies { value: number }; return x.value;"
+  },
+  {
+    "name": "const-assertion",
+    "program": "const x = [1, 2] as const; return x;"
+  },
+  {
+    "name": "nested-assertions",
+    "program": "const x = ({ value: 2 } as unknown as { value: number }); return x.value;"
+  },
+  {
+    "name": "instantiation-expression",
+    "program": "const identity = <T>(value: T) => value; const numberIdentity = identity<number>; return numberIdentity(1);"
+  },
+  {
+    "name": "generic-call",
+    "program": "function f<T>(x: T) { return x }; return f<number>(1);"
+  },
+  {
+    "name": "generic-new",
+    "program": "class C<T> { value: T; constructor(value: T) { this.value = value } }; return new C<number>(1).value;"
+  },
+  {
+    "name": "class-modifiers",
+    "program": "interface I { value: number }; class C implements I { public readonly value: number = 1; protected other!: number; private hidden?: string }; return new C().value;"
+  },
+  {
+    "name": "class-overloads",
+    "program": "class C { method(x: number): number; method(x: string): string; method(x: number | string) { return x } }; return new C().method(1);"
+  },
+  {
+    "name": "abstract-class",
+    "program": "abstract class C { abstract method(): void; declare value: number }; return 1;"
+  },
+  {
+    "name": "index-signature",
+    "program": "class C { [key: string]: unknown; value = 1 }; return new C().value;"
+  },
+  {
+    "name": "accessors",
+    "program": "class C { get value(): number { return 1 }; set value(next: number) {} }; return new C().value;"
+  },
+  {
+    "name": "destructuring",
+    "program": "const { value }: { value: number } = { value: 1 }; const [first]: number[] = [value]; return first;"
+  },
+  {
+    "name": "catch-type",
+    "program": "try { throw 1 } catch (error: unknown) { return error };"
+  },
+  {
+    "name": "loop-type",
+    "program": "let total: number = 0; for (const value of [1, 2] as number[]) total += value; return total;"
+  },
+  {
+    "name": "comments-and-tabs",
+    "program": "/* lead */ const value /* name */:\t number /* type */ = 3; // tail\nreturn value;"
+  },
+  {
+    "name": "unicode-crlf",
+    "program": "interface 実体 { 名称: string }\r\nconst 値: 実体 = { 名称: '🙂' };\r\nreturn 値.名称;"
+  },
+  {
+    "name": "unicode-type-literal",
+    "program": "type Tag = '🙂' | 'é' | '名字'; const value: Tag = '🙂'; return value;"
+  },
+  {
+    "name": "unicode-line-separators",
+    "program": "type T = number; const x: T = 1; return x;"
+  },
+  {
+    "name": "bom-and-cr",
+    "program": "﻿type T = number;\rconst x: T = 1;\rreturn x;"
+  },
+  {
+    "name": "asi-parenthesized-assertion",
+    "program": "const value = 1\n;(value as number).toString()\nreturn value"
+  },
+  {
+    "name": "duplicate-declaration",
+    "program": "const value = 1; const value = 2; return value;"
+  },
+  {
+    "name": "dynamic-import-whitespace",
+    "program": "const { parentPort } = await import ( /* keep */ 'node:worker_threads' ); return typeof parentPort.postMessage;"
+  },
+  {
+    "name": "dynamic-import-expression",
+    "program": "const specifier: string = 'node:worker_threads'; return typeof (await import(specifier)).parentPort;"
+  },
+  {
+    "name": "literal-import-text",
+    "program": "return \"import('node:worker_threads')\";"
+  },
+  {
+    "name": "runtime-enum",
+    "program": "enum E { A }; return E.A"
+  },
+  {
+    "name": "runtime-const-enum",
+    "program": "const enum E { A }; return E.A"
+  },
+  {
+    "name": "runtime-namespace",
+    "program": "namespace N { export const value = 1 }; return N.value"
+  },
+  {
+    "name": "empty-namespace",
+    "program": "namespace N {}; return 1"
+  },
+  {
+    "name": "deprecated-module",
+    "program": "module N { export const value = 1 }; return N.value"
+  },
+  {
+    "name": "parameter-property",
+    "program": "class C { constructor(public value: number) {} }; return new C(1).value"
+  },
+  {
+    "name": "readonly-parameter-property",
+    "program": "class C { constructor(readonly value: number) {} }; return 1"
+  },
+  {
+    "name": "angle-assertion",
+    "program": "return <number>1"
+  },
+  {
+    "name": "angle-const-assertion",
+    "program": "return <const>[1]"
+  },
+  {
+    "name": "import-equals",
+    "program": "import A = require('x'); return A"
+  },
+  {
+    "name": "type-only-import-in-body",
+    "program": "import type { A } from 'x'; return 1"
+  },
+  {
+    "name": "export-assignment-in-body",
+    "program": "export = 1;"
+  },
+  {
+    "name": "jsx",
+    "program": "return <div />"
+  },
+  {
+    "name": "decorators",
+    "program": "function decorator(value: unknown) { return value }; @decorator class C {}; return 1;"
+  },
+  {
+    "name": "incomplete-expression",
+    "program": "return ("
+  },
+  {
+    "name": "missing-type",
+    "program": "const value: = 1; return value"
+  },
+  {
+    "name": "unexpected-close",
+    "program": "return 1; }"
+  },
+  {
+    "name": "bad-interface",
+    "program": "interface X { value number }; return 1;"
+  },
+  {
+    "name": "linebreak-satisfies",
+    "program": "const value = 1\nsatisfies number\nreturn value"
+  },
+  {
+    "name": "multiple-errors",
+    "program": "const value: = ; const next: = ; return value"
+  }
+]

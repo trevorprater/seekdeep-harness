@@ -1,0 +1,31 @@
+[package]
+name = "seekdeep-skill-filesystem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local filesystem Skill provider with Rust-native discovery and watching"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+notify = "8.2.0"
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yml.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs = { path = "../fs" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-skill = { path = "../skill" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

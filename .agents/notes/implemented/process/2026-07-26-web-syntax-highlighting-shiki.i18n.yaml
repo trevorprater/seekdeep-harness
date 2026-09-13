@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-26-web-syntax-highlighting-shiki.md
+2026-07-26-web-syntax-highlighting-shiki.md: 0ea257ba4ad354cca44b37b7f8cf171a316aea2e
+2026-07-26-web-syntax-highlighting-shiki.zh.md: d1418079fabee07571fd02bbf681d7b85f3ce8cf

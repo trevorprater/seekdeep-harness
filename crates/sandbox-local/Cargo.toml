@@ -1,0 +1,31 @@
+[package]
+name = "seekdeep-sandbox-local"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fail-closed native local sandbox ladder for SeekDeep Harness"
+readme = "README.md"
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-landlock-run = { path = "../landlock-run" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-windows-acl = { path = "../sandbox-windows-acl" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+seekdeep-sandbox-windows-acl-native = { path = "../sandbox-windows-acl-native" }
+
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+tokio.workspace = true
+
+[lints]
+workspace = true

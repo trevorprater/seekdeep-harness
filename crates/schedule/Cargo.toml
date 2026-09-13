@@ -1,0 +1,41 @@
+[package]
+name = "seekdeep-schedule"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+futures.workspace = true
+icu_timezone.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

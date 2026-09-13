@@ -1,0 +1,69 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-web",
+  "description": "Web shell kernel: bootWebShell (module system holding + seed table + two-stage boot + AppRoot gate + app-shell assembly entry), consumed by the apps/web vite entry",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/web"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-schema-form": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-theme": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-web-react": "workspace:^",
+    "immer": "^10.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-test-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-web --artifact seekdeep_client_web --module-id @seekdeep-ai/seekdeep-client-web --out-dir packages/client/web/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-web --artifact seekdeep_client_web --module-id @seekdeep-ai/seekdeep-client-web --out-dir packages/client/web/lib --watch"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client.d.ts",
+    "lib/client_bg.wasm",
+    "lib/base.css",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

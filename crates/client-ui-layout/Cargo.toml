@@ -1,0 +1,32 @@
+[package]
+name = "seekdeep-client-ui-layout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM three-column client shell, layout store, and theme presenter"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

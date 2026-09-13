@@ -1,0 +1,254 @@
+.seekdeep-workflow-run-root {
+  width: 100%;
+  min-width: 0;
+}
+
+.seekdeep-workflow-run-runHeader {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.seekdeep-workflow-run-runHeader:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+.seekdeep-workflow-run-runLeading {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-workflow-run-runTitle {
+  overflow: hidden;
+  flex: none;
+  max-width: 42%;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  font-weight: 510;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-runSummary {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-statusTail {
+  display: inline-flex;
+  flex: none;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 510;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-phaseHeader {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+}
+
+.seekdeep-workflow-run-phaseHeader:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.seekdeep-workflow-run-phaseLeading {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-workflow-run-phaseTitle {
+  overflow: hidden;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 42%;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-phaseCount {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-phaseStatus {
+  overflow: hidden;
+  flex: none;
+  width: 132px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-separator {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-workflow-run-phaseList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 0 0 16px;
+}
+
+.seekdeep-workflow-run-phase {
+  min-width: 0;
+}
+
+.seekdeep-workflow-run-members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 0 0 16px;
+}
+
+.seekdeep-workflow-run-memberRow,
+.seekdeep-workflow-run-memberButton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: left;
+}
+
+.seekdeep-workflow-run-memberButton {
+  cursor: pointer;
+}
+
+.seekdeep-workflow-run-memberButton .seekdeep-workflow-run-memberLabel {
+  color: var(--dsw-alias-state-business-primary);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+
+.seekdeep-workflow-run-dotSlot {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.seekdeep-workflow-run-memberButton:focus-visible {
+  outline: none;
+}
+
+.seekdeep-workflow-run-memberButton:focus-visible .seekdeep-workflow-run-memberLabelWrap {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.seekdeep-workflow-run-memberLabelWrap {
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  align-items: center;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.seekdeep-workflow-run-memberLabel {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-memberStatus {
+  flex: none;
+  overflow: hidden;
+  width: 64px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-workflow-run-empty {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  padding: 0;
+}
+
+@media (max-width: 560px) {
+  .seekdeep-workflow-run-phaseList,
+  .seekdeep-workflow-run-members {
+    padding-left: 12px;
+  }
+}

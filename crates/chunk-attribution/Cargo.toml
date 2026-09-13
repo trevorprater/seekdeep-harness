@@ -1,0 +1,26 @@
+[package]
+name = "seekdeep-chunk-attribution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust sourcemap VLQ attribution audit for built browser chunks"
+
+[[bin]]
+name = "seekdeep-attribute-chunk-bytes"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+indexmap.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

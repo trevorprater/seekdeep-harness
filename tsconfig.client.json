@@ -1,0 +1,19 @@
+{
+  // Client-side typecheck aggregate: packages/client tests (.ts and .tsx).
+  // Split from the host aggregate because both sides merge cordis Context
+  // under the same keys (sessions, loader) with different services; shared
+  // leaves (session/llm/tools/apiproxy/...) build once and are referenced by
+  // both programs through each client package's own references.
+  //
+  // The TypeScript implementation tier is retired: the client plugins are Rust
+  // compiled to WebAssembly and their tests are Rust tests, so this aggregate has no
+  // files and no project references left to check.
+  "extends": "./tsconfig.base.client.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rewriteRelativeImportExtensions": false,
+    "types": ["node"]
+  },
+  "files": [],
+  "references": []
+}

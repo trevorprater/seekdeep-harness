@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-08-per-preset-standing-mounts.md
+2026-08-08-per-preset-standing-mounts.md: 2769ff8afe5a7c96ec901e97dc78d78d8b1ab655
+2026-08-08-per-preset-standing-mounts.zh.md: 6764e0ba75333b27f98fa02e68654000f8c4f1da

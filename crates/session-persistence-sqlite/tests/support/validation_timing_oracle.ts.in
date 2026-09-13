@@ -1,0 +1,57 @@
+import { it, expect } from __VITEST__
+import { Context } from __CORDIS__
+import SessionStore, { SessionId } from __SESSION__
+import Jsonl from __JSONL__
+import Sqlite from __SQLITE__
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { DatabaseSync } from 'node:sqlite'
+
+it('records source append and cold-read phases', async () => {
+  const cases = JSON.parse(await readFile(__CASES__, 'utf8'))
+  const results = []
+  for (const mode of ['jsonl-none', 'jsonl-zstd', 'sqlite']) {
+    for (const entry of cases) {
+      const root = await mkdtemp(join(tmpdir(), 'seekdeep-validation-oracle-'))
+      const mount = async () => {
+        const ctx = new Context()
+        await ctx.plugin(SessionStore)
+        await ctx.plugin(mode === 'sqlite' ? Sqlite : Jsonl, mode === 'sqlite' ? { path: join(root, 'sessions.db') } : { root, compression: mode === 'jsonl-none' ? 'none' : 'zstd' })
+        return ctx
+      }
+      let ctx = await mount()
+      const id = SessionId(entry.name)
+      const result = { mode, name: entry.name, append: false, read: false, load: false, rawEvents: null, readEvents: null, loadEvents: null, appendError: null, readError: null, loadError: null }
+      try {
+        await ctx.sessionPersistence.create({ version: 0, id, createdAt: 1000 })
+        try { await ctx.sessionPersistence.append(id, entry.events); result.append = true }
+        catch (error) { result.appendError = String(error) }
+        if (result.append && entry.events.length && mode !== 'sqlite') {
+          const raw = await ctx.sessionPersistence.readRaw(id)
+          result.rawEvents = raw?.content.trim().split('\n').slice(1).map(line => JSON.parse(line)) ?? null
+        } else if (result.append && entry.events.length) {
+          const database = new DatabaseSync(join(root, 'sessions.db'), { readOnly: true })
+          result.rawEvents = database.prepare('SELECT * FROM events WHERE session_id = ? ORDER BY seq').all(id).map(row => ({
+            type: row.type, seq: row.seq, time: row.time, data: JSON.parse(row.data),
+            ...(row.source_event_seqs === null ? {} : { sourceEventSeqs: JSON.parse(row.source_event_seqs) }),
+            ...(row.surface_op === null ? {} : { surfaceOp: JSON.parse(row.surface_op) }),
+            ...(row.ignorable === null ? {} : { ignorable: row.ignorable === 1 }),
+          }))
+          database.close()
+        }
+        await ctx.fiber.dispose()
+        ctx = await mount()
+        if (result.append && entry.events.length) {
+          try { result.readEvents = (await ctx.sessionPersistence.inspect(id)).events; result.read = true }
+          catch (error) { result.readError = String(error) }
+          try { result.loadEvents = (await ctx.sessionPersistence.load(id)).events; result.load = true }
+          catch (error) { result.loadError = String(error) }
+        }
+        results.push(result)
+      } finally { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) }
+    }
+  }
+  await writeFile(__OUTPUT__, JSON.stringify(results, null, 2))
+  expect(results.length).toBe(cases.length * 3)
+}, 60000)

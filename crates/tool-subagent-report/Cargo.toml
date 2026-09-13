@@ -1,0 +1,29 @@
+[package]
+name = "seekdeep-tool-subagent-report"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Child-scoped report tool for continuable subagents"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

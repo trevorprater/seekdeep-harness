@@ -1,0 +1,26 @@
+[package]
+name = "seekdeep-compaction-tool-result-pruner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Replay-safe, model-free tool-result pruning service"
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-token-meter = { path = "../token-meter" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+tokio.workspace = true
+
+[lints]
+workspace = true

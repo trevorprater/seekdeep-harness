@@ -1,0 +1,43 @@
+[package]
+name = "seekdeep-client-ui-conversation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM conversation UI semantic core and surfaces"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seekdeep-lossless-json = { path = "../lossless-json" }
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-identity = { path = "../identity" }
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-failure-display = { path = "../failure-display" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+base64.workspace = true
+js-sys.workspace = true
+seekdeep-client-ui-primitives = { path = "../client-ui-primitives" }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

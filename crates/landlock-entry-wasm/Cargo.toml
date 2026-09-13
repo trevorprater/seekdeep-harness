@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-landlock-entry-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust WebAssembly implementation of the Node Landlock entry API"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seekdeep-landlock-run = { path = "../landlock-run" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+[lints]
+workspace = true

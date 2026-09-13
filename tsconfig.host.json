@@ -1,0 +1,18 @@
+{
+  // Host aggregate (one of the two check units; see tsconfig.json). packages/client
+  // type-checks in tsconfig.client.json: the two sides merge cordis Context under
+  // the same keys, one program cannot see both.
+  //
+  // The TypeScript implementation tier is retired: every Host behavior this aggregate
+  // used to check lives in a Rust crate under crates/ now, so it has no files and no
+  // project references left to build. It stays as the solution entry `pnpm run typecheck`
+  // builds, and as the place the source's Host projects are relisted if a TypeScript tier
+  // returns.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rewriteRelativeImportExtensions": false
+  },
+  "files": [],
+  "references": []
+}

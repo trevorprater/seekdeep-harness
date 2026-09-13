@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/postmortem/0002-js-expression-disabled-filesystem-tools.md
+0002-js-expression-disabled-filesystem-tools.md: a25bf7b0c2d37992346c7bd135694c4ee01e1c6d
+0002-js-expression-disabled-filesystem-tools.zh.md: 36bea661088fb43b60549fc3bab7761822eebdd3

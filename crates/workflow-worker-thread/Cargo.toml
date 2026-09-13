@@ -1,0 +1,40 @@
+[package]
+name = "seekdeep-workflow-worker-thread"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+boa_engine.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+ryu-js.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-workflow = { path = "../workflow" }
+uuid.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+tempfile.workspace = true
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+
+[lints]
+workspace = true

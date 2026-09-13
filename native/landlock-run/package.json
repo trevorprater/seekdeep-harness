@@ -1,0 +1,32 @@
+{
+  "name": "@seekdeep-ai/node-addon-landlock-run-workspace",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "license": "BSD-3-Clause",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "build": "pnpm build:ts",
+    "build:ts": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-build-entry",
+    "build:native": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-build",
+    "typecheck": "cargo check --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --all-targets && cargo check --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-entry-wasm --target wasm32-unknown-unknown",
+    "test": "pnpm test:entry && pnpm test:launcher && pnpm test:tools",
+    "test:entry": "cargo test --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-run --test entry_parity && cargo test --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --test entry_wasm_parity",
+    "test:launcher": "cargo test --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-run --test launcher_parity",
+    "test:tools": "cargo test --locked --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --test build_parity --test release_parity --test publish_parity --test packed_install_parity --test process_capture_parity",
+    "gha:matrix": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-github-matrix --",
+    "release:bump": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-bump-release --",
+    "release:commit": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-commit-release --",
+    "release:assemble-prebuilds": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-assemble-prebuilds --",
+    "release:verify": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-verify-release --",
+    "release:pack": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-pack-release --",
+    "release:publish": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-publish-release --",
+    "release:verify-packed-install": "cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-verify-packed-install --"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/node-addon-landlock-run": "workspace:*",
+    "@types/node": "^26.0.1",
+    "tsx": "^4.20.6",
+    "typescript": "^6.0.3"
+  }
+}

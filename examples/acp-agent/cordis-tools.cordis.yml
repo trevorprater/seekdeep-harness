@@ -1,0 +1,12 @@
+# Add the self-referential Cordis tools without changing the base ACP tool
+# presentation mode.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - insert:
+          - id: cordis-host-runner
+            name: '@seekdeep-ai/seekdeep-cordis-host-runner'
+          - id: tool-cordis
+            name: '@seekdeep-ai/seekdeep-tool-cordis'

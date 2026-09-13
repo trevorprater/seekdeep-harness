@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-typert-loader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-typert-registry = { path = "../typert-registry" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+
+[lints]
+workspace = true

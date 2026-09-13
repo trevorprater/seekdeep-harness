@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use serde_json::Value;
+use seekdeep_lossless_json::JsonValue;
 
 use crate::{
     brand::CallId,
@@ -40,7 +40,7 @@ pub struct BlockAssembler {
     order: Vec<u64>,
     usage: Option<TokenUsage>,
     finish: Option<FinishReason>,
-    replay_state: Option<Value>,
+    replay_state: Option<JsonValue>,
 }
 
 impl BlockAssembler {
@@ -149,7 +149,7 @@ impl BlockAssembler {
 
     /// Adapter-private replay state from the terminal finish.
     #[must_use]
-    pub fn replay_state(&self) -> Option<&Value> {
+    pub fn replay_state(&self) -> Option<&JsonValue> {
         self.replay_state.as_ref()
     }
 
@@ -173,7 +173,7 @@ fn assemble(partial: &PartialBlock, index: u64) -> anyhow::Result<ContentBlock> 
     }
     match partial.block_type.as_str() {
         "text" => Ok(ContentBlock::Text {
-            text: partial.text.clone(),
+            text: partial.text.clone().into(),
         }),
         "reasoning" => Ok(ContentBlock::Reasoning {
             text: partial.text.clone(),
@@ -238,7 +238,7 @@ mod tests {
                     text: "thinking…".to_owned()
                 },
                 ContentBlock::Text {
-                    text: "Hello world".to_owned()
+                    text: "Hello world".into()
                 },
                 ContentBlock::ToolCall {
                     id: CallId::new("call-1"),
@@ -261,7 +261,7 @@ mod tests {
         assembler.push(StreamChunk::BlockEnd {
             index: 0,
             block: ContentBlock::Text {
-                text: "second".to_owned(),
+                text: "second".into(),
             },
         });
         assembler.push(StreamChunk::ReasoningDelta {

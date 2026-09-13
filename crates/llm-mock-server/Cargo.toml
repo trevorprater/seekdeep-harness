@@ -1,0 +1,34 @@
+[package]
+name = "seekdeep-llm-mock-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Scriptable OpenAI-compatible fault server for SeekDeep Harness tests"
+
+[[bin]]
+name = "seekdeep-llm-mock-server"
+path = "src/bin/seekdeep-llm-mock-server.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+nix.workspace = true
+
+[lints]
+workspace = true

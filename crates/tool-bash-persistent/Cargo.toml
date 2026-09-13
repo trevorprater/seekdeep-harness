@@ -1,0 +1,33 @@
+[package]
+name = "seekdeep-tool-bash-persistent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Persistent owner-scoped Bash tool over PTY sessions"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-terminal = { path = "../terminal" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+
+[lints]
+workspace = true

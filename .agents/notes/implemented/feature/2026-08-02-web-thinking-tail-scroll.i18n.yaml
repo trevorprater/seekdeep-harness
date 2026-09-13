@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-02-web-thinking-tail-scroll.md
+2026-08-02-web-thinking-tail-scroll.md: aebf1416181e6e6886d05690f2666ed379f19cce
+2026-08-02-web-thinking-tail-scroll.zh.md: ef877fc6b1fa2aba6d14c0958d07d60030ea3f4f

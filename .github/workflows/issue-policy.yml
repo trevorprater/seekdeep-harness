@@ -1,0 +1,29 @@
+name: Issue policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled, ready_for_review, review_requested]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  policy:
+    name: Issue policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.93.1
+      - name: Validate pull request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: CARGO_INCREMENTAL=0 cargo run --quiet --locked -p seekdeep-issue-policy -- pr

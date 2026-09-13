@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-agent-tool-presentation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-tools = { path = "../tools" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+tokio.workspace = true
+
+[lints]
+workspace = true

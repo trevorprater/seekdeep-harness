@@ -1,29 +1,43 @@
 //! Plugin registration and dependency-epoch lifecycle management.
 
 use std::{
+    any::Any,
     future::Future,
+    panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
         Arc, Weak,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
+use futures::FutureExt as _;
 use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::Notify;
 use uuid::Uuid;
 
 use crate::{
-    Context, CordisError, Fiber, FiberState,
+    Context, CordisError, EventArgs, Fiber, FiberState,
     fiber::{DisposeFuture, EffectHandle},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "lifecycle_queue.rs"]
+mod lifecycle_queue;
+#[cfg(not(target_arch = "wasm32"))]
+pub use lifecycle_queue::{LifecycleDeferral, LifecycleScheduler, LifecycleTask};
+
 /// Boxed plugin startup computation.
+#[cfg(not(target_arch = "wasm32"))]
 pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
+/// Browser plugin startup stays on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'static>>;
 
 type PluginCallback = Arc<dyn Fn(Context, Value) -> PluginFuture + Send + Sync>;
 type ConfigValidator = Arc<dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync>;
+type ConfigResolver = Arc<dyn Fn(&Context, &Value) -> anyhow::Result<Value> + Send + Sync>;
 
 /// Shared plugin entrypoint metadata and executable body.
 #[derive(Clone)]
@@ -31,9 +45,25 @@ pub struct Plugin {
     id: Uuid,
     name: String,
     inject: Vec<String>,
+    inject_intercepts: Vec<(String, Value)>,
     callback: PluginCallback,
+    config_resolver: Option<ConfigResolver>,
     validator: Option<ConfigValidator>,
+    #[cfg(target_arch = "wasm32")]
+    browser_binding: Option<BrowserBinding>,
 }
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone)]
+pub(crate) enum BrowserMountPhase {
+    CreateFace,
+    Own(EffectHandle),
+    AfterPublication,
+}
+
+#[cfg(target_arch = "wasm32")]
+type BrowserBinding =
+    Arc<dyn Fn(Arc<PluginFiber>, BrowserMountPhase) -> anyhow::Result<()> + Send + Sync>;
 
 impl std::fmt::Debug for Plugin {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,9 +88,67 @@ impl Plugin {
             id: Uuid::now_v7(),
             name: name.into(),
             inject: inject.into_iter().map(Into::into).collect(),
+            inject_intercepts: Vec::new(),
             callback: Arc::new(callback),
+            config_resolver: None,
             validator: None,
+            #[cfg(target_arch = "wasm32")]
+            browser_binding: None,
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn with_browser_binding(
+        mut self,
+        binding: impl Fn(Arc<PluginFiber>, BrowserMountPhase) -> anyhow::Result<()>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.browser_binding = Some(Arc::new(binding));
+        self
+    }
+
+    /// Adds entry-local configuration resolution that runs after every
+    /// declared dependency is active and before schema validation.
+    ///
+    /// Loader expression interpolation uses this seam so a provider
+    /// replacement resolves the same raw configuration against the new
+    /// dependency generation without teaching Cordis about a source language.
+    #[must_use]
+    pub fn with_config_resolver(
+        mut self,
+        resolver: impl Fn(&Context, &Value) -> anyhow::Result<Value> + Send + Sync + 'static,
+    ) -> Self {
+        self.config_resolver = Some(Arc::new(resolver));
+        self
+    }
+
+    /// Merges loader-entry dependency declarations into plugin metadata.
+    /// Existing declarations retain their order and duplicates are ignored.
+    #[must_use]
+    pub fn with_additional_inject(
+        mut self,
+        inject: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        for name in inject.into_iter().map(Into::into) {
+            if !self.inject.contains(&name) {
+                self.inject.push(name);
+            }
+        }
+        self
+    }
+
+    /// Adds a required service together with the intercept config visible to
+    /// the plugin context while that dependency generation is active.
+    #[must_use]
+    pub fn with_inject_config(mut self, name: impl Into<String>, config: Value) -> Self {
+        let name = name.into();
+        if !self.inject.contains(&name) {
+            self.inject.push(name.clone());
+        }
+        self.inject_intercepts.push((name, config));
+        self
     }
 
     /// Adds synchronous configuration validation and normalization.
@@ -95,6 +183,22 @@ impl Plugin {
 #[derive(Default)]
 struct RegistryInner {
     fibers: Mutex<Vec<Weak<PluginFiber>>>,
+    next_uid: AtomicU64,
+    #[cfg(not(target_arch = "wasm32"))]
+    lifecycle: Arc<lifecycle_queue::LifecycleQueue>,
+}
+
+/// Source-compatible runtime record for one plugin identity.
+#[derive(Clone, Debug)]
+pub struct PluginRuntimeSnapshot {
+    /// Stable plugin value identity.
+    pub plugin_id: Uuid,
+    /// Diagnostic plugin name.
+    pub name: String,
+    /// Live mounts in insertion order.
+    pub fibers: Vec<Arc<PluginFiber>>,
+    /// Whether the runtime validates configuration.
+    pub has_config_validator: bool,
 }
 
 /// Root-owned registry of every mounted plugin fiber.
@@ -110,6 +214,19 @@ impl PluginRegistry {
         Self::default()
     }
 
+    /// Defers newly admitted native lifecycle work until the source turn ends.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn defer_lifecycle(&self) -> LifecycleDeferral {
+        self.inner.lifecycle.defer()
+    }
+
+    /// Selects the executor for subsequently scheduled native lifecycle work.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_lifecycle_scheduler(&self, scheduler: Arc<dyn LifecycleScheduler>) {
+        self.inner.lifecycle.set_scheduler(scheduler);
+    }
+
     /// Mounts a plugin and schedules dependency resolution.
     ///
     /// # Errors
@@ -121,53 +238,309 @@ impl PluginRegistry {
         plugin: Plugin,
         config: Value,
     ) -> Result<Arc<PluginFiber>, CordisError> {
-        let fiber = Fiber::child(plugin.name.clone());
+        let fiber = Fiber::child_of(plugin.name.clone(), parent.fiber());
+        let uid = self.inner.next_uid.fetch_add(1, Ordering::AcqRel) + 1;
+        let plugin_context = plugin
+            .inject_intercepts
+            .iter()
+            .fold(parent.clone(), |context, (name, config)| {
+                context.intercept(name, config.clone())
+            })
+            .with_fiber(fiber.clone());
         let mounted = Arc::new(PluginFiber {
             fiber: fiber.clone(),
-            context: parent.with_fiber(fiber),
+            uid: AtomicU64::new(uid),
+            context: plugin_context,
             plugin,
+            additional_inject: Mutex::new(Vec::new()),
             config: Mutex::new(config),
             epoch: Mutex::new(None),
             error: Mutex::new(None),
             transition: tokio::sync::Mutex::new(()),
+            updates: tokio::sync::Mutex::new(()),
             scheduled: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            #[cfg(target_arch = "wasm32")]
+            browser_face: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
+            #[cfg(target_arch = "wasm32")]
+            browser_inject: Mutex::new(None),
+            #[cfg(target_arch = "wasm32")]
+            browser_disposer: Mutex::new(None),
+            lifecycle_generation: AtomicU64::new(0),
             disposed: AtomicBool::new(false),
+            #[cfg(not(target_arch = "wasm32"))]
+            disposal: Mutex::new(None),
+            #[cfg(not(target_arch = "wasm32"))]
+            structural_disposer: Mutex::new(None),
             settled: Notify::new(),
             registry: Arc::downgrade(&self.inner),
         });
         let owned = mounted.clone();
         let structural = EffectHandle::new("ctx.plugin()", move || -> DisposeFuture {
-            Box::pin(async move { owned.dispose().await })
+            Box::pin(async move {
+                #[cfg(not(target_arch = "wasm32"))]
+                return owned.dispose_owned(None).await;
+                #[cfg(target_arch = "wasm32")]
+                owned.dispose().await
+            })
         });
-        parent.own(structural)?;
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(binding) = &mounted.plugin.browser_binding {
+                binding(mounted.clone(), BrowserMountPhase::CreateFace)
+                    .map_err(|error| publication_error(&error))?;
+                binding(mounted.clone(), BrowserMountPhase::Own(structural))
+                    .map_err(|error| publication_error(&error))?;
+            } else {
+                let structural = parent.own(structural)?;
+                *mounted.browser_disposer.lock() = structural
+                    .browser_disposer()
+                    .as_ref()
+                    .map(js_sys::WeakRef::new);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let structural = parent.own(structural)?;
+            *mounted.structural_disposer.lock() = Some(structural.downgrade());
+        }
         self.inner.fibers.lock().push(Arc::downgrade(&mounted));
+        if let Err(error) = parent.events().emit(
+            parent,
+            "internal/plugin",
+            &EventArgs::one_shared(mounted.clone()),
+        ) {
+            let cleanup = mounted.clone().rollback_publication();
+            #[cfg(target_arch = "wasm32")]
+            {
+                let mut cleanup = Box::pin(cleanup);
+                let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+                if std::future::Future::poll(cleanup.as_mut(), &mut context).is_pending() {
+                    spawn_background(cleanup);
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            self.inner.lifecycle.dispatch(Box::pin(cleanup));
+            return Err(publication_error(&error));
+        }
+        #[cfg(target_arch = "wasm32")]
+        if !mounted.is_disposed()
+            && let Some(binding) = &mounted.plugin.browser_binding
+        {
+            binding(mounted.clone(), BrowserMountPhase::AfterPublication)
+                .map_err(|error| publication_error(&error))?;
+        }
+        #[cfg(target_arch = "wasm32")]
+        if mounted.plugin.browser_binding.is_none() {
+            mounted.schedule();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         mounted.schedule();
         Ok(mounted)
     }
 
     /// Re-evaluates dependency epochs for every live plugin.
     pub fn notify_service_change(&self) {
-        let fibers = {
-            let mut fibers = self.inner.fibers.lock();
-            let live = fibers.iter().filter_map(Weak::upgrade).collect::<Vec<_>>();
-            fibers.retain(|fiber| fiber.strong_count() > 0);
-            live
-        };
-        for fiber in fibers {
+        for fiber in self.live_fibers() {
             fiber.schedule();
         }
     }
 
-    /// Number of currently reachable plugin mounts.
+    pub(crate) fn notify_provider_change(&self, slot: &crate::service::ServiceSlot) {
+        #[cfg(target_arch = "wasm32")]
+        for fiber in self.live_fibers() {
+            if fiber
+                .required_services()
+                .iter()
+                .any(|name| name == &slot.name && fiber.context().slot(name) == *slot)
+            {
+                fiber.schedule();
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = slot;
+            self.notify_service_change();
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn notify_native_provider_change(&self, slot: &crate::service::ServiceSlot) {
+        for fiber in self.live_fibers() {
+            if fiber.plugin.browser_binding.is_none()
+                && fiber
+                    .required_services()
+                    .iter()
+                    .any(|name| name == &slot.name && fiber.context().slot(name) == *slot)
+            {
+                fiber.schedule();
+            }
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn service_dependents(&self, owner: &Context, name: &str) -> Vec<Arc<PluginFiber>> {
+        self.live_fibers()
+            .into_iter()
+            .filter(|fiber| {
+                !Arc::ptr_eq(fiber.fiber(), owner.fiber())
+                    && fiber
+                        .required_services()
+                        .iter()
+                        .any(|required| required == name)
+                    && fiber.context().slot(name) == owner.slot(name)
+            })
+            .collect()
+    }
+
+    /// Waits until every mounted fiber, including children mounted while
+    /// others activate, has settled with no pending lifecycle work.
+    pub async fn await_quiescent(&self) {
+        loop {
+            let fibers = self.live_fibers();
+            PluginFiber::await_all_quiescent(&fibers).await;
+            if self.live_fibers().len() == fibers.len() {
+                return;
+            }
+        }
+    }
+
+    /// Returns the runtime record for one plugin identity.
+    #[must_use]
+    pub fn get(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        let fibers = self.fibers_for(plugin.id());
+        (!fibers.is_empty()).then(|| PluginRuntimeSnapshot {
+            plugin_id: plugin.id(),
+            name: plugin.name().to_owned(),
+            has_config_validator: plugin.validator.is_some(),
+            fibers,
+        })
+    }
+
+    /// Whether at least one undisposed mount exists for this plugin identity.
+    #[must_use]
+    pub fn has(&self, plugin: &Plugin) -> bool {
+        !self.fibers_for(plugin.id()).is_empty()
+    }
+
+    /// Snapshots all runtime records in first-mount order.
+    #[must_use]
+    pub fn values(&self) -> Vec<PluginRuntimeSnapshot> {
+        let live = self.live_fibers();
+        let mut ids = Vec::new();
+        for fiber in &live {
+            let id = fiber.plugin.id();
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        ids.into_iter()
+            .filter_map(|id| {
+                let first = live.iter().find(|fiber| fiber.plugin.id() == id)?;
+                Some(PluginRuntimeSnapshot {
+                    plugin_id: id,
+                    name: first.plugin.name().to_owned(),
+                    has_config_validator: first.plugin.validator.is_some(),
+                    fibers: live
+                        .iter()
+                        .filter(|fiber| fiber.plugin.id() == id)
+                        .cloned()
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// Stable plugin identities in first-mount order.
+    #[must_use]
+    pub fn keys(&self) -> Vec<Uuid> {
+        self.values()
+            .into_iter()
+            .map(|runtime| runtime.plugin_id)
+            .collect()
+    }
+
+    /// Runtime entries in first-mount order.
+    #[must_use]
+    pub fn entries(&self) -> Vec<(Uuid, PluginRuntimeSnapshot)> {
+        self.values()
+            .into_iter()
+            .map(|runtime| (runtime.plugin_id, runtime))
+            .collect()
+    }
+
+    /// Visits every runtime in first-mount order.
+    pub fn for_each(&self, mut callback: impl FnMut(&PluginRuntimeSnapshot, Uuid)) {
+        for runtime in self.values() {
+            let id = runtime.plugin_id;
+            callback(&runtime, id);
+        }
+    }
+
+    /// Removes one runtime and starts disposal of all mounts without waiting.
+    pub fn delete(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        self.delete_scheduled(plugin, None)
+    }
+
+    /// Removes a runtime with an explicit per-operation effect-disposal policy.
+    /// The first disposal owner selects the policy; concurrent callers join it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn delete_with_disposal(
+        &self,
+        plugin: &Plugin,
+        scheduling: crate::DisposalScheduling,
+    ) -> Option<PluginRuntimeSnapshot> {
+        self.delete_scheduled(plugin, Some(scheduling))
+    }
+
+    fn delete_scheduled(
+        &self,
+        plugin: &Plugin,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> Option<PluginRuntimeSnapshot> {
+        let runtime = self.get(plugin)?;
+        self.inner.fibers.lock().retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| fiber.plugin.id() != plugin.id())
+        });
+        for fiber in &runtime.fibers {
+            fiber.uid.store(0, Ordering::Release);
+            fiber.fiber.request_disposal();
+            let fiber = fiber.clone();
+            let task = async move {
+                #[cfg(not(target_arch = "wasm32"))]
+                let _ = fiber.dispose_native(scheduling).await;
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let _ = scheduling;
+                    let _ = fiber.dispose().await;
+                }
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            self.inner.lifecycle.dispatch(Box::pin(task));
+            #[cfg(target_arch = "wasm32")]
+            spawn_background(task);
+        }
+        Some(runtime)
+    }
+
+    /// Removes one runtime and joins deterministic disposal of every mount.
+    pub async fn delete_joined(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        let runtime = self.get(plugin)?;
+        self.inner.fibers.lock().retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| fiber.plugin.id() != plugin.id())
+        });
+        futures::future::join_all(runtime.fibers.iter().map(PluginFiber::dispose)).await;
+        Some(runtime)
+    }
+
+    /// Number of registered plugin runtimes, not mount count.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner
-            .fibers
-            .lock()
-            .iter()
-            .filter(|fiber| fiber.strong_count() > 0)
-            .count()
+        self.keys().len()
     }
 
     /// Whether the registry contains no reachable plugin mounts.
@@ -175,20 +548,68 @@ impl PluginRegistry {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Number of live mounts across all runtimes.
+    #[must_use]
+    pub fn fiber_count(&self) -> usize {
+        self.live_fibers().len()
+    }
+
+    fn fibers_for(&self, plugin_id: Uuid) -> Vec<Arc<PluginFiber>> {
+        self.live_fibers()
+            .into_iter()
+            .filter(|fiber| fiber.plugin.id() == plugin_id)
+            .collect()
+    }
+
+    fn live_fibers(&self) -> Vec<Arc<PluginFiber>> {
+        let mut registry = self.inner.fibers.lock();
+        let live = registry
+            .iter()
+            .filter_map(Weak::upgrade)
+            .filter(|fiber| !fiber.disposed.load(Ordering::Acquire))
+            .collect::<Vec<_>>();
+        registry.retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| !fiber.disposed.load(Ordering::Acquire))
+        });
+        live
+    }
+}
+
+#[derive(Clone)]
+struct PluginFailure {
+    message: String,
+    cause: Arc<anyhow::Error>,
 }
 
 /// One mounted plugin and its current dependency epoch.
 pub struct PluginFiber {
     fiber: Arc<Fiber>,
+    uid: AtomicU64,
     context: Context,
     plugin: Plugin,
+    additional_inject: Mutex<Vec<String>>,
     config: Mutex<Value>,
     epoch: Mutex<Option<Vec<Uuid>>>,
-    error: Mutex<Option<String>>,
+    error: Mutex<Option<PluginFailure>>,
     transition: tokio::sync::Mutex<()>,
+    updates: tokio::sync::Mutex<()>,
     scheduled: AtomicBool,
     dirty: AtomicBool,
+    #[cfg(target_arch = "wasm32")]
+    browser_face: Mutex<wasm_bindgen::JsValue>,
+    #[cfg(target_arch = "wasm32")]
+    browser_inject: Mutex<Option<Vec<String>>>,
+    #[cfg(target_arch = "wasm32")]
+    browser_disposer: Mutex<Option<js_sys::WeakRef<js_sys::Function>>>,
+    lifecycle_generation: AtomicU64,
     disposed: AtomicBool,
+    #[cfg(not(target_arch = "wasm32"))]
+    disposal: Mutex<Option<crate::fiber::SharedDisposal>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    structural_disposer: Mutex<Option<crate::fiber::WeakEffectHandle>>,
     settled: Notify,
     registry: Weak<RegistryInner>,
 }
@@ -200,12 +621,174 @@ impl std::fmt::Debug for PluginFiber {
             .field("plugin", &self.plugin)
             .field("state", &self.fiber.state())
             .field("epoch", &self.epoch.lock())
-            .field("error", &self.error.lock())
+            .field("error", &self.error())
             .finish_non_exhaustive()
     }
 }
 
 impl PluginFiber {
+    async fn rollback_publication(self: Arc<Self>) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(dispose) = self.browser_disposer() {
+            let result = crate::wasm::browser_effects::run_disposable(&dispose.into());
+            let result = match result {
+                Ok(result) => {
+                    wasm_bindgen_futures::JsFuture::from(js_sys::Promise::resolve(&result)).await
+                }
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                tracing::error!(?error, "failed plugin publication rollback failed");
+            }
+            return;
+        }
+        if let Err(error) = self.dispose().await {
+            tracing::error!(%error, "failed plugin publication rollback failed");
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_disposer(&self) -> Option<js_sys::Function> {
+        self.browser_disposer
+            .lock()
+            .as_ref()
+            .and_then(js_sys::WeakRef::deref)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_disposer(&self, dispose: &js_sys::Function) {
+        *self.browser_disposer.lock() = Some(js_sys::WeakRef::new(dispose));
+    }
+
+    /// Waits until the selected fibers have finished all lifecycle work
+    /// causally admitted before quiescence is observed.
+    ///
+    /// A single pass over the fibers is insufficient: a later provider can
+    /// activate an earlier pending consumer after that consumer was already
+    /// observed as stable. Per-fiber generations make that dependency cascade
+    /// visible without waiting for unrelated plugins or relying on executor
+    /// turns or wall-clock delays.
+    pub async fn await_all_quiescent(fibers: &[Arc<Self>]) {
+        loop {
+            let generations = fibers
+                .iter()
+                .map(|fiber| fiber.lifecycle_generation.load(Ordering::Acquire))
+                .collect::<Vec<_>>();
+            for fiber in fibers {
+                let _ = fiber.await_settled().await;
+            }
+            if fibers.iter().zip(generations).all(|(fiber, generation)| {
+                fiber.lifecycle_generation.load(Ordering::Acquire) == generation
+                    && fiber.is_quiescent()
+            }) {
+                return;
+            }
+        }
+    }
+
+    /// Monotonic runtime uid, absent after disposal.
+    #[must_use]
+    pub fn uid(&self) -> Option<u64> {
+        match self.uid.load(Ordering::Acquire) {
+            0 => None,
+            uid => Some(uid),
+        }
+    }
+
+    /// Stable plugin identity shared by sibling mounts.
+    #[must_use]
+    pub fn plugin_id(&self) -> Uuid {
+        self.plugin.id()
+    }
+
+    /// Loader-facing plugin name for activation diagnostics.
+    #[must_use]
+    pub fn plugin_name(&self) -> &str {
+        self.plugin.name()
+    }
+
+    /// Configured Loader package name when this Fiber belongs to an entry.
+    #[must_use]
+    pub fn entry_name(&self) -> Option<String> {
+        self.context
+            .meta("loader.entry_name")
+            .and_then(|value| value.as_str().map(str::to_owned))
+    }
+
+    /// Stable Loader entry identity when present.
+    #[must_use]
+    pub fn entry_id(&self) -> Option<String> {
+        self.context
+            .meta("loader.entry_id")
+            .and_then(|value| value.as_str().map(str::to_owned))
+    }
+
+    /// Required service names for pending-fiber diagnostics.
+    #[must_use]
+    pub fn inject(&self) -> Vec<String> {
+        self.required_services()
+    }
+
+    /// Required services currently absent from this plugin's lookup context.
+    #[must_use]
+    pub fn missing_inject(&self) -> Vec<String> {
+        self.required_services()
+            .into_iter()
+            .filter(|name| !self.context.has_named(name))
+            .collect()
+    }
+
+    /// Adds a dependency during synchronous `internal/plugin` publication.
+    ///
+    /// # Errors
+    ///
+    /// Rejects mutation after lifecycle scheduling or disposal begins.
+    pub fn add_inject(&self, name: impl Into<String>) -> Result<(), CordisError> {
+        if self.scheduled.load(Ordering::Acquire) || self.disposed.load(Ordering::Acquire) {
+            return Err(CordisError::InactiveEffect);
+        }
+        let name = name.into();
+        #[cfg(target_arch = "wasm32")]
+        {
+            let face = self.browser_face.lock().clone();
+            if !face.is_undefined() {
+                let inject = js_sys::Reflect::get(&face, &"inject".into()).map_err(|error| {
+                    CordisError::PluginPublication(crate::wasm::js_anyhow(&error).to_string())
+                })?;
+                js_sys::Reflect::set(&inject, &name.clone().into(), &wasm_bindgen::JsValue::NULL)
+                    .map_err(|error| {
+                    CordisError::PluginPublication(crate::wasm::js_anyhow(&error).to_string())
+                })?;
+            }
+        }
+        let mut additional = self.additional_inject.lock();
+        if !self.plugin.inject.contains(&name) && !additional.contains(&name) {
+            additional.push(name);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_face(&self, face: wasm_bindgen::JsValue) {
+        *self.browser_face.lock() = face;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_face(&self) -> wasm_bindgen::JsValue {
+        self.browser_face.lock().clone()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_inject(&self, names: Vec<String>) {
+        *self.browser_inject.lock() = Some(names);
+    }
+
+    /// Whether permanent disposal has been admitted.
+    #[must_use]
+    pub fn is_disposed(&self) -> bool {
+        self.disposed.load(Ordering::Acquire)
+    }
+
     /// Underlying lifecycle owner.
     #[must_use]
     pub fn fiber(&self) -> &Arc<Fiber> {
@@ -221,7 +804,17 @@ impl PluginFiber {
     /// Last startup error after rendering its causal chain.
     #[must_use]
     pub fn error(&self) -> Option<String> {
-        self.error.lock().clone()
+        self.error
+            .lock()
+            .as_ref()
+            .map(|error| error.message.clone())
+    }
+
+    /// Original failure from the last settled configuration or startup attempt.
+    /// Disposal retains it; successful startup or unavailable dependencies clear it.
+    #[must_use]
+    pub fn failure(&self) -> Option<Arc<anyhow::Error>> {
+        self.error.lock().as_ref().map(|error| error.cause.clone())
     }
 
     /// Waits until currently scheduled lifecycle work reaches a stable state.
@@ -230,29 +823,96 @@ impl PluginFiber {
     ///
     /// Returns the plugin's most recent configuration or startup failure.
     pub async fn await_settled(&self) -> anyhow::Result<()> {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(settled) = self.fiber.browser_settled() {
+            return settled.await;
+        }
         loop {
             let notified = self.settled.notified();
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let disposal = self.disposal.lock().clone();
+                if let Some(disposal) = disposal {
+                    let _ = disposal.await;
+                }
+            }
             if !self.scheduled.load(Ordering::Acquire)
                 && !matches!(
                     self.fiber.state(),
                     FiberState::Loading | FiberState::Unloading
                 )
+                && (!self.is_disposed() || self.fiber.state() == FiberState::Disposed)
             {
                 return self
                     .error
                     .lock()
                     .clone()
-                    .map_or(Ok(()), |message| Err(anyhow::anyhow!(message)));
+                    .map_or(Ok(()), |error| Err(anyhow::Error::msg(error.message)));
             }
             notified.await;
         }
     }
 
-    /// Replaces raw configuration and restarts when dependencies are available.
-    pub fn update(self: &Arc<Self>, config: Value) {
+    fn request_update(self: &Arc<Self>, config: Value) {
         *self.config.lock() = config;
         *self.epoch.lock() = None;
         self.schedule();
+    }
+
+    /// Replaces configuration transactionally, restoring the exact previous
+    /// active generation and raw configuration when candidate activation fails.
+    ///
+    /// Concurrent callers serialize in admission order.
+    ///
+    /// # Errors
+    ///
+    /// Returns candidate activation, rollback activation, or disposal failures.
+    pub async fn update(self: &Arc<Self>, config: Value) -> anyhow::Result<()> {
+        let _update = self.updates.lock().await;
+        anyhow::ensure!(
+            !self.disposed.load(Ordering::Acquire),
+            "plugin {:?} is disposed",
+            self.plugin.name
+        );
+        let previous = self.config.lock().clone();
+        self.request_update(config);
+        match self.await_settled().await {
+            Ok(()) if self.fiber.state() != FiberState::Failed => Ok(()),
+            Ok(()) => Err(anyhow::anyhow!(
+                "plugin {:?} failed without a retained error",
+                self.plugin.name
+            )),
+            Err(candidate) => {
+                self.request_update(previous);
+                match self.await_settled().await {
+                    Ok(()) if self.fiber.state() == FiberState::Active => Err(candidate),
+                    Ok(()) => Err(anyhow::anyhow!(
+                        "{candidate:#}\nplugin {:?} rollback did not reactivate (state {:?})",
+                        self.plugin.name,
+                        self.fiber.state()
+                    )),
+                    Err(rollback) => Err(anyhow::anyhow!(
+                        "{candidate:#}\nplugin {:?} rollback failed: {rollback:#}",
+                        self.plugin.name
+                    )),
+                }
+            }
+        }
+    }
+
+    /// Explicit name for [`Self::update`] at transaction-oriented call sites.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same candidate or rollback failure as [`Self::update`].
+    pub async fn update_transactional(self: &Arc<Self>, config: Value) -> anyhow::Result<()> {
+        self.update(config).await
+    }
+
+    /// Exact raw configuration currently committed to this fiber.
+    #[must_use]
+    pub fn config(&self) -> Value {
+        self.config.lock().clone()
     }
 
     /// Permanently disposes this mount and all plugin-owned effects.
@@ -260,12 +920,120 @@ impl PluginFiber {
     /// # Errors
     ///
     /// Returns aggregated plugin cleanup failures.
-    pub async fn dispose(&self) -> anyhow::Result<()> {
+    pub async fn dispose(self: &Arc<Self>) -> anyhow::Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        return self.dispose_native(None).await;
+        #[cfg(target_arch = "wasm32")]
+        self.dispose_once(None).await
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn dispose_native(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
+        let disposal = self.disposal_future(scheduling);
+        let structural = self
+            .structural_disposer
+            .lock()
+            .as_ref()
+            .and_then(crate::fiber::WeakEffectHandle::upgrade);
+        self.settled.notify_waiters();
+        if let Some(structural) = structural {
+            structural.dispose().await
+        } else {
+            disposal.await.map_err(anyhow::Error::msg)
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn dispose_owned(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
+        let disposal = self.disposal_future(scheduling);
+        self.settled.notify_waiters();
+        disposal.await.map_err(anyhow::Error::msg)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn disposal_future(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> crate::fiber::SharedDisposal {
+        self.disposal
+            .lock()
+            .get_or_insert_with(|| {
+                let owned = self.clone();
+                async move {
+                    owned
+                        .dispose_once(scheduling)
+                        .await
+                        .map_err(|error| format!("{error:#}"))
+                }
+                .boxed()
+                .shared()
+            })
+            .clone()
+    }
+
+    async fn dispose_once(
+        self: &Arc<Self>,
+        scheduling: Option<crate::DisposalScheduling>,
+    ) -> anyhow::Result<()> {
         if self.disposed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.uid.store(0, Ordering::Release);
+        #[cfg(target_arch = "wasm32")]
+        crate::wasm::mark_browser_disposed(&self.browser_face())?;
+        #[cfg(target_arch = "wasm32")]
+        self.fiber.prepare_browser_transition(false);
+        let on_async_error: Arc<dyn Fn(anyhow::Error) + Send + Sync> = Arc::new(|error| {
+            tracing::error!(%error, "internal/plugin disposal observer failed");
+        });
+        match self.context.events().prepare_emit(
+            &self.context,
+            "internal/plugin",
+            &EventArgs::one_shared(self.clone()),
+        ) {
+            Ok(emission) => emission.emit_contained_with_async_errors(
+                |error| tracing::error!(%error, "internal/plugin disposal observer failed"),
+                &on_async_error,
+            ),
+            Err(error) => {
+                tracing::error!(%error, "internal/plugin disposal publication failed");
+            }
+        }
+        self.fiber.request_disposal();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.fiber.set_state(FiberState::Unloading);
+            if let Some(registry) = self.registry.upgrade() {
+                registry.lifecycle.after_turn().await;
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(disposal) = self.fiber.browser_disposal() {
+            let result = disposal.await;
+            self.uid.store(0, Ordering::Release);
+            self.settled.notify_waiters();
+            return result;
+        }
         let _transition = self.transition.lock().await;
-        let result = self.fiber.dispose().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        let result = if let Some(scheduling) = scheduling {
+            self.fiber.dispose_with_scheduling(scheduling).await
+        } else {
+            self.fiber.dispose().await
+        };
+        #[cfg(target_arch = "wasm32")]
+        let result = {
+            let _ = scheduling;
+            self.fiber.dispose().await
+        };
+        self.uid.store(0, Ordering::Release);
         self.notify_registry();
         self.settled.notify_waiters();
         result
@@ -275,12 +1043,21 @@ impl PluginFiber {
         if self.disposed.load(Ordering::Acquire) {
             return;
         }
+        #[cfg(target_arch = "wasm32")]
+        if self.plugin.browser_binding.is_some() {
+            if self.browser_inject.lock().is_some() {
+                self.lifecycle_generation.fetch_add(1, Ordering::AcqRel);
+                self.fiber.prepare_browser_transition(false);
+            }
+            return;
+        }
+        self.lifecycle_generation.fetch_add(1, Ordering::AcqRel);
         self.dirty.store(true, Ordering::Release);
         if self.scheduled.swap(true, Ordering::AcqRel) {
             return;
         }
         let fiber = self.clone();
-        spawn_background(async move {
+        let task = async move {
             loop {
                 fiber.dirty.store(false, Ordering::Release);
                 fiber.reconcile().await;
@@ -294,20 +1071,91 @@ impl PluginFiber {
                 fiber.schedule();
             }
             fiber.settled.notify_waiters();
-        });
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(registry) = self.registry.upgrade() {
+            registry.lifecycle.dispatch(Box::pin(task));
+        } else {
+            spawn_background(task);
+        }
+        #[cfg(target_arch = "wasm32")]
+        spawn_background(task);
+    }
+
+    fn is_quiescent(&self) -> bool {
+        !self.scheduled.load(Ordering::Acquire)
+            && !self.dirty.load(Ordering::Acquire)
+            && !matches!(
+                self.fiber.state(),
+                FiberState::Loading | FiberState::Unloading
+            )
+    }
+
+    fn resolve_config(&self, raw_config: &Value) -> anyhow::Result<Value> {
+        let config = self.plugin.config_resolver.as_ref().map_or_else(
+            || Ok(raw_config.clone()),
+            |resolver| {
+                catch_unwind(AssertUnwindSafe(|| resolver(&self.context, raw_config)))
+                    .unwrap_or_else(|panic| {
+                        Err(anyhow::anyhow!(
+                            "plugin config resolution panicked: {}",
+                            panic_detail(panic.as_ref())
+                        ))
+                    })
+            },
+        )?;
+        self.plugin
+            .validator
+            .as_ref()
+            .map_or(Ok(config.clone()), |validator| {
+                catch_unwind(AssertUnwindSafe(|| validator(&config))).unwrap_or_else(|panic| {
+                    Err(anyhow::anyhow!(
+                        "plugin config validation panicked: {}",
+                        panic_detail(panic.as_ref())
+                    ))
+                })
+            })
+    }
+
+    async fn run_startup(&self, config: Value) -> anyhow::Result<()> {
+        let startup = catch_unwind(AssertUnwindSafe(|| {
+            (self.plugin.callback)(self.context.clone(), config)
+        }));
+        match startup {
+            Ok(startup) => AssertUnwindSafe(startup)
+                .catch_unwind()
+                .await
+                .unwrap_or_else(|panic| {
+                    Err(anyhow::anyhow!(
+                        "plugin startup panicked: {}",
+                        panic_detail(panic.as_ref())
+                    ))
+                }),
+            Err(panic) => Err(anyhow::anyhow!(
+                "plugin startup panicked: {}",
+                panic_detail(panic.as_ref())
+            )),
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) async fn run_browser_startup(&self) -> anyhow::Result<()> {
+        self.run_startup(self.config()).await
     }
 
     async fn reconcile(&self) {
         let _transition = self.transition.lock().await;
-        if self.disposed.load(Ordering::Acquire) {
+        if self.disposed.load(Ordering::Acquire)
+            || cfg!(not(target_arch = "wasm32")) && self.fiber.is_disposal_requested()
+        {
             return;
         }
-        let next_epoch = self
-            .plugin
-            .inject
+        let required = self.required_services();
+        let providers = required
             .iter()
             .map(|name| self.context.provider_id(name))
-            .collect::<Option<Vec<_>>>();
+            .collect::<Vec<_>>();
+        let next_epoch = providers.into_iter().collect::<Option<Vec<_>>>();
         let previous_epoch = self.epoch.lock().clone();
 
         let Some(next_epoch) = next_epoch else {
@@ -322,26 +1170,47 @@ impl PluginFiber {
             return;
         };
 
-        if self.fiber.state() == FiberState::Active && previous_epoch.as_ref() == Some(&next_epoch)
+        if matches!(self.fiber.state(), FiberState::Active | FiberState::Failed)
+            && previous_epoch.as_ref() == Some(&next_epoch)
         {
             return;
         }
         if self.fiber.state() == FiberState::Active {
-            if let Err(error) = self.fiber.deactivate().await {
+            let cleanup = self.fiber.deactivate().await;
+            if let Err(error) = cleanup {
                 tracing::error!(plugin = %self.plugin.name, %error, "plugin reload cleanup failed");
             }
             self.notify_registry();
         }
         self.fiber.set_state(FiberState::Loading);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(registry) = self.registry.upgrade() {
+                registry.lifecycle.after_turn().await;
+            }
+            if self.fiber.is_disposal_requested() {
+                return;
+            }
+        }
         let raw_config = self.config.lock().clone();
-        let config = self.plugin.validator.as_ref().map_or_else(
-            || Ok(raw_config.clone()),
-            |validator| validator(&raw_config),
-        );
-        let result = match config {
-            Ok(config) => (self.plugin.callback)(self.context.clone(), config).await,
+        let result = match self.resolve_config(&raw_config) {
+            Ok(config) => self.run_startup(config).await,
             Err(error) => Err(error),
         };
+        if self.is_disposed() {
+            // Disposal that lands during startup aborts it, and the startup's failure is
+            // still its outcome: the source's load promise rejects with it, and
+            // `await_settled` reports it after the disposal converges. The fiber's state
+            // stays with the disposal.
+            if let Err(error) = result {
+                let message = format!("{error:#}");
+                *self.error.lock() = Some(PluginFailure {
+                    message,
+                    cause: Arc::new(error),
+                });
+            }
+            return;
+        }
         match result {
             Ok(()) => {
                 *self.epoch.lock() = Some(next_epoch);
@@ -353,8 +1222,16 @@ impl PluginFiber {
                 if let Err(cleanup_error) = self.fiber.fail().await {
                     tracing::error!(plugin = %self.plugin.name, %cleanup_error, "failed plugin rollback failed");
                 }
-                *self.epoch.lock() = None;
-                *self.error.lock() = Some(message.clone());
+                // A failed activation is settled for this exact dependency
+                // epoch. Keeping `None` here makes the service-change
+                // notification below immediately reschedule a dependency-free
+                // plugin forever; a config update explicitly clears the epoch,
+                // while a provider replacement naturally produces a new one.
+                *self.epoch.lock() = Some(next_epoch);
+                *self.error.lock() = Some(PluginFailure {
+                    message: message.clone(),
+                    cause: Arc::new(error),
+                });
                 tracing::error!(plugin = %self.plugin.name, error = %message, "plugin startup failed");
             }
         }
@@ -366,8 +1243,39 @@ impl PluginFiber {
             PluginRegistry { inner: registry }.notify_service_change();
         }
     }
+
+    fn required_services(&self) -> Vec<String> {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(inject) = self.browser_inject.lock().as_ref() {
+            return inject.clone();
+        }
+        let mut required = self.plugin.inject.clone();
+        for name in self.additional_inject.lock().iter() {
+            if !required.contains(name) {
+                required.push(name.clone());
+            }
+        }
+        required
+    }
 }
 
+fn panic_detail(panic: &(dyn Any + Send)) -> &str {
+    panic
+        .downcast_ref::<&'static str>()
+        .copied()
+        .or_else(|| panic.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
+}
+
+fn publication_error(error: &anyhow::Error) -> CordisError {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(error) = crate::wasm::js_cause(error) {
+        return CordisError::BrowserPublication(error);
+    }
+    CordisError::PluginPublication(format!("{error:#}"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
         runtime.spawn(future);
@@ -376,7 +1284,13 @@ fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
     }
 }
 
-#[cfg(test)]
+#[cfg(target_arch = "wasm32")]
+fn spawn_background(future: impl Future<Output = ()> + 'static) {
+    wasm_bindgen_futures::spawn_local(future);
+}
+
+// Native-only: these lifecycle tests drive tokio timers, which the wasm32 face never links.
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -385,6 +1299,30 @@ mod tests {
     use crate::ServiceKey;
 
     use super::*;
+
+    #[tokio::test]
+    async fn dependency_free_startup_failure_settles_until_configuration_changes() {
+        let context = Context::new();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let plugin = Plugin::new("fallible", std::iter::empty::<String>(), {
+            let attempts = attempts.clone();
+            move |_, config| {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move {
+                    anyhow::ensure!(config == json!(true), "configured failure");
+                    Ok(())
+                })
+            }
+        });
+        let fiber = context.plugin(plugin, json!(false)).unwrap();
+        assert!(fiber.await_settled().await.is_err());
+        tokio::task::yield_now().await;
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+
+        fiber.update(json!(true)).await.unwrap();
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(fiber.fiber().state(), FiberState::Active);
+    }
 
     #[derive(Debug)]
     struct Dependency;
@@ -450,5 +1388,128 @@ mod tests {
         let mounted = context.plugin(plugin, Value::Null).expect("mount");
         mounted.await_settled().await.expect("provider loads");
         assert!(context.get(PROVIDED).is_some());
+    }
+
+    #[tokio::test]
+    async fn registry_quiescence_follows_reverse_order_dependency_cascades() {
+        #[derive(Debug)]
+        struct Root;
+        #[derive(Debug)]
+        struct Middle;
+        #[derive(Debug)]
+        struct Leaf;
+        const ROOT: ServiceKey<Root> = ServiceKey::new("root");
+        const MIDDLE: ServiceKey<Middle> = ServiceKey::new("middle");
+        const LEAF: ServiceKey<Leaf> = ServiceKey::new("leaf");
+
+        let context = Context::new();
+        let leaf = context
+            .plugin(
+                Plugin::new("leaf", ["middle"], |context, _| {
+                    Box::pin(async move {
+                        context.provide(LEAF, Arc::new(Leaf))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+        let middle = context
+            .plugin(
+                Plugin::new("middle", ["root"], |context, _| {
+                    Box::pin(async move {
+                        context.provide(MIDDLE, Arc::new(Middle))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+        let root = context
+            .plugin(
+                Plugin::new("root", std::iter::empty::<&str>(), |context, _| {
+                    Box::pin(async move {
+                        context.provide(ROOT, Arc::new(Root))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+
+        PluginFiber::await_all_quiescent(&[leaf.clone(), middle.clone(), root.clone()]).await;
+
+        assert_eq!(leaf.fiber().state(), FiberState::Active);
+        assert_eq!(middle.fiber().state(), FiberState::Active);
+        assert_eq!(root.fiber().state(), FiberState::Active);
+        assert!(context.get(LEAF).is_some());
+    }
+
+    #[tokio::test]
+    async fn transactional_update_restores_previous_config_and_effects_after_failure() {
+        const CURRENT: ServiceKey<Value> = ServiceKey::new("current");
+        let context = Context::new();
+        let plugin = Plugin::new(
+            "reloadable",
+            std::iter::empty::<String>(),
+            move |context, config| {
+                Box::pin(async move {
+                    anyhow::ensure!(config["fail"] != true, "candidate config failed");
+                    context.provide(CURRENT, Arc::new(config))?;
+                    Ok(())
+                })
+            },
+        );
+        let original = json!({"value": "old"});
+        let fiber = context.plugin(plugin, original.clone()).unwrap();
+        fiber.await_settled().await.unwrap();
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&original));
+
+        let error = fiber
+            .update(json!({"fail": true, "value": "bad"}))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("candidate config failed"));
+        assert_eq!(fiber.fiber().state(), FiberState::Active);
+        assert_eq!(fiber.config(), original);
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&original));
+
+        let next = json!({"value": "new"});
+        fiber.update_transactional(next.clone()).await.unwrap();
+        assert_eq!(fiber.config(), next);
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&next));
+    }
+
+    #[tokio::test]
+    async fn panicking_config_resolver_settles_as_a_lifecycle_failure() {
+        let context = Context::new();
+        let plugin = Plugin::new("panic", std::iter::empty::<String>(), |_, _| {
+            Box::pin(async { Ok(()) })
+        })
+        .with_config_resolver(|_, _| panic!("resolver exploded"));
+        let fiber = context.plugin(plugin, Value::Null).unwrap();
+        let error =
+            tokio::time::timeout(std::time::Duration::from_millis(100), fiber.await_settled())
+                .await
+                .expect("panicking resolver must settle")
+                .unwrap_err();
+        assert!(error.to_string().contains("resolver exploded"));
+        assert_eq!(fiber.fiber().state(), FiberState::Failed);
+    }
+
+    #[tokio::test]
+    async fn panicking_plugin_future_settles_as_a_lifecycle_failure() {
+        let context = Context::new();
+        let plugin = Plugin::new("panic", std::iter::empty::<String>(), |_, _| {
+            Box::pin(async { panic!("plugin future exploded") })
+        });
+        let fiber = context.plugin(plugin, Value::Null).unwrap();
+        let error =
+            tokio::time::timeout(std::time::Duration::from_millis(100), fiber.await_settled())
+                .await
+                .expect("panicking plugin future must settle")
+                .unwrap_err();
+        assert!(error.to_string().contains("plugin future exploded"));
+        assert_eq!(fiber.fiber().state(), FiberState::Failed);
     }
 }

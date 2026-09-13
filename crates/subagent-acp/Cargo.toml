@@ -1,0 +1,46 @@
+[package]
+name = "seekdeep-subagent-acp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fresh-process ACP subagent provider for SeekDeep Harness"
+
+[[bin]]
+name = "seekdeep-acp-server-fixture"
+path = "tests/fixtures/fake_acp.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-acp = { path = "../acp" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

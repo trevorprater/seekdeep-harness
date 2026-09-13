@@ -1,0 +1,29 @@
+# Keyless replay keeps the LSP composition intact and replaces only the model adapter.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ../cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@seekdeep-ai/seekdeep-llm-deepseek'
+        disabled: true
+      - insert:
+          - id: lsp
+            name: '@seekdeep-ai/seekdeep-lsp'
+          - id: lsp-stdio
+            name: '@seekdeep-ai/seekdeep-lsp-stdio'
+            config:
+              servers:
+                fixture:
+                  # The snapshot runner exposes this compiled Rust fixture on PATH.
+                  command: seekdeep-acp-lsp-fixture
+                  extensionToLanguage:
+                    '.ts': typescript
+          - id: timeout-policy
+            name: '@seekdeep-ai/seekdeep-tool-call-timeout-policy'
+          - id: tool-lsp
+            name: '@seekdeep-ai/seekdeep-tool-lsp'
+            config:
+              maxLocations: 1
+          - id: llm-replay
+            name: '@seekdeep-ai/seekdeep-llm-replay'

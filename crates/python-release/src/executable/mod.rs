@@ -1,0 +1,15 @@
+//! Native executable build targets, source-compatible CLI parsing, and artifact assembly.
+
+mod pipeline;
+mod target;
+
+pub use pipeline::{
+    BuildReport, ENTRY_BIN, RUNTIME_DIRECTORY, build_executables, validate_native_artifact,
+    validate_native_library,
+};
+pub use target::{Arch, BuildOptions, CliError, CliOutcome, Host, Platform, Target, parse_cli};
+
+/// Native build command usage; legacy target spelling remains accepted.
+pub fn usage() -> &'static str {
+    "Usage: build-exe-for-python-sdk [flags]\n\n  --targets=<t1,t2,...>  targets, e.g. node24-linux-x64,node24-linux-arm64,node24-macos-arm64.\n                         Default: the host platform only.\n  --skip-build           use existing Cargo release artifacts.\n  --dry-run              print planned commands and writes without executing.\n  --help                 print this help.\n\nBuild route: Rust executables and compiled Node runtime assets; node<major> selects the official Node release line.\nSEEKDEEP_NODE_VERSION pins an exact release; SEEKDEEP_NODE_DIST_CACHE selects its verified archive cache; SEEKDEEP_RIPGREP_CACHE selects the verified cache of the pinned @vscode/ripgrep platform packages.\nStages the dev-only Node launch binding and native carrier under python/sdk-runtime/src/deepseek_harness_runtime/runtime/node; writes executable products and standalone code-runtime-node/<platform-arch> and ripgrep/<platform-arch> closures to dist-exe/."
+}

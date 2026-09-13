@@ -1,0 +1,1605 @@
+{
+  "package": "@seekdeep-ai/seekdeep-commands",
+  "face": "host",
+  "model": {
+    "services": [
+      {
+        "description": "Human-command registry. Plain-context definitions are global; definitions registered through a command-injected child of an agent context shadow globals for that agent.",
+        "summary": "Human-command registry.",
+        "tags": [],
+        "jsDoc": "/**\n * Human-command registry. Plain-context definitions are global; definitions\n * registered through a command-injected child of an agent context shadow\n * globals for that agent.\n */",
+        "key": "commands",
+        "exportName": "CommandRuntime",
+        "members": [
+          {
+            "kind": "method",
+            "name": "register",
+            "signature": "register(definition: CommandDefinition): () => void",
+            "summary": "Register a global or calling-agent-scoped command.",
+            "jsDoc": "/**\n * Register a global or calling-agent-scoped command.\n * @param definition - discovery metadata and direct UI handler.\n * @returns the exact effect disposer that unregisters this definition.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "list",
+            "signature": "@Remote list(agent: Agent): readonly CommandDescriptor[]",
+            "summary": "List the effective immutable command descriptors for one agent.",
+            "jsDoc": "/**\n * List the effective immutable command descriptors for one agent.\n * @param agent - exact receiving agent and scoped-layer key.\n * @returns name-sorted descriptors after scoped shadowing.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "find",
+            "signature": "find(agent: Agent, name: string): CommandDefinition | undefined",
+            "summary": "Resolve one effective command definition.",
+            "jsDoc": "/**\n * Resolve one effective command definition.\n * @param agent - exact receiving agent and scoped-layer key.\n * @param name - command name without a slash.\n * @returns the scoped shadow or global definition.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "execute",
+            "signature": "@Remote async execute( agent: Agent, line: string, signal: AbortSignal, ): Promise<CommandExecution | undefined>",
+            "summary": "Parse and execute a known command without sending it to the model.",
+            "jsDoc": "/**\n * Parse and execute a known command without sending it to the model.\n *\n * A resolved command's lifecycle is logged: `command/run` is appended\n * before the handler is invoked and `command/done` after settlement (a\n * thrown or aborted handler settles as `kind: 'error'`). Both are direct\n * log-only appends — no turn wraps them, and persistence drains them at\n * ordinary checkpoints. Admission misses (syntax or unknown name) log\n * nothing — they never entered a handler. A `command/run` append failure\n * fails the execution loud; a `command/done` append failure on the\n * handler-failure path is contained so the handler's own error stays the\n * reported failure.\n *\n * @param agent - exact receiving agent.\n * @param line - complete slash-command line.\n * @param signal - cancellation signal owned by the UI request.\n * @returns the settled execution (result + lifecycle pairing id), or\n *   `undefined` when syntax or name does not resolve.\n */"
+          }
+        ],
+        "types": [
+          {
+            "name": "Agent",
+            "declaration": "export interface Agent {\n    readonly id: SessionId;\n    readonly options: AgentOptions;\n    readonly session: Session;\n    readonly inbox: Inbox;\n    readonly status: AgentStatus;\n    readonly ctx: Context;\n    cancel(cause: AgentCancelCause, options?: CancelOptions): void;\n    whenIdle(): Promise<void>;\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n    send(message: UserMessage, target: InboxTarget, wakeup: boolean): void;\n    followup(message: UserMessage): void;\n    steer(message: UserMessage): void;\n    inject(message: UserMessage): void;\n}"
+          },
+          {
+            "name": "AgentCancelCause",
+            "declaration": "export type AgentCancelCause = { readonly kind: 'user'; } | { readonly kind: 'parent'; } | { readonly kind: 'hook'; readonly reason: string; } | { readonly kind: 'disposed'; };"
+          },
+          {
+            "name": "AgentOptions",
+            "declaration": "export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    maxTokens?: number;\n}"
+          },
+          {
+            "name": "AgentStatus",
+            "declaration": "export type AgentStatus = 'idle' | 'running';"
+          },
+          {
+            "name": "ApprovalOutcome",
+            "declaration": "export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';"
+          },
+          {
+            "name": "ApprovalPolicy",
+            "declaration": "export type ApprovalPolicy = 'ask' | 'never';"
+          },
+          {
+            "name": "ApprovalRequestId",
+            "declaration": "export type ApprovalRequestId = Branded<'ApprovalRequestId'>;"
+          },
+          {
+            "name": "AssistantMessage",
+            "declaration": "export interface AssistantMessage extends Message {\n    readonly role: 'assistant';\n    readonly source: ModelMessageSource;\n}"
+          },
+          {
+            "name": "AssistantProvenance",
+            "declaration": "export interface AssistantProvenance {\n    provider: string;\n    model: string;\n    replayState?: unknown;\n}"
+          },
+          {
+            "name": "AttachmentId",
+            "declaration": "export type AttachmentId = Branded<'AttachmentId'>;"
+          },
+          {
+            "name": "Branded",
+            "declaration": "export type Branded<B extends string> = string & { readonly [BRAND]: B; };"
+          },
+          {
+            "name": "CallId",
+            "declaration": "export type CallId = Branded<'CallId'>;"
+          },
+          {
+            "name": "CancelOptions",
+            "declaration": "export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}"
+          },
+          {
+            "name": "CodeDispatchEventData",
+            "declaration": "export interface CodeDispatchEventData extends CodeDispatchStartEventData {\n    isError: boolean;\n    content: ContentBlock[];\n}"
+          },
+          {
+            "name": "CodeDispatchStartEventData",
+            "declaration": "export interface CodeDispatchStartEventData {\n    rootCallId: CallId;\n    parentCallId: CallId;\n    subCallId: CallId;\n    name: string;\n    arguments: unknown;\n}"
+          },
+          {
+            "name": "CommandDefinition",
+            "declaration": "export interface CommandDefinition {\n    readonly name: string;\n    readonly description: string;\n    readonly input?: CommandInputDescriptor;\n    readonly recordInput?: boolean;\n    readonly handler: (invocation: CommandInvocation) => CommandResult | Promise<CommandResult>;\n}"
+          },
+          {
+            "name": "CommandDescriptor",
+            "declaration": "export interface CommandDescriptor {\n    readonly name: string;\n    readonly description: string;\n    readonly input?: CommandInputDescriptor;\n}"
+          },
+          {
+            "name": "CommandExecution",
+            "declaration": "export interface CommandExecution {\n    readonly commandId: CommandId;\n    readonly result: CommandResult;\n}"
+          },
+          {
+            "name": "CommandId",
+            "declaration": "export type CommandId = Branded<'CommandId'>;"
+          },
+          {
+            "name": "CommandInputDescriptor",
+            "declaration": "export interface CommandInputDescriptor {\n    readonly hint: string;\n}"
+          },
+          {
+            "name": "CommandInvocation",
+            "declaration": "export interface CommandInvocation {\n    readonly commandId: CommandId;\n    readonly agent: Agent;\n    readonly rawInput: string;\n    readonly signal: AbortSignal;\n}"
+          },
+          {
+            "name": "CommandResult",
+            "declaration": "export type CommandResult = { readonly kind: 'success'; readonly text?: string; readonly sourceEventSeq?: number; } | { readonly kind: 'error'; readonly text: string; };"
+          },
+          {
+            "name": "CommandSource",
+            "declaration": "export type CommandSource = CommandSourceMap[keyof CommandSourceMap];"
+          },
+          {
+            "name": "CommandSourceMap",
+            "declaration": "export interface CommandSourceMap {\n    user: { kind: 'user'; };\n}"
+          },
+          {
+            "name": "ContentBlock",
+            "declaration": "export type ContentBlock = ContentBlockMap[ContentBlockType];"
+          },
+          {
+            "name": "ContentBlockMap",
+            "declaration": "export interface ContentBlockMap {\n    text: TextBlock;\n    reasoning: ReasoningBlock;\n    image: ImageBlock;\n    'tool-call': ToolCallBlock;\n    'tool-result': ToolResultBlock;\n}"
+          },
+          {
+            "name": "ContentBlockType",
+            "declaration": "export type ContentBlockType = keyof ContentBlockMap;"
+          },
+          {
+            "name": "ContextFormed",
+            "declaration": "export type ContextFormed = { readonly form?: never; } | { readonly form: 'instructions'; } | { readonly form: 'catalog'; } | { readonly form: 'snapshot'; readonly sections: readonly ContextSnapshotSection[]; } | { readonly form: 'notice'; readonly summary: string; } | { readonly form: 'relay'; } | { readonly form: 'recall'; };"
+          },
+          {
+            "name": "ContextSnapshotSection",
+            "declaration": "export interface ContextSnapshotSection {\n    readonly name: string;\n    readonly text: string;\n}"
+          },
+          {
+            "name": "EpochHeader",
+            "declaration": "export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}"
+          },
+          {
+            "name": "FinishReason",
+            "declaration": "export type FinishReason = FinishReasonMap[keyof FinishReasonMap];"
+          },
+          {
+            "name": "FinishReasonMap",
+            "declaration": "export interface FinishReasonMap {\n    stop: { kind: 'stop'; };\n    'tool-calls': { kind: 'tool-calls'; };\n    'max-tokens': { kind: 'max-tokens'; };\n    aborted: { kind: 'aborted'; failure: LlmFailure; };\n    error: { kind: 'error'; failure: LlmFailure; };\n}"
+          },
+          {
+            "name": "GoalBlockReason",
+            "declaration": "export interface GoalBlockReason {\n    readonly code: string;\n    readonly message: string;\n}"
+          },
+          {
+            "name": "GoalChangeMeta",
+            "declaration": "export type GoalChangeMeta = GoalSnapshotChangeMeta | GoalClearChangeMeta;"
+          },
+          {
+            "name": "GoalClearChangeMeta",
+            "declaration": "export interface GoalClearChangeMeta {\n    readonly kind: 'goal/change';\n    readonly version: 1;\n    readonly operation: 'clear';\n    readonly cleared: GoalRef;\n    readonly clearedAt: number;\n}"
+          },
+          {
+            "name": "GoalId",
+            "declaration": "export type GoalId = Branded<'GoalId'>;"
+          },
+          {
+            "name": "GoalMessageSource",
+            "declaration": "export interface GoalMessageSource {\n    readonly kind: 'goal';\n    readonly goalId: GoalId;\n    readonly revision: number;\n    readonly round: number;\n}"
+          },
+          {
+            "name": "GoalOperation",
+            "declaration": "export type GoalOperation = 'create' | 'edit' | 'pause' | 'resume' | 'complete' | 'block' | 'clear';"
+          },
+          {
+            "name": "GoalPhase",
+            "declaration": "export type GoalPhase = 'active' | 'paused' | 'blocked' | 'complete';"
+          },
+          {
+            "name": "GoalRef",
+            "declaration": "export interface GoalRef {\n    readonly id: GoalId;\n    readonly revision: number;\n}"
+          },
+          {
+            "name": "GoalSnapshot",
+            "declaration": "export interface GoalSnapshot extends GoalRef {\n    readonly objective: string;\n    readonly phase: GoalPhase;\n    readonly blockedReason?: GoalBlockReason;\n    readonly maxGoalRounds: number;\n}"
+          },
+          {
+            "name": "GoalSnapshotChangeMeta",
+            "declaration": "export interface GoalSnapshotChangeMeta {\n    readonly kind: 'goal/change';\n    readonly version: 1;\n    readonly operation: Exclude<GoalOperation, 'clear'>;\n    readonly goal: GoalSnapshot;\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}"
+          },
+          {
+            "name": "ImageAttachmentRef",
+            "declaration": "export interface ImageAttachmentRef {\n    attachmentId: AttachmentId;\n    mediaType: ImageMediaType;\n    bytes: number;\n    width: number;\n    height: number;\n    name?: string;\n}"
+          },
+          {
+            "name": "ImageBlock",
+            "declaration": "export interface ImageBlock {\n    type: 'image';\n    attachment: ImageAttachmentRef;\n}"
+          },
+          {
+            "name": "ImageMediaType",
+            "declaration": "export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';"
+          },
+          {
+            "name": "Inbox",
+            "declaration": "export class Inbox {\n    get nextTurn(): readonly UserMessage[];\n    get nextStep(): readonly UserMessage[];\n    get hasPending(): boolean;\n    clear(): void;\n    claim(target: InboxTarget, turn: number): UserMessage[];\n    append(target: InboxTarget, message: UserMessage): void;\n    prepend(target: InboxTarget, message: UserMessage): void;\n    replace(messageId: MessageId, newMessage: UserMessage): boolean;\n    remove(messageId: MessageId): boolean;\n    splice(target: InboxTarget, start: number, deleteCount: number, inserted: UserMessage[]): UserMessage[];\n}"
+          },
+          {
+            "name": "InboxTarget",
+            "declaration": "export type InboxTarget = 'next-turn' | 'next-step';"
+          },
+          {
+            "name": "JsonValue",
+            "declaration": "export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue; };"
+          },
+          {
+            "name": "LlmCallConfig",
+            "declaration": "export interface LlmCallConfig {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n}"
+          },
+          {
+            "name": "LlmCallConfigAdapterDefaults",
+            "declaration": "export interface LlmCallConfigAdapterDefaults {\n    reasoningEffort?: true;\n    maxTokens?: true;\n}"
+          },
+          {
+            "name": "LlmFailure",
+            "declaration": "export interface LlmFailure {\n    readonly message: string;\n    readonly code: string;\n    readonly status?: number;\n    readonly providerRetryAfterMs?: number;\n    readonly requestId?: ProviderRequestId;\n}"
+          },
+          {
+            "name": "Message",
+            "declaration": "export interface Message {\n    readonly id: MessageId;\n    readonly role: 'system' | 'user' | 'assistant';\n    readonly content: ContentBlock[];\n    readonly source: MessageSource;\n}"
+          },
+          {
+            "name": "MessageId",
+            "declaration": "export type MessageId = Branded<'MessageId'>;"
+          },
+          {
+            "name": "MessageSource",
+            "declaration": "export type MessageSource = MessageSourceMap[keyof MessageSourceMap];"
+          },
+          {
+            "name": "MessageSourceMap",
+            "declaration": "export interface MessageSourceMap {\n    user: { kind: 'user'; };\n    plugin: { kind: 'plugin'; plugin: string; } & ContextFormed;\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n    goal: GoalMessageSource;\n}"
+          },
+          {
+            "name": "ModelMessageSource",
+            "declaration": "export interface ModelMessageSource extends AssistantProvenance {\n    kind: 'model';\n}"
+          },
+          {
+            "name": "ProviderRequestId",
+            "declaration": "export type ProviderRequestId = Branded<'ProviderRequestId'>;"
+          },
+          {
+            "name": "ReasoningBlock",
+            "declaration": "export interface ReasoningBlock {\n    type: 'reasoning';\n    text: string;\n}"
+          },
+          {
+            "name": "ReasoningEffortId",
+            "declaration": "export type ReasoningEffortId = Branded<'ReasoningEffortId'>;"
+          },
+          {
+            "name": "RequestContext",
+            "declaration": "export interface RequestContext {\n    provider: string;\n    model: string;\n    contextWindow?: number;\n}"
+          },
+          {
+            "name": "RequestHeaderReason",
+            "declaration": "export type RequestHeaderReason = 'initial' | 'resume' | 'change';"
+          },
+          {
+            "name": "Session",
+            "declaration": "export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    get events(): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}"
+          },
+          {
+            "name": "SessionEvent",
+            "declaration": "export type SessionEvent<T extends SessionEventType = SessionEventType> = { [K in SessionEventType]: { type: K; seq: number; time: number; data: SessionEventMap[K]; ignorable?: true; } & (K extends SurfaceEventType ? { sourceEventSeqs?: number[]; surfaceOp?: SurfaceOp; } : object) }[T];"
+          },
+          {
+            "name": "SessionEventMap",
+            "declaration": "export interface SessionEventMap {\n    'turn/start': { turn: number; };\n    'turn/end': { turn: number; reason: TurnEndReason; };\n    'step/start': { turn: number; step: number; };\n    'step/end': { turn: number; step: number; };\n    'user/message': UserMessage;\n    'assistant/chunk': { turn: number; step: number; chunk: StreamChunk; };\n    'assistant/message': { turn: number; step: number; message: AssistantMessage; usage?: TokenUsage; };\n    'tool/call': { turn: number; step: number; callId: CallId; name: string; arguments: string; };\n    'tool/result': { turn: number; step: number; message: ToolResultMessage; error?: { name: string; code: string; }; meta?: JsonValue; };\n    'todo/write': { todos: TodoItem[]; };\n    'request/header': { header: EpochHeader; reason: RequestHeaderReason; };\n    'request/context': RequestContext;\n    'session/end-seed': Record<string, never>;\n    'agent/inbox/spliced': { target: InboxTarget; start: number; removedCount?: number; inserted: UserMessage[]; outcome?: 'canceled'; };\n    'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource; };\n    'command/done': { commandId: CommandId; kind: 'success' | 'error'; text?: string; sourceEventSeq?: number; };\n    'approval/asked': { id: ApprovalRequestId; toolName: string; callId?: CallId; reason?: string; };\n    'approval/decided': { id: ApprovalRequestId; outcome: ApprovalOutcome; };\n    'approval/policy': { policy: ApprovalPolicy; source?: 'delegation'; };\n    'tool/code-dispatch-start': CodeDispatchStartEventData;\n    'tool/code-dispatch': CodeDispatchEventData;\n    'goal/change': GoalChangeMeta;\n}"
+          },
+          {
+            "name": "SessionEventType",
+            "declaration": "export type SessionEventType = keyof SessionEventMap;"
+          },
+          {
+            "name": "SessionHeader",
+            "declaration": "export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: 'subagent';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}"
+          },
+          {
+            "name": "SessionId",
+            "declaration": "export type SessionId = Branded<'SessionId'>;"
+          },
+          {
+            "name": "SessionSurface",
+            "declaration": "export interface SessionSurface {\n    readonly nodes: readonly number[];\n    readonly replaceGeneration: number;\n}"
+          },
+          {
+            "name": "StreamChunk",
+            "declaration": "export type StreamChunk = { type: 'block-start'; index: number; blockType: ContentBlockType; } | { type: 'text-delta'; index: number; text: string; } | { type: 'reasoning-delta'; index: number; text: string; } | { type: 'tool-call-delta'; index: number; id: CallId; name?: string; argumentsDelta: string; } | { type: 'block-end'; index: number; block: ContentBlock; } | { type: 'usage'; usage: TokenUsage; } | { type: 'finish'; reason: FinishReason; replayState?: unknown; };"
+          },
+          {
+            "name": "SurfaceEventType",
+            "declaration": "export type SurfaceEventType = 'user/message' | 'assistant/message' | 'tool/result';"
+          },
+          {
+            "name": "SurfaceIntent",
+            "declaration": "export interface SurfaceIntent {\n    surfaceOp: SurfaceOp;\n    sourceEventSeqs?: number[];\n}"
+          },
+          {
+            "name": "SurfaceOp",
+            "declaration": "export type SurfaceOp = 'append' | { op: 'replace'; start: number; end: number; };"
+          },
+          {
+            "name": "TextBlock",
+            "declaration": "export interface TextBlock {\n    type: 'text';\n    text: string;\n}"
+          },
+          {
+            "name": "TodoItem",
+            "declaration": "export interface TodoItem {\n    content: string;\n    status: 'pending' | 'in_progress' | 'completed';\n}"
+          },
+          {
+            "name": "TokenUsage",
+            "declaration": "export interface TokenUsage {\n    inputTokens: number;\n    outputTokens: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    reasoningTokens?: number;\n}"
+          },
+          {
+            "name": "ToolCallBlock",
+            "declaration": "export interface ToolCallBlock {\n    type: 'tool-call';\n    id: CallId;\n    name: string;\n    arguments: string;\n}"
+          },
+          {
+            "name": "ToolMessageSource",
+            "declaration": "export interface ToolMessageSource {\n    kind: 'tool';\n    callId: CallId;\n}"
+          },
+          {
+            "name": "ToolResultBlock",
+            "declaration": "export interface ToolResultBlock {\n    type: 'tool-result';\n    toolCallId: CallId;\n    content: ContentBlock[];\n    isError?: boolean;\n}"
+          },
+          {
+            "name": "ToolResultMessage",
+            "declaration": "export interface ToolResultMessage extends Message {\n    readonly role: 'user';\n    readonly content: [ToolResultBlock];\n    readonly source: ToolMessageSource;\n}"
+          },
+          {
+            "name": "ToolSchema",
+            "declaration": "export interface ToolSchema {\n    name: string;\n    description: string;\n    parameters: Record<string, unknown>;\n}"
+          },
+          {
+            "name": "TurnEndCancelCause",
+            "declaration": "export type TurnEndCancelCause = AgentCancelCause | { readonly kind: 'legacy'; };"
+          },
+          {
+            "name": "TurnEndReason",
+            "declaration": "export type TurnEndReason = TurnEndReasonMap[keyof TurnEndReasonMap];"
+          },
+          {
+            "name": "TurnEndReasonMap",
+            "declaration": "export interface TurnEndReasonMap {\n    completed: { kind: 'completed'; };\n    aborted: { kind: 'aborted'; reason: TurnEndCancelCause; };\n    blocked: { kind: 'blocked'; };\n    error: { kind: 'error'; error: LlmFailure; };\n    'max-tokens': { kind: 'max-tokens'; };\n    interrupted: { kind: 'interrupted'; };\n}"
+          },
+          {
+            "name": "UserMessage",
+            "declaration": "export interface UserMessage extends Message {\n    readonly role: 'user';\n}"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "description": "A command was registered or unregistered. This is an unfiltered registry notification because a global or scoped change may affect any UI view. Observer failures are contained and cannot veto the registry mutation.",
+        "summary": "A command was registered or unregistered.",
+        "tags": [
+          {
+            "name": "mode",
+            "comment": "emit",
+            "text": "@mode emit"
+          }
+        ],
+        "jsDoc": "/**\n * A command was registered or unregistered. This is an unfiltered registry\n * notification because a global or scoped change may affect any UI view.\n * Observer failures are contained and cannot veto the registry mutation.\n * @mode emit\n */",
+        "name": "commands/change",
+        "mode": "emit",
+        "signature": "'commands/change'(): void"
+      }
+    ],
+    "objects": []
+  },
+  "invocations": [
+    {
+      "id": "@seekdeep-ai/seekdeep-commands#commands/execute",
+      "service": "commands",
+      "namespace": "commands",
+      "method": "execute",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#6",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#7",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "line",
+          "wire": "line",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/interaction/commands/src/index.ts:299:11#2",
+            "codecType": "type:packages/interaction/commands/src/index.ts:299:11#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-commands#commands/execute:line",
+            "imports": []
+          }
+        }
+      ],
+      "cancellation": {
+        "parameter": "signal"
+      },
+      "result": {
+        "type": "type:packages/interaction/commands/src/index.ts:301:14#3",
+        "codecType": "type:packages/interaction/commands/src/index.ts:301:14#5",
+        "acceptsUndefined": true,
+        "typeSymbol": "@seekdeep-ai/seekdeep-commands#commands/execute:result",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandExecution",
+            "specifier": "@seekdeep-ai/seekdeep-commands/types",
+            "name": "CommandExecution"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/interaction/commands/src/index.ts",
+        "line": 297,
+        "column": 9
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-commands#commands/list",
+      "service": "commands",
+      "namespace": "commands",
+      "method": "list",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#1",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#2",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/interaction/commands/src/index.ts:260:23#2",
+        "codecType": "type:packages/interaction/commands/src/index.ts:260:23#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-commands#commands/list:result",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor",
+            "specifier": "@seekdeep-ai/seekdeep-commands/types",
+            "name": "CommandDescriptor"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/interaction/commands/src/index.ts",
+        "line": 260,
+        "column": 3
+      }
+    }
+  ],
+  "graph": {
+    "declarations": [
+      {
+        "description": "A string carrying a compile-time-only brand `B`.",
+        "summary": "A string carrying a compile-time-only brand `B`.",
+        "tags": [],
+        "jsDoc": "/** A string carrying a compile-time-only brand `B`. */",
+        "id": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded",
+        "package": "@seekdeep-ai/seekdeep-brand",
+        "name": "Branded",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/util/brand/src/index.ts",
+          "line": 27,
+          "column": 1
+        },
+        "text": "export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};",
+        "typeParameters": [
+          {
+            "id": "packages/util/brand/src/index.ts:27:21#B",
+            "name": "B",
+            "const": false,
+            "constraint": "type:packages/util/brand/src/index.ts:27:31#1"
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/util/brand/src/index.ts:27:41#1"
+      },
+      {
+        "description": "Pairs one command execution's `command/run`/`command/done` lifecycle records with each other and with the `command.execute` admission response. Minted by the executor, monotonic per service instance.",
+        "summary": "Pairs one command execution's `command/run`/`command/done` lifecycle records with each other and with the `command.execute` admission response.",
+        "tags": [],
+        "jsDoc": "/**\n * Pairs one command execution's `command/run`/`command/done` lifecycle\n * records with each other and with the `command.execute` admission response.\n * Minted by the executor, monotonic per service instance.\n */",
+        "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/brand.ts#CommandId",
+        "package": "@seekdeep-ai/seekdeep-commands",
+        "name": "CommandId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/interaction/commands/src/brand.ts",
+          "line": 20,
+          "column": 1
+        },
+        "text": "export type CommandId = Branded<'CommandId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/interaction/commands/src/brand.ts:20:25#1"
+      },
+      {
+        "description": "Handler-free immutable command view returned to UI adapters.",
+        "summary": "Handler-free immutable command view returned to UI adapters.",
+        "tags": [],
+        "jsDoc": "/** Handler-free immutable command view returned to UI adapters. */",
+        "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor",
+        "package": "@seekdeep-ai/seekdeep-commands",
+        "name": "CommandDescriptor",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/interaction/commands/src/types.ts",
+          "line": 42,
+          "column": 1
+        },
+        "text": "export interface CommandDescriptor {\n    readonly name: string;\n    readonly description: string;\n    readonly input?: CommandInputDescriptor;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Lowercase command name without the leading slash.",
+            "summary": "Lowercase command name without the leading slash.",
+            "tags": [],
+            "jsDoc": "/** Lowercase command name without the leading slash. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor#name@1563",
+            "name": "name",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 44,
+              "column": 3
+            },
+            "text": "readonly name: string",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:44:18#1"
+          },
+          {
+            "description": "Human-readable summary used in discovery UI.",
+            "summary": "Human-readable summary used in discovery UI.",
+            "tags": [],
+            "jsDoc": "/** Human-readable summary used in discovery UI. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor#description@1641",
+            "name": "description",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 46,
+              "column": 3
+            },
+            "text": "readonly description: string",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:46:25#1"
+          },
+          {
+            "description": "Optional free-form input hint advertised to capable clients.",
+            "summary": "Optional free-form input hint advertised to capable clients.",
+            "tags": [],
+            "jsDoc": "/** Optional free-form input hint advertised to capable clients. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor#input@1742",
+            "name": "input",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 48,
+              "column": 3
+            },
+            "text": "readonly input?: CommandInputDescriptor",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:48:20#1"
+          }
+        ]
+      },
+      {
+        "description": "One settled command execution: the handler's normalized result plus the lifecycle pairing id minted for its `command/run`/`command/done` records, so a dispatching surface can correlate the Remote acknowledgment with the flow node those events produce.",
+        "summary": "One settled command execution: the handler's normalized result plus the lifecycle pairing id minted for its `command/run`/`command/done` records, so a dispatching surface can correlate the Remote acknowledgment with the flow node those events produce.",
+        "tags": [],
+        "jsDoc": "/**\n * One settled command execution: the handler's normalized result plus the\n * lifecycle pairing id minted for its `command/run`/`command/done` records,\n * so a dispatching surface can correlate the Remote acknowledgment with the\n * flow node those events produce.\n */",
+        "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandExecution",
+        "package": "@seekdeep-ai/seekdeep-commands",
+        "name": "CommandExecution",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/interaction/commands/src/types.ts",
+          "line": 34,
+          "column": 1
+        },
+        "text": "export interface CommandExecution {\n    readonly commandId: CommandId;\n    readonly result: CommandResult;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Pairing id carried by this execution's lifecycle events.",
+            "summary": "Pairing id carried by this execution's lifecycle events.",
+            "tags": [],
+            "jsDoc": "/** Pairing id carried by this execution's lifecycle events. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandExecution#commandId@1288",
+            "name": "commandId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 36,
+              "column": 3
+            },
+            "text": "readonly commandId: CommandId",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:36:23#1"
+          },
+          {
+            "description": "The handler's normalized outcome.",
+            "summary": "The handler's normalized outcome.",
+            "tags": [],
+            "jsDoc": "/** The handler's normalized outcome. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandExecution#result@1363",
+            "name": "result",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 38,
+              "column": 3
+            },
+            "text": "readonly result: CommandResult",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:38:20#1"
+          }
+        ]
+      },
+      {
+        "description": "Immutable metadata for a command's optional unstructured input.",
+        "summary": "Immutable metadata for a command's optional unstructured input.",
+        "tags": [],
+        "jsDoc": "/** Immutable metadata for a command's optional unstructured input. */",
+        "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandInputDescriptor",
+        "package": "@seekdeep-ai/seekdeep-commands",
+        "name": "CommandInputDescriptor",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/interaction/commands/src/types.ts",
+          "line": 13,
+          "column": 1
+        },
+        "text": "export interface CommandInputDescriptor {\n    readonly hint: string;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Placeholder shown before the user supplies free-form input.",
+            "summary": "Placeholder shown before the user supplies free-form input.",
+            "tags": [],
+            "jsDoc": "/** Placeholder shown before the user supplies free-form input. */",
+            "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandInputDescriptor#hint@549",
+            "name": "hint",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 15,
+              "column": 3
+            },
+            "text": "readonly hint: string",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:15:18#1"
+          }
+        ]
+      },
+      {
+        "description": "Expected command outcome rendered directly by the dispatching UI.",
+        "summary": "Expected command outcome rendered directly by the dispatching UI.",
+        "tags": [],
+        "jsDoc": "/** Expected command outcome rendered directly by the dispatching UI. */",
+        "id": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandResult",
+        "package": "@seekdeep-ai/seekdeep-commands",
+        "name": "CommandResult",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/interaction/commands/src/types.ts",
+          "line": 19,
+          "column": 1
+        },
+        "text": "export type CommandResult = {\n    readonly kind: 'success';\n    readonly text?: string;\n    readonly sourceEventSeq?: number;\n} | {\n    readonly kind: 'error';\n    readonly text: string;\n};",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/interaction/commands/src/types.ts:20:3#1"
+      },
+      {
+        "description": "Identifies one session in the store (and its persistence artifacts).",
+        "summary": "Identifies one session in the store (and its persistence artifacts).",
+        "tags": [],
+        "jsDoc": "/** Identifies one session in the store (and its persistence artifacts). */",
+        "id": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+        "package": "@seekdeep-ai/seekdeep-session",
+        "name": "SessionId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/core/session/src/types.ts",
+          "line": 22,
+          "column": 1
+        },
+        "text": "export type SessionId = Branded<'SessionId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/core/session/src/types.ts:22:25#1"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#10",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#2",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#3",
+          "type:packages/core/agent/src/index.ts:28:32#4"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#3",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#4#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#5"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#5",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#6",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#7",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#8",
+          "type:packages/core/agent/src/index.ts:28:32#9"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#9",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#9#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#10"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/session/src/types.ts:22:25#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/core/session/src/types.ts:22:33#1"
+        ]
+      },
+      {
+        "id": "type:packages/core/session/src/types.ts:22:33#1",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "'SessionId'"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/brand.ts:20:25#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/interaction/commands/src/brand.ts:20:33#1"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/brand.ts:20:33#1",
+        "kind": "literal",
+        "value": "CommandId",
+        "text": "'CommandId'"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:23#2",
+        "kind": "operator",
+        "operator": "readonly",
+        "type": "type:packages/interaction/commands/src/index.ts:260:32#3"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:23#3",
+        "kind": "array",
+        "element": "type:packages/interaction/commands/src/index.ts:260:23#4"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:23#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:260:23#4#name",
+            "name": "name",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 260,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:260:23#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:260:23#4#description",
+            "name": "description",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 260,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:260:23#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:260:23#4#input",
+            "name": "input",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 260,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:260:23#6"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:23#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:23#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:260:23#6#hint",
+            "name": "hint",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 260,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:260:23#5"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:32#3",
+        "kind": "array",
+        "element": "type:packages/interaction/commands/src/index.ts:260:32#4"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:260:32#4",
+        "kind": "reference",
+        "name": "CommandDescriptor",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandDescriptor"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:299:11#2",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:299:11#3",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#10",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#10#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#11"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#11",
+        "kind": "literal",
+        "value": "CommandId",
+        "text": "\"CommandId\""
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#12",
+        "kind": "union",
+        "types": [
+          "type:packages/interaction/commands/src/index.ts:301:14#13",
+          "type:packages/interaction/commands/src/index.ts:301:14#16"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#13",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#13#kind",
+            "name": "kind",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#13#text",
+            "name": "text",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#13#sourceEventSeq",
+            "name": "sourceEventSeq",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#15"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#14",
+        "kind": "literal",
+        "value": "success",
+        "text": "\"success\""
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#15",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#16#kind",
+            "name": "kind",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#17"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#16#text",
+            "name": "text",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#9"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#17",
+        "kind": "literal",
+        "value": "error",
+        "text": "\"error\""
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#3",
+        "kind": "union",
+        "types": [
+          "type:packages/interaction/commands/src/index.ts:301:14#4",
+          "type:packages/interaction/commands/src/index.ts:301:33#2"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#4",
+        "kind": "reference",
+        "name": "CommandExecution",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandExecution"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#5",
+        "kind": "union",
+        "types": [
+          "type:packages/interaction/commands/src/index.ts:301:14#6",
+          "type:packages/interaction/commands/src/index.ts:301:14#7"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#6",
+        "kind": "keyword",
+        "name": "undefined"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#7",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#7#commandId",
+            "name": "commandId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/index.ts:301:14#7#result",
+            "name": "result",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/index.ts",
+              "line": 301,
+              "column": 14
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/index.ts:301:14#12"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#8",
+        "kind": "intersection",
+        "types": [
+          "type:packages/interaction/commands/src/index.ts:301:14#9",
+          "type:packages/interaction/commands/src/index.ts:301:14#10"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:14#9",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/index.ts:301:33#2",
+        "kind": "keyword",
+        "name": "undefined"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:15:18#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:20:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/interaction/commands/src/types.ts:20:5#1",
+          "type:packages/interaction/commands/src/types.ts:26:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:20:5#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/types.ts:20:5#1#kind@685",
+            "name": "kind",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 21,
+              "column": 5
+            },
+            "text": "readonly kind: 'success'",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:21:20#1"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/types.ts:20:5#1#text@714",
+            "name": "text",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 22,
+              "column": 5
+            },
+            "text": "readonly text?: string",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:22:21#1"
+          },
+          {
+            "description": "Earlier authoritative domain event that owns a richer presentation.",
+            "summary": "Earlier authoritative domain event that owns a richer presentation.",
+            "tags": [],
+            "jsDoc": "/** Earlier authoritative domain event that owns a richer presentation. */",
+            "id": "type:packages/interaction/commands/src/types.ts:20:5#1#sourceEventSeq@820",
+            "name": "sourceEventSeq",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 24,
+              "column": 5
+            },
+            "text": "readonly sourceEventSeq?: number",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:24:31#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:21:20#1",
+        "kind": "literal",
+        "value": "success",
+        "text": "'success'"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:22:21#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:24:31#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:26:22#1",
+        "kind": "literal",
+        "value": "error",
+        "text": "'error'"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:26:46#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:26:5#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/types.ts:26:5#1#kind@863",
+            "name": "kind",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 26,
+              "column": 7
+            },
+            "text": "readonly kind: 'error'",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:26:22#1"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/interaction/commands/src/types.ts:26:5#1#text@887",
+            "name": "text",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/interaction/commands/src/types.ts",
+              "line": 26,
+              "column": 31
+            },
+            "text": "readonly text: string",
+            "kind": "property",
+            "type": "type:packages/interaction/commands/src/types.ts:26:46#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:36:23#1",
+        "kind": "reference",
+        "name": "CommandId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/brand.ts#CommandId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:38:20#1",
+        "kind": "reference",
+        "name": "CommandResult",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandResult"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:44:18#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:46:25#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/interaction/commands/src/types.ts:48:20#1",
+        "kind": "reference",
+        "name": "CommandInputDescriptor",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-commands:packages/interaction/commands/src/types.ts#CommandInputDescriptor"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:31#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#1",
+        "kind": "intersection",
+        "types": [
+          "type:packages/util/brand/src/index.ts:27:41#2",
+          "type:packages/util/brand/src/index.ts:27:50#1"
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#2",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:50#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/util/brand/src/index.ts:27:50#1#[BRAND]@1293",
+            "name": "[BRAND]",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/util/brand/src/index.ts",
+              "line": 27,
+              "column": 52
+            },
+            "text": "readonly [BRAND]: B",
+            "kind": "property",
+            "type": "type:packages/util/brand/src/index.ts:27:70#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:70#1",
+        "kind": "reference",
+        "name": "B",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/util/brand/src/index.ts:27:21#B"
+        },
+        "arguments": []
+      }
+    ]
+  }
+}

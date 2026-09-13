@@ -1,0 +1,35 @@
+[package]
+name = "seekdeep-client-ui-permission-presets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM permission preset Settings and popup UI semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+futures.workspace = true
+seekdeep-client-ui-commands = { path = "../client-ui-commands" }
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[dev-dependencies]
+regex.workspace = true
+
+[lints]
+workspace = true

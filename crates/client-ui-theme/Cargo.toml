@@ -1,0 +1,40 @@
+[package]
+name = "seekdeep-client-ui-theme"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust theme settings, registry, Host bootstrap, and browser Appearance surface"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+indexmap.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-trait.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

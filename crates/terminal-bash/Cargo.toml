@@ -1,0 +1,36 @@
+[package]
+name = "seekdeep-terminal-bash"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Persistent local shell PTY backend for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-terminal = { path = "../terminal" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-scope = { path = "../scope" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

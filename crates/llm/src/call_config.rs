@@ -19,8 +19,8 @@ mod tests {
 
     fn base() -> LlmCallConfig {
         LlmCallConfig {
-            provider: "p".to_owned(),
-            model: "m".to_owned(),
+            provider: crate::ProviderId::new("p"),
+            model: crate::ModelId::new("m"),
             reasoning_effort: None,
             temperature: None,
             max_tokens: None,

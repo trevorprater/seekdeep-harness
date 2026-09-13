@@ -1,0 +1,43 @@
+[package]
+name = "seekdeep-session-checkpoint-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+crash-test = [
+  "dep:seekdeep-session-persistence",
+  "dep:seekdeep-session-persistence-jsonl",
+]
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+futures.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-session-persistence = { path = "../session-persistence", optional = true }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl", optional = true }
+seekdeep-scope = { path = "../scope" }
+seekdeep-tools = { path = "../tools" }
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+parking_lot.workspace = true
+tempfile.workspace = true
+
+[[bin]]
+name = "seekdeep-checkpoint-crash-child"
+path = "src/bin/crash_child.rs"
+required-features = ["crash-test"]
+
+[lints]
+workspace = true

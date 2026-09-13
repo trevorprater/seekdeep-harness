@@ -2,6 +2,7 @@
 
 use indexmap::IndexMap;
 use seekdeep_llm::{CallId, ContentBlock, Message, MessageId, MessageRole, MessageSource};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
 use serde_json::{Value, json};
 
 use crate::session::{SessionEvent, SurfaceOp};
@@ -11,25 +12,52 @@ pub const TOOL_NOT_STARTED: &str = "TOOL_NOT_STARTED";
 /// A started tool has no durable outcome, so retry safety is unknown.
 pub const TOOL_OUTCOME_UNKNOWN: &str = "TOOL_OUTCOME_UNKNOWN";
 
-const NOT_STARTED_TEXT: &str = "The tool call was interrupted before Seekdeep recorded it as started. Retry it if it is still needed.";
+const NOT_STARTED_TEXT: &str = "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.";
 const OUTCOME_UNKNOWN_TEXT: &str = "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.";
 
 #[derive(Clone, Debug)]
 struct PendingCall {
-    step: i64,
+    step: Option<JsonValue>,
     call_seq: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+enum OpenMarker {
+    Undefined,
+    Value(JsonValue),
+}
+
+impl OpenMarker {
+    fn value(&self) -> Option<&JsonValue> {
+        match self {
+            Self::Undefined => None,
+            Self::Value(value) => Some(value),
+        }
+    }
+}
+
 /// Returns deterministic events that close an open crash-tail turn.
+///
+/// # Panics
+/// Panics on malformed event objects. Untrusted stored data uses
+/// [`try_interrupted_turn_closers`] to report the error without unwinding.
 #[must_use]
 pub fn interrupted_turn_closers(events: &[SessionEvent]) -> Vec<SessionEvent> {
+    try_interrupted_turn_closers(events).expect("crash repair requires readable event objects")
+}
+
+/// Closes a stored tail while retaining its exact turn and step values.
+///
+/// # Errors
+/// Reports malformed objects at the same property read as the source repair walk.
+pub fn try_interrupted_turn_closers(events: &[SessionEvent]) -> anyhow::Result<Vec<SessionEvent>> {
     let mut open_turn = None;
     let mut open_step = None;
     let mut pending = IndexMap::<String, PendingCall>::new();
     for event in events {
         match event.event_type.as_str() {
             "turn/start" => {
-                open_turn = integer_field(&event.data, "turn");
+                open_turn = open_marker(property(Some(event.data.as_ref()), "turn")?);
                 open_step = None;
                 pending.clear();
             }
@@ -38,66 +66,71 @@ pub fn interrupted_turn_closers(events: &[SessionEvent]) -> Vec<SessionEvent> {
                 open_step = None;
                 pending.clear();
             }
-            "step/start" => open_step = integer_field(&event.data, "step"),
+            "step/start" => open_step = open_marker(property(Some(event.data.as_ref()), "step")?),
             "step/end" => {
                 pending.clear();
                 open_step = None;
             }
-            "assistant/message" => register_assistant_calls(event, &mut pending),
+            "assistant/message" => register_assistant_calls(event, &mut pending)?,
             "tool/call" => {
-                if let Some(call_id) = event.data.get("callId").and_then(Value::as_str)
-                    && let Some(call) = pending.get_mut(call_id)
+                if let Some(call_id) = property(Some(event.data.as_ref()), "callId")?
+                    .and_then(|value| value.deserialize::<String>().ok())
+                    && let Some(call) = pending.get_mut(&call_id)
                 {
                     call.call_seq = Some(event.seq);
                 }
             }
             "tool/result" => {
-                if let Some(call_id) = event
-                    .data
-                    .pointer("/message/source/callId")
-                    .and_then(Value::as_str)
+                let message = property(Some(event.data.as_ref()), "message")?;
+                let source = property(message, "source")?;
+                if let Some(call_id) =
+                    property(source, "callId")?.and_then(|value| value.deserialize::<String>().ok())
                 {
-                    pending.shift_remove(call_id);
+                    pending.shift_remove(&call_id);
                 }
             }
             _ => {}
         }
     }
     let (Some(turn), Some(last)) = (open_turn, events.last()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    synthesize_closers(turn, open_step, pending, last)
+    Ok(synthesize_closers(turn.value(), open_step, pending, last))
 }
 
-fn register_assistant_calls(event: &SessionEvent, pending: &mut IndexMap<String, PendingCall>) {
-    let Some(step) = integer_field(&event.data, "step") else {
-        return;
-    };
-    let Some(content) = event
-        .data
-        .pointer("/message/content")
-        .and_then(Value::as_array)
-    else {
-        return;
+fn register_assistant_calls(
+    event: &SessionEvent,
+    pending: &mut IndexMap<String, PendingCall>,
+) -> anyhow::Result<()> {
+    let message = property(Some(event.data.as_ref()), "message")?;
+    let content = property(message, "content")?;
+    let Some(content) = content.and_then(JsonRef::array_items) else {
+        anyhow::bail!("event.data.message.content is not iterable");
     };
     for block in content {
-        if block.get("type").and_then(Value::as_str) == Some("tool-call")
-            && let Some(id) = block.get("id").and_then(Value::as_str)
+        if property(Some(block), "type")?
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+            == Some("tool-call")
+            && let Some(id) = block
+                .get("id")
+                .and_then(|value| value.deserialize::<String>().ok())
         {
             pending.insert(
-                id.to_owned(),
+                id,
                 PendingCall {
-                    step,
+                    step: property(Some(event.data.as_ref()), "step")?.map(JsonRef::to_owned),
                     call_seq: None,
                 },
             );
         }
     }
+    Ok(())
 }
 
 fn synthesize_closers(
-    turn: i64,
-    open_step: Option<i64>,
+    turn: Option<&JsonValue>,
+    open_step: Option<OpenMarker>,
     pending: IndexMap<String, PendingCall>,
     last: &SessionEvent,
 ) -> Vec<SessionEvent> {
@@ -112,7 +145,7 @@ fn synthesize_closers(
             "step/end",
             seq,
             last.time,
-            json!({"turn": turn, "step": step}),
+            positioned_data(turn, step.value(), json!({})),
         ));
         seq = seq.saturating_add(1);
     }
@@ -120,13 +153,13 @@ fn synthesize_closers(
         "turn/end",
         seq,
         last.time,
-        json!({"turn": turn, "reason": {"kind": "interrupted"}}),
+        positioned_data(turn, None, json!({"reason": {"kind": "interrupted"}})),
     ));
     closers
 }
 
 fn tool_result_closer(
-    turn: i64,
+    turn: Option<&JsonValue>,
     call_id: &str,
     pending: &PendingCall,
     seq: u64,
@@ -134,43 +167,46 @@ fn tool_result_closer(
 ) -> SessionEvent {
     let started = pending.call_seq.is_some();
     let call_id = CallId::new(call_id);
-    let message = Message {
-        id: MessageId::new(format!("interrupted-tool-result-{call_id}-{seq}")),
-        role: MessageRole::User,
-        source: MessageSource::tool(&call_id),
-        content: vec![ContentBlock::ToolResult {
-            tool_call_id: call_id,
+    let message = Message::from_existing(
+        MessageId::new(format!("interrupted-tool-result-{call_id}-{seq}")),
+        MessageRole::User,
+        vec![ContentBlock::ToolResult {
+            tool_call_id: call_id.clone(),
             is_error: Some(true),
             content: vec![ContentBlock::Text {
                 text: if started {
-                    OUTCOME_UNKNOWN_TEXT.to_owned()
+                    OUTCOME_UNKNOWN_TEXT.into()
                 } else {
-                    NOT_STARTED_TEXT.to_owned()
+                    NOT_STARTED_TEXT.into()
                 },
             }],
         }],
-    };
+        MessageSource::tool(&call_id),
+        serde_json::Map::new(),
+    );
     SessionEvent {
         event_type: "tool/result".to_owned(),
         seq,
         time,
-        data: json!({
-            "turn": turn,
-            "step": pending.step,
-            "message": message,
-            "error": if started {
-                json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
-            } else {
-                json!({"name": "ToolNotStartedError", "code": TOOL_NOT_STARTED})
-            },
-        }),
+        data: positioned_data(
+            turn,
+            pending.step.as_ref(),
+            json!({
+                "message": message,
+                "error": if started {
+                    json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
+                } else {
+                    json!({"name": "ToolNotStartedError", "code": TOOL_NOT_STARTED})
+                },
+            }),
+        ),
         source_event_seqs: pending.call_seq.map(|call_seq| vec![call_seq]),
         surface_op: Some(SurfaceOp::append()),
         ignorable: None,
     }
 }
 
-fn plain_closer(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEvent {
+fn plain_closer(event_type: &str, seq: u64, time: i64, data: JsonValue) -> SessionEvent {
     SessionEvent {
         event_type: event_type.to_owned(),
         seq,
@@ -182,8 +218,43 @@ fn plain_closer(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEv
     }
 }
 
-fn integer_field(value: &Value, field: &str) -> Option<i64> {
-    value.get(field)?.as_i64()
+fn property<'a>(value: Option<JsonRef<'a>>, field: &str) -> anyhow::Result<Option<JsonRef<'a>>> {
+    match value {
+        None => anyhow::bail!("Cannot read properties of undefined (reading '{field}')"),
+        Some(value) if value.is_null() => {
+            anyhow::bail!("Cannot read properties of null (reading '{field}')")
+        }
+        Some(value) => Ok(value.get(field)),
+    }
+}
+
+fn open_marker(value: Option<JsonRef<'_>>) -> Option<OpenMarker> {
+    if value.is_some_and(JsonRef::is_null) {
+        None
+    } else {
+        Some(value.map_or(OpenMarker::Undefined, |value| {
+            OpenMarker::Value(value.to_owned())
+        }))
+    }
+}
+
+fn positioned_data(turn: Option<&JsonValue>, step: Option<&JsonValue>, extra: Value) -> JsonValue {
+    let mut data = IndexMap::new();
+    if let Some(turn) = turn {
+        data.insert("turn".to_owned(), turn.clone());
+    }
+    if let Some(step) = step {
+        data.insert("step".to_owned(), step.clone());
+    }
+    let Value::Object(extra) = extra else {
+        unreachable!("closer fields are an object")
+    };
+    data.extend(
+        extra
+            .into_iter()
+            .map(|(key, value)| (key, JsonValue::from(value))),
+    );
+    JsonValue::from_serialize(&data).expect("validated closer fields serialize as JSON")
 }
 
 #[cfg(test)]
@@ -195,7 +266,7 @@ mod tests {
             event_type,
             seq,
             i64::try_from(seq).expect("small seq"),
-            data,
+            data.into(),
         )
     }
 
@@ -253,7 +324,10 @@ mod tests {
             assistant(2, "call-1"),
         ];
         let not_started = interrupted_turn_closers(&base);
-        assert_eq!(not_started[0].data["error"]["code"], TOOL_NOT_STARTED);
+        assert_eq!(
+            not_started[0].data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_NOT_STARTED
+        );
 
         let mut started = base;
         started.push(event(
@@ -262,7 +336,238 @@ mod tests {
             json!({"turn": 1, "step": 1, "callId": "call-1", "name": "bash", "arguments": "{}"}),
         ));
         let unknown = interrupted_turn_closers(&started);
-        assert_eq!(unknown[0].data["error"]["code"], TOOL_OUTCOME_UNKNOWN);
+        assert_eq!(
+            unknown[0].data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_OUTCOME_UNKNOWN
+        );
         assert_eq!(unknown[0].source_event_seqs, Some(vec![3]));
+    }
+    fn turn_start(turn: i64, seq: u64) -> SessionEvent {
+        event("turn/start", seq, json!({"turn": turn}))
+    }
+
+    fn step_start(turn: i64, step: i64, seq: u64) -> SessionEvent {
+        event("step/start", seq, json!({"turn": turn, "step": step}))
+    }
+
+    fn step_end(turn: i64, step: i64, seq: u64) -> SessionEvent {
+        event("step/end", seq, json!({"turn": turn, "step": step}))
+    }
+
+    fn turn_end(turn: i64, seq: u64) -> SessionEvent {
+        event(
+            "turn/end",
+            seq,
+            json!({"turn": turn, "reason": {"kind": "completed"}}),
+        )
+    }
+
+    fn assistant(seq: u64, turn: i64, step: i64, calls: &[&str]) -> SessionEvent {
+        let content = calls
+            .iter()
+            .map(|id| json!({"type": "tool-call", "id": id, "name": "bash", "arguments": "{}"}))
+            .collect::<Vec<_>>();
+        event(
+            "assistant/message",
+            seq,
+            json!({
+                "turn": turn,
+                "step": step,
+                "message": {
+                    "id": format!("m-{seq}"),
+                    "role": "assistant",
+                    "source": {"kind": "model", "provider": "mock", "model": "mock"},
+                    "content": content,
+                }
+            }),
+        )
+    }
+
+    fn tool_call(seq: u64, turn: i64, step: i64, call_id: &str) -> SessionEvent {
+        event(
+            "tool/call",
+            seq,
+            json!({"turn": turn, "step": step, "callId": call_id, "name": "bash", "arguments": "{}"}),
+        )
+    }
+
+    fn tool_result(seq: u64, turn: i64, step: i64, call_id: &str) -> SessionEvent {
+        event(
+            "tool/result",
+            seq,
+            json!({
+                "turn": turn,
+                "step": step,
+                "message": {
+                    "id": format!("r-{seq}"),
+                    "role": "user",
+                    "source": {"kind": "tool", "callId": call_id},
+                    "content": [{"type": "tool-result", "toolCallId": call_id, "isError": false, "content": [{"type": "text", "text": "ok"}]}],
+                }
+            }),
+        )
+    }
+
+    fn closer_types(events: &[SessionEvent]) -> Vec<&str> {
+        events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn closes_an_open_turn_with_no_open_step() {
+        let closers = interrupted_turn_closers(&[turn_start(1, 0)]);
+        assert_eq!(closer_types(&closers), ["turn/end"]);
+        assert_eq!(closers[0].seq, 1);
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["reason"],
+            json!({"kind": "interrupted"})
+        );
+    }
+
+    #[test]
+    fn not_started_result_carries_message_text_and_contiguous_sequences() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(
+            closers.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            [3, 4, 5]
+        );
+        let result = &closers[0];
+        assert_eq!(result.data.as_serde_json().unwrap()["turn"], json!(2));
+        assert_eq!(result.data.as_serde_json().unwrap()["step"], json!(1));
+        assert_eq!(
+            result.data.as_serde_json().unwrap()["error"]["code"],
+            TOOL_NOT_STARTED
+        );
+        assert!(matches!(
+            &result.surface_op,
+            Some(SurfaceOp::Marker(marker)) if marker == "append"
+        ));
+        let text =
+            &result.data.as_serde_json().unwrap()["message"]["content"][0]["content"][0]["text"];
+        assert_eq!(
+            text,
+            "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
+        );
+    }
+
+    #[test]
+    fn does_not_synthesize_a_result_for_an_already_answered_call() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+            tool_result(3, 2, 1, "call-1"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["step/end", "turn/end"]);
+    }
+
+    #[test]
+    fn does_not_synthesize_a_result_after_the_owning_step_closed() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+            step_end(2, 1, 3),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["turn/end"]);
+        assert_eq!(closers[0].seq, 4);
+    }
+
+    #[test]
+    fn synthesizes_results_only_for_the_still_open_turn() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["old-call"]),
+            tool_result(3, 1, 1, "old-call"),
+            step_end(1, 1, 4),
+            turn_end(1, 5),
+            turn_start(2, 6),
+            step_start(2, 1, 7),
+            assistant(8, 2, 1, &["new-call"]),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["message"]["source"]["callId"],
+            "new-call"
+        );
+    }
+
+    #[test]
+    fn synthesizes_one_result_per_unanswered_call_in_log_order() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["call-a", "call-b"]),
+            tool_result(3, 1, 1, "call-a"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(
+            closers[0].data.as_serde_json().unwrap()["message"]["source"]["callId"],
+            "call-b"
+        );
+    }
+
+    #[test]
+    fn unknown_outcome_result_carries_surface_op_source_seqs_and_text() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["call-1"]),
+            tool_call(3, 1, 1, "call-1"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        let result = &closers[0];
+        assert!(matches!(
+            &result.surface_op,
+            Some(SurfaceOp::Marker(marker)) if marker == "append"
+        ));
+        assert_eq!(result.source_event_seqs, Some(vec![3]));
+        assert_eq!(
+            result.data.as_serde_json().unwrap()["error"],
+            json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
+        );
+        let text =
+            result.data.as_serde_json().unwrap()["message"]["content"][0]["content"][0]["text"]
+                .as_str()
+                .expect("text");
+        assert!(text.contains("retry only if the operation is read-only or idempotent"));
+        assert!(text.contains("first verify external state or ask the user"));
+    }
+
+    #[test]
+    fn handles_an_orphan_tool_call_without_a_matching_assistant_entry() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            tool_call(2, 1, 1, "orphan"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["step/end", "turn/end"]);
     }
 }

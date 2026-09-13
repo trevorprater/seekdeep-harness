@@ -1,0 +1,23 @@
+[package]
+name = "seekdeep-demo-launcher"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Repository demo entrypoints for compiled SeekDeep applications"
+
+[[bin]]
+name = "seekdeep-demo-code-mode"
+path = "src/bin/seekdeep-demo-code-mode.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "seekdeep-demo-cordis"
+path = "src/bin/seekdeep-demo-cordis.rs"
+test = false
+bench = false
+
+[lints]
+workspace = true

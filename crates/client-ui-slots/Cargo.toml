@@ -1,0 +1,41 @@
+[package]
+name = "seekdeep-client-ui-slots"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Portable Rust/WASM Slot registry and renderer contracts"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["wasm-bindings"]
+wasm-bindings = [
+  "dep:js-sys",
+  "dep:serde-wasm-bindgen",
+  "dep:wasm-bindgen",
+  "dep:wasm-bindgen-futures",
+]
+
+[dependencies]
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = { workspace = true, optional = true }
+serde-wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true

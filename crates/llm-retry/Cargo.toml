@@ -1,0 +1,43 @@
+[package]
+name = "seekdeep-llm-retry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Durable provider-routed LLM retry policy for SeekDeep Harness"
+readme = "README.md"
+
+[dependencies]
+anyhow.workspace = true
+num-traits.workspace = true
+parking_lot.workspace = true
+ryu-js.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+seekdeep-scope = { path = "../scope" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-persistence-sqlite = { path = "../session-persistence-sqlite" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

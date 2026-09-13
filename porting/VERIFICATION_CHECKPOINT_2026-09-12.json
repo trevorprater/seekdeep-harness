@@ -1,0 +1,221 @@
+{
+  "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+  "scope": "Built Web client and real Rust Host through the xtask browser gates, plus the web payload and transport work on this branch",
+  "gates_run": {
+    "web_navigation": "7 pinned navigation assertions passed: seeded-session open by message content, trajectory ledger and record inspector, Session Header and /export download, overview drag focus, closed default details column for bash and file-path rows, bash terminal card, exact fixture inventory",
+    "web_startup": "3 passed: compressed cold blank session stays out of the sidebar against the source golden; first workspace connection preserves Hero, workspace chip, scroll body and composer nodes; auto-selected blank-session history keeps the Hero visible and never settles",
+    "web_composer": "10 passed: 14-line cap and single scrollport, wheel scroll with caret, caret reveal after scrolling away, real clipboard paste, trailing-newline bottom, exact source draft geometry golden, scrollbar reservation across Chat and Trajectory, 800px shrink, CSS control shift, exact source tab geometry golden",
+    "web_scrollbars": "6 passed: five-width sweep without horizontal wheel movement, mutation control against the source golden, 24 real cold sessions with source gutter and insets, pointer reveal and linger, group collapse, WebKit thumb styling and geometry golden",
+    "web_details": "1 passed: real replayed turn, source handle golden, sidebar drag, reload and Session ownership switches",
+    "web_model_selection": "4 passed: composer choice persists while a logged session keeps its route, unavailable route blocks composer and Host, declared reasoning levels against the source menu golden, closed reasoning fixture inventory",
+    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host, rerun on the assistant-fold tree; zero failure lines",
+    "web_assembled_snapshots": "7 tests across 5 files passed: the pinned assembled-jsdom snapshot suites run under vitest against the port's built bundles",
+    "web_workspaces": "12 scenarios passed with the real Host and a cold registry: typed path pane navigation and miss fallback, hover card reachability and clipboard, row menu transit, archive echo and reload, same basename distinct identities, zero prompt requests; cold audit found 9 durable sessions and no model request beyond the pinned seed",
+    "web_settings": "8 passed: modal and real plugin inventory against source goldens, permission defaults preserving existing sessions and requiring the Full access confirmation, persisted dark preference during held plugin loading, theme gesture and OS override with reload and a second Host, busy Enter preference across reload, language switching and persistence, English browser default, closed fixture inventory",
+    "web_plugin_settings": "7 passed: three exposed namespaces against the source section golden, staged edit writing only on Save, Discard restoring without writing, invalid numeric draft rejection, Reset staging the composed default, Agent Loop writes reaching the real scheduler, closed fixture inventory",
+    "web_assembled": "Passed against a real Rust Host with persisted history: rendered conversation, reload and search all verified",
+    "web_models_settings": "8 passed: reference-free native-auth profile, deletion wording, write-only credential with derived profile reference, custom settings merge, custom route and model declaration, route identity and protocol edit, identified deletion and credential removal, closed fixture inventory with no prompt traffic",
+    "web_onboarding": "7 passed: welcome version with a write-only official credential and immediate readiness, configured reload staying interactive while settings responses are held, real model edits persisting capacities, closed fixture inventories, setup-card dismissal preserving an independent draft, another provider ending onboarding without an official credential"
+  },
+  "snapshot_cross_check": {
+    "method": "Every apps/web/tests/snapshots/**/*.expected.md golden in the source checkout compared with the .actual artifact the keyless run wrote, after applying the identity renames AGENTS.md requires (dsh to seekdeep, deepseek-ai to seekdeep-ai, DSH_ to SEEKDEEP_)",
+    "goldens": 103,
+    "produced": 70,
+    "identical": 68,
+    "mismatched": 2,
+    "not_produced_by_this_suite": 33,
+    "open_leads": [
+      "steering/mid-steer and steering/settled differ from the source goldens in model reasoning text and, for mid-steer, in the Ask question waiting row and Running status. The owning keyless scenario reports success, so the comparison the suite performs is either lenient for these goldens or narrower than a byte compare. Diagnostics for a steering failure and hang in this directory are dated 2026-09-09, three days before this run. Not attributed."
+    ]
+  },
+  "differential_ui_check": {
+    "method": "Visible control inventory captured in Chromium for the built port and for the pinned source harness, then compared as sets",
+    "boot_controls": {
+      "port": 24,
+      "source": 26
+    },
+    "settings_controls": {
+      "port": 39,
+      "source": 41
+    },
+    "shared_settings_controls": 28,
+    "differences": "All boot and settings differences are data or user configuration, not UI surface: session titles and counts, selected model id, and the access-mode, agent-mode and busy-enter labels. The port renders Full access, Code mode and Steer because ~/.seekdeep/settings.yaml sets permission.defaultPreset: danger-full-access, agent-presets.default: code and ui-conversation.busyEnter: steer; the source home sets none of those and shows its own defaults. No port default differs.",
+    "console_errors": "Zero across boot, session open, settings, tool details, session search and the trajectory view."
+  },
+  "payload_and_transport_work_verified_here": [
+    "Shipped WebAssembly carries no DWARF: the 46 browser artifacts fall from 419 MiB to 69.7 MiB, and the largest artifact (5.7 MiB) is below the browser's 8 MiB synchronous compile limit. The Chromium fixture that maps a real wasm panic frame to Rust source through client_bg.wasm.map still passes.",
+    "Cold page load 20.9 MB and reload 1.2 MB; Host CPU per page load 2.06 s cold, then 0.15 s once the encoded body is replayed for a revision-addressed target.",
+    "Lossless JSON string conversion decodes and encodes runs instead of characters: to_utf16 1,925 ms to 46 ms and encode_utf16 below the sampling threshold on one cold session open.",
+    "A Definition's run of update Matches folds in one call: one decode, every Match applied against the state the previous one left, one encode. Measured per plugin module over one cold open of the same session, ui-conversation 1,545 ms to 1,380 ms, ui-trajectory 1,244 ms to 1,074 ms, client total 4,970 ms to 4,630 ms and the open 4,856 ms to 4,528 ms, two runs per side holding to about 0.2%. Verified afterwards by the same keyless run and navigation gate listed above.",
+    "A literal ASCII run decodes to UTF-16 one unit per byte instead of dispatching on each character's encoded width. `extend_desugared` under `JsonRef::to_utf16` falls from 266 ms to 62-76 ms per cold open, ui-conversation from 1,380 ms to 1,354 ms and ui-trajectory from 1,073 ms to 1,049 ms.",
+    "A history entry builds its wire envelope directly instead of serializing the durable event to JSON text and parsing it back. Measured on the real 6.9 MB history response by alternating the two builds: 264 ms to 243 ms, eight per cent, consistent across four warm iterations. An equivalence test asserts the direct envelope equals the round trip in value and in serialized text for escapes, large and fractional numbers, absent and empty optionals, both surface-operation variants and a negative timestamp; history, subagent-history and schema parity suites pass, as do web-navigation and the full keyless suite.",
+    "A history page borrows the loaded window instead of deep-copying every event before selecting a suffix of it, and a tool result's backscan reads through an iterator so the live event stream keeps passing its session's own list. Measured on the real 6.9 MB history response by alternating the two builds over eight iterations: 239.4 ms to 236.9 ms with no overlap, and the transient copy of the whole window per request is gone."
+  ],
+  "remaining": [
+    "A cold session open of an 8 MB history is 2.03-2.08 s against the source harness's 0.48 s on the same payload. The Host serves the history in 335 ms, so about 1.7 s is the client folding 36,196 assistant/chunk events. Per module over one open: client-runtime 463-467 ms, ui-conversation 311-313 ms, ui-trajectory 193-194 ms, frames with no script URL 308 ms of which 143 ms is unattributed program time, idle about 335 ms.",
+    "What is left is the per-event work itself: matching 36k events against the registry's Definitions, building the view nodes they publish, and the React update the browser performs for the rendered conversation. None of it is a conversion that can be removed; it is work the source does in JavaScript without a wasm boundary.",
+    "Localized work is now down to items of 3-8 per cent of an open. Anything larger means changing the shape of what the client folds, not another hot function."
+  ],
+  "measurement_note": "Wall clock at the 5-10% level is not measurable on this machine while another session compiles: the same committed source measured 4.29-4.62 s and later 4.63-5.04 s. Changes of this size are resolved by per-plugin-module profile self-time instead, where two runs of the same build hold to about 0.2%. The fold above was measured that way and then confirmed by the cold-open total, where the same policy holds.",
+  "feature_probe": {
+    "commands_palette": "The Commands button and a leading slash in the composer both open the command listbox (compact, export, feedback, record); zero page errors",
+    "theme": "Selecting Dark in Settings flips data-ds-dark-theme from false to true",
+    "session_open": "9,598 characters of conversation render from a cold 8 MB history with no console error"
+  },
+  "differential_client_cost": {
+    "method": "The same visible session opened in the built port and in the pinned source harness, capturing each history payload and profiling the browser",
+    "history_payload": {
+      "source_harness": {
+        "events": 42606,
+        "assistant_chunks": 42360,
+        "decoded_mb": 7.4
+      },
+      "port": {
+        "events": 36592,
+        "assistant_chunks": 36196,
+        "decoded_mb": 8.0
+      }
+    },
+    "per_event_us": {
+      "source_harness": 11,
+      "port": 69,
+      "method": "Client-side settle time of one cold open divided by the events in the history document (port 2,527 ms over 36,592 events)"
+    },
+    "content_arrival": {
+      "source_harness": "65,137 characters of conversation at 465 ms after the click",
+      "port": "609 characters at 1 s, then 9,598 characters at 2,232 ms",
+      "method": "The same click on the same visible session, polling the rendered conversation every 50 ms (perceived.mjs)"
+    },
+    "conclusion": "The two implementations ship comparable payloads and the port ships fewer events than the source. Both publish the window atomically, and the port shows its first content at 2,232 ms against the source's 465 ms. The gap is a per-event constant in the client, not a payload, pagination or publication-strategy difference."
+  },
+  "trajectory_share": {
+    "method": "The same session opened in the built port with the trajectory plugin enabled and disabled through a launcher patch overlay that sets disabled on the ui-trajectory row",
+    "enabled": {
+      "open_ms": 4520,
+      "ui_conversation_ms": 1339,
+      "ui_trajectory_ms": 1049,
+      "client_runtime_ms": 635
+    },
+    "disabled": {
+      "open_ms": 3004,
+      "ui_conversation_ms": 1340,
+      "ui_trajectory_ms": 0,
+      "client_runtime_ms": 457
+    },
+    "after_the_assistant_fold": {
+      "open_ms": 2619,
+      "ui_conversation_ms": 301,
+      "ui_trajectory_ms": 195,
+      "client_runtime_ms": 614
+    },
+    "chat_output": "9,598 characters with the plugin and 9,582 without; the 16-character difference is exactly the Chat and Trajectory tab labels it provides",
+    "conclusion": "Folding a chunk run removed the per-chunk re-encoding these numbers measured, so the trajectory Definitions now cost 195 ms of a 2,619 ms cold open instead of about 1.4 s of 4.5 s. Both UI plugins together are 496 ms, about 19 per cent, and the deferred-HMR trade recorded below is correspondingly smaller.",
+    "why_the_obvious_fix_was_not_taken": "Registering those Definitions lazily on first Trajectory use would route through rebuild_registry, which re-folds the entire stored window with every Definition, so the first Trajectory open would pay the whole open cost again. Capturing that saving needs an assembler capability that folds the stored window for one newly registered Definition, plus a background fold after the first paint. That is a product trade, not a localized fix."
+  },
+  "gates_note": "Every web gate this repository exposes has now been run against the current tree: 14 gates, all passing. No feature bug was found by exercising them.",
+  "idle_explained": "The 393 ms idle bucket in a cold open is predominantly the history round trip: the Host's response latency is 335 ms and the client cannot fold the window before the whole document arrives. The slice yields are not the cost, because the defer is a browser timer and 18 slices at 2,048 events cost about 4 ms each.",
+  "parity_gate": {
+    "command": "cargo xtask parity --scope all",
+    "result": "16 pending and 3 ported but unverified, so the final manifest gate does not pass",
+    "reasons": "The pending set is environmental rather than behavioural: the pwsh terminal browser suite needs a pwsh executable that is not installed, hmr-live needs a published package and a dev watcher, and the remaining suites need a real provider key, an e2b sandbox, or a Windows or Linux host. The three ported-but-unverified rows are the Landlock build and packed-install scripts, which are Linux-only, and the OTel exporter, whose native SDK cannot represent lone UTF-16 surrogates.",
+    "note": "The same 19 rows were pending when this work started. Nothing in the web surface this objective names is among them."
+  },
+  "gate_flakiness": "Two keyless scenarios failed under load during this work and pass in isolation and in an undisturbed full run: steering timed out on a 10 s poll, and live-interactions reported a mode label golden mismatch. Both are consequences of a client that renders about ten times slower than the source under contention. Neither reproduces on a quiet machine.",
+  "rejected_after_measurement": [
+    "Replacing the lossless round trip that builds the RPC response value with serde_json::to_value: the response must cross as a serde_json::Value, whose type cannot hold the lone UTF-16 surrogates a session's data can contain, so the lossless text and its parse are the fidelity gate rather than waste.",
+    "Folding a Definition's run of update Matches (kept, and measured at 7 per cent of an open) was measured once before at no change on wall clock alone and reverted; per-module profile self-time is the instrument that resolves changes of this size."
+  ],
+  "assistant_fold_work_verified_here": {
+    "what_changed": "A Definition update wrote each accepted Match into the state's JSON: for a streamed block that re-encoded the whole accumulated text of that block - text, reasoning and Tool call arguments alike - and revalidated and rescanned it, once per chunk. The batch fold now keeps the block it is still growing in PendingBlocks (crates/client-runtime/src/pending_blocks.rs), appends each delta's exact UTF-16 code units, and publishes every pending block once per fold. A block replaced wholesale by block-start, block-end, assistant/message or llm/retry is dropped from the fold, and the visibility scan reads the pending blocks so a still-growing block decides first_visible_seq and hidden exactly as a published one would.",
+    "per_module_ms": {
+      "ui_conversation": "1,134 and 1,111 before, 301 and 289 after",
+      "ui_trajectory": "1,055 and 1,033 before, 195 and 185 after",
+      "client_runtime": "635 and 605 before, 614 and 592 after",
+      "cold_open_total": "4,353 and 4,279 before, 2,619 and 2,615 after"
+    },
+    "equivalence_evidence": "crates/client-ui-conversation/tests/assistant_fold_parity.rs drives one window - a leading Tool call run whose state stays hidden, text, reasoning, a replaced Tool call block, block-start, block-end and a final message - through the real assembler twice, batched and unbatched, and asserts the published chat snapshot is identical. crates/client-ui-trajectory/tests/assistant_definition_parity.rs holds the same check for the trajectory Definition, and crates/client-runtime/src/pending_blocks.rs unit-tests the load, replace, append and visibility rules.",
+    "gate_results": "web-keyless 151 assertions across its scenarios with exit 0; web-assembled-snapshots 7 passed; conversation assistant_tool_lossless_parity 3, conversation_nodes_parity 8, conversation_contract_parity 1, assistant_fold_parity 1; trajectory assistant_definition_parity 6; clippy --all-targets --all-features clean on the three crates; cargo fmt --all -- --check clean."
+  },
+  "definition_lookup_work_verified_here": {
+    "what_changed": "Asking a Definition about an event goes through the browser registry adapter, which rebuilt its adapted Definition list on every question: it pruned a linear cache against the registry and re-adapted every entry through another linear scan, so a 36k-event window paid a quadratic number of pointer comparisons and allocations before matching began. The adapter now keeps the adapted list beside the registry entry list it was built from (a cheap rc identity comparison decides reuse, so a registration still takes effect on the next question). The assembler's prematch table also hashed Definition addresses and event sequences with the default randomly seeded hasher; it now uses an unseeded FNV-1a, and the per-event fallback check compares targets instead of cloning every matched target into a set.",
+    "per_module_ms": {
+      "client_runtime": "592 and 614 before, 472 and 484 after",
+      "match_with_inside_it": "67-75 before, 36-51 after",
+      "hashing_inside_it": "44-48 before, about 20 after",
+      "cold_open_total": "2,596 and 2,605 before, 2,518 and 2,590 after"
+    },
+    "evidence": "crates/client-runtime/src/fast_hash.rs unit-tests the hasher; cargo test -p seekdeep-client-runtime is green across its suites; conversation_nodes_parity 8, assistant_fold_parity 1 and trajectory assistant_definition_parity 6 pass; web-keyless 151 assertions with exit 0 and web-assembled-snapshots 7 passed on this tree; clippy --all-targets --all-features and cargo fmt --all -- --check are clean."
+  },
+  "boundary_crossing_work_verified_here": {
+    "what_changed": "A window replacement hands every Definition the whole window as one JSON text, which is what lets a module parse its 36k events once instead of crossing the boundary per event. That text was a JavaScript string, so it left the assembler's module as UTF-16 and was encoded back to UTF-8 inside every module that read it, and the matcher's rows came back the same way. It now crosses as UTF-8 bytes in both directions. Reading a field of a face also created its member name as a JavaScript string on every read, inside the per-event path that decodes a match, a context, an event, or a location; those names are now created once per spelling.",
+    "per_frame_ms": {
+      "encodeInto": "191 before, 15 after",
+      "TextDecoder.decode": "169 before, 57 after",
+      "frames_with_no_script_url": "602 before, 308 after"
+    },
+    "per_module_ms": {
+      "cold_open_total": "2,518 and 2,590 before, 2,033 and 2,081 after",
+      "client_runtime": "472 and 484 before, 463 and 467 after",
+      "ui_conversation": "294 and 308 before, 311 and 313 after",
+      "ui_trajectory": "189 and 192 before, 193 and 194 after",
+      "first_content": "2,134 before, 1,721 after"
+    },
+    "protocol_note": "matchMany is a port-internal hook: the producer is crates/client-runtime/src/wasm_native_definition.rs and the only consumer is the adapter's prematch, with no JavaScript or TypeScript implementor anywhere in the tree. The second argument and the returned rows changed representation from JSON text to UTF-8 bytes; a Definition that answers with a string is still accepted.",
+    "evidence": "cargo test -p seekdeep-client-runtime green across its suites; conversation_nodes_parity 8, assistant_fold_parity 1 and trajectory assistant_definition_parity 6 pass; web-assembled-snapshots 7 passed and web-keyless 151 assertions with exit 0 on this tree; clippy --all-targets --all-features and cargo fmt --all -- --check clean."
+  },
+  "measurement_instrument_correction": {
+    "what_was_wrong": "Every browser measurement in the rounds above found the session row with getByText(title).first() and then treated the open as finished when document.body.innerText.length passed 2,500. Two defects followed. The click resolved to the row's title span, which the hover-card overlay covers often enough that Playwright's actionability check refused it or the synthetic pointer sequence never reached the row's handler, so many runs measured the page after a click that opened nothing - and the app's own auto-open of the most recent session then filled the time. Worse, the body-text threshold is satisfied by the sidebar alone, so an open that never happened still looked settled. Session age also mattered: a session that is still running carries the same title with a minute-based age and never settles.",
+    "what_the_instrument_does_now": "./open.mjs selects a row by title plus a day-or-hour age label, clicks it with the real mouse, and requires more than 1,500 characters inside the chat region before it returns - the sidebar cannot satisfy that. /tmp/seekdeep-measure/compare.mjs measures the same way for both implementations and reports first content and settle time from a stable-text rule.",
+    "consequence": "The per-round open times reported for the assistant fold, the Definition lookup, and the boundary crossings do not identify the session they came from, so they are not comparable with each other or with the source. They are superseded by the measurement below.",
+    "row_selection": "The row is now pinned by title plus an age pattern (DSH_AGE, default day, hour, month or year). The seeded session is '1d' while the still-running session of the same title was '1h' during these runs, and an hour-wide pattern opened the running one; runs log the row they opened."
+  },
+  "canonical_open_measurement": {
+    "session": "The settled seeded session in ~/.seekdeep, verified from the Host: 34,501 events of which 34,288 are assistant/chunk, 7.6 MB of decoded history over the wire (POST /api/session.history answered 6,890,434 bytes in 0.50 s for the same session).",
+    "method": "Chromium, 1512x950, nine seconds after first paint, then a real mouse click on that row; first content is the first poll where the chat region holds more than 1,500 characters, settle is the first time the body text has not changed for 1.5 s.",
+    "port": {
+      "first_content_ms": [
+        546,
+        543,
+        537
+      ],
+      "settle_ms": [
+        2089,
+        2086,
+        2081
+      ],
+      "rendered_chars": 3832
+    },
+    "source_harness": {
+      "first_content_ms": [
+        634
+      ],
+      "settle_ms": [
+        2283
+      ],
+      "rendered_chars": 65189
+    },
+    "ab_of_this_branch": "The three performance commits on this branch (the assistant fold, the Definition lookup, and the UTF-16-free boundary crossing) were re-measured against the tree before them, rebuilt and served from the same Host: first content 555/575 ms before and 546/543/537 ms after, settle 2,099/2,117 ms before and 2,089/2,086/2,081 ms after. On this session the three commits do not move the open measurably.",
+    "caveat": "The source harness renders 65,189 characters of the same session where the port renders 3,832, because the port's Chat pane is virtualized. The two figures therefore describe different amounts of rendering work and are not a like-for-like speed comparison; the comparison worth making is the port against itself, which the A/B above does.",
+    "session_shape": "The Host reports 34,501 events: 34,288 assistant/chunk, 23 assistant/message carrying 1,834 characters of visible text in total, 7 user/message, 49 tool calls and results, 23 steps, 1 turn. The Chat pane renders 3,459 characters, which is this conversation plus its chrome, so the pane is complete rather than truncated. The source harness's 65,189 characters for the same session include reasoning and Tool detail that the port shows in the Trajectory ledger instead, which holds 816 rows and 26,997 characters.",
+    "interaction": {
+      "typing": "43 characters typed with no key delay into the composer of that session: 315 ms total, 7.3 ms per character, zero long tasks reported by a PerformanceObserver watching the interval.",
+      "trajectory_tab": "Switching to the Trajectory tab renders 816 rows and 26,997 characters within about one second, stable over twenty seconds, with no console error.",
+      "app_startup": "A cold page with no session selected: shell at 193 ms, composer usable at 750 ms, three long tasks totalling 207 ms. No session opens by itself, so the earlier reading of a startup that never painted was an expectation of content the app does not load at the root route."
+    }
+  },
+  "session_size_scaling": {
+    "why": "The objective is about the browser experience, and the sessions a working user accumulates grow without bound. Two settled sessions of the same workspace were measured with the corrected instrument.",
+    "small": "session-c7280f5e, 34,501 events, 7.6 MB of history: first content 540 ms, main-thread work 665 ms, and the three Busiest modules are ui-conversation 110 ms, ui-trajectory 99 ms, client-runtime 85 ms.",
+    "large": "session-d40b4793, 58,574 events, 15.1 MB of history (the Host answers it in 0.45 s): first content 6,952 ms and 7,206 ms to settle, main-thread work 6,561 ms, with ui-conversation 1,879 ms, ui-trajectory 1,538 ms, client-runtime 928 ms.",
+    "finding": "1.7 times the events costs about 15 times the per-event work, and the growth is inside the two UI plugins rather than in transport, which the Host serves in under half a second.",
+    "inside_ui_conversation": "Of its 1,879 ms: push_plain_units 221 ms and encode_utf16 192 ms (code units to JSON text), extend_units 181 ms (JSON text to code units), value_end 146 ms and skip_to_escape 143 ms (parsing that text), match_from_js 73 ms and event_from_js 35 ms, with dlmalloc malloc and free 110 ms.",
+    "diagnosis": "The fold decodes each Context's state text, re-encodes every block it touched, and parses the state text again; that is three passes over a step's accumulated text per fold, and the text conversions and parses measured above are 883 ms of the conversation plugin's 1,879 ms. What is not yet attributed is the rest: the two plugins together cost 3,417 ms for this session against 209 ms for the canonical one, which is a larger factor than the text volumes alone explain, so a second term is still unidentified.",
+    "next_target": "Two steps: attribute the unattributed remainder inside ui-trajectory and client-runtime for the 58,574-event session, and give the fold an incremental representation so a fold costs each delta rather than three passes over the step's text (crates/lossless-json/src/string.rs already caches a JsonString's encoded text, and push_utf16 discards that cache today).",
+    "instrument_note": "compare.mjs settles on unchanged text for 1.5 s, which fires during a loading pause: it reported the 58,574-event session as contentAtMs null with 562 characters. The chat-region signal in open.mjs is the reliable one; the stability rule needs the content gate in front of it.",
+    "session_shape_comparison": {
+      "canonical_34_5k": "23 steps, 5,008 chunks in its largest step, 2.5 MB of chunk text (reasoning 1.5 MB, Tool call arguments 0.83 MB), largest step 283 KB.",
+      "large_58_6k": "25 steps, 11,001 chunks in its largest step, 6.2 MB of chunk text (Tool call arguments 4.3 MB, reasoning 1.2 MB), largest step 1.30 MB.",
+      "reading": "The larger session is not simply longer: it carries 5 times the Tool call argument text and its largest step is 4.6 times the size, so a per-step pass over that text costs far more than the event ratio suggests."
+    }
+  }
+}

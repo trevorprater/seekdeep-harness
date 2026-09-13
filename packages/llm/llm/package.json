@@ -1,0 +1,41 @@
+{
+  "name": "@seekdeep-ai/seekdeep-llm",
+  "version": "0.1.0-rc.5",
+  "description": "Provider-neutral LLM service interface for the SeekDeep Harness",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
+    "./brand": {
+      "types": "./lib/types/brand.d.ts"
+    },
+    "./message": {
+      "types": "./lib/types/message.d.ts"
+    }
+  },
+  "files": [
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/schemastery": "workspace:^",
+    "@seekdeep-ai/seekdeep-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  }
+}

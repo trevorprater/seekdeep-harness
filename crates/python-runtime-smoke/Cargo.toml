@@ -1,0 +1,26 @@
+[package]
+name = "seekdeep-python-runtime-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Native keyless installed-Python SDK and executable smoke runner"
+
+[[bin]]
+name = "smoke-python-runtime"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+clap.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+walkdir.workspace = true
+
+[lints]
+workspace = true

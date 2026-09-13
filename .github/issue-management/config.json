@@ -1,0 +1,18 @@
+{
+  "organization": "seekdeep-harness",
+  "repository": "seekdeep-harness",
+  "projectNumber": 1,
+  "projectTitle": "SEEKDEEP Issue Management",
+  "lifecycleActor": "seekdeep-issue-management",
+  "priorityField": "Priority",
+  "allowUnassignedOwner": true,
+  "statuses": [
+    "Inbox",
+    "Backlog",
+    "Ready",
+    "In progress",
+    "In review",
+    "Done",
+    "No action"
+  ]
+}
