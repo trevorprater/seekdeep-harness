@@ -1178,6 +1178,9 @@ importers:
 
   packages/client/connection:
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -2929,6 +2932,9 @@ importers:
         specifier: workspace:^
         version: link:../../llm/llm
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -2939,6 +2945,9 @@ importers:
         specifier: workspace:^
         version: link:../../llm/llm
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -3718,6 +3727,9 @@ importers:
         specifier: workspace:^
         version: link:../../interaction/user-questions
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -3859,12 +3871,18 @@ importers:
         specifier: workspace:^
         version: link:../../util/brand
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
 
   packages/interaction/user-questions:
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -4366,6 +4384,9 @@ importers:
 
   packages/session/session-projection:
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -5435,6 +5456,9 @@ importers:
 
   packages/typert/registry:
     devDependencies:
+      '@seekdeep-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@seekdeep-ai/seekdeep-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
