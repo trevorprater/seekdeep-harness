@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use js_sys::{Function, Object, Reflect};
 use wasm_bindgen::{JsValue, closure::Closure, prelude::wasm_bindgen};
 
-const PERSISTENCE_KEY: &str = "dsh.conversation.chat";
+const PERSISTENCE_KEY: &str = "seekdeep.conversation.chat";
 
 thread_local! {
     static DEFINE_STORE: RefCell<Option<Function>> = const { RefCell::new(None) };

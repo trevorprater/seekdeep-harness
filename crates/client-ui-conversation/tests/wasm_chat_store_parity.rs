@@ -72,7 +72,7 @@ fn declaration_pins_init_shape_compatibility_key_and_free_define_store_call() {
     let declaration = store_declarations().get(0);
     assert_eq!(
         property(&declaration, "persist").as_string().as_deref(),
-        Some("dsh.conversation.chat")
+        Some("seekdeep.conversation.chat")
     );
     let initial = property(&declaration, "init")
         .dyn_into::<Function>()
