@@ -414,8 +414,9 @@ fn update_chunk(
             return Ok(());
         }
     }
-    let compact = compact_blocks(&state.blocks);
-    if state.first_visible_seq.is_none() && has_visible_content(&compact) {
+    // The visibility scan copies every block, so it runs only until the first visible chunk
+    // settles: after that its answer cannot change anything.
+    if state.first_visible_seq.is_none() && has_visible_content(&compact_blocks(&state.blocks)) {
         state.first_visible_seq = Some(accepted.event.seq);
         state.first_visible_time = Some(accepted.event.time);
     }

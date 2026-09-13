@@ -270,14 +270,17 @@ fn update_chunk(
         }
         _ => return Ok(()),
     }
-    let blocks = compact_blocks(&state.blocks);
-    let visible = has_visible_content(&blocks);
-    if visible {
-        state.hidden = false;
-    }
-    if visible && state.first_visible_seq.is_none() {
-        state.first_visible_seq = Some(accepted.event.seq);
-        state.first_visible_time = Some(accepted.event.time);
+    // The visibility scan copies every block, so it runs only while its answer can still change
+    // something: a message already shown and already dated needs neither.
+    if state.hidden || state.first_visible_seq.is_none() {
+        let visible = has_visible_content(&compact_blocks(&state.blocks));
+        if visible {
+            state.hidden = false;
+        }
+        if visible && state.first_visible_seq.is_none() {
+            state.first_visible_seq = Some(accepted.event.seq);
+            state.first_visible_time = Some(accepted.event.time);
+        }
     }
     if state.first_token_time.is_none() && is_token_delta(chunk) {
         state.first_token_time = Some(accepted.event.time);
