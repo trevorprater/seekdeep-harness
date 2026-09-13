@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Workspace context loader for AGENTS.md/CLAUDE.md instruction files"
 
 [dependencies]
+indexmap.workspace = true
 anyhow.workspace = true
 futures.workspace = true
 parking_lot.workspace = true

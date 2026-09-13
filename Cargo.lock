@@ -5498,6 +5498,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "indexmap 2.14.0",
  "parking_lot",
  "path-clean",
  "seekdeep-agent",

@@ -210,16 +210,16 @@ fn visible_instruction_changes(
 #[derive(Clone, Debug, Default)]
 pub struct BaselineInstructionState {
     /// Latest baseline changes.
-    pub changes: HashMap<String, AgentInstructionChange>,
+    pub changes: indexmap::IndexMap<String, AgentInstructionChange>,
     /// Provider versions for retained files.
-    pub versions: HashMap<String, InstructionVersionState>,
+    pub versions: indexmap::IndexMap<String, InstructionVersionState>,
 }
 
 /// Converts retained baseline files into comparison and metadata-cache state.
 #[must_use]
 pub fn baseline_instruction_state(files: &[LoadedInstructionFile]) -> BaselineInstructionState {
-    let mut changes = HashMap::new();
-    let mut versions = HashMap::new();
+    let mut changes = indexmap::IndexMap::new();
+    let mut versions = indexmap::IndexMap::new();
     for file in files {
         let digest = instruction_content_sha1(&file.content);
         let scope = instruction_scope_key(&file.display_path);
