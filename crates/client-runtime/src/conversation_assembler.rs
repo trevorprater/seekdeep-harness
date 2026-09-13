@@ -234,6 +234,13 @@ pub struct AssemblerNodeDefinition {
 pub trait AssemblerEventDefinitions {
     /// Ordinary Definitions in registration order.
     fn entries(&self) -> Vec<Rc<AssemblerNodeDefinition>>;
+    /// The same list, shared when the source can hand out one instance of it.
+    ///
+    /// This list is read once per event, so an implementation that already owns it returns a
+    /// reference count instead of rebuilding the list on every question.
+    fn entries_shared(&self) -> Rc<Vec<Rc<AssemblerNodeDefinition>>> {
+        Rc::new(self.entries())
+    }
     /// Unmatched-event fallback.
     fn fallback_entry(&self) -> Option<Rc<AssemblerNodeDefinition>>;
     /// Matches a whole window at once for the Definitions that can.
