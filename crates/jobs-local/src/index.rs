@@ -218,10 +218,6 @@ impl LocalJobState {
 
     /// Counts authoritative active records for one exact owner or the shared
     /// unowned bucket.
-    fn active_task_count(&self, owner: Option<&Arc<Agent>>) -> usize {
-        self.inner.lock().active_task_count(owner)
-    }
-
     /// The completion listeners that own `owner`'s notices, in registration
     /// order per layer: the global layer's first, then each scoped layer along
     /// the owner's chain.
