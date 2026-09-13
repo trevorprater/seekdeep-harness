@@ -8,7 +8,7 @@
     "web_scrollbars": "6 passed: five-width sweep without horizontal wheel movement, mutation control against the source golden, 24 real cold sessions with source gutter and insets, pointer reveal and linger, group collapse, WebKit thumb styling and geometry golden",
     "web_details": "1 passed: real replayed turn, source handle golden, sidebar drag, reload and Session ownership switches",
     "web_model_selection": "4 passed: composer choice persists while a logged session keeps its route, unavailable route blocks composer and Host, declared reasoning levels against the source menu golden, closed reasoning fixture inventory",
-    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host; zero failure lines",
+    "web_keyless": "151 assertions across 48 scenarios passed with exit 0 against the pinned keyless source browser suites bound to the Rust Host, rerun on the assistant-fold tree; zero failure lines",
     "web_assembled_snapshots": "7 tests across 5 files passed: the pinned assembled-jsdom snapshot suites run under vitest against the port's built bundles",
     "web_workspaces": "12 scenarios passed with the real Host and a cold registry: typed path pane navigation and miss fallback, hover card reachability and clipboard, row menu transit, archive echo and reload, same basename distinct identities, zero prompt requests; cold audit found 9 durable sessions and no model request beyond the pinned seed",
     "web_settings": "8 passed: modal and real plugin inventory against source goldens, permission defaults preserving existing sessions and requiring the Full access confirmation, persisted dark preference during held plugin loading, theme gesture and OS override with reload and a second Host, busy Enter preference across reload, language switching and persistence, English browser default, closed fixture inventory",
@@ -134,6 +134,6 @@
       "cold_open_total": "4,353 and 4,279 before, 2,619 and 2,615 after"
     },
     "equivalence_evidence": "crates/client-ui-conversation/tests/assistant_fold_parity.rs drives one window - a leading Tool call run whose state stays hidden, text, reasoning, a replaced Tool call block, block-start, block-end and a final message - through the real assembler twice, batched and unbatched, and asserts the published chat snapshot is identical. crates/client-ui-trajectory/tests/assistant_definition_parity.rs holds the same check for the trajectory Definition, and crates/client-runtime/src/pending_blocks.rs unit-tests the load, replace, append and visibility rules.",
-    "gate_results": "web-assembled-snapshots 7 passed; conversation assistant_tool_lossless_parity 3, conversation_nodes_parity 8, conversation_contract_parity 1, assistant_fold_parity 1; trajectory assistant_definition_parity 6; clippy --all-targets --all-features clean on the three crates; cargo fmt --all -- --check clean."
+    "gate_results": "web-keyless 151 assertions across its scenarios with exit 0; web-assembled-snapshots 7 passed; conversation assistant_tool_lossless_parity 3, conversation_nodes_parity 8, conversation_contract_parity 1, assistant_fold_parity 1; trajectory assistant_definition_parity 6; clippy --all-targets --all-features clean on the three crates; cargo fmt --all -- --check clean."
   }
 }
