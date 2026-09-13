@@ -224,5 +224,14 @@
     "change_tried": "The assembler asked the registry for its Definition list once per event and the browser adapter rebuilt that vector every time. It now answers from the cached list through a shared reference (crates/client-runtime/src/conversation_assembler.rs, wasm_conversation_adapter.rs).",
     "result": "Not measurable: first content 6,952/7,096 ms before against 7,017/7,096/7,101 ms after. Kept as a simplification that removes one allocation per event, not as a speed fix. The suites stay green: client-runtime, conversation_nodes_parity 8, assistant_fold_parity 1, trajectory assistant_definition_parity 6, clippy and fmt clean.",
     "still_open": "The per-event matching bookkeeping in client-runtime (about 470 ms of its 928 ms) and the two plugins' text round trips are the two known terms; neither has been attributed to a single call yet, and the SipHash cost shows maps outside the ones round 13 converted."
+  },
+  "agent_preset_label_defect": {
+    "found_by": "The web-keyless gate on the tree that shares the Definition list: 151 checks, exit 1, exactly one scenario failed - agent-preset-selection, on its header golden.",
+    "expected": "'- navigation \"Session hierarchy\":' ... 'text: Minimal mode'",
+    "actual": "the same node renders 'text: minimal'",
+    "why_it_is_a_defect": "The port already carries the right copy: crates/client-ui-agent-preset/data/locales.json has presetMinimalName 'Minimal mode' and presetStandardName 'Standard mode'. The header chip therefore renders the preset identifier instead of the localized display name the picker uses.",
+    "earlier_misattribution": "Round 10 recorded a live-interactions golden mismatch (Standard mode against standard) as environmental, on the theory that ~/.seekdeep/settings.yaml was changing the label. That was wrong: the same class of mismatch is deterministic for a built-in preset here. The settings theory explained a different golden, and this scenario's failure is the port's.",
+    "next_target": "Route the session header's preset chip through the same name lookup the picker uses (preset_text in crates/client-ui-agent-preset/src/browser_components.rs maps the built-in ids to presetStandardName, presetCodeName, presetMinimalName and presetCordisName and falls back to the option's own name).",
+    "gate_state": "This is the only failing scenario on the current tree; the other 150 checks passed."
   }
 }
