@@ -217,7 +217,7 @@ pub fn apply_read_image_tool(ctx: &Context) -> anyhow::Result<()> {
                     let value = ImageReadValue {
                         path: target.display_path.clone(),
                         image: ImageMetadata {
-                            attachment_id: reference.attachment_id.into_string(),
+                            attachment_id: reference.attachment_id,
                             media_type: reference.media_type,
                             bytes: reference.bytes,
                             width: reference.width,
@@ -258,7 +258,7 @@ pub fn apply_read_image_tool(ctx: &Context) -> anyhow::Result<()> {
 #[serde(rename_all = "camelCase")]
 pub struct ImageMetadata {
     /// Durable attachment identity.
-    pub attachment_id: String,
+    pub attachment_id: AttachmentId,
     /// Verified media type.
     pub media_type: ImageMediaType,
     /// Exact encoded byte length.
@@ -299,7 +299,7 @@ pub fn image_media_type_for_path(file_path: &str) -> Option<ImageMediaType> {
 #[must_use]
 pub fn image_ref_from_value(image: &ImageMetadata) -> ImageAttachmentRef {
     ImageAttachmentRef {
-        attachment_id: AttachmentId::new(image.attachment_id.clone()),
+        attachment_id: image.attachment_id.clone(),
         media_type: image.media_type,
         bytes: image.bytes,
         width: image.width,
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn ref_and_output_render_canonically() {
         let image = ImageMetadata {
-            attachment_id: "id1".to_owned(),
+            attachment_id: AttachmentId::new("id1"),
             media_type: ImageMediaType::Png,
             bytes: 100,
             width: 20,
