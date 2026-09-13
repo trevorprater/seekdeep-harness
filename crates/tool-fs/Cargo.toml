@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+similar.workspace = true
 seekdeep-lossless-json = { path = "../lossless-json" }
 anyhow.workspace = true
 futures.workspace = true

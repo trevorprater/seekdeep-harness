@@ -267,6 +267,7 @@ license = "MIT"
 repository = "https://github.com/deepseek-ai/seekdeep-harness"
 
 [workspace.dependencies]
+similar = "2.7.0"
 anyhow = "1.0.100"
 async-trait = "0.1.89"
 async-stream = "0.3.6"

@@ -36,6 +36,8 @@ fn split_lines(text: &str) -> Vec<&str> {
     lines
 }
 
+use similar::{ChangeTag, TextDiff};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Op {
     Equal,
@@ -43,44 +45,20 @@ enum Op {
     Insert,
 }
 
-/// Longest-common-subsequence edit script between two line lists.
+/// Edit script between two line lists.
+///
+/// Myers over the two slices, matching the oracle's delegation to a diff library rather than a
+/// longest-common-subsequence table: the table costs `(old + 1) x (new + 1)` cells, which is
+/// gigabytes for the large files `write` and `edit` diff.
 fn diff_script(old: &[&str], new: &[&str]) -> Vec<Op> {
-    let n = old.len();
-    let m = new.len();
-    let mut lcs = vec![vec![0usize; m + 1]; n + 1];
-    for i in (0..n).rev() {
-        for j in (0..m).rev() {
-            lcs[i][j] = if old[i] == new[j] {
-                lcs[i + 1][j + 1] + 1
-            } else {
-                lcs[i + 1][j].max(lcs[i][j + 1])
-            };
-        }
-    }
-    let mut script = Vec::with_capacity(n + m);
-    let (mut i, mut j) = (0, 0);
-    while i < n && j < m {
-        if old[i] == new[j] {
-            script.push(Op::Equal);
-            i += 1;
-            j += 1;
-        } else if lcs[i + 1][j] >= lcs[i][j + 1] {
-            script.push(Op::Delete);
-            i += 1;
-        } else {
-            script.push(Op::Insert);
-            j += 1;
-        }
-    }
-    while i < n {
-        script.push(Op::Delete);
-        i += 1;
-    }
-    while j < m {
-        script.push(Op::Insert);
-        j += 1;
-    }
-    script
+    TextDiff::from_slices(old, new)
+        .iter_all_changes()
+        .map(|change| match change.tag() {
+            ChangeTag::Equal => Op::Equal,
+            ChangeTag::Delete => Op::Delete,
+            ChangeTag::Insert => Op::Insert,
+        })
+        .collect()
 }
 
 /// A contiguous changed range plus its surrounding context, in old/new indices.
@@ -266,5 +244,23 @@ mod tests {
                 new_text: "two".to_owned(),
             }])
         );
+    }
+    #[test]
+    fn diffs_a_large_file_without_a_quadratic_table() {
+        // A 20k-line diff allocated 20_001 x 20_001 cells under the previous LCS table (~3 GB),
+        // so completing at all is the property under test rather than any particular output.
+        let lines: Vec<String> = (0..20_000).map(|i| format!("line {i}")).collect();
+        let mut changed = lines.clone();
+        changed[15_000] = "changed 15000".to_owned();
+        let before = lines.join(
+            "
+",
+        );
+        let after = changed.join(
+            "
+",
+        );
+        let diffs = compute_hunk_diffs("big.txt", &before, &after);
+        assert!(!diffs.is_empty(), "a one-line change must produce a hunk");
     }
 }
