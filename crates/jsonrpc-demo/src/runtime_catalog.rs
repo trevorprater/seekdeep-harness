@@ -1,6 +1,11 @@
 //! Compiled runtime plugins selected by the embedded Python runtime manifest.
+//!
+//! The manifest names the closure twice over: its `dependencies` are the packages the
+//! JavaScript workspace still resolves, and `seekdeep.compiledPlugins` are the plugins
+//! compiled into this executable, which the workspace can no longer express as
+//! dependencies since the crate migration replaced their packages.
 
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 use seekdeep_cordis::Plugin;
 use seekdeep_loader::PluginCatalog;
@@ -8,17 +13,36 @@ use serde_json::Value;
 
 type PluginFactory = fn() -> Plugin;
 
-pub(crate) fn describe() -> anyhow::Result<Value> {
-    let manifest: Value =
-        serde_json::from_str(include_str!("../../../python/sdk-runtime/package.json"))?;
+/// The package names the manifest places in the runtime closure: its workspace
+/// dependencies plus the compiled plugins it declares.
+pub(crate) fn closure_packages(manifest: &Value) -> anyhow::Result<BTreeSet<String>> {
     let dependencies = manifest
         .get("dependencies")
         .and_then(Value::as_object)
         .ok_or_else(|| anyhow::anyhow!("runtime closure manifest has no dependency object"))?;
+    let mut packages = dependencies.keys().cloned().collect::<BTreeSet<_>>();
+    if let Some(compiled) = manifest.pointer("/seekdeep/compiledPlugins") {
+        let compiled = compiled.as_array().ok_or_else(|| {
+            anyhow::anyhow!("runtime closure manifest seekdeep.compiledPlugins must be an array")
+        })?;
+        for plugin in compiled {
+            let name = plugin.as_str().ok_or_else(|| {
+                anyhow::anyhow!("runtime closure manifest compiled plugin names must be strings")
+            })?;
+            packages.insert(name.to_owned());
+        }
+    }
+    Ok(packages)
+}
+
+pub(crate) fn describe() -> anyhow::Result<Value> {
+    let manifest: Value =
+        serde_json::from_str(include_str!("../../../python/sdk-runtime/package.json"))?;
+    let closure = closure_packages(&manifest)?;
     let plugins = FACTORIES
         .iter()
         .map(|(name, _)| format!("@seekdeep-ai/{name}"))
-        .filter(|name| dependencies.contains_key(name))
+        .filter(|name| closure.contains(name))
         .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "formatVersion": 1,
@@ -206,12 +230,9 @@ pub(crate) fn register(
 ) -> anyhow::Result<()> {
     let manifest: Value =
         serde_json::from_str(include_str!("../../../python/sdk-runtime/package.json"))?;
-    let dependencies = manifest
-        .get("dependencies")
-        .and_then(Value::as_object)
-        .ok_or_else(|| anyhow::anyhow!("runtime closure manifest has no dependency object"))?;
+    let closure = closure_packages(&manifest)?;
     for &(name, factory) in FACTORIES {
-        if dependencies.contains_key(&format!("@seekdeep-ai/{name}")) {
+        if closure.contains(&format!("@seekdeep-ai/{name}")) {
             let plugin = match (name, integrated_worker) {
                 ("seekdeep-workflow-worker-thread", Some(path)) => {
                     seekdeep_workflow_worker_thread::plugin_with_integrated_worker_path(
@@ -223,7 +244,7 @@ pub(crate) fn register(
             register_aliases(catalog, name, plugin)?;
         }
     }
-    if dependencies.contains_key("@seekdeep-ai/seekdeep-tool-subagent-control") {
+    if closure.contains("@seekdeep-ai/seekdeep-tool-subagent-control") {
         register_aliases(
             catalog,
             "seekdeep-tool-subagent-control/list-agents",

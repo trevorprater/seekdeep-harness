@@ -880,12 +880,21 @@ fn validate_manifest(binary: &Path, manifest: &Value, version: &str) -> anyhow::
     let plugins = compiled["plugins"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("compiled runtime has no plugin inventory"))?;
+    let compiled_plugins = manifest
+        .pointer("/seekdeep/compiledPlugins")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect::<Vec<_>>();
     for plugin in plugins {
         let name = plugin
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("compiled plugin name is not a string"))?;
+        // The manifest declares the closure as workspace dependencies plus the plugins
+        // compiled into the executable (`seekdeep.compiledPlugins`).
         anyhow::ensure!(
-            manifest["dependencies"].get(name).is_some(),
+            manifest["dependencies"].get(name).is_some() || compiled_plugins.contains(&name),
             "compiled runtime exposes undeclared plugin {name}"
         );
     }
