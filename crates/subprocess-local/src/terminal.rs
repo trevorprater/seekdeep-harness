@@ -346,7 +346,12 @@ impl LocalTerminalHandle {
             let outcome = outcome_receiver.await.unwrap_or_else(|_| {
                 StoredDone::Failure(Arc::from("terminal exit observer stopped"))
             });
-            let _ = tokio::time::timeout(Duration::from_millis(200), reader_done_receiver).await;
+            // node-pty reports exit only once the PTY has closed and every byte was
+            // delivered, so the end marker follows the reader's own finish rather than a
+            // deadline: a reader still draining after the exit can never enqueue data behind
+            // `End`, which the channel reader treats as final. A descendant that keeps the PTY
+            // open delays the exit the same way it does in the source.
+            let _ = reader_done_receiver.await;
             let _ = end_sender.send(ChannelMessage::End);
             wait_done.complete(outcome);
         });
@@ -924,6 +929,44 @@ mod tests {
         assert!(text.contains("ready:visible:dumb:/tmp"), "{text:?}");
         assert!(text.contains("got:hello"), "{text:?}");
         handle.terminate().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn output_written_just_before_exit_arrives_before_the_end_marker() {
+        let request = spec(
+            "i=0; while [ $i -lt 4000 ]; do printf 'burst-%04d\\n' \"$i\"; i=$((i+1)); done; exit 3",
+        );
+        let handle = LocalTerminalHandle::spawn(
+            &request,
+            create_process_inspector().unwrap(),
+            Duration::from_millis(200),
+        )
+        .unwrap();
+        let outcome = tokio::time::timeout(Duration::from_secs(10), handle.done())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome.exit_code, Some(3));
+        // The exit was reported only after the reader finished, so everything the shell wrote
+        // sits ahead of the end marker and a drain after `done` misses nothing.
+        let output = handle.output();
+        let mut output = output.lock().await;
+        let mut bytes = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), output.read_to_end(&mut bytes))
+            .await
+            .unwrap()
+            .unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            text.contains("burst-0000"),
+            "{}",
+            &text[..text.len().min(200)]
+        );
+        assert!(
+            text.contains("burst-3999"),
+            "{}",
+            &text[text.len().saturating_sub(200)..]
+        );
     }
 
     #[tokio::test]

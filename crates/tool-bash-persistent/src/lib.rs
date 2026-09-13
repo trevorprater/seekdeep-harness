@@ -15,6 +15,7 @@ use seekdeep_tools::{
     define_tool,
 };
 use seekdeep_util::timeout::{deadline, timeout_of};
+use seekdeep_util::utf16::{utf16_len, utf16_prefix};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -449,13 +450,10 @@ fn partial_output(
     }
 }
 
-fn utf16_prefix(text: &str, max_units: usize) -> String {
-    let units = text.encode_utf16().collect::<Vec<_>>();
-    String::from_utf16_lossy(&units[..units.len().min(max_units)])
-}
-
+/// Bounds the result to `max_chars` UTF-16 units like the source's `slice`; a cut inside an
+/// astral character stops before it (DEV-003) instead of decoding a replacement character.
 fn maybe_truncate(content: &str, max_chars: usize, incomplete: bool) -> String {
-    if content.encode_utf16().count() <= max_chars && !incomplete {
+    if utf16_len(content) <= max_chars && !incomplete {
         return content.to_owned();
     }
     format!("{}{TRUNCATED_MESSAGE}", utf16_prefix(content, max_chars))
@@ -717,4 +715,29 @@ pub fn plugin() -> Plugin {
         })
     })
     .with_config_validator(normalize_config)
+}
+
+#[cfg(test)]
+mod maybe_truncate_tests {
+    use super::{TRUNCATED_MESSAGE, maybe_truncate};
+
+    #[test]
+    fn a_cap_inside_an_astral_character_cuts_before_it_without_a_replacement() {
+        let text = "ab\u{1F600}cd";
+        assert_eq!(maybe_truncate(text, 6, false), text);
+        assert_eq!(
+            maybe_truncate(text, 4, false),
+            format!("ab\u{1F600}{TRUNCATED_MESSAGE}")
+        );
+        // Three units would split the emoji: the kept prefix stops before it.
+        assert_eq!(
+            maybe_truncate(text, 3, false),
+            format!("ab{TRUNCATED_MESSAGE}")
+        );
+        assert!(!maybe_truncate(text, 3, false).contains('\u{FFFD}'));
+        assert_eq!(
+            maybe_truncate(text, 6, true),
+            format!("{text}{TRUNCATED_MESSAGE}")
+        );
+    }
 }
