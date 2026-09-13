@@ -349,3 +349,25 @@ fn empty_store_identity_is_rejected() {
         store_identity(&database, std::path::Path::new(":memory:")).expect_err("missing identity");
     assert!(error.to_string().contains("no valid store identity"));
 }
+
+
+#[test]
+fn rejects_a_malformed_committed_closing_row() {
+    // The final row is a committed turn/end whose payload cannot be parsed. Reading the corruption
+    // boundary from the stored type makes that row corruption; reading it from successful
+    // deserialization moved the boundary back to the earlier turn/end, so this row fell past it and
+    // the scan reported a torn tail - returning a truncated log and no error.
+    let mut closing = event_row(2, "turn/end");
+    closing.data = "{".to_owned();
+    let rows = vec![
+        event_row(0, "turn/start"),
+        event_row(1, "turn/end"),
+        closing,
+    ];
+
+    let error = scan_rows(&rows, 0).expect_err("a malformed committed closing row is corruption");
+    assert!(
+        error.to_string().contains("unparsable committed event"),
+        "{error}"
+    );
+}
