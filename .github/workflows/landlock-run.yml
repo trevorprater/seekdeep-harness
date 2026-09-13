@@ -63,7 +63,7 @@ jobs:
     outputs:
       ci: ${{ steps.matrix.outputs.ci }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@1.93.1
 
@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix.outputs.ci) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Read source oracle pin
         id: oracle
@@ -87,7 +87,7 @@ jobs:
           [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
           echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: deepseek-ai/deepseek-harness
           ref: ${{ steps.oracle.outputs.commit }}
@@ -160,7 +160,7 @@ jobs:
     name: darwin (no platform package — degradation proof)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Read source oracle pin
         id: oracle
@@ -169,7 +169,7 @@ jobs:
           [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
           echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: deepseek-ai/deepseek-harness
           ref: ${{ steps.oracle.outputs.commit }}
