@@ -282,6 +282,17 @@ async fn startup_failure_is_optional_or_strict_and_strict_conflicts_roll_back() 
     );
     assert!(format!("{error:#}").contains("connection refused"));
     assert!(strict_tools.get("mcp__strict__remote", None).is_none());
+    // A strict failure is a rolled-back registration: the same name registers again on the
+    // still-live context instead of conflicting with a stale reservation.
+    let retried = apply_with_runtime(
+        &strict_context,
+        config("strict", true),
+        runtime(StartupClient::success("remote")),
+    )
+    .await
+    .unwrap();
+    assert!(strict_tools.get("mcp__strict__remote", None).is_some());
+    retried.dispose().await.unwrap();
 
     let (conflict_context, conflict_tools) = registry();
     conflict_tools

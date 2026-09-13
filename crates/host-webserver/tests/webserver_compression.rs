@@ -3,16 +3,22 @@
 
 use std::{
     io::Read as _,
+    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
+    task::{Context as TaskContext, Poll},
 };
 
 use bytes::Bytes;
 use flate2::read::GzDecoder;
 use http_body_util::{BodyExt as _, StreamBody};
-use hyper::{StatusCode, body::Frame, header};
+use hyper::{
+    StatusCode,
+    body::{Frame, SizeHint},
+    header,
+};
 use seekdeep_cordis::Context;
 use seekdeep_host_webserver::{
     ListenHost, WebHandler, WebHandlerFuture, WebResponse, WebRoute, WebRouteKind, WebServer,
@@ -56,6 +62,42 @@ fn typed(content_type: &'static str, body: String) -> WebHandler {
                 header::CONTENT_TYPE,
                 header::HeaderValue::from_static(content_type),
             );
+            Ok(response) as anyhow::Result<WebResponse>
+        }) as WebHandlerFuture
+    })
+}
+
+/// A complete-looking body (exact size hint) whose stream fails as soon as it is read.
+struct FailingBody {
+    size: u64,
+}
+
+impl hyper::body::Body for FailingBody {
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        _context: &mut TaskContext<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Poll::Ready(Some(Err(std::io::Error::other("route stream failed"))))
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        SizeHint::with_exact(self.size)
+    }
+}
+
+/// A compressible route whose body fails while streaming.
+fn failing(content_type: &'static str, size: u64) -> WebHandler {
+    Arc::new(move |_request| {
+        Box::pin(async move {
+            let mut response = response(StatusCode::OK, Bytes::new());
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                header::HeaderValue::from_static(content_type),
+            );
+            *response.body_mut() = FailingBody { size }.boxed_unsync();
             Ok(response) as anyhow::Result<WebResponse>
         }) as WebHandlerFuture
     })
@@ -250,4 +292,23 @@ async fn only_an_immutable_target_replays_its_encoded_body() {
         assert!(headers.contains("content-encoding: gzip"), "{headers}");
         assert_eq!(gunzip(body), expected);
     }
+}
+
+#[tokio::test]
+async fn a_body_that_fails_while_buffering_for_compression_fails_the_response() {
+    let server = install(vec![("/failing.json", failing("application/json", 4096))])
+        .await
+        .unwrap();
+    let outcome = request(server.port(), "/failing.json", Some("gzip")).await;
+    // The peer must never see a well-formed successful payload standing in for the route's
+    // failure: either the connection drops or the message is left incomplete.
+    let complete_success = match &outcome {
+        Ok(bytes) if bytes.windows(4).any(|window| window == b"\r\n\r\n") => {
+            let (headers, body) = split(bytes);
+            headers.starts_with("http/1.1 200")
+                && (headers.contains("content-length: 0") || body.ends_with(b"0\r\n\r\n"))
+        }
+        _ => false,
+    };
+    assert!(!complete_success, "{outcome:?}");
 }

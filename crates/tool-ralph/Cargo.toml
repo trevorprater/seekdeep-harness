@@ -14,6 +14,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-subagent = { path = "../subagent" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
 seekdeep-workflow = { path = "../workflow" }
 serde.workspace = true
 serde_json.workspace = true

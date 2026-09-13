@@ -169,11 +169,9 @@ pub fn install(
         default_model_selection: std::sync::Arc::new(move || {
             let selection = current_defaults.current_selection();
             ModelSelection {
-                provider: selection.provider.to_string(),
-                model: selection.model.to_string(),
-                reasoning_effort: selection
-                    .reasoning_effort
-                    .map(|effort| effort.as_str().to_owned()),
+                provider: selection.provider,
+                model: selection.model,
+                reasoning_effort: selection.reasoning_effort,
             }
         }),
         save_default_model_selection: Some(std::sync::Arc::new(move |selection| {
@@ -181,11 +179,9 @@ pub fn install(
             Box::pin(async move {
                 save_defaults
                     .save_selection(&seekdeep_agent::ModelSelection {
-                        provider: seekdeep_llm::ProviderId::new(selection.provider),
-                        model: seekdeep_llm::ModelId::new(selection.model),
-                        reasoning_effort: selection
-                            .reasoning_effort
-                            .map(seekdeep_llm::ReasoningEffortId::new),
+                        provider: selection.provider,
+                        model: selection.model,
+                        reasoning_effort: selection.reasoning_effort,
                     })
                     .await
             })

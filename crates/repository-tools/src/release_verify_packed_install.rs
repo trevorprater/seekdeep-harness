@@ -60,6 +60,9 @@ pub fn packed_dependencies(
         }
         for tarball in tarballs {
             let identity = packed_identity(&tarball)?;
+            // The source resolves each tarball before forming its file URL; a relative `--from`
+            // directory must produce the same absolute `file:` specifier.
+            let tarball = std::path::absolute(&tarball)?;
             let url = url::Url::from_file_path(&tarball)
                 .map_err(|()| anyhow::anyhow!("cannot form file URL for {}", tarball.display()))?;
             dependencies.insert(

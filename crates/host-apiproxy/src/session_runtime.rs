@@ -34,7 +34,7 @@ use seekdeep_core::{
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_jobs::{JOBS, JobRegistryService};
-use seekdeep_llm::{AbortSignal, JsonString, ModelId, ProviderId};
+use seekdeep_llm::{AbortSignal, JsonString};
 use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
 };
@@ -611,8 +611,8 @@ impl SessionApiProxyRuntime {
             .ok_or_else(|| anyhow::anyhow!("session.create requires default model selection"))?;
         let selection = defaults();
         Ok(AgentOptions {
-            provider: Some(ProviderId::new(selection.provider)),
-            model: Some(ModelId::new(selection.model)),
+            provider: Some(selection.provider),
+            model: Some(selection.model),
             ..AgentOptions::default()
         })
     }

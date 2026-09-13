@@ -1,7 +1,7 @@
 //! Differentially ported schema and row-scanning contracts.
 
 use rusqlite::Connection;
-use seekdeep_core::session::{SessionOrigin, SurfaceOp};
+use seekdeep_core::session::{SessionId, SessionOrigin, SurfaceOp};
 use seekdeep_session_persistence_sqlite::schema::{
     EventRow, JournalMode, SCHEMA_VERSION, SESSION_PERSISTENCE_SQLITE_APPLICATION_ID, SessionRow,
     open_database, row_to_event, row_to_meta, scan_rows, store_identity,
@@ -22,7 +22,7 @@ fn event_row(seq: i64, event_type: &str) -> EventRow {
 
 fn session_row() -> SessionRow {
     SessionRow {
-        id: "session-1".to_owned(),
+        id: SessionId::new("session-1"),
         version: 0,
         created_at: 123,
         cwd: None,
@@ -281,7 +281,7 @@ fn suffix_scan_uses_the_requested_base() {
 fn row_reconstruction_restores_every_optional_header_field() {
     let mut row = session_row();
     row.cwd = Some("/workspace".to_owned());
-    row.parent_session = Some("parent".to_owned());
+    row.parent_session = Some(SessionId::new("parent"));
     row.seed_length = Some(4);
     row.origin = Some("subagent".to_owned());
     row.delegation_depth = Some(2);

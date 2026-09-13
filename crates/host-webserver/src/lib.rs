@@ -15,10 +15,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use http_body_util::{BodyExt as _, Empty, Full, combinators::UnsyncBoxBody};
+use http_body_util::{BodyExt as _, Empty, Full, StreamBody, combinators::UnsyncBoxBody};
 use hyper::{
-    Request, Response, StatusCode, body::Body as _, body::Incoming, header, header::HeaderValue,
-    service::service_fn,
+    Request, Response, StatusCode, body::Body as _, body::Frame, body::Incoming, header,
+    header::HeaderValue, service::service_fn,
 };
 use hyper_util::rt::TokioIo;
 use indexmap::IndexMap;
@@ -835,14 +835,12 @@ async fn compress(
         return encoded_response(parts, cached);
     }
     let (parts, body) = response.into_parts();
-    let Ok(collected) = body.collect().await else {
-        tracing::warn!("webserver: response body failed to buffer for compression");
-        return Response::from_parts(
-            parts,
-            Full::new(Bytes::new())
-                .map_err(|never| match never {})
-                .boxed_unsync(),
-        );
+    let collected = match body.collect().await {
+        Ok(collected) => collected,
+        Err(error) => {
+            tracing::warn!(%error, "webserver: response body failed while buffering for compression");
+            return Response::from_parts(parts, failed_body(error));
+        }
     };
     let original = collected.to_bytes();
     let source = original.clone();
@@ -873,6 +871,16 @@ async fn compress(
             )
         }
     }
+}
+
+/// A body that fails the way the route's own stream did, so the peer observes the transport
+/// failure instead of a synthesized empty payload under the route's status and headers.
+fn failed_body(error: std::io::Error) -> WebBody {
+    StreamBody::new(futures::stream::once(std::future::ready(Err::<
+        Frame<Bytes>,
+        _,
+    >(error))))
+    .boxed_unsync()
 }
 
 /// Rebuilds a response around one encoded body, keeping its status and other headers.

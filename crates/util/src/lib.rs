@@ -10,3 +10,4 @@ pub mod native_command;
 pub mod output_retention;
 pub mod product_assets;
 pub mod timeout;
+pub mod utf16;

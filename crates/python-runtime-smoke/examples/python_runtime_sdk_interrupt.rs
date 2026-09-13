@@ -128,15 +128,21 @@ for line in sys.stdin:
             .success(),
         "could not interrupt owned CLI"
     );
-    // The SDK's own runtime teardown allows ten seconds before it kills the runtime;
-    // the cleanup budget starts at the interrupt and leaves room for that.
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // The SDK's own runtime teardown allows ten seconds before it kills the runtime, and a
+    // loaded runner adds interpreter shutdown and scheduling latency on top; the cleanup
+    // budget starts at the interrupt and leaves generous room for both. A miss reports how
+    // far the teardown got so the next failure carries a signal.
+    let interrupted = Instant::now();
+    let deadline = interrupted + Duration::from_secs(60);
     while child.0.as_mut().expect("owned CLI").try_wait()?.is_none() {
         if Instant::now() >= deadline {
-            return Err(failure(
-                &mut child,
-                "interrupted CLI did not finish SDK cleanup",
-            ));
+            let phase = format!(
+                "interrupted CLI did not finish SDK cleanup within {:?} (shutdown reached the runtime: {}, runtime still alive: {})",
+                interrupted.elapsed(),
+                closed.is_file(),
+                process_alive(runtime_pid.trim())?
+            );
+            return Err(failure(&mut child, &phase));
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -149,14 +155,20 @@ for line in sys.stdin:
     );
     anyhow::ensure!(closed.is_file(), "SDK did not send runtime shutdown");
     anyhow::ensure!(
-        !Command::new("kill")
-            .args(["-0", runtime_pid.trim()])
-            .stderr(Stdio::null())
-            .status()?
-            .success(),
+        !process_alive(runtime_pid.trim())?,
         "runtime remains alive after CLI exit"
     );
     Ok(())
+}
+
+/// Whether `pid` still answers a null signal.
+#[cfg(unix)]
+fn process_alive(pid: &str) -> anyhow::Result<bool> {
+    Ok(Command::new("kill")
+        .args(["-0", pid])
+        .stderr(Stdio::null())
+        .status()?
+        .success())
 }
 
 #[cfg(not(unix))]

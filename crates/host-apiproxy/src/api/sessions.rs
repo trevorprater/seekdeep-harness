@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use seekdeep_attachment::{AttachmentId, ImageAttachmentRef, ImageMediaType};
 use seekdeep_core::session::{JsonRef, JsonValue, SessionId};
-use seekdeep_llm::MessageId;
+use seekdeep_llm::{MessageId, ModelId, ProviderId, ReasoningEffortId};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
@@ -527,12 +527,12 @@ impl SessionHistoryRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ModelSelection {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Optional adapter-owned reasoning effort.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortId>,
 }
 
 impl ModelSelection {

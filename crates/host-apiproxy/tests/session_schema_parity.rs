@@ -290,7 +290,8 @@ fn model_directory_contract_requires_routability_and_nonempty_reasoning_metadata
         SessionSelectModelValue::parse(&json!({"selected": {"provider": "p", "model": "m"}}))
             .unwrap()
             .selected
-            .model,
+            .model
+            .as_str(),
         "m"
     );
 }

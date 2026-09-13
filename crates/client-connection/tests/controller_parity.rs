@@ -502,3 +502,34 @@ async fn restart_during_a_backoff_wait_leaves_one_loop_driving_generations() {
     assert_eq!(api.describe_calls.load(Ordering::Acquire), 2);
     controller.stop();
 }
+
+#[tokio::test]
+async fn cancellation_wins_over_a_frame_that_is_ready_at_the_same_time() {
+    let api = Arc::new(FakeApi::default());
+    let (describe, mut mux, mut host) = api.generation();
+    let mux_frames = Arc::new(Mutex::new(Vec::new()));
+    let controller = ConnectionController::new(
+        api,
+        ConnectionSinks {
+            on_mux_envelope: Some({
+                let values = mux_frames.clone();
+                Arc::new(move |frame| values.lock().push(frame))
+            }),
+            on_host_envelope: None,
+            on_connected: None,
+            on_state_change: None,
+        },
+        fast_config(),
+    );
+    controller.start();
+    describe.send(Ok(description("fixture"))).unwrap();
+    mux.open();
+    host.open();
+    settle().await;
+    // The frame and the stop reach the pump in the same poll: a stopped generation must never
+    // deliver a stale envelope, whichever branch a runtime would otherwise pick.
+    mux.frame("mux/message", json!(1));
+    controller.stop();
+    settle().await;
+    assert!(mux_frames.lock().is_empty());
+}

@@ -12,6 +12,7 @@ use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, GenericResultView, TOOLS, ToolCallView,
     ToolResult, ToolResultView, define_tool,
 };
+use seekdeep_util::utf16::{utf16_len, utf16_prefix};
 use seekdeep_workflow::{
     WORKFLOW_ENGINE, WorkflowMeta, WorkflowPhase, WorkflowResult, WorkflowRunId,
     WorkflowStartRequest, WorkflowStopReason,
@@ -509,17 +510,21 @@ fn stop_reason_error(result: &WorkflowResult) -> Option<String> {
 const TRUNCATION_NOTICE: &str = "\n… [truncated]";
 
 /// Bound complete parent-facing text, including its envelope and truncation marker.
+///
+/// The limit counts UTF-16 code units like the source's `length` and `slice`; a cut that would
+/// split an astral character stops before it (DEV-003).
 fn bound_result(text: &str, max_chars: usize) -> String {
-    let count = text.chars().count();
-    if count <= max_chars {
+    if utf16_len(text) <= max_chars {
         return text.to_owned();
     }
-    let notice_len = TRUNCATION_NOTICE.chars().count();
+    let notice_len = utf16_len(TRUNCATION_NOTICE);
     if max_chars <= notice_len {
-        return TRUNCATION_NOTICE.chars().take(max_chars).collect();
+        return utf16_prefix(TRUNCATION_NOTICE, max_chars).to_owned();
     }
-    let head: String = text.chars().take(max_chars - notice_len).collect();
-    format!("{head}{TRUNCATION_NOTICE}")
+    format!(
+        "{}{TRUNCATION_NOTICE}",
+        utf16_prefix(text, max_chars - notice_len)
+    )
 }
 
 /// Render the fixed terminal envelope without presenting self-report as certification.
@@ -742,4 +747,42 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     )?;
     tools.register(context, definition)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod bound_result_tests {
+    use super::{TRUNCATION_NOTICE, bound_result};
+
+    #[test]
+    fn counts_the_limit_in_utf16_units_like_the_source() {
+        // Eight astral characters are sixteen units: over a limit of fifteen even though they
+        // are eight characters.
+        let emoji = "\u{1F600}".repeat(8);
+        assert_eq!(bound_result(&emoji, 16), emoji);
+        let bounded = bound_result(&emoji, 15);
+        assert!(bounded.ends_with(TRUNCATION_NOTICE));
+        assert!(super::utf16_len(&bounded) <= 15);
+        assert_eq!(bounded, format!("{TRUNCATION_NOTICE}"));
+    }
+
+    #[test]
+    fn a_cut_inside_an_astral_character_stops_before_it() {
+        let notice = super::utf16_len(TRUNCATION_NOTICE);
+        let text = format!("ab\u{1F600}{}", "c".repeat(40));
+        // Three units of head: "ab" plus half of the emoji, which the port cannot keep.
+        assert_eq!(
+            bound_result(&text, notice + 3),
+            format!("ab{TRUNCATION_NOTICE}")
+        );
+        assert_eq!(
+            bound_result(&text, notice + 4),
+            format!("ab\u{1F600}{TRUNCATION_NOTICE}")
+        );
+    }
+
+    #[test]
+    fn a_limit_inside_the_notice_keeps_a_prefix_of_the_notice() {
+        assert_eq!(bound_result(&"x".repeat(50), 3), "\n\u{2026} ");
+        assert_eq!(bound_result(&"x".repeat(50), 0), "");
+    }
 }

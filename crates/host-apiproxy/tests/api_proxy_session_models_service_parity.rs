@@ -299,7 +299,7 @@ impl Harness {
                 "model": logged.model,
             });
             if let Some(effort) = logged.reasoning_effort {
-                config["reasoningEffort"] = Value::String(effort);
+                config["reasoningEffort"] = Value::String(effort.into_string());
             }
             session
                 .append(
@@ -329,8 +329,8 @@ impl Harness {
             .unwrap();
         agents.register(&context, &agent, None).unwrap();
         let defaults = Arc::new(Mutex::new(ModelSelection {
-            provider: "deepseek-official".to_owned(),
-            model: "deepseek-chat".to_owned(),
+            provider: ProviderId::new("deepseek-official"),
+            model: ModelId::new("deepseek-chat"),
             reasoning_effort: None,
         }));
         let runtime = PresetApiProxyRuntime::from_context(
@@ -454,9 +454,9 @@ fn value(result: RpcResult<Value>) -> Value {
 async fn directory_groups_valid_providers_contains_failures_and_keeps_unlisted_selection() {
     let harness = Harness::new(
         Some(ModelSelection {
-            provider: "deepseek-official".to_owned(),
-            model: "private-preview".to_owned(),
-            reasoning_effort: Some("max".to_owned()),
+            provider: ProviderId::new("deepseek-official"),
+            model: ModelId::new("private-preview"),
+            reasoning_effort: Some(ReasoningEffortId::new("max")),
         }),
         None,
     );
@@ -517,7 +517,7 @@ async fn live_default_logged_override_and_selection_epoch_are_exact() {
         .await,
     );
     assert_eq!(initial["current"]["model"], "deepseek-chat");
-    harness.defaults.lock().model = "deepseek-reasoner".to_owned();
+    harness.defaults.lock().model = ModelId::new("deepseek-reasoner");
     let moved_default = value(
         invoke(
             &harness.runtime,

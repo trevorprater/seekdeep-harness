@@ -163,9 +163,9 @@ impl ApiModelSelection {
         }
         let defaults = (self.defaults)();
         AgentModelSelection {
-            provider: ProviderId::new(defaults.provider),
-            model: ModelId::new(defaults.model),
-            reasoning_effort: defaults.reasoning_effort.map(ReasoningEffortId::new),
+            provider: defaults.provider,
+            model: defaults.model,
+            reasoning_effort: defaults.reasoning_effort,
         }
     }
 
@@ -305,8 +305,8 @@ impl PresetApiProxyRuntime {
         let agent_options = Arc::new(move || {
             let selection = defaults();
             AgentOptions {
-                provider: Some(ProviderId::new(selection.provider)),
-                model: Some(ModelId::new(selection.model)),
+                provider: Some(selection.provider),
+                model: Some(selection.model),
                 ..AgentOptions::default()
             }
         });
@@ -898,7 +898,7 @@ impl PresetApiProxyRuntime {
         let routable = llm
             .list_providers()
             .iter()
-            .any(|provider| provider.id.as_str() == current.provider);
+            .any(|provider| provider.id == current.provider);
         let (groups, failures) = build_model_catalog(llm).await;
         typed_success(
             request,
@@ -1443,8 +1443,8 @@ impl PresetApiProxyRuntime {
             },
             seed: Some(source.events[..cut].to_vec()),
             agent_options: AgentOptions {
-                provider: Some(ProviderId::new(defaults.provider)),
-                model: Some(ModelId::new(defaults.model)),
+                provider: Some(defaults.provider),
+                model: Some(defaults.model),
                 ..AgentOptions::default()
             },
             signal: None,
@@ -1945,21 +1945,17 @@ fn wire_trust(trust: PresetTrust) -> AgentPresetTrust {
 
 fn wire_model_selection(selection: AgentModelSelection) -> SessionModelSelection {
     SessionModelSelection {
-        provider: selection.provider.into_string(),
-        model: selection.model.into_string(),
-        reasoning_effort: selection
-            .reasoning_effort
-            .map(ReasoningEffortId::into_string),
+        provider: selection.provider,
+        model: selection.model,
+        reasoning_effort: selection.reasoning_effort,
     }
 }
 
 fn default_model_selection(selection: AgentModelSelection) -> crate::ModelSelection {
     crate::ModelSelection {
-        provider: selection.provider.into_string(),
-        model: selection.model.into_string(),
-        reasoning_effort: selection
-            .reasoning_effort
-            .map(ReasoningEffortId::into_string),
+        provider: selection.provider,
+        model: selection.model,
+        reasoning_effort: selection.reasoning_effort,
     }
 }
 

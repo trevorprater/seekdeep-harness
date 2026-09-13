@@ -548,7 +548,7 @@ async fn describe_reads_live_defaults_count_and_path_capability() {
     *selection.lock().unwrap() = ModelSelection {
         provider: "saved".into(),
         model: "next".into(),
-        reasoning_effort: Some("high".to_owned()),
+        reasoning_effort: Some("high".into()),
     };
     *visible.lock().unwrap() = true;
     *count.lock().unwrap() = 4;

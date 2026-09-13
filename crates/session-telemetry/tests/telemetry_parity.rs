@@ -442,3 +442,33 @@ fn contains_each_backend_failure_independently_while_replaying_a_prefix() {
         vec![0, 2]
     );
 }
+
+/// The source keys its handoff cursor by session in a weak map, so a disposed session's cursor
+/// dies with it even when capture is on demand and no adoption listener runs.
+#[tokio::test]
+async fn on_demand_capture_retires_its_cursor_when_the_session_is_disposed() {
+    let backend = Arc::new(FakeBackend::default());
+    let (context, backend, coordinator) = setup(backend.clone(), SessionTelemetryCapture::OnDemand);
+    let fiber = seekdeep_cordis::Fiber::active_child("session-owner");
+    let scoped = context.with_fiber(fiber.clone());
+    let session = live_session(&scoped, "on-demand-retired");
+    append_turn(&session);
+    coordinator.capture_session(&session, None);
+    assert_eq!(backend.ledger().len(), 2);
+    // A second capture hands nothing over: the cursor already covers the log.
+    coordinator.capture_session(&session, None);
+    assert_eq!(backend.ledger().len(), 2);
+
+    fiber.dispose().await.expect("dispose the session owner");
+    // The disposed session's cursor is gone, so a capture of its retained log starts over
+    // instead of inheriting the retired cursor.
+    coordinator.capture_session(&session, None);
+    assert_eq!(backend.ledger().len(), 4);
+    assert!(
+        backend
+            .records
+            .lock()
+            .iter()
+            .all(|record| record.channel != SessionTelemetryChannel::Ops)
+    );
+}

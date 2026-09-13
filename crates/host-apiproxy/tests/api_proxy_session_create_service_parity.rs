@@ -220,8 +220,8 @@ impl Harness {
             &context,
             PresetApiProxyOptions {
                 default_model_selection: Arc::new(|| ModelSelection {
-                    provider: "provider".to_owned(),
-                    model: "model".to_owned(),
+                    provider: "provider".into(),
+                    model: "model".into(),
                     reasoning_effort: None,
                 }),
                 save_default_model_selection: None,
@@ -236,8 +236,8 @@ impl Harness {
             SessionApiProxyOptions {
                 default_cwd: Some(project.path().to_string_lossy().into_owned()),
                 default_model_selection: Some(Arc::new(|| ModelSelection {
-                    provider: "provider".to_owned(),
-                    model: "model".to_owned(),
+                    provider: "provider".into(),
+                    model: "model".into(),
                     reasoning_effort: None,
                 })),
                 ..SessionApiProxyOptions::default()

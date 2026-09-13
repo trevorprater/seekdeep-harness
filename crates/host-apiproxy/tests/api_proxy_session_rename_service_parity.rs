@@ -109,8 +109,8 @@ impl Harness {
             &context,
             PresetApiProxyOptions {
                 default_model_selection: Arc::new(|| ModelSelection {
-                    provider: "provider".to_owned(),
-                    model: "model".to_owned(),
+                    provider: "provider".into(),
+                    model: "model".into(),
                     reasoning_effort: None,
                 }),
                 save_default_model_selection: None,

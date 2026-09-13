@@ -120,6 +120,9 @@ impl SessionTelemetryCoordinator {
             adopted: Mutex::new(HashMap::new()),
             chunk_seen: Mutex::new(HashMap::new()),
         });
+        // Pointer-keyed capture state must die with its session in every mode, as the source's
+        // weak-keyed maps do; only live capture also follows creation, events, and flush hints.
+        coordinator.register_retirement(context)?;
         if capture == SessionTelemetryCapture::Live {
             coordinator.register(context)?;
         }
@@ -139,21 +142,7 @@ impl SessionTelemetryCoordinator {
         Ok(coordinator)
     }
 
-    fn register(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        let created = self.clone();
-        context.events().on_sync(
-            context,
-            "session/created",
-            move |_, args| {
-                let Some(session) = args.get::<Session>(0) else {
-                    return Ok(EventReply::Undefined);
-                };
-                created.adopt(&session);
-                Ok(EventReply::Undefined)
-            },
-            EventOptions::default(),
-        )?;
-
+    fn register_retirement(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
         let disposed = self.clone();
         context.events().on_sync(
             context,
@@ -175,6 +164,23 @@ impl SessionTelemetryCoordinator {
                     disposed.deliver(&session, disposed.redact(shutdown_record(&session))?, None);
                     Ok(())
                 });
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        )?;
+        Ok(())
+    }
+
+    fn register(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
+        let created = self.clone();
+        context.events().on_sync(
+            context,
+            "session/created",
+            move |_, args| {
+                let Some(session) = args.get::<Session>(0) else {
+                    return Ok(EventReply::Undefined);
+                };
+                created.adopt(&session);
                 Ok(EventReply::Undefined)
             },
             EventOptions::default(),

@@ -11,7 +11,7 @@ use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_host_directory_picker::{
     DIRECTORY_PICKER, DirectoryPickerCapability, DirectoryPickerFailure, DirectoryPickerService,
 };
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, ModelId, ProviderId, ReasoningEffortId};
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use uuid::Uuid;
@@ -42,11 +42,11 @@ use crate::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelSelection {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Adapter-owned reasoning effort, when selected.
-    pub reasoning_effort: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffortId>,
 }
 
 /// Dynamic default-model reader.
@@ -560,8 +560,8 @@ impl ApiProxyService {
             // Exact pinned-source placeholder. The source carries the same TODO.
             version: "0.0.1".to_owned(),
             cwd: self.defaults.cwd.clone(),
-            provider: Some(selection.provider),
-            model: Some(selection.model),
+            provider: Some(selection.provider.into_string()),
+            model: Some(selection.model.into_string()),
             attached_sessions,
             can_open_path: self.can_open_paths(),
         };

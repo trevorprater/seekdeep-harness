@@ -92,6 +92,11 @@ pub async fn apply_with_runtime(
     if let Some(error) = connection.initial_error().await
         && config.fail_on_startup_error()
     {
+        // A strict startup failure is a failed registration: release the connection and the
+        // name reservation now so the caller's live context can register the name again,
+        // instead of leaving both owned until the whole context tears down.
+        let _ = connection.dispose().await;
+        let _ = reservation.dispose().await;
         return Err(anyhow::Error::msg(error).context(format!(
             "mcp-client({server_name}): initial connection or tool synchronization failed"
         )));

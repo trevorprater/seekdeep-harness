@@ -338,14 +338,18 @@ impl ConnectionController {
         };
         runtime::spawn(async move {
             loop {
+                // Cancellation wins over a frame that is ready at the same time, and a frame
+                // taken just before the abort is dropped rather than dispatched: a stopped or
+                // superseded generation never delivers a stale envelope.
                 let item = tokio::select! {
+                    biased;
                     () = signal.cancelled() => break,
                     item = stream.next() => item,
                 };
                 let Some(Ok(frame)) = item else {
                     break;
                 };
-                if frame.is_stream_error() {
+                if signal.is_aborted() || frame.is_stream_error() {
                     break;
                 }
                 if let Some(sink) = &sink {

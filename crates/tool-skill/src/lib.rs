@@ -22,6 +22,7 @@ use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, TOOLS, ToolCallKind, ToolCallView,
     ToolDefinition, ToolRunContext, ToolRuntime, define_tool,
 };
+use seekdeep_util::utf16::{utf16_len, utf16_prefix};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -123,17 +124,15 @@ pub fn catalog_source_entries(
 pub fn catalog_description(value: &str, max_length: usize) -> String {
     let normalized = WHITESPACE.replace_all(value, " ").trim().to_owned();
     // The source measures and slices with JavaScript string semantics, which count UTF-16 code
-    // units, so an astral character costs two.
-    if normalized.encode_utf16().count() <= max_length {
+    // units, so an astral character costs two; a cut inside one stops before it (DEV-003)
+    // rather than publishing a replacement character the description never contained.
+    if utf16_len(&normalized) <= max_length {
         normalized
     } else {
-        let truncated = String::from_utf16_lossy(
-            &normalized
-                .encode_utf16()
-                .take(max_length.saturating_sub(3))
-                .collect::<Vec<u16>>(),
-        );
-        format!("{truncated}...")
+        format!(
+            "{}...",
+            utf16_prefix(&normalized, max_length.saturating_sub(3))
+        )
     }
 }
 
@@ -903,5 +902,25 @@ mod tests {
         let tool = definition(&context).expect("definition");
         assert_eq!(tool.name, "skill");
         assert!(register_skill_tool(&context).is_err());
+    }
+}
+
+#[cfg(test)]
+mod catalog_description_tests {
+    use super::catalog_description;
+
+    #[test]
+    fn measures_in_utf16_units_and_never_publishes_a_replacement_character() {
+        assert_eq!(catalog_description("  a   b  ", 10), "a b");
+        // "abc", three astral characters, and "d" are ten UTF-16 units: they fit a limit of
+        // ten and truncate to `limit - 3` units plus "..." below it.
+        let description = "abc\u{1F600}\u{1F600}\u{1F600}d";
+        assert_eq!(catalog_description(description, 10), description);
+        // Six units of head hold "abc" and one emoji; the second emoji would split, so the cut
+        // stops before it instead of publishing a replacement character.
+        assert_eq!(catalog_description(description, 9), "abc\u{1F600}...");
+        // Four units of head hold "abc" only.
+        assert_eq!(catalog_description(description, 7), "abc...");
+        assert!(!catalog_description(description, 9).contains('\u{FFFD}'));
     }
 }

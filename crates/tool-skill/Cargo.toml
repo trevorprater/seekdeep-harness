@@ -18,6 +18,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-skill = { path = "../skill" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

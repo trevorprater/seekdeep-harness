@@ -754,7 +754,7 @@ async fn start_watcher(
     }
     let (stop, stop_rx) = watch::channel(false);
     let weak = Arc::downgrade(storage);
-    let debounce = Duration::from_secs_f64(storage.spec.debounce_ms / 1_000.0);
+    let debounce = settle_window(storage.spec.debounce_ms);
     let task = tokio::spawn(async move {
         let _watcher = watcher;
         watcher_loop(weak, events_rx, stop_rx, target, debounce).await;
@@ -870,6 +870,35 @@ pub fn install(
     config: FileSettingsConfig,
 ) -> anyhow::Result<Arc<seekdeep_cordis::PluginFiber>> {
     Ok(context.plugin(plugin(), serde_json::to_value(config)?)?)
+}
+
+/// A settle window no timer could elapse: like the source's chokidar threshold, a window this
+/// large means changes never settle, never a panic at the timer.
+const NEVER_SETTLES: Duration = Duration::from_secs(60 * 60 * 24 * 365 * 30);
+
+/// The watcher's write-settle window for a validated `debounceMs`.
+fn settle_window(debounce_ms: f64) -> Duration {
+    if debounce_ms <= 0.0 {
+        return Duration::ZERO;
+    }
+    Duration::try_from_secs_f64(debounce_ms / 1_000.0)
+        .map_or(NEVER_SETTLES, |window| window.min(NEVER_SETTLES))
+}
+
+#[cfg(test)]
+mod settle_window_tests {
+    use super::{NEVER_SETTLES, settle_window};
+    use std::time::Duration;
+
+    #[test]
+    fn a_window_beyond_any_timer_never_settles_instead_of_panicking() {
+        assert_eq!(settle_window(1e300), NEVER_SETTLES);
+        assert_eq!(settle_window(f64::INFINITY), NEVER_SETTLES);
+        assert_eq!(settle_window(f64::NAN), NEVER_SETTLES);
+        assert_eq!(settle_window(100.0), Duration::from_millis(100));
+        assert_eq!(settle_window(0.0), Duration::ZERO);
+        assert_eq!(settle_window(-5.0), Duration::ZERO);
+    }
 }
 
 #[cfg(test)]

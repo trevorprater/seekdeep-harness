@@ -39,7 +39,7 @@ Verified absent at the pinned commit: analytics or crash-reporting SDKs (`sentry
 - **Ported behavior.** The port counts and cuts in UTF-16 units as well, but a Rust string cannot end in a lone surrogate: the cut moves one unit earlier, before the pair, so the kept text is one unit shorter than the source's and carries no replacement character.
 - **Observable delta.** Only a body cut exactly inside a surrogate pair differs: the source ends with an unpaired code unit, the port ends before the character. `truncated` is reported the same way.
 - **Rationale.** A replacement character would insert text the page never contained, and carrying an unpaired unit through the tool result would need a non-string body type for one edge; dropping the split character keeps the text a faithful prefix of the page.
-- **Affected surfaces.** `crates/web-fetch-http/src/provider.rs` (the cap) and its fetch specification tests.
+- **Affected surfaces.** `crates/web-fetch-http/src/provider.rs` (the fetch body cap) and its fetch specification tests; `crates/tool-skill/src/lib.rs` (`catalog_description`, the skill catalog's `maxLength - 3` cut before `...`); `crates/tool-ralph/src/index.rs` (`bound_result`, the `maxResultChars` cut before the truncation notice); `crates/tool-fs/src/read_render.rs` (line truncation). The shared rule lives in `seekdeep_util::utf16::utf16_prefix`.
 
 ## Explicit non-deviations
 

@@ -43,7 +43,7 @@ impl JournalMode {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionRow {
     /// Session id.
-    pub id: String,
+    pub id: SessionId,
     /// Event vocabulary version.
     pub version: i64,
     /// Unix epoch milliseconds.
@@ -51,7 +51,7 @@ pub struct SessionRow {
     /// Working directory.
     pub cwd: Option<String>,
     /// Parent id.
-    pub parent_session: Option<String>,
+    pub parent_session: Option<SessionId>,
     /// Seed boundary.
     pub seed_length: Option<i64>,
     /// Origin marker.
@@ -234,10 +234,10 @@ pub fn row_to_meta(row: &SessionRow) -> anyhow::Result<SessionHeader> {
     };
     Ok(SessionHeader {
         version,
-        id: SessionId::new(row.id.clone()),
+        id: row.id.clone(),
         created_at,
         cwd: row.cwd.clone(),
-        parent_session: row.parent_session.clone().map(SessionId::new),
+        parent_session: row.parent_session.clone(),
         seed_length,
         origin,
         delegation_depth,
@@ -344,11 +344,11 @@ pub fn session_row(database: &Connection, id: &SessionId) -> anyhow::Result<Opti
             params![id.as_str()],
             |row| {
                 Ok(SessionRow {
-                    id: row.get(0)?,
+                    id: SessionId::new(row.get::<_, String>(0)?),
                     version: row.get(1)?,
                     created_at: row.get(2)?,
                     cwd: row.get(3)?,
-                    parent_session: row.get(4)?,
+                    parent_session: row.get::<_, Option<String>>(4)?.map(SessionId::new),
                     seed_length: row.get(5)?,
                     origin: row.get(6)?,
                     incarnation: row.get(7)?,

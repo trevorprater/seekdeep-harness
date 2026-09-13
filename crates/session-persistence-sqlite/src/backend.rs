@@ -1410,11 +1410,11 @@ fn decode_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventRow> {
 
 fn decode_session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionRow> {
     Ok(SessionRow {
-        id: row.get(0)?,
+        id: SessionId::new(row.get::<_, String>(0)?),
         version: row.get(1)?,
         created_at: row.get(2)?,
         cwd: row.get(3)?,
-        parent_session: row.get(4)?,
+        parent_session: row.get::<_, Option<String>>(4)?.map(SessionId::new),
         seed_length: row.get(5)?,
         origin: row.get(6)?,
         incarnation: row.get(7)?,

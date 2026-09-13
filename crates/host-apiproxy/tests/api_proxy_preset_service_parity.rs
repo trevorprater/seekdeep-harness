@@ -220,8 +220,8 @@ impl Harness {
             &context,
             PresetApiProxyOptions {
                 default_model_selection: Arc::new(|| ModelSelection {
-                    provider: "provider".to_owned(),
-                    model: "model".to_owned(),
+                    provider: "provider".into(),
+                    model: "model".into(),
                     reasoning_effort: None,
                 }),
                 save_default_model_selection: None,
@@ -666,8 +666,8 @@ async fn rosterless_deployment_lists_empty_and_refuses_management() {
         &context,
         PresetApiProxyOptions {
             default_model_selection: Arc::new(|| ModelSelection {
-                provider: "p".to_owned(),
-                model: "m".to_owned(),
+                provider: "p".into(),
+                model: "m".into(),
                 reasoning_effort: None,
             }),
             save_default_model_selection: None,
