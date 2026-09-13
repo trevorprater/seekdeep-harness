@@ -5,8 +5,8 @@ use seekdeep_client_runtime::{
     ConversationBoundaryStatus, ConversationLocation, ConversationLocationData,
     ConversationLocationDataScope, ConversationMatch, ConversationMatchResult,
     ConversationMatchRole, ConversationNodeContext, ConversationPublication,
-    ConversationValue as Value, ConversationViewNode, ConversationVisibility, PendingBlock,
-    PendingBlockKind, PendingBlocks, empty_assistant_block, to_assistant_block,
+    ConversationValue as Value, ConversationViewNode, ConversationVisibility,
+    empty_assistant_block, to_assistant_block,
 };
 use seekdeep_lossless_json::JsonString;
 use serde::{Deserialize, Serialize};
@@ -127,12 +127,10 @@ fn reset_for_retry(previous: &AssistantState) -> AssistantState {
 fn apply_assistant(
     state: &mut AssistantState,
     accepted: &Rc<ConversationMatch>,
-    pending: &mut PendingBlocks,
 ) -> Result<bool, ConversationAssemblerError> {
     match accepted.event.event_type.as_str() {
-        "assistant/chunk" => update_chunk(state, accepted, pending)?,
+        "assistant/chunk" => update_chunk(state, accepted)?,
         "assistant/message" => {
-            pending.clear();
             state.blocks = message_blocks(&accepted.event.data)?
                 .into_iter()
                 .map(Some)
@@ -142,45 +140,12 @@ fn apply_assistant(
             state.usage = accepted.event.data.get_value("usage").cloned();
         }
         "llm/retry" => {
-            pending.clear();
             let retried = reset_for_retry(state);
             *state = retried;
         }
         _ => return Ok(false),
     }
     Ok(true)
-}
-
-/// The Assistant block a fold is still growing, loaded from the state's published JSON.
-fn load_block(state: &AssistantState, index: usize, kind: PendingBlockKind) -> PendingBlock {
-    let published = state
-        .blocks
-        .get(index)
-        .and_then(Option::as_ref)
-        .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some(kind.as_str()));
-    if kind == PendingBlockKind::ToolCall {
-        PendingBlock::new(kind)
-            .with_identity(
-                text_of(published, "callId").unwrap_or_default(),
-                text_of(published, "name").unwrap_or_default(),
-            )
-            .with_text(text_of(published, "argsRaw").unwrap_or_default())
-    } else {
-        PendingBlock::new(kind).with_text(text_of(published, "text").unwrap_or_default())
-    }
-}
-
-fn text_of(block: Option<&Value>, key: &str) -> Option<JsonString> {
-    block
-        .and_then(|block| block.get_value(key))
-        .and_then(|text| text.deserialize::<JsonString>().ok())
-}
-
-/// Publishes every block the fold grew into the state's JSON, once.
-fn publish_blocks(state: &mut AssistantState, pending: &PendingBlocks) {
-    pending.publish(&mut state.blocks, |block| {
-        assistant_block_value(&block.as_assistant_block())
-    });
 }
 
 fn update_assistant(
@@ -191,11 +156,9 @@ fn update_assistant(
         return Ok(None);
     };
     let mut state = decode(previous)?;
-    let mut pending = PendingBlocks::default();
-    if !apply_assistant(&mut state, accepted, &mut pending)? {
+    if !apply_assistant(&mut state, accepted)? {
         return Ok(context.state.clone());
     }
-    publish_blocks(&mut state, &pending);
     encode(&state).map(Some)
 }
 
@@ -226,15 +189,13 @@ pub fn update_assistant_batch(
         return Ok(None);
     };
     let mut state = decode(previous)?;
-    let mut pending = PendingBlocks::default();
     let mut changed = false;
     for accepted in batch {
-        changed |= apply_assistant(&mut state, accepted, &mut pending)?;
+        changed |= apply_assistant(&mut state, accepted)?;
     }
     if !changed {
         return Ok(context.state.clone());
     }
-    publish_blocks(&mut state, &pending);
     encode(&state).map(Some)
 }
 
@@ -242,7 +203,6 @@ pub fn update_assistant_batch(
 fn update_chunk(
     state: &mut AssistantState,
     accepted: &ConversationMatch,
-    pending: &mut PendingBlocks,
 ) -> Result<(), ConversationAssemblerError> {
     let chunk = accepted
         .event
@@ -262,39 +222,46 @@ fn update_chunk(
         .and_then(conversation_coordinate)
         .and_then(|value| usize::try_from(value).ok());
     match chunk_type {
-        "block-start" => {
-            let index = required_index(index, "block-start")?;
-            pending.remove(index);
-            set_block(
-                &mut state.blocks,
-                index,
-                assistant_block_value(&empty_assistant_block(
-                    chunk
-                        .get_value("blockType")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default(),
-                )),
-            );
-        }
+        "block-start" => set_block(
+            &mut state.blocks,
+            required_index(index, "block-start")?,
+            assistant_block_value(&empty_assistant_block(
+                chunk
+                    .get_value("blockType")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )),
+        ),
         "text-delta" | "reasoning-delta" => {
             let index = required_index(index, chunk_type)?;
             let kind = if chunk_type == "text-delta" {
-                PendingBlockKind::Text
+                "text"
             } else {
-                PendingBlockKind::Reasoning
+                "reasoning"
             };
-            let block = pending.load(index, kind, || load_block(state, index, kind));
+            let mut text = state
+                .blocks
+                .get(index)
+                .and_then(Option::as_ref)
+                .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some(kind))
+                .and_then(|block| block.get_value("text"))
+                .and_then(|text| text.deserialize::<JsonString>().ok())
+                .unwrap_or_default();
             if let Some(delta) = chunk
                 .get_value("text")
                 .and_then(|text| text.deserialize::<JsonString>().ok())
             {
-                block.push(&delta);
+                text.push_utf16(delta.utf16_units());
             }
+            set_block(
+                &mut state.blocks,
+                index,
+                Value::object([("kind", json!(kind).into()), ("text", text.into())]),
+            );
         }
-        "tool-call-delta" => update_tool_delta(state, chunk, index, pending)?,
+        "tool-call-delta" => update_tool_delta(state, chunk, index)?,
         "block-end" => {
             let index = required_index(index, "block-end")?;
-            pending.remove(index);
             set_block(
                 &mut state.blocks,
                 index,
@@ -303,10 +270,10 @@ fn update_chunk(
         }
         _ => return Ok(()),
     }
-    // The visibility answer can only change while the message is hidden or still undated, so the
-    // scan runs only until both are settled.
+    // The visibility scan copies every block, so it runs only while its answer can still change
+    // something: a message already shown and already dated needs neither.
     if state.hidden || state.first_visible_seq.is_none() {
-        let visible = visible_content(&state.blocks, pending);
+        let visible = has_visible_content(&compact_blocks(&state.blocks));
         if visible {
             state.hidden = false;
         }
@@ -325,38 +292,53 @@ fn update_tool_delta(
     state: &mut AssistantState,
     chunk: &Value,
     index: Option<usize>,
-    pending: &mut PendingBlocks,
 ) -> Result<(), ConversationAssemblerError> {
     let index = required_index(index, "tool-call-delta")?;
-    let block = pending.load(index, PendingBlockKind::ToolCall, || {
-        let prior = state
-            .blocks
-            .get(index)
-            .and_then(Option::as_ref)
-            .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some("tool-call"));
-        let prior_id = text_of(prior, "callId").unwrap_or_default();
-        let call_id = if prior_id.is_empty() {
-            chunk
-                .get_value("id")
-                .map_or_else(|| JsonString::from("undefined"), js_text)
-        } else {
-            prior_id
-        };
-        let name = chunk
-            .get_value("name")
-            .filter(|name| !name.is_null())
-            .and_then(|name| name.deserialize::<JsonString>().ok())
-            .or_else(|| text_of(prior, "name"))
-            .unwrap_or_default();
-        PendingBlock::new(PendingBlockKind::ToolCall)
-            .with_identity(call_id, name)
-            .with_text(text_of(prior, "argsRaw").unwrap_or_default())
-    });
+    let prior = state
+        .blocks
+        .get(index)
+        .and_then(Option::as_ref)
+        .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some("tool-call"));
+    let prior_id = prior
+        .and_then(|block| block.get_value("callId"))
+        .and_then(|id| id.deserialize::<JsonString>().ok())
+        .unwrap_or_default();
+    let call_id = if prior_id.is_empty() {
+        chunk
+            .get_value("id")
+            .map_or_else(|| JsonString::from("undefined"), js_text)
+    } else {
+        prior_id
+    };
+    let name = chunk
+        .get_value("name")
+        .filter(|name| !name.is_null())
+        .and_then(|name| name.deserialize::<JsonString>().ok())
+        .or_else(|| {
+            prior
+                .and_then(|block| block.get_value("name"))
+                .and_then(|name| name.deserialize::<JsonString>().ok())
+        })
+        .unwrap_or_default();
+    let mut args = prior
+        .and_then(|block| block.get_value("argsRaw"))
+        .and_then(|args| args.deserialize::<JsonString>().ok())
+        .unwrap_or_default();
     let delta = chunk
         .get_value("argumentsDelta")
         .and_then(|delta| delta.deserialize::<JsonString>().ok())
         .unwrap_or_default();
-    block.push(&delta);
+    args.push_utf16(delta.utf16_units());
+    set_block(
+        &mut state.blocks,
+        index,
+        Value::object([
+            ("kind", json!("tool-call").into()),
+            ("callId", call_id.into()),
+            ("name", name.into()),
+            ("argsRaw", args.into()),
+        ]),
+    );
     Ok(())
 }
 
@@ -522,7 +504,6 @@ fn fallback_state(
     context: &ConversationNodeContext,
 ) -> Result<Option<AssistantState>, ConversationAssemblerError> {
     let mut state = None;
-    let mut pending = PendingBlocks::default();
     for accepted in context.matches.borrow().iter() {
         match accepted.event.event_type.as_str() {
             "assistant/chunk" => {
@@ -532,7 +513,7 @@ fn fallback_state(
                         required_coordinate(&accepted.event.data, "step")?,
                     ));
                 }
-                update_chunk(state.as_mut().expect("initialized"), accepted, &mut pending)?;
+                update_chunk(state.as_mut().expect("initialized"), accepted)?;
             }
             "assistant/message" => {
                 if state.is_none() {
@@ -542,7 +523,6 @@ fn fallback_state(
                     ));
                 }
                 let current = state.as_mut().expect("initialized");
-                pending.clear();
                 current.blocks = message_blocks(&accepted.event.data)?
                     .into_iter()
                     .map(Some)
@@ -551,15 +531,9 @@ fn fallback_state(
                 current.final_event = Some(EventEvidence::from(accepted.as_ref()));
                 current.usage = accepted.event.data.get_value("usage").cloned();
             }
-            "llm/retry" if state.is_some() => {
-                pending.clear();
-                state = state.as_ref().map(reset_for_retry);
-            }
+            "llm/retry" if state.is_some() => state = state.as_ref().map(reset_for_retry),
             _ => {}
         }
-    }
-    if let Some(state) = state.as_mut() {
-        publish_blocks(state, &pending);
     }
     Ok(state)
 }
@@ -691,28 +665,16 @@ fn compact_blocks(blocks: &[Option<Value>]) -> Vec<Value> {
 }
 
 fn has_visible_content(blocks: &[Value]) -> bool {
-    blocks.iter().any(block_has_visible_content)
-}
-
-fn block_has_visible_content(block: &Value) -> bool {
-    match block.get_value("kind").and_then(Value::as_str) {
-        Some("tool-call") => false,
-        Some("text" | "reasoning") => block
-            .get_value("text")
-            .and_then(|text| text.deserialize::<JsonString>().ok())
-            .is_some_and(|text| !text.trim().is_empty()),
-        _ => true,
-    }
-}
-
-/// Visible content over the published blocks plus the ones this fold is still growing.
-fn visible_content(blocks: &[Option<Value>], pending: &PendingBlocks) -> bool {
-    if pending.has_visible_content() {
-        return true;
-    }
-    blocks.iter().enumerate().any(|(index, block)| {
-        pending.get(index).is_none() && block.as_ref().is_some_and(block_has_visible_content)
-    })
+    blocks.iter().any(
+        |block| match block.get_value("kind").and_then(Value::as_str) {
+            Some("tool-call") => false,
+            Some("text" | "reasoning") => block
+                .get_value("text")
+                .and_then(|text| text.deserialize::<JsonString>().ok())
+                .is_some_and(|text| !text.trim().is_empty()),
+            _ => true,
+        },
+    )
 }
 
 fn has_interruption_evidence(blocks: &[Value]) -> bool {

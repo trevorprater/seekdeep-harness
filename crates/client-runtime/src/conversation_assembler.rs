@@ -5,8 +5,6 @@ use std::{cell::RefCell, cmp::Ordering, collections::HashMap, rc::Rc};
 use crate::ConversationValue as Value;
 use indexmap::{IndexMap, IndexSet};
 
-use crate::FnvBuildHasher;
-
 use crate::{
     ConversationEventInput, ConversationLocation, ConversationLocationData,
     ConversationLocationDataChange, ConversationLocationError, ConversationLocationEvent,
@@ -304,11 +302,7 @@ struct UpdateBatch {
 /// Match results for a whole window, by Definition and event sequence.
 #[derive(Default)]
 pub struct PrematchTable {
-    results: HashMap<
-        usize,
-        HashMap<u64, Option<ConversationMatchResult>, FnvBuildHasher>,
-        FnvBuildHasher,
-    >,
+    results: HashMap<usize, HashMap<u64, Option<ConversationMatchResult>>>,
 }
 
 impl PrematchTable {
@@ -863,18 +857,20 @@ impl ConversationNodeAssembler {
         Vec<(Rc<AssemblerNodeDefinition>, ConversationMatchResult)>,
         ConversationAssemblerError,
     > {
+        let mut matched_targets = IndexSet::new();
         let mut matches = Vec::new();
         for definition in self.event_definitions.entries() {
             let Some(result) = self.match_with(&definition, input)? else {
                 continue;
             };
+            if let Some(target) = &definition.target {
+                matched_targets.insert(target.clone());
+            }
             matches.push((definition, result));
         }
         if let Some(fallback) = self.event_definitions.fallback_entry()
             && let Some(target) = &fallback.target
-            && !matches
-                .iter()
-                .any(|(definition, _)| definition.target.as_deref() == Some(target.as_str()))
+            && !matched_targets.contains(target)
             && let Some(result) = self.match_with(&fallback, input)?
         {
             matches.push((fallback, result));

@@ -176,6 +176,22 @@ struct Inner {
     listeners_closed: bool,
 }
 
+impl Inner {
+    fn active_task_count(&self, owner: Option<&Arc<Agent>>) -> usize {
+        self.store
+            .values()
+            .filter(|job| {
+                let same_owner = match (&job.owner, owner) {
+                    (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                    (None, None) => true,
+                    (Some(_), None) | (None, Some(_)) => false,
+                };
+                same_owner && matches!(job.status, JobStatus::Running | JobStatus::Stopping)
+            })
+            .count()
+    }
+}
+
 /// Shared state that outlives the public service wrapper and its fibers.
 struct LocalJobState {
     context: Context,
@@ -203,19 +219,7 @@ impl LocalJobState {
     /// Counts authoritative active records for one exact owner or the shared
     /// unowned bucket.
     fn active_task_count(&self, owner: Option<&Arc<Agent>>) -> usize {
-        self.inner
-            .lock()
-            .store
-            .values()
-            .filter(|job| {
-                let same_owner = match (&job.owner, owner) {
-                    (Some(left), Some(right)) => Arc::ptr_eq(left, right),
-                    (None, None) => true,
-                    (Some(_), None) | (None, Some(_)) => false,
-                };
-                same_owner && matches!(job.status, JobStatus::Running | JobStatus::Stopping)
-            })
-            .count()
+        self.inner.lock().active_task_count(owner)
     }
 
     /// The completion listeners that own `owner`'s notices, in registration
@@ -560,18 +564,19 @@ impl JobRegistry for LocalJobRegistry {
         if let Some(ref owner) = owner {
             self.0.ensure_owner_cleanup(owner);
         }
-        let active = self.0.active_task_count(owner.as_ref());
-        assert!(
-            active < self.0.max_concurrent_jobs_per_owner,
-            "background job limit reached for this owner (limit: {}); use job_kill to stop an unneeded job, wait for it to finish, then retry",
-            self.0.max_concurrent_jobs_per_owner
-        );
-
         let hooks = (spec.run)();
         let done_future = hooks.done();
         let hooks = Arc::new(Mutex::new(hooks));
         let id = {
             let mut inner = self.0.inner.lock();
+            // Read the count and take the slot in one critical section: a check taken outside this
+            // lock can pass for two concurrent starts of the same owner, exceeding the cap.
+            let active = inner.active_task_count(owner.as_ref());
+            assert!(
+                active < self.0.max_concurrent_jobs_per_owner,
+                "background job limit reached for this owner (limit: {}); use job_kill to stop an unneeded job, wait for it to finish, then retry",
+                self.0.max_concurrent_jobs_per_owner
+            );
             let count = inner.counters.get(&spec.kind).copied().unwrap_or(0) + 1;
             inner.counters.insert(spec.kind.clone(), count);
             let id = JobId::new(format!("{}-{count}", spec.kind));
