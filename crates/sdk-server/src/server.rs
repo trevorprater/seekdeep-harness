@@ -452,7 +452,7 @@ impl HarnessSdkJsonRpcServer {
                 server.notify(
                     "subagent.finished",
                     &SubagentFinishedNotification {
-                        provider: info.provider.clone(),
+                        provider: info.provider.clone().into(),
                         agent_id: info.id.clone(),
                         parent_session_id: parent.id().clone(),
                         child_session_id: info.id.clone(),

@@ -115,7 +115,7 @@ pub struct SubagentStartedNotification {
 #[serde(rename_all = "camelCase")]
 pub struct SubagentFinishedNotification {
     /// Provider that ran the child.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-reported child identity.
     pub agent_id: SessionId,
     /// Delegating session.
