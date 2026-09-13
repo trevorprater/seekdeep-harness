@@ -28,7 +28,7 @@ http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 regex.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, features = ["gzip", "brotli", "deflate"] }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-host-webserver = { path = "../host-webserver" }
 tokio.workspace = true
