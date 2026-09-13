@@ -298,7 +298,7 @@ impl WebServer {
             run_server.accept(listener).await;
         }));
         if let Err(error) = context.provide(WEB_SERVER, server.clone()) {
-            server.shutdown.abort();
+            server.release_listener().await;
             return Err(error.into());
         }
         let cleanup = server.clone();
@@ -308,10 +308,20 @@ impl WebServer {
             // The owner went inactive between the publication and this registration:
             // nothing will ever run the cleanup, so release the listener now instead of
             // leaving the accept task holding the port.
-            server.shutdown.abort();
+            server.release_listener().await;
             return Err(error.into());
         }
         Ok(server)
+    }
+
+    /// Stops accepting and waits for the accept task to drop the listener, so a failed
+    /// installation has released its port by the time its error is reported.
+    async fn release_listener(&self) {
+        self.shutdown.abort();
+        let accept_task = self.accept_task.lock().take();
+        if let Some(task) = accept_task {
+            let _ = task.await;
+        }
     }
 
     /// Actual listening port, including OS assignment for configured port zero.

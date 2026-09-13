@@ -106,8 +106,38 @@ fn persist_or_adopt(home: &Path, file: &Path, created: AnonymousUserId) -> Anony
     if let Some(winner) = read_persisted_id(file) {
         return winner;
     }
-    let _ = std::fs::write(file, format!("{created}\n"));
+    // The existing entry is unreadable or not an identity. Replace it through a private
+    // file and a same-directory rename: opening the path for truncation would follow a
+    // planted symlink and overwrite whatever it points at, while a rename replaces the
+    // directory entry itself.
+    let _ = replace_without_following(home, file, &format!("{created}\n"));
     created
+}
+
+fn replace_without_following(home: &Path, file: &Path, content: &str) -> anyhow::Result<()> {
+    let temporary = home.join(format!(
+        ".{}.{}.tmp",
+        ANONYMOUS_USER_ID_FILE_NAME,
+        std::process::id()
+    ));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    let written = (|| -> anyhow::Result<()> {
+        let mut output = options.open(&temporary)?;
+        output.write_all(content.as_bytes())?;
+        output.sync_all()?;
+        std::fs::rename(&temporary, file)?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    written
 }
 
 fn canonical_uuid_shape(value: &str) -> bool {

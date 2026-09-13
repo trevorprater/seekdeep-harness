@@ -171,3 +171,33 @@ async fn explained_empty_invariant_reserves_and_releases_identity() {
         .await
         .expect("replacement ready");
 }
+
+/// A corrupt identity file is replaced through a rename, so a symlink planted at the
+/// path cannot turn the recovery into a truncation of the file it points at.
+#[cfg(unix)]
+#[test]
+fn replacing_a_corrupt_id_file_does_not_follow_a_planted_symlink() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let victim = temporary.path().join("victim.txt");
+    std::fs::write(&victim, "precious").expect("victim");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let file = home.join(ANONYMOUS_USER_ID_FILE_NAME);
+    std::os::unix::fs::symlink(&victim, &file).expect("plant symlink");
+
+    let id = get_or_create_anonymous_user_id(options(&home)).expect("id");
+    assert_eq!(id.as_str().len(), 36);
+    assert_eq!(
+        std::fs::read_to_string(&victim).expect("victim"),
+        "precious"
+    );
+    let metadata = std::fs::symlink_metadata(&file).expect("replaced entry");
+    assert!(
+        metadata.file_type().is_file(),
+        "the entry is a regular file again"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).expect("file"),
+        format!("{id}\n")
+    );
+}
