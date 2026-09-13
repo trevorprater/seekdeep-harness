@@ -45,6 +45,24 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Kills the CLI and folds its captured output into the failure, so a deadline miss on a
+/// CI runner explains what the SDK and runtime printed instead of only naming the phase.
+#[cfg(unix)]
+fn failure(child: &mut ChildGuard, phase: &str) -> anyhow::Error {
+    let Some(mut cli) = child.0.take() else {
+        return anyhow::anyhow!("{phase}");
+    };
+    let _ = cli.kill();
+    match cli.wait_with_output() {
+        Ok(output) => anyhow::anyhow!(
+            "{phase}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+        Err(error) => anyhow::anyhow!("{phase} (and its output could not be read: {error})"),
+    }
+}
+
 #[cfg(unix)]
 fn check_interrupt(binary: &Path, python: &Path, group: bool) -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
@@ -84,12 +102,13 @@ for line in sys.stdin:
         .stderr(Stdio::piped())
         .spawn()?;
     let mut child = ChildGuard(Some(child));
-    let deadline = Instant::now() + Duration::from_secs(10);
+    // A cold runner spends seconds starting Python and importing the SDK before the
+    // fake runtime reports readiness; that budget is separate from the cleanup budget.
+    let deadline = Instant::now() + Duration::from_secs(30);
     while !ready.is_file() {
-        anyhow::ensure!(
-            Instant::now() < deadline,
-            "runtime did not reach initialization"
-        );
+        if Instant::now() >= deadline {
+            return Err(failure(&mut child, "runtime did not reach initialization"));
+        }
         anyhow::ensure!(
             child.0.as_mut().expect("owned CLI").try_wait()?.is_none(),
             "CLI exited before initialization"
@@ -109,11 +128,16 @@ for line in sys.stdin:
             .success(),
         "could not interrupt owned CLI"
     );
+    // The SDK's own runtime teardown allows ten seconds before it kills the runtime;
+    // the cleanup budget starts at the interrupt and leaves room for that.
+    let deadline = Instant::now() + Duration::from_secs(20);
     while child.0.as_mut().expect("owned CLI").try_wait()?.is_none() {
-        anyhow::ensure!(
-            Instant::now() < deadline,
-            "interrupted CLI did not finish SDK cleanup"
-        );
+        if Instant::now() >= deadline {
+            return Err(failure(
+                &mut child,
+                "interrupted CLI did not finish SDK cleanup",
+            ));
+        }
         std::thread::sleep(Duration::from_millis(5));
     }
     let output = child.0.take().expect("owned CLI").wait_with_output()?;
