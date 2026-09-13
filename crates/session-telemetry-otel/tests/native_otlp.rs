@@ -16,6 +16,9 @@ use seekdeep_core::{
     session::{AppendOptions, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
+use seekdeep_session_telemetry::{
+    SESSION_TELEMETRY, SessionTelemetryChannel, SessionTelemetryRecord, SessionTelemetrySeverity,
+};
 use seekdeep_session_telemetry_otel::{
     NativeOtelLogPipelineFactory, OpenTelemetrySessionBackend, OtelLogFactoryService,
     OtelLogPipelineFactory as _, OtelLogRecord, OtelPipelineOptions, OtelResource,
@@ -233,6 +236,86 @@ async fn native_pipeline_keeps_unpaired_utf16_as_escape_text_and_marks_the_recor
     );
 }
 
+fn records_of<'a>(body: &'a Value, scope: &str) -> Vec<&'a Value> {
+    body["resourceLogs"][0]["scopeLogs"]
+        .as_array()
+        .expect("scope logs")
+        .iter()
+        .filter(|logs| logs["scope"]["name"] == scope)
+        .flat_map(|logs| logs["logRecords"].as_array().expect("log records").iter())
+        .collect()
+}
+
+fn attribute<'a>(record: &'a Value, key: &str) -> Option<&'a Value> {
+    record["attributes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|attribute| attribute["key"] == key)
+        .map(|attribute| &attribute["value"])
+}
+
+fn event_type(record: &Value) -> Option<&str> {
+    attribute(record, "event.type").and_then(|value| value["stringValue"].as_str())
+}
+
+/// The source wire test's assertions over one captured export.
+fn assert_source_wire(capture: &Capture, anonymous_user_id: &str, first_event_time: i64) {
+    assert_eq!(capture.headers["authorization"], "Bearer test-token");
+    assert_eq!(capture.headers["x-native-composition"], "yes");
+    let resource = capture.body["resourceLogs"][0]["resource"]["attributes"]
+        .as_array()
+        .expect("resource attributes");
+    assert!(
+        resource.contains(
+            &json!({"key": "service.name", "value": {"stringValue": "seekdeep-harness"}})
+        )
+    );
+    assert!(
+        resource.contains(&json!({"key": "user.id", "value": {"stringValue": anonymous_user_id}}))
+    );
+
+    let ledger = records_of(
+        &capture.body,
+        "@seekdeep-ai/seekdeep-session-telemetry-otel",
+    );
+    let ops = records_of(
+        &capture.body,
+        "@seekdeep-ai/seekdeep-session-telemetry-otel/ops",
+    );
+    let start = ledger
+        .iter()
+        .find(|record| event_type(record) == Some("turn/start"))
+        .expect("turn/start record");
+    assert_eq!(start["severityNumber"], 9);
+    assert_eq!(
+        start["timeUnixNano"],
+        (first_event_time * 1_000_000).to_string()
+    );
+    assert_eq!(
+        attribute(start, "session.cwd"),
+        Some(&json!({"stringValue": "/tmp/w"}))
+    );
+    let end = ledger
+        .iter()
+        .find(|record| event_type(record) == Some("turn/end"))
+        .expect("turn/end record");
+    assert_eq!(end["severityNumber"], 17);
+    assert_eq!(end["severityText"], "ERROR");
+    assert!(
+        ledger
+            .iter()
+            .any(|record| event_type(record) == Some("manual"))
+    );
+    assert_eq!(ops.len(), 1);
+    assert_eq!(
+        attribute(ops[0], "telemetry.op"),
+        Some(&json!({"stringValue": "shutdown"}))
+    );
+}
+
+/// The source's wire test: session records and the ops shutdown marker ship through the real
+/// pipeline with the resource identity, severities, timestamps, and attributes it pins.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal() {
     let (endpoint, captured) = collector().await;
@@ -246,6 +329,7 @@ async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal
             "00000000-0000-4000-8000-000000000654".to_owned()
         })),
     }));
+    let anonymous_user_id = factory.anonymous_user_id().expect("anonymous id");
     let root = Context::new();
     let sessions = SessionStore::install(&root).expect("session store");
     OtelLogFactoryService::new(factory)
@@ -259,7 +343,7 @@ async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal
             mode: Some("FULL".to_owned()),
             exporter: Some(json!({
                 "url": endpoint,
-                "headers": {"x-native-composition": "yes"}
+                "headers": {"authorization": "Bearer test-token", "x-native-composition": "yes"}
             })),
             processor: Some(json!({"scheduledDelayMillis": 60_000})),
             shutdown_timeout_millis: Some(5_000.0),
@@ -270,7 +354,10 @@ async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal
         .create(
             &root,
             Some(SessionId::new("native-wire")),
-            CreateSessionOptions::default(),
+            CreateSessionOptions {
+                cwd: Some("/tmp/w".to_owned()),
+                ..CreateSessionOptions::default()
+            },
         )
         .expect("session");
     session
@@ -279,54 +366,35 @@ async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal
     session
         .append(
             "turn/end",
-            json!({"turn": 1, "reason": {"kind": "error", "error": {"message": "boom"}}}),
+            json!({"turn": 1, "reason": {"kind": "error", "error": {"message": "boom", "code": "UNKNOWN"}}}),
             AppendOptions::default(),
         )
         .expect("turn end");
+    context
+        .get(SESSION_TELEMETRY)
+        .expect("session telemetry service")
+        .emit(SessionTelemetryRecord {
+            channel: SessionTelemetryChannel::Ledger,
+            time: 1_700_000_000_999,
+            severity: SessionTelemetrySeverity::Info,
+            attributes: Map::from_iter([
+                ("session.id".to_owned(), json!("native-wire")),
+                ("event.type".to_owned(), json!("manual")),
+                ("event.seq".to_owned(), json!(99)),
+            ]),
+            body: json!({"direct": true}).into(),
+        });
     fiber.dispose().await.expect("dispose backend");
 
     let capture = tokio::time::timeout(std::time::Duration::from_secs(5), captured)
         .await
         .expect("collector deadline")
         .expect("collector capture");
-    assert_eq!(capture.headers["x-native-composition"], "yes");
-    let scopes = capture.body["resourceLogs"][0]["scopeLogs"]
-        .as_array()
-        .expect("scope logs");
-    let records = scopes
-        .iter()
-        .flat_map(|scope| scope["logRecords"].as_array().expect("log records").iter())
-        .collect::<Vec<_>>();
-    let event_types = records
-        .iter()
-        .flat_map(|record| {
-            record["attributes"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|attribute| attribute["key"] == "event.type")
-                .filter_map(|attribute| attribute["value"]["stringValue"].as_str())
-        })
-        .collect::<Vec<_>>();
-    assert!(event_types.contains(&"turn/start"));
-    assert!(event_types.contains(&"turn/end"));
-    assert!(records.iter().any(|record| {
-        record["attributes"].as_array().is_some_and(|attributes| {
-            attributes.iter().any(|attribute| {
-                attribute["key"] == "telemetry.op"
-                    && attribute["value"]["stringValue"] == "shutdown"
-            })
-        })
-    }));
-    assert!(records.iter().any(|record| {
-        record["severityNumber"] == 17
-            && record["attributes"].as_array().is_some_and(|attributes| {
-                attributes.iter().any(|attribute| {
-                    attribute["key"] == "event.type"
-                        && attribute["value"]["stringValue"] == "turn/end"
-                })
-            })
-    }));
+    assert_source_wire(
+        &capture,
+        &anonymous_user_id,
+        session.events_shared()[0].time,
+    );
     root.root_fiber().dispose().await.expect("dispose root");
 }
 

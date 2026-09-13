@@ -37832,7 +37832,7 @@
     {
       "source": "native/landlock-run/scripts/build.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/landlock-tools/src/build.rs",
         "crates/landlock-tools/src/bin/landlock-build.rs"
@@ -37840,9 +37840,10 @@
       "evidence": [
         "Native Linux-only host selection, explicit tool/kind validation, matching musl target, musl-gcc linker, crt-static, symbol stripping, executable output, and metadata verification are implemented in Rust.",
         "Source fixtures cover Linux x64/arm64 build plans and error ordering. Actual macOS source and Rust CLI executions return the same exit 1 and byte-identical refusal diagnostics before any compiler runs.",
-        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed.",
+        "2026-09-13 Landlock Run workflow on fec36557d (run 34750688437, jobs linux-x64 103706649385 and linux-arm64 103706649328): the musl builder of record built linux-x64/bin/landlock-run and linux-arm64/bin/landlock-run, the build and release script source comparisons passed (7 passed per architecture), and the launcher tests ran against the real kernel (2 passed per architecture: exec exit, grants, denials, inheritance, fail-closed)"
       ],
-      "note": "Rust implementation and portable fixtures complete. Matching Linux arm64/x64 static-musl build and mandatory kernel confinement rehearsal remain unverified; CI commands are wired."
+      "note": "Linux arm64/x64 static-musl build and the mandatory kernel confinement rehearsal are now verified in the Landlock Run workflow on every push; the darwin job proves the no-platform-package degradation."
     },
     {
       "source": "native/landlock-run/scripts/bump-release.mjs",
@@ -37972,7 +37973,7 @@
     {
       "source": "native/landlock-run/scripts/verify-packed-install.mjs",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/landlock-tools/src/release/installed.rs",
         "crates/landlock-tools/src/release/pack.rs",
@@ -37985,9 +37986,10 @@
         "Outer tar/Node captures retain the source 64 MiB cap; inner confined command captures retain the default 1 MiB cap. A capture error remains an error even if the child handles SIGTERM with exit 0.",
         "Portable source comparisons exercise Linux full/partial/unusable and failure branches. The actual newly packed Rust/WASM entry passes the package-command installation rehearsal and a separate real offline npm install/import after consumer relocation on macOS.",
         "Current production Rust/WASM entry rebuilt and packed; packed-install and independent real offline npm install/relocated import passed with all audit snapshots byte-equal to current checkout.",
-        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed."
+        "2026-09-11: authored/source hashes match 35 Landlock and 24 npm-baseline passing tests and scoped strict Clippy; fresh production entry build, pack, relocated offline npm install and workflow/script wiring passed.",
+        "2026-09-13 Landlock Run workflow on fec36557d (run 34750688437, jobs linux-x64 103706649385 and linux-arm64 103706649328): pack rehearsal (pack, install, confine, this platform only) unpacked the entry and platform tarballs into a consumer, byte-pinned bin/landlock-run against the workspace build, probed full enforcement through the installed launcher, and passed the confinement world-proof on both architectures (\"Packed install verification passed.\")"
       ],
-      "note": "Rust implementation and portable fixtures complete. Matching Linux arm64/x64 static-musl build and mandatory kernel confinement rehearsal remain unverified; CI commands are wired."
+      "note": "Linux arm64/x64 static-musl build and the mandatory kernel confinement rehearsal are now verified in the Landlock Run workflow on every push; the darwin job proves the no-platform-package degradation."
     },
     {
       "source": "native/landlock-run/scripts/verify-release.mjs",
@@ -70832,7 +70834,18 @@
     {
       "source": "packages/sandbox/sandbox-local/tests/packed-install.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-tools/src/release/installed.rs",
+        "crates/landlock-tools/src/bin/landlock-verify-packed-install.rs",
+        ".github/workflows/landlock-run.yml",
+        "crates/sandbox-local/tests/local_parity.rs"
+      ],
+      "evidence": [
+        "2026-09-13 Landlock Run workflow on fec36557d (run 34750688437, jobs linux-x64 103706649385 and linux-arm64 103706649328): the publish-path rehearsal packed this checkout's entry and platform packages, installed those exact tarballs in an external consumer, byte-pinned the installed launcher, probed full enforcement through it, and confined a real process (\"confinement world-proof passed through the installed launcher\"); the darwin job (103706591848) proved the no-platform-package degradation",
+        "cargo test -p seekdeep-sandbox-local --test local_parity: the provider selects the Landlock launcher with bwrap unavailable, reports full/partial enforcement, and fails closed with SANDBOX_UNAVAILABLE on a non-enforcing probe (injected launcher and probe seams)"
+      ],
+      "note": "The source rehearsal installs the JS sandbox-local provider and its workspace peers into a plain-Node consumer; the port's sandbox-local is a Rust crate, so the consumer install that remains is the Landlock entry and platform packages', run by the ported verify-packed-install (landlock-verify-packed-install) in the Landlock Run workflow. The Rust provider resolves landlock-run beside its own executable (seekdeep_landlock_run::launcher_path_from), the packaged-release counterpart of the consumer's node_modules platform package; the provider-side confinement and fail-closed branches are pinned by local_parity with injected launcher and probe seams."
     },
     {
       "source": "packages/sandbox/sandbox-local/tests/seatbelt.e2e.ts",
@@ -74269,7 +74282,7 @@
     {
       "source": "packages/session/session-telemetry-otel/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-telemetry-otel/src/lib.rs",
         "crates/session-telemetry-otel/src/native.rs"
@@ -74278,9 +74291,10 @@
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/session/session-telemetry-otel/tests/otel.spec.ts (25 passed)",
         "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features (9 passed, including real OTLP/HTTP JSON wire and Cordis disposal)",
         "cargo clippy --locked --offline -p seekdeep-session-telemetry-otel --all-targets --all-features -- -D warnings",
-        "Rust OpenTelemetry SDK pipeline is the production default; object-safe factory replacement is limited to the reporting boundary"
+        "Rust OpenTelemetry SDK pipeline is the production default; object-safe factory replacement is limited to the reporting boundary",
+        "2026-09-13: cargo test -p seekdeep-session-telemetry-otel --test native_otlp (4 passed): backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal now carries the source wire test's assertions over the real OTLP/HTTP JSON export (authorization header, service.name and anonymous user.id resource attributes, ledger and ops scopes, turn/start severity 9 with timeUnixNano = event time × 1e6 and session.cwd, turn/end severity 17 ERROR, a direct 'manual' emit, exactly one shutdown op)"
       ],
-      "note": "2026-09-11: native adapter/collector tests and retained-session shutdown regression pass. Native SDK cannot represent lone UTF16 surrogates in strings or keys; such strings and keys are exported as the text of their JSON escape with the seekdeep.telemetry.unpaired_utf16 marker attribute (DEV-002) instead of dropping the record. Matching source raw HTTP/JSON export remains unverified."
+      "note": "2026-09-11: native adapter/collector tests and retained-session shutdown regression pass. Native SDK cannot represent lone UTF16 surrogates in strings or keys; such strings and keys are exported as the text of their JSON escape with the seekdeep.telemetry.unpaired_utf16 marker attribute (DEV-002) instead of dropping the record. 2026-09-13: the raw HTTP/JSON export is verified against the source wire test's assertions."
     },
     {
       "source": "packages/session/session-telemetry-otel/src/invariant.ts",
@@ -90061,19 +90075,28 @@
       "source": "vitest.config.ts",
       "kind": "production-code",
       "status": "withdrawn",
-      "note": "The harness ships no vitest configuration: every lane these configs described now runs through cargo or xtask (cargo test for the unit entry point, xtask web-assembled-snapshots for browser goldens, xtask web-keyless for the browser scenarios, xtask host-assets plus the ACP snapshot suite for snapshots, and scripts/run-e2e-lane.sh for the keyed suites), so the TypeScript config surfaces are retired tooling rather than unported behaviour."
+      "note": "The port carries no Vitest projects (pinned by ci_workflow_contract::native_windows_coverage_is_the_cargo_test_lane_and_carries_no_vitest_projects): cargo test --workspace --all-features is the unit inventory, the coverage gate is the ported scripts/coverage-exempt.ts, scripts/coverage-uncovered-locations.cjs and run-coverage surfaces, the shared test invariants are the ported scripts/test-invariants.ts, and the Windows, pwsh, and process-bound exclusions are cfg gates and self-skips inside the crates rather than a config inventory."
     },
     {
       "source": "vitest.e2e.config.ts",
       "kind": "test",
-      "status": "withdrawn",
-      "note": "The harness ships no vitest configuration: every lane these configs described now runs through cargo or xtask (cargo test for the unit entry point, xtask web-assembled-snapshots for browser goldens, xtask web-keyless for the browser scenarios, xtask host-assets plus the ACP snapshot suite for snapshots, and scripts/run-e2e-lane.sh for the keyed suites), so the TypeScript config surfaces are retired tooling rather than unported behaviour."
+      "status": "verified",
+      "targets": [
+        "scripts/run-e2e-lane.sh",
+        ".github/workflows/e2e.yml"
+      ],
+      "evidence": [
+        "bash scripts/run-e2e-lane.sh --list (keyless, probe .env: selects every crates/*/tests target that reads DEEPSEEK_API_KEY, one cargo invocation per package, ignored tests included, SEEKDEEP_E2E_MAX_WORKERS from the root .env honoured as --test-threads)",
+        "env-file loader checked against quoted, single-quoted, bare-with-comment, padded, empty, export-prefixed, invalid-name lines and an environment value that must win",
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (7 passed: the e2e workflow stays manual-only and fails loud before running the lane)"
+      ],
+      "note": "vitest is not shipped; the shell lane owns the credentialed inventory. Keyed suites are the crates' #[ignore] tests (the workspace gate never spends a credential by accident) run with --include-ignored, the gitignored root .env is loaded with the environment winning like process.loadEnvFile, SEEKDEEP_E2E_MAX_WORKERS (default 4, rejects non-positive-integers) bounds --test-threads instead of file parallelism, and each package retries twice instead of each test. The source's 120 s per-test timeout is carried by the suites' own tokio timeouts; the tsconfig-paths resolution and decorator transform have no counterpart in compiled Rust."
     },
     {
       "source": "vitest.shared.ts",
       "kind": "production-code",
       "status": "withdrawn",
-      "note": "The harness ships no vitest configuration: every lane these configs described now runs through cargo or xtask (cargo test for the unit entry point, xtask web-assembled-snapshots for browser goldens, xtask web-keyless for the browser scenarios, xtask host-assets plus the ACP snapshot suite for snapshots, and scripts/run-e2e-lane.sh for the keyed suites), so the TypeScript config surfaces are retired tooling rather than unported behaviour."
+      "note": "vitest is not shipped, so there is no decorator pre-transform or worker argv to share; the three differential fixtures that still drive the pinned source under vitest (crates/{cordis,tools,code-runtime-worker-thread}/tests/fixtures/*.vitest.config.mjs) import the source checkout's own vitest.shared.ts and the port carries no copy (its absence is pinned by the CI workflow contract test)."
     },
     {
       "source": "vitest.snapshot.config.ts",
