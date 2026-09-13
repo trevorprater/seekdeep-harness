@@ -436,7 +436,7 @@ fn store_and_locale_contracts_match_the_source() {
     );
     assert_eq!(WORKSPACE_LOCALES[61], ("time.ago", "{t}前", "{t} ago"));
     assert_eq!(FLAT_SESSION_ORDER_KEY, "__flat_session_order__");
-    assert_eq!(WORKSPACE_VIEW_PERSIST_KEY, "dsh.workspace.view.v5");
+    assert_eq!(WORKSPACE_VIEW_PERSIST_KEY, "seekdeep.workspace.view.v5");
     let mut state = WorkspaceViewState::default();
     assert_eq!(state.group_by, SessionGroupBy::Workspace);
     assert_eq!(state.order_by, SessionOrderBy::Updated);

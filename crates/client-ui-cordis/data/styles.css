@@ -524,8 +524,8 @@
   background: var(--dsw-alias-bg-base);
   box-shadow: var(--dsw-shadow-lv2);
   /* Only `.seekdeep-cordis-panel-body` scrolls; the header remains fixed above it. */
-  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
-  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  --seekdeep-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --seekdeep-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .seekdeep-cordis-panel-header {
@@ -609,7 +609,7 @@
 .seekdeep-cordis-panel-rowId {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
-  font-family: var(--dsh-font-mono, monospace);
+  font-family: var(--seekdeep-font-mono, monospace);
   font-size: 11px;
   line-height: 20px;
 }

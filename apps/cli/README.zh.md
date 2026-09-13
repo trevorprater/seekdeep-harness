@@ -42,6 +42,10 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 层的确切优先级、flag、关闭行为、部署默认值和源码执行方式，以 [CLI（命令行界面）行为参考](reference/README.md)为准。
 
+## 已安装的可执行文件
+
+发布的 `@seekdeep-ai/seekdeep` 包通过 `lib/bin.js` 暴露 `seekdeep` 命令，它是由 `cargo xtask build-client` 生成的启动器。启动器运行编译后的 Rust `seekdeep` 可执行文件：`SEEKDEEP_EXECUTABLE` 可显式指定一个；否则由安装在其旁边的平台包 `@seekdeep-ai/seekdeep-<platform>-<arch>`（例如 `@seekdeep-ai/seekdeep-linux-x64`）提供 `bin/seekdeep`。参数、标准流、退出状态和终止信号原样透传。没有可执行文件时，启动器只根据自身清单回答 `--version`，其余情况报告它尝试过的解析方式并失败。
+
 ## 开发
 
 生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm seekdeep <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.md#source-execution)为准。

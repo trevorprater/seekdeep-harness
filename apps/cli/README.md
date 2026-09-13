@@ -42,6 +42,10 @@ Use `--dump-default-config` and `--dump-config` to inspect the composed tree wit
 
 The [CLI behavior reference](reference/README.md) owns exact layer precedence, flags, shutdown behavior, deployment defaults, and source execution.
 
+## Installed executable
+
+The published `@seekdeep-ai/seekdeep` package exposes `seekdeep` through `lib/bin.js`, a launcher that `cargo xtask build-client` generates. The launcher runs the compiled Rust `seekdeep` executable: `SEEKDEEP_EXECUTABLE` names one explicitly; otherwise the platform package `@seekdeep-ai/seekdeep-<platform>-<arch>` installed next to it (for example `@seekdeep-ai/seekdeep-linux-x64`) provides `bin/seekdeep`. Arguments, standard streams, the exit status, and termination signals pass through unchanged. Without an executable the launcher answers only `--version` from its own manifest and otherwise fails with the resolution it attempted.
+
 ## Development
 
 Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm seekdeep <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract.

@@ -22,7 +22,7 @@ fn dictionaries_duration_key_and_client_edges_are_exact() {
         ]
     );
     assert_eq!(LOCALE_NAMESPACE, "trajectory");
-    assert_eq!(DURATION_PERSISTENCE_KEY, "dsh.trajectory.duration");
+    assert_eq!(DURATION_PERSISTENCE_KEY, "seekdeep.trajectory.duration");
     assert!(!std::hint::black_box(DEFAULT_ACTUAL_DURATION));
     assert_eq!(TRAJECTORY_ZH.len(), 14);
     assert_eq!(TRAJECTORY_EN.len(), 14);

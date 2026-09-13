@@ -157,7 +157,7 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     let persist = property(&options, "persist");
     assert_eq!(
         property(&persist, "name").as_string().as_deref(),
-        Some("dsh.trajectory.duration")
+        Some("seekdeep.trajectory.duration")
     );
 
     let request_header = events

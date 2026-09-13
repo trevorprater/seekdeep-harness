@@ -10,7 +10,7 @@ use serde_json::Value;
 /// Browser-local order account for the hierarchy-free flat Session list.
 pub const FLAT_SESSION_ORDER_KEY: &str = "__flat_session_order__";
 /// Persisted browser-store key.
-pub const WORKSPACE_VIEW_PERSIST_KEY: &str = "dsh.workspace.view.v5";
+pub const WORKSPACE_VIEW_PERSIST_KEY: &str = "seekdeep.workspace.view.v5";
 
 /// Session-list grouping mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

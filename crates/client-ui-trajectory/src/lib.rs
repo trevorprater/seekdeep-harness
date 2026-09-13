@@ -77,7 +77,7 @@ pub const INJECT: &[&str] = &[
 /// Dictionary namespace owned by the browser plugin.
 pub const LOCALE_NAMESPACE: &str = "trajectory";
 /// Browser-wide duration preference persistence key.
-pub const DURATION_PERSISTENCE_KEY: &str = "dsh.trajectory.duration";
+pub const DURATION_PERSISTENCE_KEY: &str = "seekdeep.trajectory.duration";
 /// Initial duration preference.
 pub const DEFAULT_ACTUAL_DURATION: bool = false;
 /// Compiled simple trajectory component stylesheet.

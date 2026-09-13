@@ -686,10 +686,12 @@ pub(super) fn build() -> anyhow::Result<()> {
                     recipe.id
                 );
             }
+            let launcher = super::cli_launcher::write(&workspace.workspace_root)?;
             println!(
-                "built {} Rust Client package artifacts ({} browser plugins)",
+                "built {} Rust Client package artifacts ({} browser plugins) and the npm launcher {}",
                 recipes.len(),
-                plugins.len()
+                plugins.len(),
+                launcher.display()
             );
             Ok::<_, anyhow::Error>(None)
         })?;

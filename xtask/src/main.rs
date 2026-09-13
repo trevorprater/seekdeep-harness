@@ -12,6 +12,7 @@ use base64::Engine as _;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod cli_launcher;
 mod client_build;
 mod client_test_runtime_built_smoke_driver;
 mod node_runtime;
@@ -5319,6 +5320,7 @@ fn is_generated_output(path: &Path) -> bool {
             && parts[0] == "apps"
             && parts[1] == "web"
             && matches!(parts[2], "dist" | "generated"))
+        || parts.starts_with(&["apps", "cli", "lib"])
         || parts.starts_with(&[
             "python",
             "sdk-runtime",
