@@ -217,5 +217,12 @@
       "large_58_6k": "25 steps, 11,001 chunks in its largest step, 6.2 MB of chunk text (Tool call arguments 4.3 MB, reasoning 1.2 MB), largest step 1.30 MB.",
       "reading": "The larger session is not simply longer: it carries 5 times the Tool call argument text and its largest step is 4.6 times the size, so a per-step pass over that text costs far more than the event ratio suggests."
     }
+  },
+  "large_session_round_16": {
+    "measured": "session-d40b4793 (58,574 events, 15.1 MB) opened with the corrected instrument: first content 6,952, 7,096, 7,017, 7,096 and 7,101 ms across five runs, main-thread work 6,561 to 6,683 ms, with a run-to-run spread of about 0.6 per cent.",
+    "where_it_goes": "ui-conversation 1,879 ms, ui-trajectory 1,538 ms, client-runtime 928 ms, client.js 696 ms, then TextDecoder.decode 445 ms and encodeInto 315 ms. Inside client-runtime: matching_definitions 162 ms, the registry adapter 105 ms, SipHash 127 ms across three maps, PrematchTable::insert 53 ms, parsing 77 ms, match_face 27 ms.",
+    "change_tried": "The assembler asked the registry for its Definition list once per event and the browser adapter rebuilt that vector every time. It now answers from the cached list through a shared reference (crates/client-runtime/src/conversation_assembler.rs, wasm_conversation_adapter.rs).",
+    "result": "Not measurable: first content 6,952/7,096 ms before against 7,017/7,096/7,101 ms after. Kept as a simplification that removes one allocation per event, not as a speed fix. The suites stay green: client-runtime, conversation_nodes_parity 8, assistant_fold_parity 1, trajectory assistant_definition_parity 6, clippy and fmt clean.",
+    "still_open": "The per-event matching bookkeeping in client-runtime (about 470 ms of its 928 ms) and the two plugins' text round trips are the two known terms; neither has been attributed to a single call yet, and the SipHash cost shows maps outside the ones round 13 converted."
   }
 }
