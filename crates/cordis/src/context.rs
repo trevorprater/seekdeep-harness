@@ -100,7 +100,7 @@ impl<T: Service> MixinMember<T> {
 #[derive(Default)]
 struct ServiceChangeBus {
     listeners: Mutex<HashMap<Uuid, ServiceChangeListener>>,
-    guards: Mutex<HashMap<Uuid, ServiceChangeGuard>>,
+    guards: Mutex<indexmap::IndexMap<Uuid, ServiceChangeGuard>>,
 }
 
 impl ServiceChangeBus {
@@ -692,13 +692,13 @@ impl Context {
             .insert(id, Arc::new(guard));
         let changes = self.root.service_changes.clone();
         let effect = EffectHandle::synchronous("ctx.on_service_change_checked", move || {
-            changes.guards.lock().remove(&id);
+            changes.guards.lock().shift_remove(&id);
             Ok(())
         });
         match self.own(effect.clone()) {
             Ok(effect) => Ok(effect),
             Err(error) => {
-                self.root.service_changes.guards.lock().remove(&id);
+                self.root.service_changes.guards.lock().shift_remove(&id);
                 Err(error)
             }
         }
