@@ -37,11 +37,23 @@ fn renders_the_five_detailed_pages_from_pinned_vendor_declarations() {
     assert!(
         fiber.contains("**Returns** a disposer that tears the effect down and settles once done.")
     );
+    // The committed page is the pipeline's artifact, which pins each source reference to the
+    // recorded oracle revision. The renderer emits no URLs, so comparing its raw output would
+    // fail for every page; pinning first is what makes this a check of the shipped page.
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let revision =
+        seekdeep_repository_tools::doc_source_links::oracle_revision(&repository).unwrap();
     for (out, rendered) in &pages {
+        let pinned = seekdeep_repository_tools::doc_source_links::pin_oracle_source_links(
+            rendered,
+            Path::new(out),
+            &source_root(),
+            &revision,
+        )
+        .unwrap();
         let committed = std::fs::read_to_string(repository.join(out)).unwrap();
         assert!(
-            rendered == &committed,
+            pinned == committed,
             "{out} differs from the committed page"
         );
     }
