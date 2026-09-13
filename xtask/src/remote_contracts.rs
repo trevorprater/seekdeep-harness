@@ -186,7 +186,7 @@ fn bundle_zod_format(root: &Path, bundle: &str, format: &str) -> anyhow::Result<
     let zod = dependencies.join("zod/index.js");
     anyhow::ensure!(
         esbuild.is_file() && zod.is_file(),
-        "install the pinned browser build dependencies: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile"
+        "install the pinned browser build dependencies: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false"
     );
     let entry = format!(
         "{bundle}\nimport {{ z as __seekdeepRemoteZod }} from {};\n",

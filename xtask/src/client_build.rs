@@ -21,7 +21,7 @@ pub(super) fn inline_store_dependency(root: &Path, bundle: &str) -> anyhow::Resu
     let package = dependencies.join("immer/dist/immer.mjs");
     anyhow::ensure!(
         esbuild.is_file() && package.is_file(),
-        "install the pinned browser build dependencies: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile"
+        "install the pinned browser build dependencies: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false"
     );
     let mode = serde_json::to_string(
         &std::env::var("NODE_ENV").unwrap_or_else(|_| "production".to_owned()),
