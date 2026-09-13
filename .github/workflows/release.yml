@@ -51,6 +51,19 @@ jobs:
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
 
+      # The build compiles the Client packages and the web frontend to WebAssembly and
+      # binds them with the `wasm-bindgen` CLI, which the runner image does not carry.
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-pack
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
       - name: Configure pnpm store path
         id: pnpm-store
         run: |

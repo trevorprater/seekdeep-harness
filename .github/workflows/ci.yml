@@ -287,6 +287,19 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
+      # The build gate compiles the Client packages to WebAssembly and binds them with
+      # the `wasm-bindgen` CLI, which the runner image does not carry.
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: node-compat-${{ matrix.node }}
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 

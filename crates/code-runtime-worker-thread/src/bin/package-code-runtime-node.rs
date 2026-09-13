@@ -49,7 +49,18 @@ fn package(wasm: &Path, output: &Path) -> anyhow::Result<()> {
             "--out-dir",
         ])
         .arg(output)
-        .status()?;
+        .status()
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                anyhow::anyhow!(
+                    "wasm-bindgen is not installed; the Node code-runtime boundary needs the CLI \
+                     matching the workspace crate: cargo install --locked wasm-bindgen-cli \
+                     --version 0.2.127"
+                )
+            } else {
+                anyhow::Error::from(error).context("cannot start wasm-bindgen")
+            }
+        })?;
     anyhow::ensure!(
         status.success(),
         "wasm-bindgen failed for the Node code-runtime boundary"

@@ -170,9 +170,17 @@ jobs:
           restore-keys: |
             rust-sdk-${{ runner.os }}-${{ runner.arch }}-1.93.1-
 
+      # The manylinux container runs this toolchain's binaries without rustup, so the
+      # WebAssembly target the Node runtime build needs is installed on the host here.
       - uses: dtolnay/rust-toolchain@1.93.1
         with:
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
+
+      # The Node runtime packager binds the compiled WebAssembly with the `wasm-bindgen`
+      # CLI; it lands in the cached CARGO_HOME, which the container also sees.
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
       - uses: actions/setup-node@v6
         with:
@@ -210,7 +218,7 @@ jobs:
             -w "$PWD" \
             "$image" \
             bash -euxo pipefail -c '
-              export PATH="$SEEKDEEP_RUST_BIN:$PATH"
+              export PATH="$CARGO_HOME/bin:$SEEKDEEP_RUST_BIN:$PATH"
               cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
               cargo build --locked -p seekdeep-python-runtime-smoke --bin smoke-python-runtime --example python_runtime_sdk_interrupt
             '

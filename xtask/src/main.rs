@@ -967,6 +967,23 @@ fn wasm_package_once(
     wasm_classic_package(&metadata, artifact, module_id, out_dir, &wasm)
 }
 
+/// Version of the `wasm-bindgen` CLI the builds need; it must match the workspace's
+/// `wasm-bindgen` crate exactly, and the workflows install the same version.
+const WASM_BINDGEN_VERSION: &str = "0.2.127";
+
+/// Explains a failed `wasm-bindgen` launch: a missing binary names the pinned install
+/// command instead of the bare "No such file or directory" the OS reports.
+fn wasm_bindgen_launch_error(error: std::io::Error) -> anyhow::Error {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        anyhow::anyhow!(
+            "wasm-bindgen is not installed; the WebAssembly builds need the CLI matching the \
+             workspace crate: cargo install --locked wasm-bindgen-cli --version {WASM_BINDGEN_VERSION}"
+        )
+    } else {
+        anyhow::Error::from(error).context("cannot start wasm-bindgen")
+    }
+}
+
 fn wasm_classic_package(
     metadata: &CargoMetadata,
     artifact: &str,
@@ -996,7 +1013,8 @@ fn wasm_classic_package(
         ])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for {module_id}");
     seekdeep_repository_tools::client_bundle::sourcemaps::write_wasm_source_map(
         &staging.join("client_bg.wasm"),
@@ -1094,7 +1112,8 @@ fn wasm_cordis_package(
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for browser Cordis");
     write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
@@ -1150,7 +1169,8 @@ fn wasm_client_loader_package(
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for browser Loader");
     write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
@@ -1815,7 +1835,8 @@ fn wasm_bindgen_web_staging(
         .args(["--target", "web", "--out-name", "wasm", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for {label}");
     write_staged_source_maps(metadata, artifact, &staging, "wasm")?;
     Ok(staging)
@@ -2267,7 +2288,8 @@ fn wasm_web_shell_package(
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(status.success(), "wasm-bindgen failed for client web shell");
     write_staged_source_maps(metadata, artifact, &staging, "client")?;
     let out_dir = if out_dir.is_absolute() {
@@ -2389,7 +2411,8 @@ fn wasm_ui_primitives_package(
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(
         status.success(),
         "wasm-bindgen failed for client UI primitives"
@@ -2469,7 +2492,8 @@ fn wasm_ui_attachment_package(
         .args(["--target", "web", "--out-name", "client", "--out-dir"])
         .arg(&staging)
         .arg(wasm)
-        .status()?;
+        .status()
+        .map_err(wasm_bindgen_launch_error)?;
     anyhow::ensure!(
         status.success(),
         "wasm-bindgen failed for client UI attachment"
@@ -5328,8 +5352,8 @@ mod tests {
     use std::{collections::HashSet, path::Path};
 
     use super::{
-        Status, Surface, SurfaceKind, classic_module_bundle, classic_web_bundle,
-        client_loader_esm_wrapper, client_modules_esm_wrapper,
+        Status, Surface, SurfaceKind, WASM_BINDGEN_VERSION, classic_module_bundle,
+        classic_web_bundle, client_loader_esm_wrapper, client_modules_esm_wrapper,
         client_test_runtime_esm_declarations, client_test_runtime_esm_wrapper,
         client_web_esm_declarations, client_web_esm_wrapper, compatibility_declarations,
         compatibility_prelude, copy_ui_attachment_type_declarations,
@@ -7217,5 +7241,49 @@ mod tests {
     #[test]
     fn macos_deployment_default_comes_from_the_runtime_platform_manifest() {
         assert_eq!(default_macos_platform_tag().unwrap(), "macosx_14_0_arm64");
+    }
+
+    /// The CLI must match the crate exactly, and every workflow that installs it must
+    /// install the same version, so all three spellings are pinned to the lockfile.
+    #[test]
+    fn wasm_bindgen_cli_version_matches_the_lockfile_and_the_workflows() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let lockfile = std::fs::read_to_string(root.join("Cargo.lock")).unwrap();
+        let locked = lockfile
+            .split("[[package]]")
+            .find_map(|package| {
+                package.contains("name = \"wasm-bindgen\"\n").then(|| {
+                    package
+                        .lines()
+                        .find_map(|line| line.strip_prefix("version = "))
+                        .unwrap()
+                        .trim_matches('"')
+                        .to_owned()
+                })
+            })
+            .expect("wasm-bindgen is locked");
+        assert_eq!(locked, WASM_BINDGEN_VERSION);
+
+        let workflows = std::fs::read_dir(root.join(".github/workflows")).unwrap();
+        let mut pinned = 0;
+        for entry in workflows {
+            let contents = std::fs::read_to_string(entry.unwrap().path()).unwrap();
+            for line in contents
+                .lines()
+                .filter(|line| line.contains("wasm-bindgen-cli"))
+            {
+                let version = line
+                    .split("--version ")
+                    .nth(1)
+                    .map(|rest| rest.split_whitespace().next().unwrap_or_default())
+                    .unwrap_or_default();
+                assert_eq!(version, WASM_BINDGEN_VERSION, "{line}");
+                pinned += 1;
+            }
+        }
+        assert!(
+            pinned >= 4,
+            "workflows install wasm-bindgen-cli in {pinned} places"
+        );
     }
 }
