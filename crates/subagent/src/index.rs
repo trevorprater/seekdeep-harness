@@ -1,10 +1,8 @@
 //! Service definition for the subagent capability seam.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-};
+use std::sync::{Arc, Weak};
 
+use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_agent::Agent;
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
@@ -49,7 +47,7 @@ pub const INJECT: &[&str] = &[];
 /// continuable-child operations.
 pub struct SubagentRuntime {
     context: Context,
-    providers: Mutex<HashMap<String, Arc<dyn SubagentProvider>>>,
+    providers: Mutex<IndexMap<String, Arc<dyn SubagentProvider>>>,
     continuations: Mutex<Option<Arc<SubagentContinuationManager>>>,
     setup_registry: Arc<SubagentActivationSetupRegistry>,
 }
@@ -60,7 +58,7 @@ impl SubagentRuntime {
     pub fn new(context: &Context) -> Arc<Self> {
         Arc::new(Self {
             context: context.clone(),
-            providers: Mutex::new(HashMap::new()),
+            providers: Mutex::new(IndexMap::new()),
             continuations: Mutex::new(None),
             setup_registry: SubagentActivationSetupRegistry::new(),
         })
@@ -157,7 +155,7 @@ impl SubagentRuntime {
             providers.insert(name.clone(), provider);
         }
         if let Err(error) = emission.emit() {
-            self.providers.lock().remove(&name);
+            self.providers.lock().shift_remove(&name);
             return Err(error);
         }
         let runtime = Arc::clone(self);
@@ -165,7 +163,7 @@ impl SubagentRuntime {
             let runtime = Arc::clone(&runtime);
             let name = name.clone();
             Box::pin(async move {
-                runtime.providers.lock().remove(&name);
+                runtime.providers.lock().shift_remove(&name);
                 runtime.emit_provider_removed(&name);
                 Ok(())
             })
