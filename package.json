@@ -45,7 +45,7 @@
     "test:web:perf": "npm run build && npm run test:web:perf:built",
     "test:web:perf:built": "SEEKDEEP_SNAPSHOT=replay cargo xtask web-keyless --scenario complex-history-perf",
     "test:web:stress": "npm run build && cargo xtask web-keyless --scenario reasoning-chunks-stress",
-    "test:gui": "vitest run packages/client packages/host",
+    "test:gui": "cargo test $(ls crates | grep -E '^(client|host)-' | sed 's|^|--package seekdeep-|' | xargs)",
     "check:all": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- check-all",
     "check:ci": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- ci-primary",
     "check:ci:linux-primary": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- ci-linux-primary",
