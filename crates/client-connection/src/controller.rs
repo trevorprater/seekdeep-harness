@@ -145,6 +145,11 @@ struct ControllerState {
     attempt: u32,
     current: Option<AbortSignal>,
     last_state: Option<ConnectionState>,
+    /// Aborted by `stop`, so a backoff wait ends at once instead of at its deadline.
+    stop: AbortSignal,
+    /// Counts `start` calls; a loop whose count is stale exits at its next check, so a
+    /// restart during a backoff never leaves two loops driving generations.
+    run: u64,
 }
 
 /// Idempotently started dual-stream generation controller.
@@ -186,6 +191,8 @@ impl ConnectionController {
                 attempt: 0,
                 current: None,
                 last_state: None,
+                stop: AbortSignal::default(),
+                run: 0,
             }),
         })
     }
@@ -195,16 +202,30 @@ impl ConnectionController {
         if self.running.swap(true, Ordering::AcqRel) {
             return;
         }
+        let run = {
+            let mut state = self.state.lock();
+            state.stop = AbortSignal::default();
+            state.run += 1;
+            state.run
+        };
         let controller = self.clone();
-        runtime::spawn(async move { controller.run().await });
+        runtime::spawn(async move { controller.run(run).await });
     }
 
-    /// Stops the loop and aborts the current generation's streams.
+    /// Stops the loop, wakes a pending backoff wait, and aborts the current generation's
+    /// streams.
     pub fn stop(&self) {
         self.running.store(false, Ordering::Release);
-        if let Some(signal) = self.state.lock().current.take() {
+        let mut state = self.state.lock();
+        state.stop.abort();
+        if let Some(signal) = state.current.take() {
             signal.abort();
         }
+    }
+
+    /// Whether the loop started by the `run`-th `start` still owns the controller.
+    fn owns_run(&self, run: u64) -> bool {
+        self.is_running() && self.state.lock().run == run
     }
 
     /// Whether the controller currently owns its loop.
@@ -213,8 +234,8 @@ impl ConnectionController {
         self.running.load(Ordering::Acquire)
     }
 
-    async fn run(self: Arc<Self>) {
-        while self.is_running() {
+    async fn run(self: Arc<Self>, run: u64) {
+        while self.owns_run(run) {
             let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
             let signal = AbortSignal::default();
             self.state.lock().current = Some(signal.clone());
@@ -284,7 +305,7 @@ impl ConnectionController {
             }
 
             wait_for_failure(&mut events_rx, &signal).await;
-            if !self.is_running() {
+            if !self.owns_run(run) {
                 return;
             }
             self.emit_state(ConnectionState::Reconnecting);
@@ -294,7 +315,12 @@ impl ConnectionController {
                 state.attempt
             };
             tracing::warn!(attempt, "[web-runtime] connection lost, retry");
-            runtime::sleep(self.backoff_delay(attempt)).await;
+            let stop = self.state.lock().stop.clone();
+            tokio::select! {
+                biased;
+                () = stop.cancelled() => return,
+                () = runtime::sleep(self.backoff_delay(attempt)) => {}
+            }
         }
     }
 

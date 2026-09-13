@@ -235,11 +235,20 @@ impl WebRegistration {
     ///
     /// Returns inactive-owner failures from Cordis.
     pub fn own(self, context: &Context, label: impl Into<String>) -> anyhow::Result<EffectHandle> {
+        let withdraw = Arc::clone(&self.withdraw);
         let effect = EffectHandle::synchronous(label, move || {
-            self.dispose();
+            withdraw();
             Ok(())
         });
-        Ok(context.own(effect)?)
+        match context.own(effect) {
+            Ok(effect) => Ok(effect),
+            Err(error) => {
+                // No owner will ever withdraw the route: withdraw it now rather than leaving
+                // it registered on the server after the caller's activation failed.
+                self.dispose();
+                Err(error.into())
+            }
+        }
     }
 }
 

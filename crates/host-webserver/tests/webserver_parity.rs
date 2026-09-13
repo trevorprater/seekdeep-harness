@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, Fiber};
 use seekdeep_host_webserver::{
     ListenHost, WebHandler, WebHandlerFuture, WebRoute, WebRouteKind, WebServer, WebServerConfig,
     WebUpgradeRoute, response, switching_protocols,
@@ -299,4 +299,37 @@ async fn taken_port_fails_before_service_publication() {
             .is_none()
     );
     first_context.fiber().dispose().await.unwrap();
+}
+
+/// A registration whose owner is no longer active cannot be owned; it withdraws itself so
+/// the failed activation leaves no route behind on the server.
+#[tokio::test]
+async fn owning_a_registration_under_an_inactive_owner_withdraws_the_route() {
+    let context = Context::new();
+    let server = WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::Loopback,
+            port: 0,
+        },
+    )
+    .await
+    .unwrap();
+    let registration = server
+        .register(WebRoute {
+            kind: WebRouteKind::Exact,
+            path: "/orphan".to_owned(),
+            handler: text("ORPHAN"),
+        })
+        .unwrap();
+    let received = raw_request(server.port(), "GET", "/orphan").await.unwrap();
+    assert_eq!(status(&received), 200);
+
+    let owner = Fiber::active_child("disposed-owner");
+    let inactive = context.with_fiber(owner.clone());
+    owner.dispose().await.unwrap();
+    assert!(registration.own(&inactive, "orphan route").is_err());
+    let received = raw_request(server.port(), "GET", "/orphan").await.unwrap();
+    assert_eq!(status(&received), 404);
+    context.fiber().dispose().await.unwrap();
 }

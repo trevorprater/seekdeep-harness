@@ -410,3 +410,95 @@ async fn stream_failure_emits_reconnecting_once_across_consecutive_failures() {
     assert_eq!(*states.lock(), vec![ConnectionState::Reconnecting]);
     controller.stop();
 }
+
+fn slow_backoff() -> ConnectionConfig {
+    ConnectionConfig {
+        backoff_base_ms: 10_000.0,
+        backoff_factor: 1.0,
+        backoff_max_ms: 10_000.0,
+        stream_open_timeout_ms: 10.0,
+    }
+}
+
+fn failing_describe() -> RpcResult<HostDescription> {
+    RpcResult::Failure {
+        error: RpcError {
+            code: "internal".to_owned(),
+            message: "not ready".to_owned(),
+            details: serde_json::Map::new(),
+        },
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn stop_ends_a_pending_backoff_wait_at_once() {
+    let api = Arc::new(FakeApi::default());
+    let (describe, mut mux, mut host) = api.generation();
+    let states = Arc::new(Mutex::new(Vec::new()));
+    let controller = ConnectionController::new(
+        api.clone(),
+        ConnectionSinks {
+            on_state_change: Some({
+                let values = states.clone();
+                Arc::new(move |state| values.lock().push(state))
+            }),
+            ..ConnectionSinks::default()
+        },
+        slow_backoff(),
+    );
+    controller.start();
+    settle().await;
+    mux.open();
+    host.open();
+    describe.send(Ok(failing_describe())).unwrap();
+    settle().await;
+    assert_eq!(states.lock().last(), Some(&ConnectionState::Reconnecting));
+    controller.stop();
+    settle().await;
+    assert!(!controller.is_running());
+    // The loop is gone: nothing wakes after the backoff deadline to start a generation.
+    tokio::time::advance(std::time::Duration::from_millis(11_000)).await;
+    settle().await;
+    assert_eq!(api.describe_calls.load(Ordering::Acquire), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn restart_during_a_backoff_wait_leaves_one_loop_driving_generations() {
+    let api = Arc::new(FakeApi::default());
+    let (first_describe, mut first_mux, mut first_host) = api.generation();
+    let (second_describe, mut second_mux, mut second_host) = api.generation();
+    let states = Arc::new(Mutex::new(Vec::new()));
+    let controller = ConnectionController::new(
+        api.clone(),
+        ConnectionSinks {
+            on_state_change: Some({
+                let values = states.clone();
+                Arc::new(move |state| values.lock().push(state))
+            }),
+            ..ConnectionSinks::default()
+        },
+        slow_backoff(),
+    );
+    controller.start();
+    settle().await;
+    first_mux.open();
+    first_host.open();
+    first_describe.send(Ok(failing_describe())).unwrap();
+    settle().await;
+    assert_eq!(states.lock().last(), Some(&ConnectionState::Reconnecting));
+    controller.stop();
+    controller.start();
+    settle().await;
+    // The restart began its own generation without waiting for the old backoff.
+    assert_eq!(api.describe_calls.load(Ordering::Acquire), 2);
+    second_mux.open();
+    second_host.open();
+    second_describe.send(Ok(description("second"))).unwrap();
+    settle().await;
+    assert_eq!(states.lock().last(), Some(&ConnectionState::Connected));
+    // The superseded loop does not wake after its deadline and start a third generation.
+    tokio::time::advance(std::time::Duration::from_millis(11_000)).await;
+    settle().await;
+    assert_eq!(api.describe_calls.load(Ordering::Acquire), 2);
+    controller.stop();
+}

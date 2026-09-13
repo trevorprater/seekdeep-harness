@@ -302,7 +302,28 @@ impl JsonRpcLineTransport {
             );
             pending.insert(id.clone(), sender);
         }
-        if let Err(error) = self.write_frame(wire::request(&id, &method, params)).await {
+        // The frame write runs as its own task so that a full pipe (a peer that stopped
+        // reading) cannot hold the caller past its cancellation: the caller stops waiting
+        // and forgets the correlation while the write still completes whole, which keeps
+        // the line stream well-formed for later frames.
+        let writer = Arc::clone(self);
+        let frame = wire::request(&id, &method, params);
+        let write = tokio::spawn(async move { writer.write_frame(frame).await });
+        let written = match signal.as_ref() {
+            Some(signal) => tokio::select! {
+                biased;
+                result = write => result,
+                () = signal.cancelled() => {
+                    self.pending.lock().remove(&id);
+                    return Err(abort_error(signal));
+                }
+            },
+            None => write.await,
+        };
+        if let Err(error) = written
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+        {
             self.pending.lock().remove(&id);
             return Err(error);
         }

@@ -256,9 +256,14 @@ pub fn install_host(
         let _ = downlink_mounts.begin_close();
         return Err(error);
     }
-    route_registration.own(context, "client-connection: /api route")?;
+    // Ownership can fail once the owner starts disposing between the publication above
+    // and here; the route withdraws itself on that failure, and the mounts must close too.
+    if let Err(error) = route_registration.own(context, "client-connection: /api route") {
+        let _ = downlink_mounts.begin_close();
+        return Err(error);
+    }
     let cleanup_mounts = downlink_mounts.clone();
-    context.own(EffectHandle::new(
+    if let Err(error) = context.own(EffectHandle::new(
         "client-connection: WebSocket downlinks",
         move || {
             Box::pin(async move {
@@ -266,7 +271,10 @@ pub fn install_host(
                 Ok(())
             })
         },
-    ))?;
+    )) {
+        let _ = downlink_mounts.begin_close();
+        return Err(error.into());
+    }
     let reconcile_mounts = downlink_mounts;
     context.on_service_change(move || {
         if let Err(error) = reconcile_mounts.reconcile() {

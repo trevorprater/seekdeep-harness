@@ -344,6 +344,35 @@ async fn method_not_found_input_end_close_and_unknown_responses_are_fail_closed(
     assert_eq!(transport.pending_len(), 0);
 }
 
+/// A request whose frame cannot be written (the peer stopped reading and the pipe is
+/// full) still settles through its cancellation signal, and its correlation is forgotten.
+#[tokio::test]
+async fn a_blocked_request_write_settles_through_cancellation() {
+    let (transport, _peer) = transport_and_peer();
+    transport.start();
+    let signal = seekdeep_llm::AbortSignal::default();
+    let trigger = signal.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        trigger.abort();
+    });
+    let oversized = "x".repeat(256 * 1024);
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        transport.request_json_with_cancellation(
+            "blocked",
+            serde_json::json!({"payload": oversized}).into(),
+            signal,
+            "blocked/cancel",
+        ),
+    )
+    .await
+    .expect("the cancelled request must settle");
+    let error = outcome.unwrap_err().to_string();
+    assert!(error.contains("abort"), "{error}");
+    assert_eq!(transport.pending_len(), 0);
+}
+
 #[test]
 fn named_wire_types_preserve_exact_method_and_field_spellings() {
     let request = seekdeep_sdk_protocol::HarnessSdkRequest::Initialize(
