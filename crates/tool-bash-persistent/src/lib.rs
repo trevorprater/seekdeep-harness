@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use seekdeep_agent::Agent;
-use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
+use seekdeep_agent::{Agent, AgentLifecycleEvent};
+use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_llm::ContentBlock;
 use seekdeep_terminal::{
     TERMINALS, TerminalReadResult, TerminalSendResult, TerminalSessionId, TerminalSessionStatus,
@@ -143,6 +143,23 @@ impl PersistentShells {
                 })
             },
         ))?;
+        // A disposed agent takes its shell with it: the record, its serialization lock,
+        // and the terminal go now instead of living until the plugin is disposed (and
+        // instead of a later agent at the same address finding a stale record).
+        let retire = Arc::downgrade(&shells);
+        context.events().on_sync(
+            context,
+            "agent/disposed",
+            move |_, args| {
+                if let Some(event) = args.get::<AgentLifecycleEvent>(0)
+                    && let Some(shells) = retire.upgrade()
+                {
+                    shells.retire(&event.agent);
+                }
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        )?;
         Ok(shells)
     }
 
@@ -167,6 +184,21 @@ impl PersistentShells {
         {
             let _ = self.terminals.kill(owner, id, Some(reason)).await;
         }
+    }
+
+    /// Drops a disposed agent's record and lock and kills its terminal in the background.
+    fn retire(self: &Arc<Self>, owner: &Arc<Agent>) {
+        let key = Self::owner_key(owner);
+        self.locks.lock().remove(&key);
+        let Some(record) = self.live.lock().remove(&key) else {
+            return;
+        };
+        let shells = Arc::clone(self);
+        tokio::spawn(async move {
+            shells
+                .close(&record.owner, &record.id, "agent disposed")
+                .await;
+        });
     }
 
     async fn reset(&self, owner: &Arc<Agent>, reason: &str) {

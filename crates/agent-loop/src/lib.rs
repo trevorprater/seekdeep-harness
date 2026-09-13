@@ -53,7 +53,7 @@ pub struct ConfiguredAgent {
     /// Stable configuration label used for diagnostics and fallback identity.
     pub id: String,
     /// Exact fresh session identity.
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
     /// Provider route.
     pub provider: Option<String>,
     /// Model identity.
@@ -63,7 +63,7 @@ pub struct ConfiguredAgent {
     /// Fresh-session workspace.
     pub cwd: Option<String>,
     /// Existing persisted session to resume.
-    pub resume_session_id: Option<String>,
+    pub resume_session_id: Option<SessionId>,
 }
 
 /// Agent-loop Loader configuration.
@@ -162,13 +162,13 @@ async fn create_configured_agents(
             agents.resume(request).await?;
         } else {
             let id = configured.session_id.clone().unwrap_or_else(|| {
-                format!(
+                SessionId::new(format!(
                     "{}-session-{:016x}",
                     configured.id,
                     NEXT_CONFIGURED_AGENT.fetch_add(1, Ordering::AcqRel)
-                )
+                ))
             });
-            let mut request = CreateAgentOptions::new(SessionId::new(id));
+            let mut request = CreateAgentOptions::new(id);
             request.agent_options = options;
             request.meta.cwd.clone_from(&configured.cwd);
             agents.create(request).await?;

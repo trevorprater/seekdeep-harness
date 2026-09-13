@@ -163,12 +163,13 @@ impl SessionTelemetryCoordinator {
                     return Ok(EventReply::Undefined);
                 };
                 Self::contain(|| {
-                    if disposed
-                        .adopted
-                        .lock()
-                        .remove(&session_key(&session))
-                        .is_none()
-                    {
+                    // Every pointer-keyed capture state retires with the session: a later
+                    // session allocated at the same address must start from its own cursor
+                    // and its own chunk ledger.
+                    let key = session_key(&session);
+                    HANDOFF_CURSOR.lock().remove(&key);
+                    disposed.chunk_seen.lock().remove(&key);
+                    if disposed.adopted.lock().remove(&key).is_none() {
                         return Ok(());
                     }
                     disposed.deliver(&session, disposed.redact(shutdown_record(&session))?, None);

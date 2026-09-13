@@ -296,6 +296,24 @@ impl GoalService {
             global_events(),
         )?;
 
+        // The cache is keyed by the session's address; a disposed session retires it so a
+        // later session allocated at the same address folds its own log instead of
+        // inheriting the previous goal and observed sequence.
+        let evict = Arc::downgrade(&service);
+        context.events().on_sync(
+            context,
+            "session/disposed",
+            move |_, args| {
+                if let Some(session) = args.get::<Session>(0)
+                    && let Some(service) = evict.upgrade()
+                {
+                    service.caches.lock().remove(&session_key(&session));
+                }
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        )?;
+
         let projection = Arc::new(Mutex::new(ProjectionBinding::default()));
         reconcile_projection(context, &projection)?;
         let watched_context = context.clone();

@@ -2,37 +2,45 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, Weak},
 };
 
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_agent::Agent;
 
-static TAILS: LazyLock<Mutex<HashMap<usize, Arc<tokio::sync::Mutex<()>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// One serialization slot per live agent, keyed by pointer identity and paired with a
+/// weak handle so a slot whose agent is gone is dropped before the next lookup (the
+/// source's `WeakMap` semantics), including one whose address a new agent reuses.
+type Slot = (Weak<Agent>, Arc<tokio::sync::Mutex<()>>);
+
+static TAILS: LazyLock<Mutex<HashMap<usize, Slot>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Runs one complete Schedule transaction after its exact agent's prior
 /// transaction settles.
 ///
 /// Each agent is serialized independently; the source's `WeakMap` key maps to the
-/// agent pointer identity, so a long-lived process retains one mutex slot per
-/// agent it has ever serialized.
+/// agent pointer identity, and slots whose agents were dropped are retired on the
+/// next transaction, so a long-lived process holds one slot per live agent only.
 pub async fn run_schedule_transaction<T, F>(agent: Arc<Agent>, operation: F) -> T
 where
     T: Send + 'static,
     F: FnOnce() -> BoxFuture<'static, T> + Send + 'static,
 {
-    let key = Arc::as_ptr(&agent) as usize;
-    let lock = {
-        let mut tails = TAILS.lock();
-        tails
-            .entry(key)
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone()
-    };
+    let lock = slot_for(&mut TAILS.lock(), &agent);
     let _guard = lock.lock().await;
     operation().await
+}
+
+/// Retires the slots of dropped agents, then returns the exact agent's slot, creating it
+/// on first use.
+fn slot_for(tails: &mut HashMap<usize, Slot>, agent: &Arc<Agent>) -> Arc<tokio::sync::Mutex<()>> {
+    tails.retain(|_, (owner, _)| owner.strong_count() > 0);
+    tails
+        .entry(Arc::as_ptr(agent) as usize)
+        .or_insert_with(|| (Arc::downgrade(agent), Arc::new(tokio::sync::Mutex::new(()))))
+        .1
+        .clone()
 }
 
 #[cfg(test)]
@@ -91,5 +99,26 @@ mod tests {
             observed,
             ["first-start", "first-end", "second-start", "second-end"]
         );
+    }
+
+    #[test]
+    fn slots_retire_with_their_agents() {
+        let mut tails = HashMap::new();
+        let first = agent("retire-first");
+        let first_slot = super::slot_for(&mut tails, &first);
+        assert!(Arc::ptr_eq(
+            &super::slot_for(&mut tails, &first),
+            &first_slot
+        ));
+        assert_eq!(tails.len(), 1);
+        drop(first);
+        let second = agent("retire-second");
+        let second_slot = super::slot_for(&mut tails, &second);
+        assert_eq!(tails.len(), 1, "the dropped agent's slot is gone");
+        assert!(!Arc::ptr_eq(&second_slot, &first_slot));
+        drop(second);
+        let third = agent("retire-third");
+        super::slot_for(&mut tails, &third);
+        assert_eq!(tails.len(), 1);
     }
 }
