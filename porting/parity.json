@@ -86568,7 +86568,16 @@
     {
       "source": "scripts/ci-workflow.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/ci_workflow_contract.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/ci-workflow.spec.ts (pinned source: 12 passed)",
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract --all-features (7 passed)",
+        "cargo clippy -p seekdeep-repository-tools --tests --all-features -- -D warnings"
+      ],
+      "note": "The source's two Vitest-project assertions (LSP source under native Windows coverage, process-isolated projects) have no counterpart: the port carries no Vitest projects, so the port pins their absence and the native Windows job's cargo test lane. Product identities follow the rename policy (SEEKDEEP_CI_FAILOVER_*, seekdeep-win-ci runners, SEEKDEEP_E2E_MAX_WORKERS, SEEKDEEP_EXAMPLE_MODE)."
     },
     {
       "source": "scripts/clean.spec.ts",
