@@ -202,10 +202,26 @@ fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_
         "--bin build-exe-for-python-sdk",
         "--user",
         "rustup which --toolchain 1.93.1 cargo",
-        "export PATH=\"$SEEKDEEP_RUST_BIN:$PATH\"",
+        // The container sees the cached CARGO_HOME, where the host installed wasm-bindgen.
+        "export PATH=\"$CARGO_HOME/bin:$SEEKDEEP_RUST_BIN:$PATH\"",
     ] {
         assert!(script.contains(expected), "{expected}");
     }
+    // The container runs the host toolchain without rustup, so the host installs the
+    // WebAssembly target and the binding generator the Node runtime build needs.
+    let toolchain = steps
+        .iter()
+        .find(|step| step["uses"] == "dtolnay/rust-toolchain@1.93.1")
+        .unwrap();
+    assert_eq!(toolchain["with"]["targets"], "wasm32-unknown-unknown");
+    let generator = steps
+        .iter()
+        .find(|step| step["name"] == "Install Rust/WASM binding generator")
+        .unwrap();
+    assert_eq!(
+        generator["run"],
+        "cargo install --locked wasm-bindgen-cli --version 0.2.127"
+    );
     for name in ["MANYLINUX_X64_IMAGE", "MANYLINUX_ARM64_IMAGE"] {
         assert!(github["env"][name].as_str().unwrap().contains("@sha256:"));
     }
