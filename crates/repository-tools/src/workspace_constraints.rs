@@ -138,6 +138,21 @@ fn workspace_protocol(manifests: &[(String, Value)]) -> Vec<String> {
     errors
 }
 
+/// Whether a directory holds only ported package documentation.
+///
+/// The port keeps a package's README at its source path while the implementation moves to a
+/// Rust crate, so such a directory is not a package and must not fail the hierarchy rule.
+fn documentation_only(directory: &Path) -> anyhow::Result<bool> {
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(directory)? {
+        names.push(entry?.file_name().to_string_lossy().into_owned());
+    }
+    Ok(!names.is_empty()
+        && names
+            .iter()
+            .all(|name| name.starts_with("README") || name == "tsconfig.json"))
+}
+
 fn hierarchy(root: &Path) -> anyhow::Result<Vec<String>> {
     let mut errors = Vec::new();
     for group in directories(&root.join("packages"))? {
@@ -152,6 +167,9 @@ fn hierarchy(root: &Path) -> anyhow::Result<Vec<String>> {
             }
             let package = format!("{group}/{package}");
             if !root.join(&package).join("package.json").exists() {
+                if documentation_only(&root.join(&package))? {
+                    continue;
+                }
                 errors.push(format!("{package}: expected a package here (no package.json found) — the hierarchy is exactly packages/<group>/<pkg>, no deeper nesting"));
             }
         }
