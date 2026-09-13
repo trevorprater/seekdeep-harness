@@ -8,4 +8,5 @@ pub mod invariants;
 pub mod launch_environment;
 pub mod native_command;
 pub mod output_retention;
+pub mod product_assets;
 pub mod timeout;

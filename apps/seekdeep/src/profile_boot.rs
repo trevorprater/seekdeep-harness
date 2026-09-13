@@ -24,7 +24,10 @@ use seekdeep_loader::{
     profile_patch::{ProfileEntry, ProfileNode, ProfilePatch, ProfilePatchWarning},
 };
 use seekdeep_typert_loader::TypertArtifactRegistry;
-use seekdeep_util::launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT};
+use seekdeep_util::{
+    launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT},
+    product_assets,
+};
 
 use crate::{process_shutdown::ProcessShutdown, profile_support};
 
@@ -46,12 +49,36 @@ const EXIT_CODE_UNSET: i32 = i32::MIN;
 /// Privacy switch applied after every user-controlled profile layer.
 pub const TELEMETRY_DISABLED_ENV: &str = "SEEKDEEP_TELEMETRY_DISABLED";
 
-/// Shipped agent-preset asset root in the source-checkout application layout.
+/// Shipped agent-preset root in the source-checkout application layout.
 #[must_use]
 pub fn shipped_preset_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../cli/config/agent-presets")
         .clean()
+}
+
+/// Shipped agent-preset root for one launch: `SEEKDEEP_AGENT_PRESET_DIR`, then the
+/// `@seekdeep-ai/seekdeep` package found from the installation anchor or next to the
+/// executable, then a packaged `agent-presets` directory beside the executable, and
+/// finally the source checkout (which the preset mount reports when it is absent too).
+#[must_use]
+pub fn resolve_shipped_preset_root(
+    environment: &LaunchEnvironmentSnapshot,
+    home: &Path,
+) -> PathBuf {
+    let checkout = shipped_preset_root();
+    let executable = std::env::current_exe().ok();
+    let anchor = profile_support::install_anchor(home);
+    product_assets::resolve(
+        &product_assets::SHIPPED_AGENT_PRESETS,
+        &product_assets::AssetAnchors {
+            environment: Some(environment),
+            install_anchor: Some(&anchor),
+            executable: executable.as_deref(),
+            checkout: None,
+        },
+    )
+    .unwrap_or(checkout)
 }
 
 /// Builds the profile framework catalog over one frozen launch environment.

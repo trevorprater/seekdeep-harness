@@ -12,6 +12,7 @@ use seekdeep_shell_env::{
     SHELL_ENV, ShellEnvContributor, ShellEnvResolvedValues, ShellEnvVariable,
 };
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
+use seekdeep_util::{launch_environment::launch_environment_of, product_assets};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -83,13 +84,37 @@ fn source_root() -> PathBuf {
         .clean()
 }
 
-fn dist_index() -> anyhow::Result<PathBuf> {
-    let index = source_root().join("apps/web/dist/index.html");
-    anyhow::ensure!(
-        index.is_file(),
-        "web-app: frontend dist not built; run pnpm run build from the repository root first"
-    );
-    Ok(index)
+/// Locates the built frontend index the way the source resolved
+/// `@seekdeep-ai/seekdeep-web-frontend/dist/index.html`: an explicit `SEEKDEEP_WEB_DIST`,
+/// the package found from the Loader's installation anchor or next to the executable, a
+/// packaged `web` directory beside the executable, and finally the source checkout.
+fn dist_index(context: &seekdeep_cordis::Context) -> anyhow::Result<PathBuf> {
+    let environment = launch_environment_of(context);
+    let install_anchor = context
+        .meta("loader.base_url")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .and_then(|base_url| url::Url::parse(&base_url).ok())
+        .and_then(|url| url.to_file_path().ok());
+    let executable = std::env::current_exe().ok();
+    let checkout = source_root();
+    let anchors = product_assets::AssetAnchors {
+        environment: Some(&environment),
+        install_anchor: install_anchor.as_deref(),
+        executable: executable.as_deref(),
+        checkout: Some(&checkout),
+    };
+    let index = product_assets::resolve(&product_assets::WEB_FRONTEND_INDEX, &anchors)
+        .filter(|index| index.is_file());
+    index.ok_or_else(|| {
+        anyhow::anyhow!(
+            "web-app: frontend dist not built; run pnpm run build from the repository root first (searched {})",
+            product_assets::candidates(&product_assets::WEB_FRONTEND_INDEX, &anchors)
+                .iter()
+                .map(|candidate| candidate.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
 }
 
 fn local_web_url(server: &seekdeep_host_webserver::WebServer) -> String {
@@ -142,7 +167,7 @@ pub fn install(context: &seekdeep_cordis::Context, config: &Config) -> anyhow::R
     install_with_runtime_seams(
         context,
         config,
-        dist_index()?,
+        dist_index(context)?,
         interface_addresses_for_context(context)?,
         Arc::new(|line| println!("{line}")),
     )

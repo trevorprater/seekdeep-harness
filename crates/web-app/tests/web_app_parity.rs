@@ -5,8 +5,15 @@ use std::sync::{Arc, Mutex};
 use seekdeep_cordis::Context;
 use seekdeep_host_webserver::{ListenHost, WebServer, WebServerConfig};
 use seekdeep_system_prompt::{AssembleContext, SystemPromptConfig, render_prompt};
+use seekdeep_util::{
+    launch_environment::{
+        LaunchEnvironmentLayerInput, LaunchEnvironmentSource, SEEKDEEP_LAUNCH_ENVIRONMENT,
+        create_launch_environment_snapshot,
+    },
+    product_assets::WEB_FRONTEND_DIST_ENV,
+};
 use seekdeep_web_app::{
-    Config, INJECT, SEEKDEEP_WEB_URL, WEB_RUNTIME, install_with_dist_index,
+    Config, INJECT, SEEKDEEP_WEB_URL, WEB_RUNTIME, install, install_with_dist_index,
     install_with_runtime_seams, plugin, resolve_lan_trust,
     startup::{WebStartupOutcome, WebStartupValues, parse_web_startup},
 };
@@ -97,6 +104,96 @@ fn lan_trust_uses_one_noninternal_ipv4_sample_and_preserves_extra_order() {
             trusted_hosts: strings(&["lab.internal"]),
         }
     );
+}
+
+/// Production `install` locates the built frontend from the launch environment before any
+/// installation, executable, or checkout lookup, and names every searched location when
+/// none holds an index.
+#[tokio::test]
+async fn install_resolves_the_frontend_from_the_launch_environment() -> anyhow::Result<()> {
+    let (_temporary, index) = stage_dist()?;
+    let dist = index.parent().unwrap().to_string_lossy().into_owned();
+    let context = Context::new();
+    context.provide(
+        SEEKDEEP_LAUNCH_ENVIRONMENT,
+        Arc::new(create_launch_environment_snapshot(&[
+            LaunchEnvironmentLayerInput {
+                source: LaunchEnvironmentSource::Process,
+                path: None,
+                values: [(WEB_FRONTEND_DIST_ENV.to_owned(), dist)]
+                    .into_iter()
+                    .collect(),
+            },
+        ])),
+    )?;
+    WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::Loopback,
+            port: 0,
+        },
+    )
+    .await?;
+    install(
+        &context,
+        &Config {
+            print_url: false,
+            surface_context: false,
+            trusted_hosts: Vec::new(),
+        },
+    )?;
+    assert!(context.get(WEB_RUNTIME).is_some());
+    context.fiber().dispose().await?;
+
+    let missing = tempfile::tempdir()?;
+    let context = Context::new();
+    context.provide(
+        SEEKDEEP_LAUNCH_ENVIRONMENT,
+        Arc::new(create_launch_environment_snapshot(&[
+            LaunchEnvironmentLayerInput {
+                source: LaunchEnvironmentSource::Process,
+                path: None,
+                values: [(
+                    WEB_FRONTEND_DIST_ENV.to_owned(),
+                    missing.path().join("dist").to_string_lossy().into_owned(),
+                )]
+                .into_iter()
+                .collect(),
+            },
+        ])),
+    )?;
+    WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::Loopback,
+            port: 0,
+        },
+    )
+    .await?;
+    let quiet = Config {
+        print_url: false,
+        surface_context: false,
+        trusted_hosts: Vec::new(),
+    };
+    let error = match install(&context, &quiet) {
+        Ok(()) => {
+            // The build checkout still carries a built frontend, which the lookup reaches
+            // last; the explicit directory is then merely the first candidate.
+            context.fiber().dispose().await?;
+            return Ok(());
+        }
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.starts_with("web-app: frontend dist not built; run pnpm run build"),
+        "{error}"
+    );
+    assert!(
+        error.contains(&missing.path().join("dist/index.html").display().to_string()),
+        "{error}"
+    );
+    context.fiber().dispose().await?;
+    Ok(())
 }
 
 #[tokio::test]

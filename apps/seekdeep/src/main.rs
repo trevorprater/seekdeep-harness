@@ -111,7 +111,10 @@ async fn run_loader_profile_async(invocation: ProfileInvocation) -> anyhow::Resu
         &cwd,
         &layered.seekdeep_home,
         &seekdeep::profile_support::install_anchor(&layered.seekdeep_home),
-        &seekdeep::profile_boot::shipped_preset_root(),
+        &seekdeep::profile_boot::resolve_shipped_preset_root(
+            &layered.launch_environment,
+            &layered.seekdeep_home,
+        ),
         telemetry_disabled.as_deref(),
     )?;
     let catalog = seekdeep::profile_boot::framework_profile_catalog(
