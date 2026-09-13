@@ -230,6 +230,7 @@ fn expected_files(manifest: &Value) -> Vec<&str> {
         Some("@seekdeep-ai/seekdeep-subprocess-local") => vec!["scripts/ensure-spawn-helper.mjs"],
         _ => vec![],
     });
+    files.extend(wasm_publication_files(manifest["name"].as_str()));
     if manifest["exports"].as_object().is_some_and(|exports| {
         exports
             .values()
@@ -264,6 +265,41 @@ fn expected_files(manifest: &Value) -> Vec<&str> {
         ]);
     }
     files
+}
+
+/// Publication entries the source's rule cannot know about: browser packages are Rust compiled to
+/// `WebAssembly` (`AGENTS.md`), so each ships its compiled module and the bindgen glue, and the
+/// primitives package its highlight and markdown backends and the `KaTeX` assets, beside the entry
+/// point. Without them the published tarball's `lib/index.js` would import files that were never
+/// packed.
+fn wasm_publication_files(name: Option<&str>) -> &'static [&'static str] {
+    match name {
+        Some("@seekdeep-ai/seekdeep-client-ui-primitives") => &[
+            "lib/internal.js",
+            "lib/client.js",
+            "lib/client_bg.wasm",
+            "lib/highlight-backend.js",
+            "lib/markdown-backend.js",
+            "lib/katex/**/*",
+        ],
+        Some("@seekdeep-ai/seekdeep-client-ui-attachment") => {
+            &["lib/client.js", "lib/client_bg.wasm"]
+        }
+        Some("@seekdeep-ai/seekdeep-client-web") => &[
+            "lib/client.js",
+            "lib/client.d.ts",
+            "lib/client_bg.wasm",
+            "lib/base.css",
+        ],
+        Some(
+            "@seekdeep-ai/seekdeep-client-web-react"
+            | "@seekdeep-ai/seekdeep-client-ui-slots"
+            | "@seekdeep-ai/seekdeep-client-modules"
+            | "@seekdeep-ai/seekdeep-client-schema-form"
+            | "@seekdeep-ai/seekdeep-client-test-runtime",
+        ) => &["lib/wasm.js", "lib/wasm.d.ts", "lib/wasm_bg.wasm"],
+        _ => &[],
+    }
 }
 
 fn export_default(entry: &Value) -> Option<&str> {

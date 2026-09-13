@@ -50,6 +50,9 @@
     "lib/index.js",
     "lib/invariant.js",
     "lib/client.js",
+    "lib/wasm.js",
+    "lib/wasm.d.ts",
+    "lib/wasm_bg.wasm",
     "lib/types/**/*.d.ts"
   ],
   "peerDependencies": {

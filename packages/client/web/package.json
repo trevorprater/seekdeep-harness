@@ -60,6 +60,10 @@
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "lib/client.js",
+    "lib/client.d.ts",
+    "lib/client_bg.wasm",
+    "lib/base.css",
     "lib/types/**/*.d.ts"
   ]
 }
