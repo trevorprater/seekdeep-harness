@@ -2634,7 +2634,8 @@ fn copy_ui_primitives_type_declarations(
         let declaration = std::fs::read_to_string(entry.path())?
             .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
             .replace("@deepseek-ai/cordis", "@seekdeep-ai/cordis")
-            .replace("DeepSeek Harness", "SeekDeep Harness");
+            .replace("DeepSeek Harness", "SeekDeep Harness")
+            .replace("dsh web UI", "seekdeep web UI");
         std::fs::write(output, declaration)?;
         count += 1;
     }
@@ -6961,6 +6962,10 @@ mod tests {
             std::fs::read_to_string(projected_types.join("index.d.ts")).unwrap();
         assert!(index_declaration.contains("export { MarkdownText }"));
         assert!(!index_declaration.contains("@deepseek-ai/dsh-"));
+        let icons_declaration =
+            std::fs::read_to_string(projected_types.join("icons/index.d.ts")).unwrap();
+        assert!(icons_declaration.contains("seekdeep web UI"));
+        assert!(!icons_declaration.contains("dsh web UI"));
         assert!(ui_primitives_invariant_wrapper().contains("client-ui-primitives-invariant"));
         let internal = ui_primitives_internal_wrapper();
         assert!(internal.contains("export * from './index.js'"));

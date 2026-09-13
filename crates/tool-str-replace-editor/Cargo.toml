@@ -18,6 +18,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-sandbox = { path = "../sandbox" }
 seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 

@@ -90,16 +90,38 @@ fn cache_control_for(target: &Path) -> &'static str {
     }
 }
 
-/// Whether a file name ends in a bundler content hash such as `index-C8S-ni_M.js`.
+/// Whether a file name carries a bundler content hash.
+///
+/// The bundler names every emitted asset `<name>-<hash><extensions>` with an eight-character
+/// base64url hash that may itself contain `-` and `_` (`index-C8S-ni_M.js`,
+/// `client_bg-D0L-57UV.wasm`), and a source map appends `.map` to its script's hashed name
+/// (`index-DSWuNRsQ.js.map`), so the hash is the eight characters before the extensions rather
+/// than whatever follows the last `-`.
 fn content_hashed(target: &Path) -> bool {
-    let stem = target
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or_default();
-    let Some((_, hash)) = stem.rsplit_once('-') else {
+    let Some(name) = target.file_name().and_then(|name| name.to_str()) else {
         return false;
     };
-    hash.len() >= 8
+    name.match_indices('.').any(|(dot, _)| {
+        let (stem, extensions) = name.split_at(dot);
+        stem_carries_hash(stem)
+            && extensions.split('.').skip(1).all(|extension| {
+                !extension.is_empty() && extension.bytes().all(|byte| byte.is_ascii_alphanumeric())
+            })
+    })
+}
+
+/// Whether `stem` ends in `-` followed by an eight-character base64url hash; a hash that happens
+/// to be eight lowercase letters is indistinguishable from a plain word such as `manifest`, so it
+/// is left revalidating rather than risking an immutable hand-named file.
+fn stem_carries_hash(stem: &str) -> bool {
+    const HASH_LENGTH: usize = 8;
+    let Some(start) = stem.len().checked_sub(HASH_LENGTH) else {
+        return false;
+    };
+    let (Some(prefix), Some(hash)) = (stem.get(..start), stem.get(start..)) else {
+        return false;
+    };
+    prefix.ends_with('-')
         && hash
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
@@ -230,4 +252,48 @@ pub fn install(
         .ok_or_else(|| anyhow::anyhow!("frontend-static lost webServer"))?
         .register_fallback(handler)?;
     registration.own(context, "frontend-static: fallback seat")
+}
+
+#[cfg(test)]
+mod content_hashed_tests {
+    use std::path::Path;
+
+    use super::content_hashed;
+
+    #[test]
+    fn recognizes_bundler_hashes_including_those_containing_separators() {
+        for name in [
+            "index-C8S-ni_M.js",
+            "client_bg-D0L-57UV.wasm",
+            "wasm_bg-DN-vQADA.wasm",
+            "index-DSWuNRsQ.js",
+            "vendor-CrOf2xga.js.map",
+            "katex.min-tQFonBqR.css",
+            "index-NMDGHlFt.css",
+        ] {
+            assert!(
+                content_hashed(Path::new(&format!("dist/assets/{name}"))),
+                "{name} carries a content hash"
+            );
+        }
+    }
+
+    #[test]
+    fn leaves_unhashed_names_revalidating() {
+        for name in [
+            "index.html",
+            "favicon.svg",
+            "manifest.webmanifest",
+            "langs/en-US.json",
+            "site-manifest.js",
+            "index-abc.js",
+            "index-C8S-ni_M",
+            "index-C8S-ni_M.js~",
+        ] {
+            assert!(
+                !content_hashed(Path::new(name)),
+                "{name} must be revalidated"
+            );
+        }
+    }
 }

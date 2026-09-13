@@ -15,6 +15,7 @@ use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, DiffCallView, FileDiff, FileLocation, GenericCallView,
     TOOLS, ToolCallKind, ToolCallView, ToolRunContext, define_tool,
 };
+use seekdeep_util::utf16::{utf16_len, utf16_prefix};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
@@ -846,14 +847,16 @@ fn visit_directory<'a>(
     })
 }
 
+/// Bounds a view to `max_output_chars` UTF-16 units like the source's `slice`; a cut inside an
+/// astral character stops before it (DEV-003) instead of handing the model a replacement
+/// character the file never contained.
 fn maybe_truncate(content: &str, max_output_chars: usize) -> String {
-    let units = content.encode_utf16().collect::<Vec<_>>();
-    if units.len() <= max_output_chars {
+    if utf16_len(content) <= max_output_chars {
         content.to_owned()
     } else {
         format!(
             "{}{TRUNCATED_MESSAGE}",
-            String::from_utf16_lossy(&units[..max_output_chars])
+            utf16_prefix(content, max_output_chars)
         )
     }
 }
@@ -937,5 +940,22 @@ fn present_editor_call(args: &EditorArgs) -> ToolCallView {
                 args.insert_line.map(|line| (line + 1.0).max(1.0)),
             )]),
         }),
+    }
+}
+
+#[cfg(test)]
+mod maybe_truncate_tests {
+    use super::{TRUNCATED_MESSAGE, maybe_truncate};
+
+    #[test]
+    fn a_cap_inside_an_astral_character_cuts_before_it_without_a_replacement() {
+        let text = "ab\u{1F600}cd";
+        assert_eq!(maybe_truncate(text, 6), text);
+        assert_eq!(
+            maybe_truncate(text, 4),
+            format!("ab\u{1F600}{TRUNCATED_MESSAGE}")
+        );
+        assert_eq!(maybe_truncate(text, 3), format!("ab{TRUNCATED_MESSAGE}"));
+        assert!(!maybe_truncate(text, 3).contains('\u{FFFD}'));
     }
 }

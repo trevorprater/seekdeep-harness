@@ -10097,6 +10097,7 @@ dependencies = [
  "seekdeep-scope",
  "seekdeep-system-prompt",
  "seekdeep-tools",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "tempfile",

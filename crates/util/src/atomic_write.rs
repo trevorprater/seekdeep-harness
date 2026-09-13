@@ -42,6 +42,13 @@ pub async fn write_file_atomic(
     let parent = nonempty_parent(filename);
     create_parent_directories(parent, options.dir_mode).await?;
     let temp = temporary_sibling(filename);
+    // The temporary sibling is owned across every await: a write future dropped between
+    // creating it and persisting it (a cancelled settings or credentials write) must not leave
+    // the file, or a plaintext copy of a secret, behind.
+    let mut cleanup = TemporaryCleanup {
+        path: temp.clone(),
+        armed: true,
+    };
 
     let operation = async {
         let mut open = tokio::fs::OpenOptions::new();
@@ -55,7 +62,9 @@ pub async fn write_file_atomic(
     .await;
 
     if let Err(operation_error) = operation {
-        match tokio::fs::remove_file(&temp).await {
+        let removal = tokio::fs::remove_file(&temp).await;
+        cleanup.armed = false;
+        match removal {
             Ok(()) => return Err(operation_error),
             Err(cleanup) if cleanup.kind() == io::ErrorKind::NotFound => {
                 return Err(operation_error);
@@ -63,7 +72,23 @@ pub async fn write_file_atomic(
             Err(cleanup) => return Err(cleanup),
         }
     }
+    cleanup.armed = false;
     Ok(())
+}
+
+/// Removes a temporary sibling that was never persisted, including when the write future is
+/// dropped mid-flight; disarmed once the rename or the explicit cleanup has run.
+struct TemporaryCleanup {
+    path: PathBuf,
+    armed: bool,
+}
+
+impl Drop for TemporaryCleanup {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
 }
 
 fn nonempty_parent(path: &Path) -> &Path {
@@ -213,9 +238,9 @@ where
     let lock_path = lock_path(filename);
     let deadline = Instant::now() + timeout;
     let mut delay = initial_delay;
-    loop {
+    let mut guard = loop {
         match create_lock(&lock_path).await {
-            Ok(()) => break,
+            Ok(guard) => break guard,
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(FileLockError::Acquire(error)),
         }
@@ -224,9 +249,8 @@ where
         }
         tokio::time::sleep(delay).await;
         delay = delay.saturating_mul(2).min(maximum_delay);
-    }
+    };
 
-    let mut guard = LockFileGuard::new(lock_path.clone());
     let result = operation().await.map_err(FileLockError::Operation);
     let released = tokio::fs::remove_file(&lock_path).await;
     guard.disarm();
@@ -274,14 +298,20 @@ fn lock_path(filename: &Path) -> PathBuf {
     PathBuf::from(path)
 }
 
-async fn create_lock(path: &Path) -> io::Result<()> {
+/// Claims `path` and arms its guard the moment the open returns, before the pid is written, so a
+/// cycle dropped while the pid write or its flush is still in flight cannot strand the lock. The
+/// guard is armed only after the open succeeds because an open that loses to a contender must
+/// never remove that contender's lock.
+async fn create_lock(path: &Path) -> io::Result<LockFileGuard> {
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create_new(true);
     set_open_mode(&mut options, 0o600);
     let mut lock = options.open(path).await?;
+    let guard = LockFileGuard::new(path.to_owned());
     lock.write_all(format!("{}\n", std::process::id()).as_bytes())
         .await?;
-    lock.shutdown().await
+    lock.shutdown().await?;
+    Ok(guard)
 }
 
 #[cfg(test)]
@@ -525,6 +555,84 @@ mod tests {
             "the cycle acquired the lock"
         );
         assert!(!lock.exists(), "a cancelled cycle must not strand its lock");
+        with_file_lock(&target, || async { Ok::<(), std::io::Error>(()) })
+            .await
+            .unwrap();
+    }
+
+    /// Drives `future` one poll at a time until `observed` reports the on-disk state the test
+    /// wants to interrupt; each poll advances at most one blocking step, so the state cannot be
+    /// skipped over between checks.
+    async fn poll_until<F: std::future::Future>(
+        mut future: std::pin::Pin<&mut F>,
+        observed: impl Fn() -> bool,
+    ) {
+        for _ in 0..10_000 {
+            if observed() {
+                return;
+            }
+            let settled = std::future::poll_fn(|context| {
+                std::task::Poll::Ready(future.as_mut().poll(context).is_ready())
+            })
+            .await;
+            assert!(
+                !settled,
+                "the future settled before the interrupt point was observed"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!("the interrupt point was never observed");
+    }
+
+    #[tokio::test]
+    async fn a_dropped_write_removes_its_temporary_sibling() {
+        let temporary = tempdir().unwrap();
+        let target = temporary.path().join("settings.json");
+        let content = vec![b'x'; 64 * 1024];
+        let sibling_present = || {
+            std::fs::read_dir(temporary.path()).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            })
+        };
+        {
+            let mut write = std::pin::pin!(write_file_atomic(
+                &target,
+                &content,
+                WriteFileAtomicOptions {
+                    mode: 0o600,
+                    dir_mode: None
+                }
+            ));
+            poll_until(write.as_mut(), sibling_present).await;
+        }
+        assert!(
+            !sibling_present(),
+            "a dropped write must not leave its temporary sibling behind"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_cycle_dropped_while_claiming_the_lock_leaves_no_lock_behind() {
+        let temporary = tempdir().unwrap();
+        let target = temporary.path().join("settings.yaml");
+        let lock = temporary.path().join("settings.yaml.lock");
+        // The pid appears only after the open has returned, so interrupting once the lock has
+        // content lands between claiming the name and finishing the cycle's own bookkeeping.
+        let pid_written = || std::fs::read(&lock).is_ok_and(|content| !content.is_empty());
+        {
+            let mut cycle = std::pin::pin!(with_file_lock(&target, || {
+                std::future::pending::<Result<(), std::io::Error>>()
+            }));
+            poll_until(cycle.as_mut(), pid_written).await;
+        }
+        assert!(
+            !lock.exists(),
+            "a cycle dropped right after claiming the lock must not strand it"
+        );
         with_file_lock(&target, || async { Ok::<(), std::io::Error>(()) })
             .await
             .unwrap();

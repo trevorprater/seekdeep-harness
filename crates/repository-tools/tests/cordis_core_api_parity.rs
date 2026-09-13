@@ -52,10 +52,7 @@ fn renders_the_five_detailed_pages_from_pinned_vendor_declarations() {
         )
         .unwrap();
         let committed = std::fs::read_to_string(repository.join(out)).unwrap();
-        assert!(
-            pinned == committed,
-            "{out} differs from the committed page"
-        );
+        assert!(pinned == committed, "{out} differs from the committed page");
     }
 }
 
