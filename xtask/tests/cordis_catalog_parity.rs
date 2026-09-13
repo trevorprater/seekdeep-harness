@@ -89,9 +89,12 @@ fn identity_renames_data_and_documentation_spellings() {
         target_identity("@deepseek-ai/dsh-scope dsh-agent DSH_HOME DshEnvironment DSH process"),
         "@seekdeep-ai/seekdeep-scope seekdeep-agent SEEKDEEP_HOME SeekdeepEnvironment SeekDeep Harness process"
     );
+    // Data and documentation share one rename: the model reads the generated data, so the
+    // manifest field, scope-scan tag, and skill-source literals name what the port's
+    // runtime recognizes.
     assert_eq!(
-        target_identity("dsh.client @dshScopeScan"),
-        "dsh.client @dshScopeScan"
+        target_identity("dsh.client @dshScopeScan 'project-dsh' | 'user-dsh'"),
+        "seekdeep.client @seekdeepScopeScan 'project-seekdeep' | 'user-seekdeep'"
     );
     assert_eq!(
         document_identity("dsh.client @dshScopeScan dsh-x"),
