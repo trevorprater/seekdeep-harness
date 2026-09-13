@@ -186,6 +186,15 @@ jobs:
         with:
           node-version: 24
 
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      # The Node runtime packager copies the pinned watcher packages into the runtime
+      # closure from this out-of-workspace install.
+      - name: Install pinned Node runtime dependencies
+        run: pnpm --dir support/node-runtime-dependencies install --ignore-workspace --frozen-lockfile
+
       - uses: actions/setup-python@v6.3.0
         with:
           python-version: '3.10'

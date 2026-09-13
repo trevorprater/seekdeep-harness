@@ -87,6 +87,11 @@ jobs:
           RELEASE_PUBLISH: ${{ inputs.publish }}
         run: pnpm run release:verify --family seekdeep
 
+      # `cargo xtask build-client` bundles the Client packages against the pinned browser
+      # build dependencies, installed outside the workspace.
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile
+
       - name: Build
         run: pnpm run build
 
