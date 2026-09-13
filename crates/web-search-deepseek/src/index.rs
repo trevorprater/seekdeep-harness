@@ -10,7 +10,7 @@ use seekdeep_cordis::{Context, Plugin};
 use seekdeep_core::session::AppendOptions;
 use seekdeep_credentials::{CREDENTIALS, credential_ref};
 use seekdeep_schemastery::Schema;
-use seekdeep_settings::{install_settings_section, settings_namespace};
+use seekdeep_settings::{SettingsValidator, install_settings_section, settings_namespace};
 use seekdeep_util::launch_environment::launch_environment_of;
 use seekdeep_web::index::WEB;
 use serde::{Deserialize, Serialize};
@@ -196,12 +196,21 @@ pub fn resolve_options(
 async fn install_into_context(context: &Context, config: &Value) -> anyhow::Result<()> {
     let namespace = web_search_deepseek_settings_namespace()?;
     let entry = config.clone();
+    // `apiKeyEnv` is a schema-valid string whose credential-reference shape only resolution can
+    // check, so validate the resolved options on every write: a mistyped reference then fails where
+    // it is written rather than aborting a later search.
+    let validator_context = context.clone();
+    let validate: SettingsValidator = Arc::new(move |value: &Value| {
+        let config: DeepSeekSearchConfig = serde_json::from_value(value.clone())?;
+        resolve_options(&validator_context, &config)?;
+        Ok(())
+    });
     let installed = install_settings_section(
         context,
         &namespace,
         config_schema(),
         entry,
-        None,
+        Some(validate),
         Arc::new(|| Ok(())),
     )?;
     let source = installed.source;
