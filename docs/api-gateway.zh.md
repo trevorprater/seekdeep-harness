@@ -130,7 +130,7 @@ Client 卸载一个贡献时会一起移除描述符和具体方法，中止其�
 
 ## SRC 开发回退
 
-Host 通过 `node --import tsx/esm` 从源码启动时不会执行 Typert 编译插件。标准 decorator 初始化器仍会把方法名和调用模式记录到模块私有 `WeakMap`，`TypertRemoteService` 或 `bindTypertRemote()` 则提供显式服务 binding；Gateway 因而可以在不启动 `ts.Program` 的情况下构造一个较弱的临时描述符。
+Host 从源码启动时不会运行 Typert 契约生成过程。标准 decorator 初始化器仍会把方法名和调用模式记录到模块私有 `WeakMap`，`TypertRemoteService` 或 `bindTypertRemote()` 则提供显式服务 binding；Gateway 因而可以在不运行生成器的情况下构造一个较弱的临时描述符。
 
 SRC 回退从运行中函数解析简单参数名。参数名与某个已注册 lookup 的 `parameter` 相同，例如 `agent` 或 `session`，就使用其 `agentId` 或 `sessionId` wire 字段并在 Host 解析对象；其他参数只检查值是否为无循环、无特殊 prototype 的 JSON-safe 数据。`@RemoteScope` 直接使用已注册 Host Context 提供方的 wire 字段。SRC 不读取 TypeScript 类型，不生成 Zod schema，不推断可选参数，也不支持解构、默认值、rest 或重复参数名。
 
@@ -145,7 +145,7 @@ pnpm seekdeep web
 pnpm run dev:web
 ```
 
-`seekdeep` 通过 tsx 启动 Host 源码，所以 Host 可以使用 SRC 回退；`dev:web` 只监听带 `seekdeep.client` 声明的 Client 插件并重写其 `lib/client.js`，它不会分析 Host decorator，也不会生成 Remote Client DTS。
+`seekdeep` 从源码启动 Host，所以 Host 可以使用 SRC 回退；`dev:web` 只监听带 `seekdeep.client` 声明的 Client 插件并重写其 `lib/client.js`，它不会分析 Host decorator，也不会生成 Remote Client DTS。
 
 只修改 Remote 方法实现体而不改变约定时，无需重新生成 Typert 文件。新增或删除 decorator、修改导出名、namespace、参数、返回值、lookup、Context 或取消签名时，重新执行有序 lib 构建，让 Host 先生成严格约定，再让 Client 编译并打包新的贡献：
 
