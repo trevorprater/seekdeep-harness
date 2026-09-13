@@ -221,10 +221,9 @@ wine_node() {
 
 cd "$scratch/tree"
 tsc_js='node_modules/typescript/bin/tsc'
-tsdown_js='node_modules/tsdown/dist/run.mjs'
 vitepress_js='node_modules/vitepress/bin/vitepress.js'
 [ -f "$vitepress_js" ] || vitepress_js='website/node_modules/vitepress/bin/vitepress.js'
-for entry in "$tsc_js" "$tsdown_js" "$vitepress_js"; do
+for entry in "$tsc_js" "$vitepress_js"; do
   [ -f "$entry" ] || { echo "wine-windows-gates: expected entrypoint missing after hoisted install: $entry" >&2; exit 1; }
 done
 # VitePress links vue into the site's node_modules at build time; Wine cannot
@@ -239,16 +238,21 @@ cat "$scratch/logs/smoke.log"
 grep -q '^smoke: win32 x64' "$scratch/logs/smoke.log" || { echo 'wine-windows-gates: Windows Node smoke did not report win32 x64' >&2; exit 1; }
 
 # ---- the two blocking surfaces, concurrently ------------------------------
-# The build preserves the face order from package.json: compile and bundle the
-# Host face before compiling and bundling the Client face.
+# The build preserves the face order from package.json: compile the Host face
+# before the Client face. The bundles themselves are compiled Rust/WASM
+# (`cargo xtask build-client`), a native build outside this Windows Node gate.
 # Both statuses are captured so one failure cannot hide the other's result.
 build_gate() {
   wine_node "$scratch/logs/host-tsc.log" "$tsc_js" -b tsconfig.host.json --pretty false || return $?
-  wine_node "$scratch/logs/host-tsdown.log" "$tsdown_js" --env.SEEKDEEP_BUILD_FACE host || return $?
-  wine_node "$scratch/logs/client-tsc.log" "$tsc_js" -b tsconfig.client.json --pretty false || return $?
-  wine_node "$scratch/logs/client-tsdown.log" "$tsdown_js" --env.SEEKDEEP_BUILD_FACE client
+  wine_node "$scratch/logs/client-tsc.log" "$tsc_js" -b tsconfig.client.json --pretty false
 }
+# The site build reads the prepared inputs under website/.cache (site config, the
+# compiled docs runtime, copied public assets). `docs:prepare` is a native Rust/WASM
+# build, so it runs on the host and its ignored outputs are copied into the tree.
 site_gate() {
+  (cd "$repo_root" && pnpm run docs:prepare > "$scratch/logs/site-prepare.log" 2>&1) || return $?
+  rm -rf "$scratch/tree/website/.cache"
+  cp -R "$repo_root/website/.cache" "$scratch/tree/website/.cache"
   cd website
   wine_node "$scratch/logs/site.log" "../$vitepress_js" build .
 }
@@ -272,11 +276,11 @@ report() {
     for log in "$@"; do tail -n 200 "$log" >&2 || true; done
   fi
 }
-report 'build (Host tsc/tsdown, Client tsc/tsdown)' "$build_status" \
+report 'build (Host tsc, Client tsc)' "$build_status" \
   "$scratch/logs/host-tsc.log" \
-  "$scratch/logs/host-tsdown.log" \
-  "$scratch/logs/client-tsc.log" \
-  "$scratch/logs/client-tsdown.log"
-report 'production site (vitepress build)' "$site_status" "$scratch/logs/site.log"
+  "$scratch/logs/client-tsc.log"
+report 'production site (docs:prepare, vitepress build)' "$site_status" \
+  "$scratch/logs/site-prepare.log" \
+  "$scratch/logs/site.log"
 if (( build_status != 0 )); then exit "$build_status"; fi
 exit "$site_status"
