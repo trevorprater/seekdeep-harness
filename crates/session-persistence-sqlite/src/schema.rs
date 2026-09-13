@@ -289,10 +289,11 @@ pub fn row_to_event(row: &EventRow) -> anyhow::Result<SessionEvent> {
 ///
 /// A hole through the last committed `turn/end` is corruption.
 pub fn scan_rows(rows: &[EventRow], base: u64) -> anyhow::Result<(Vec<SessionEvent>, Option<u64>)> {
+    // The boundary comes from the stored type, not from successful deserialization: a committed
+    // turn/end whose payload fails to parse is corruption at the boundary, and requiring a parsed
+    // event here would let it read as a torn tail instead - silently truncating committed rows.
+    let last_turn_end = rows.iter().rposition(|row| row.event_type == "turn/end");
     let parsed: Vec<Option<SessionEvent>> = rows.iter().map(|row| row_to_event(row).ok()).collect();
-    let last_turn_end = parsed.iter().enumerate().rev().find_map(|(index, event)| {
-        (event.is_some() && rows[index].event_type == "turn/end").then_some(index)
-    });
     let mut preserved = Vec::new();
     for (index, event) in parsed.into_iter().enumerate() {
         let index_u64 = u64::try_from(index).context("stored session row count exceeds u64")?;
