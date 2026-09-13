@@ -333,6 +333,15 @@ async fn method_not_found_input_end_close_and_unknown_responses_are_fail_closed(
             .to_string()
             .contains("transport closed")
     );
+    // A request that starts after `close` fails at registration instead of waiting on
+    // the reader that `close` aborted (the port's deterministic-cancellation rule; the
+    // source leaves such a request pending forever).
+    let late = transport
+        .request("after-close", Map::new(), None)
+        .await
+        .unwrap_err();
+    assert!(late.to_string().contains("transport closed"), "{late}");
+    assert_eq!(transport.pending_len(), 0);
 }
 
 #[test]

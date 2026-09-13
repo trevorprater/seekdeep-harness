@@ -1143,13 +1143,12 @@ pub fn partition_maps() -> WalkPartitionMaps {
 }
 
 /// Product identity applied to source-identity documentation before it lands
-/// in the port: the data rename plus the manifest field and scope-scan tag
-/// spellings the committed pages carry.
+/// in the port. Documentation and data share one rename: the model reads the
+/// generated data too, so a manifest field, scope-scan tag, or skill-source
+/// literal must name what the port's runtime actually recognizes.
 #[must_use]
 pub fn document_identity(text: &str) -> String {
     target_identity(text)
-        .replace("dsh.client", "seekdeep.client")
-        .replace("@dshScopeScan", "@seekdeepScopeScan")
 }
 
 /// Product identity applied to source-identity data before it lands in the port.
@@ -1162,6 +1161,12 @@ pub fn target_identity(text: &str) -> String {
         .replace("dsh-", "seekdeep-")
         .replace("DshEnvironment", "SeekdeepEnvironment")
         .replace("DSH_", "SEEKDEEP_")
+        // Manifest field and scope-scan tag the client scanner recognizes.
+        .replace("dsh.client", "seekdeep.client")
+        .replace("@dshScopeScan", "@seekdeepScopeScan")
+        // Skill-source literals the filesystem skill provider emits.
+        .replace("'project-dsh'", "'project-seekdeep'")
+        .replace("'user-dsh'", "'user-seekdeep'")
 }
 
 const POLICY_ORACLE: &str = r"

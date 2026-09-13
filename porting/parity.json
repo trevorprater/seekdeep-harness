@@ -74280,7 +74280,7 @@
         "cargo clippy --locked --offline -p seekdeep-session-telemetry-otel --all-targets --all-features -- -D warnings",
         "Rust OpenTelemetry SDK pipeline is the production default; object-safe factory replacement is limited to the reporting boundary"
       ],
-      "note": "2026-09-11: native adapter/collector tests and retained-session shutdown regression pass. Native SDK cannot represent lone UTF16 surrogates in strings or keys; conversion rejects explicitly. Matching source raw HTTP/JSON export remains unverified."
+      "note": "2026-09-11: native adapter/collector tests and retained-session shutdown regression pass. Native SDK cannot represent lone UTF16 surrogates in strings or keys; such strings and keys are exported as the text of their JSON escape with the seekdeep.telemetry.unpaired_utf16 marker attribute (DEV-002) instead of dropping the record. Matching source raw HTTP/JSON export remains unverified."
     },
     {
       "source": "packages/session/session-telemetry-otel/src/invariant.ts",
@@ -87034,7 +87034,7 @@
         "cargo test -p seekdeep-repository-tools --all-features",
         "cargo test -p xtask --test cordis_catalog_parity"
       ],
-      "note": "documentation artifacts use the port identity (dsh- to seekdeep-, dsh.client to seekdeep.client, @dshScopeScan to @seekdeepScopeScan); the runtime API module is the Rust runtime catalog JSON (crates/tool-cordis/data/api-catalog.json), which keeps the dsh.client manifest spelling the committed data already carries"
+      "note": "documentation artifacts use the port identity (dsh- to seekdeep-, dsh.client to seekdeep.client, @dshScopeScan to @seekdeepScopeScan); the runtime API module is the Rust runtime catalog JSON (crates/tool-cordis/data/api-catalog.json); data and documentation share one rename, so the model-facing catalog names the seekdeep.client manifest field, the @seekdeepScopeScan tag, and the project-seekdeep/user-seekdeep skill sources the port's runtime recognizes"
     },
     {
       "source": "scripts/gen-cordis-inspect-catalog.ts",

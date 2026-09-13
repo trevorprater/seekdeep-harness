@@ -544,8 +544,8 @@
     },
     {
       "key": "clientModules",
-      "summary": "The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap.",
-      "description": "The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).",
+      "summary": "The web plugin table service: incremental `seekdeep.client` scan + wire composition + bundle route + index tap.",
+      "description": "The web plugin table service: incremental `seekdeep.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).",
       "methods": [
         {
           "signature": "graph(): WebBootGraph",
@@ -6155,7 +6155,7 @@
     },
     {
       "name": "SkillSource",
-      "declaration": "export type SkillSource = 'project-dsh' | 'project-agents' | 'runtime' | 'user-dsh' | 'user-agents' | 'custom' | 'bundled' | (string & {});"
+      "declaration": "export type SkillSource = 'project-seekdeep' | 'project-agents' | 'runtime' | 'user-seekdeep' | 'user-agents' | 'custom' | 'bundled' | (string & {});"
     },
     {
       "name": "SkillSummary",

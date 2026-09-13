@@ -71,6 +71,8 @@ pub struct JsonRpcLineTransport {
     reader: Mutex<Option<JoinHandle<()>>>,
     next_request: AtomicU64,
     pending: Mutex<HashMap<String, PendingSender>>,
+    /// Set under the pending-request lock by `close`, so no request registers after it.
+    closed: AtomicBool,
     request_handler: RwLock<Option<JsonRpcJsonRequestHandler>>,
     notification_handler: RwLock<Option<IncomingNotificationHandler>>,
     failure_handler: RwLock<Option<JsonRpcTransportFailureHandler>>,
@@ -110,6 +112,7 @@ impl JsonRpcLineTransport {
             reader: Mutex::new(None),
             next_request: AtomicU64::new(1),
             pending: Mutex::new(HashMap::new()),
+            closed: AtomicBool::new(false),
             request_handler: RwLock::new(None),
             notification_handler: RwLock::new(None),
             failure_handler: RwLock::new(None),
@@ -289,7 +292,16 @@ impl JsonRpcLineTransport {
             self.next_request.fetch_add(1, Ordering::AcqRel)
         );
         let (sender, receiver) = oneshot::channel();
-        self.pending.lock().insert(id.clone(), sender);
+        {
+            // Registration and closure share one lock: a request that starts after
+            // `close` fails here instead of waiting on a reader that no longer exists.
+            let mut pending = self.pending.lock();
+            anyhow::ensure!(
+                !self.closed.load(Ordering::Acquire),
+                "JSON-RPC transport closed"
+            );
+            pending.insert(id.clone(), sender);
+        }
         if let Err(error) = self.write_frame(wire::request(&id, &method, params)).await {
             self.pending.lock().remove(&id);
             return Err(error);
@@ -378,7 +390,14 @@ impl JsonRpcLineTransport {
         if let Some(reader) = self.reader.lock().take() {
             reader.abort();
         }
-        self.fail_pending("JSON-RPC transport closed");
+        let pending = {
+            let mut pending = self.pending.lock();
+            self.closed.store(true, Ordering::Release);
+            std::mem::take(&mut *pending)
+        };
+        for sender in pending.into_values() {
+            let _ = sender.send(Err(anyhow::anyhow!("JSON-RPC transport closed")));
+        }
     }
 
     /// Delivers EOF on the caller-owned output stream. Idempotent writers may

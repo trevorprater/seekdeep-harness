@@ -25,9 +25,17 @@ Verified absent at the pinned commit: analytics or crash-reporting SDKs (`sentry
 - **Rationale.** The collector is DeepSeek product infrastructure, not a model-protocol field, so it does not survive the `dsh` → `seekdeep` identity rename on its own terms, and a renamed harness exporting to it would be wrong in both directions. Removing the constant makes "no bytes to DeepSeek's collector" unconditional rather than merely default.
 - **Affected surfaces.** `packages/bundle/base/cordis.patch.yml` (the constant), `apps/cli/reference/README.md` and `README.zh.md` (documented default), `apps/cli/composition.md`, `.agents/notes/implemented/feature/2026-08-10-telemetry-default-off.md` and its i18n siblings (deployment stance), plus any snapshot that captures the rendered base-bundle config.
 
+## DEV-002: unpaired UTF-16 in exported telemetry records
+
+- **Source behavior.** The OTLP/HTTP exporter serializes log bodies and attributes with JavaScript's JSON writer, so a string or key holding an unpaired UTF-16 surrogate (which the session log accepts losslessly) reaches the collector as a `\uXXXX` JSON escape that a JSON reader decodes back to the lone code unit.
+- **Ported behavior.** The native exporter carries strings through the OpenTelemetry SDK, which only represents Unicode scalar values. A string or key with an unpaired surrogate is exported as the text of that escape (`\ud83d`, six ASCII characters) and the record carries the attribute `seekdeep.telemetry.unpaired_utf16 = "escaped"`; every other record is unchanged. Before this entry the native exporter dropped such records entirely.
+- **Observable delta.** Only records containing unpaired surrogates differ: the collector receives the escape as literal text instead of a lone code unit, plus the marker attribute. No record is lost.
+- **Rationale.** The SDK's string type cannot hold the code unit and its JSON writer would re-escape any backslash we emit; the escape text is a faithful, reversible encoding of the source's wire bytes, and the marker lets a consumer decode it deliberately.
+- **Affected surfaces.** `crates/session-telemetry-otel/src/native.rs` (conversion and marker), the native exporter tests, and the `packages/session/session-telemetry-otel/src/index.ts` parity row.
+
 ## Explicit non-deviations
 
-These port at full parity; they are listed so removal never creeps beyond DEV-001:
+These port at full parity; they are listed so removal never creeps beyond DEV-001 and DEV-002:
 
 - The telemetry capability: capture coordinator, `session-telemetry/record` redaction waterfall, and the OTel backend — a vendor-neutral OTLP/HTTP exporter whose whole configuration surface is preserved.
 - `anonymous-user-id` and both feedback packages; the `/feedback` acknowledgement and its sharing disclosure are user-facing surfaces.

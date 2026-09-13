@@ -293,9 +293,15 @@ impl WebServer {
             return Err(error.into());
         }
         let cleanup = server.clone();
-        context.own(EffectHandle::new("webServer.listen", move || {
+        if let Err(error) = context.own(EffectHandle::new("webServer.listen", move || {
             Box::pin(async move { cleanup.close().await })
-        }))?;
+        })) {
+            // The owner went inactive between the publication and this registration:
+            // nothing will ever run the cleanup, so release the listener now instead of
+            // leaving the accept task holding the port.
+            server.shutdown.abort();
+            return Err(error.into());
+        }
         Ok(server)
     }
 

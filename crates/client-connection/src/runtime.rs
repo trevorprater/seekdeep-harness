@@ -22,7 +22,20 @@ pub(crate) fn sleep(duration: Duration) -> impl Future<Output = ()> + Send {
 pub(crate) fn random_unit() -> f64 {
     let bytes = *uuid::Uuid::new_v4().as_bytes();
     let random_bits = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-    f64::from(random_bits) / f64::from(u32::MAX)
+    // Divide by 2^32, not `u32::MAX`, so the sample never reaches 1.0.
+    f64::from(random_bits) / 4_294_967_296.0
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    #[test]
+    fn the_jitter_sample_stays_below_one() {
+        for _ in 0..10_000 {
+            let sample = super::random_unit();
+            assert!((0.0..1.0).contains(&sample), "{sample}");
+        }
+        assert!(f64::from(u32::MAX) / 4_294_967_296.0 < 1.0);
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

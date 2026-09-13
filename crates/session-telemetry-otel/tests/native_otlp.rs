@@ -170,6 +170,69 @@ async fn native_pipeline_emits_otlp_json_with_resource_scopes_headers_and_gzip()
     assert_eq!(record["body"]["kvlistValue"]["values"][0]["key"], "reason");
 }
 
+/// DEV-002: a body string or key with an unpaired UTF-16 code unit reaches the collector
+/// as the text of its JSON escape, and the record says so, instead of being dropped.
+#[tokio::test]
+async fn native_pipeline_keeps_unpaired_utf16_as_escape_text_and_marks_the_record() {
+    let (endpoint, captured) = collector().await;
+    let factory = NativeOtelLogPipelineFactory::default();
+    let pipeline = factory
+        .create(OtelPipelineOptions {
+            exporter: json!({"url": endpoint, "timeoutMillis": 5_000}),
+            processor: Some(json!({
+                "maxQueueSize": 32,
+                "maxExportBatchSize": 16,
+                "scheduledDelayMillis": 60_000,
+                "exportTimeoutMillis": 5_000
+            })),
+            resource: OtelResource {
+                attributes: BTreeMap::new(),
+            },
+        })
+        .expect("native pipeline");
+    pipeline.emit(OtelLogRecord {
+        scope: "@seekdeep-ai/seekdeep-session-telemetry-otel".to_owned(),
+        scope_version: "0.1.0-rc.5".to_owned(),
+        timestamp: 1_700_000_000_123,
+        severity_number: 9,
+        severity_text: "INFO",
+        attributes: Map::from_iter([("session.id".to_owned(), json!("wire"))]),
+        body: seekdeep_core::session::JsonValue::parse(
+            r#"{"text":"a\ud83d","\udc00":1,"pair":"\ud83d\ude00"}"#.to_owned(),
+        )
+        .expect("lossless body"),
+    });
+    pipeline.shutdown().await.expect("pipeline shutdown");
+
+    let capture = tokio::time::timeout(std::time::Duration::from_secs(5), captured)
+        .await
+        .expect("collector deadline")
+        .expect("collector capture");
+    let record = &capture.body["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0];
+    let values = record["body"]["kvlistValue"]["values"]
+        .as_array()
+        .expect("body fields");
+    let field = |key: &str| {
+        values
+            .iter()
+            .find(|entry| entry["key"] == key)
+            .unwrap_or_else(|| panic!("body field {key}"))
+    };
+    assert_eq!(field("text")["value"]["stringValue"], "a\\ud83d");
+    assert_eq!(field("pair")["value"]["stringValue"], "\u{1F600}");
+    assert!(field("\\udc00")["value"]["intValue"].is_string());
+    let attributes = record["attributes"].as_array().expect("attributes");
+    assert!(attributes.iter().any(|attribute| {
+        attribute["key"] == "seekdeep.telemetry.unpaired_utf16"
+            && attribute["value"]["stringValue"] == "escaped"
+    }));
+    assert!(
+        attributes
+            .iter()
+            .any(|attribute| attribute["key"] == "session.id")
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn backend_coordinator_reaches_the_native_otlp_wire_and_drains_on_disposal() {
     let (endpoint, captured) = collector().await;

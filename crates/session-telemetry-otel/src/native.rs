@@ -1,6 +1,6 @@
 //! Native Rust OpenTelemetry SDK binding.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Write as _, sync::Arc, time::Duration};
 
 use opentelemetry::{
     InstrumentationScope, Key, KeyValue,
@@ -117,23 +117,23 @@ impl OtelLogPipeline for NativeOtelLogPipeline {
             _ => Severity::Info,
         });
         output.set_severity_text(record.severity_text);
-        match json_value(&record.body) {
-            Ok(Some(body)) => output.set_body(body),
-            Ok(None) => {}
-            Err(error) => {
-                tracing::warn!(%error, "OpenTelemetry SDK rejected an unrepresentable log body");
-                return;
-            }
+        let mut escaped = false;
+        if let Some(body) = json_value(&record.body, &mut escaped) {
+            output.set_body(body);
         }
         for (key, value) in record.attributes {
-            match json_value(&value.into()) {
-                Ok(Some(value)) => output.add_attribute(Key::new(key), value),
-                Ok(None) => {}
-                Err(error) => {
-                    tracing::warn!(%error, "OpenTelemetry SDK rejected an unrepresentable log attribute");
-                    return;
-                }
+            if let Some(value) = json_value(&value.into(), &mut escaped) {
+                output.add_attribute(Key::new(key), value);
             }
+        }
+        if escaped {
+            // The source serializes an unpaired UTF-16 code unit as a `\uXXXX` JSON escape.
+            // The native SDK only carries Unicode scalar strings, so the record keeps that
+            // escape as text and says so instead of being dropped (DEV-002).
+            output.add_attribute(
+                Key::new(ESCAPED_UTF16_ATTRIBUTE),
+                AnyValue::String(ESCAPED_UTF16_VALUE.into()),
+            );
         }
         logger.emit(output);
     }
@@ -163,10 +163,14 @@ fn exporter(config: &Value) -> anyhow::Result<LogExporter> {
     {
         builder = builder.with_timeout(timeout);
     }
-    // `with_headers` installs the whole map, so the configured headers and the user agent
-    // are merged before the single call; the source's exporter receives them together.
+    // The exporter seeds its header map with a `User-Agent` entry under exactly that
+    // spelling, and the map is keyed by string, not by header name: a differently cased
+    // key would coexist with the default and the wire value would depend on map order.
     let mut headers = match object.get("headers") {
-        Some(headers) => string_map(headers, "exporter.headers")?,
+        Some(headers) => string_map(headers, "exporter.headers")?
+            .into_iter()
+            .map(|(key, value)| (canonical_header_key(&key), value))
+            .collect(),
         None => HashMap::new(),
     };
     if let Some(compression) = object.get("compression") {
@@ -182,7 +186,7 @@ fn exporter(config: &Value) -> anyhow::Result<LogExporter> {
         let user_agent = user_agent.as_str().ok_or_else(|| {
             anyhow::anyhow!("session-telemetry-otel: exporter.userAgent must be a string")
         })?;
-        headers.insert("user-agent".to_owned(), user_agent.to_owned());
+        headers.insert(USER_AGENT_HEADER.to_owned(), user_agent.to_owned());
     }
     if !headers.is_empty() {
         builder = builder.with_headers(headers);
@@ -255,6 +259,19 @@ fn optional_usize(value: Option<&Value>, field: &str) -> anyhow::Result<Option<u
         .transpose()
 }
 
+/// The exporter's own spelling of the user-agent header key.
+const USER_AGENT_HEADER: &str = "User-Agent";
+
+/// Maps any spelling of the user-agent key onto the exporter's, leaving other keys as
+/// configured.
+fn canonical_header_key(key: &str) -> String {
+    if key.eq_ignore_ascii_case(USER_AGENT_HEADER) {
+        USER_AGENT_HEADER.to_owned()
+    } else {
+        key.to_owned()
+    }
+}
+
 fn string_map(value: &Value, field: &str) -> anyhow::Result<HashMap<String, String>> {
     value
         .as_object()
@@ -281,47 +298,48 @@ fn unix_millis(value: i64) -> std::time::SystemTime {
     }
 }
 
-fn json_value(value: &JsonValue) -> anyhow::Result<Option<AnyValue>> {
+/// Record attribute set when a string or key kept an unpaired UTF-16 escape as text.
+const ESCAPED_UTF16_ATTRIBUTE: &str = "seekdeep.telemetry.unpaired_utf16";
+/// The attribute's value: the escapes are the `\uXXXX` text a JSON reader would decode.
+const ESCAPED_UTF16_VALUE: &str = "escaped";
+
+/// Converts a lossless JSON value for the SDK. A string or key with an unpaired UTF-16
+/// code unit becomes the text of its JSON escape and sets `escaped`.
+fn json_value(value: &JsonValue, escaped: &mut bool) -> Option<AnyValue> {
     if value.is_null() {
-        return Ok(None);
+        return None;
     }
     if let Some(value) = value.as_bool() {
-        return Ok(Some(AnyValue::Boolean(value)));
+        return Some(AnyValue::Boolean(value));
     }
     if value.is_string() {
-        let value = value.as_str().ok_or_else(|| {
-            anyhow::anyhow!("OpenTelemetry SDK cannot encode unpaired UTF-16 in a body string")
-        })?;
-        return Ok(Some(AnyValue::String(value.to_owned().into())));
+        return Some(AnyValue::String(
+            lossless_string(value.as_raw(), escaped).into(),
+        ));
     }
     if let Some(values) = value.as_array() {
-        let mut output = Vec::new();
-        for value in values {
-            if let Some(value) = json_value(value)? {
-                output.push(value);
-            }
-        }
-        return Ok(Some(AnyValue::ListAny(Box::new(output))));
+        let output = values
+            .iter()
+            .filter_map(|value| json_value(value, escaped))
+            .collect();
+        return Some(AnyValue::ListAny(Box::new(output)));
     }
     if let Some(values) = value.object_entries() {
+        // A repeated key keeps its last value (JSON.parse semantics), so only the
+        // effective value is converted and can set the escape marker.
         let mut fields = HashMap::new();
         for (key, value) in values {
-            let key: String = key.deserialize().map_err(|_| {
-                anyhow::anyhow!(
-                    "OpenTelemetry SDK cannot encode unpaired UTF-16 in a body object key"
-                )
-            })?;
-            fields.insert(key, value.to_owned());
+            fields.insert(lossless_string(key.as_raw(), escaped), value.to_owned());
         }
         let mut output = HashMap::new();
         for (key, value) in fields {
-            if let Some(value) = json_value(&value)? {
+            if let Some(value) = json_value(&value, escaped) {
                 output.insert(Key::new(key), value);
             }
         }
-        return Ok(Some(AnyValue::Map(Box::new(output))));
+        return Some(AnyValue::Map(Box::new(output)));
     }
-    Ok(value
+    value
         .as_i64()
         .map(AnyValue::Int)
         .or_else(|| {
@@ -330,7 +348,75 @@ fn json_value(value: &JsonValue) -> anyhow::Result<Option<AnyValue>> {
                 .and_then(|value| i64::try_from(value).ok())
                 .map(AnyValue::Int)
         })
-        .or_else(|| value.as_f64().map(AnyValue::Double)))
+        .or_else(|| value.as_f64().map(AnyValue::Double))
+}
+
+/// Decodes a raw JSON string literal, keeping every unpaired surrogate as the text of
+/// its `\uXXXX` escape (the bytes the source's JSON serializer emits for it).
+fn lossless_string(raw: &str, escaped: &mut bool) -> String {
+    if let Ok(text) = serde_json::from_str::<String>(raw) {
+        return text;
+    }
+    let literal = raw
+        .strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .unwrap_or(raw);
+    let mut output = String::with_capacity(literal.len());
+    let mut characters = literal.chars().peekable();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            output.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some('u') => {
+                let unit = hex_unit(&mut characters);
+                match unit {
+                    Some(high @ 0xD800..=0xDBFF) => {
+                        let mut lookahead = characters.clone();
+                        if lookahead.next() == Some('\\')
+                            && lookahead.next() == Some('u')
+                            && let Some(low @ 0xDC00..=0xDFFF) = hex_unit(&mut lookahead)
+                        {
+                            characters = lookahead;
+                            let scalar = 0x10000
+                                + ((u32::from(high) - 0xD800) << 10)
+                                + (u32::from(low) - 0xDC00);
+                            output.push(char::from_u32(scalar).unwrap_or('\u{FFFD}'));
+                        } else {
+                            *escaped = true;
+                            let _ = write!(output, "\\u{high:04x}");
+                        }
+                    }
+                    Some(unit @ 0xDC00..=0xDFFF) => {
+                        *escaped = true;
+                        let _ = write!(output, "\\u{unit:04x}");
+                    }
+                    Some(unit) => {
+                        output.push(char::from_u32(u32::from(unit)).unwrap_or('\u{FFFD}'));
+                    }
+                    None => output.push('\u{FFFD}'),
+                }
+            }
+            Some('n') => output.push('\n'),
+            Some('t') => output.push('\t'),
+            Some('r') => output.push('\r'),
+            Some('b') => output.push('\u{8}'),
+            Some('f') => output.push('\u{c}'),
+            Some(other) => output.push(other),
+            None => {}
+        }
+    }
+    output
+}
+
+fn hex_unit(characters: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<u16> {
+    let mut unit = 0u16;
+    for _ in 0..4 {
+        let digit = characters.next()?.to_digit(16)?;
+        unit = (unit << 4) | u16::try_from(digit).ok()?;
+    }
+    Some(unit)
 }
 
 #[cfg(test)]
@@ -338,30 +424,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn native_body_conversion_rejects_unrepresentable_strings_and_keys_explicitly() {
-        for raw in [
-            r#""\ud800""#,
-            r#"{"nested":[1,"\udfff"]}"#,
-            r#"{"\ud800":true}"#,
+    fn native_body_conversion_keeps_unpaired_utf16_as_escape_text_and_marks_it() {
+        for (raw, expected) in [
+            (r#""\ud800""#, AnyValue::String("\\ud800".into())),
+            (
+                r#"{"nested":[1,"\udfff"]}"#,
+                AnyValue::Map(Box::new(HashMap::from([(
+                    Key::new("nested"),
+                    AnyValue::ListAny(Box::new(vec![
+                        AnyValue::Int(1),
+                        AnyValue::String("\\udfff".into()),
+                    ])),
+                )]))),
+            ),
+            (
+                r#"{"\ud800":true}"#,
+                AnyValue::Map(Box::new(HashMap::from([(
+                    Key::new("\\ud800"),
+                    AnyValue::Boolean(true),
+                )]))),
+            ),
         ] {
             let body = JsonValue::parse(raw.to_owned()).unwrap();
-            assert!(
-                json_value(&body)
-                    .unwrap_err()
-                    .to_string()
-                    .contains("cannot encode unpaired UTF-16")
-            );
+            let mut escaped = false;
+            assert_eq!(json_value(&body, &mut escaped), Some(expected));
+            assert!(escaped, "{raw}");
             assert_eq!(body.as_raw(), raw);
         }
+    }
+
+    #[test]
+    fn native_body_conversion_decodes_pairs_and_ordinary_escapes_without_marking() {
+        let body = JsonValue::parse(
+            r#"{"text":"a\ud83d\ude00b\n\"quoted\" \u00e9\\end","plain":"x"}"#.to_owned(),
+        )
+        .unwrap();
+        let mut escaped = false;
+        let Some(AnyValue::Map(values)) = json_value(&body, &mut escaped) else {
+            panic!("object body");
+        };
+        assert!(!escaped);
+        assert_eq!(
+            values.get(&Key::new("text")),
+            Some(&AnyValue::String(
+                "a\u{1F600}b\n\"quoted\" \u{e9}\\end".into()
+            ))
+        );
     }
 
     #[test]
     fn native_body_conversion_keeps_only_effective_duplicate_field_values() {
         let body =
             JsonValue::parse(r#"{"value":"\ud800","value":"ok","count":3}"#.to_owned()).unwrap();
-        let Some(AnyValue::Map(values)) = json_value(&body).unwrap() else {
+        let mut escaped = false;
+        let Some(AnyValue::Map(values)) = json_value(&body, &mut escaped) else {
             panic!("object body");
         };
+        assert!(
+            !escaped,
+            "an overridden duplicate value must not mark the record"
+        );
         assert_eq!(
             values.get(&Key::new("value")),
             Some(&AnyValue::String("ok".into()))
