@@ -258,6 +258,24 @@ async fn truncates_decoded_body_past_char_cap() {
 }
 
 #[tokio::test]
+async fn counts_decoded_body_cap_in_utf16_units() {
+    // "a\u{1f600}b" is four UTF-16 units but three scalar values, so a cap of three truncates
+    // under the source's JavaScript string semantics and would not under a scalar-value count.
+    let server = MockServer::start(Arc::new(|_req: &CapturedRequest| {
+        respond(200, "text/plain", "a\u{1f600}b")
+    }))
+    .await;
+    let mut limits = default_limits();
+    limits.max_body_chars = 3.0;
+    let result = provider(limits)
+        .fetch(&req(&server.url), None)
+        .await
+        .expect("truncated");
+    assert_eq!(body_content(&result), "a\u{1f600}");
+    assert!(result.truncated);
+}
+
+#[tokio::test]
 async fn rejects_unsupported_or_missing_content_type() {
     let server = MockServer::start(Arc::new(|_req: &CapturedRequest| {
         respond(200, "image/png", "binary")

@@ -167,13 +167,17 @@ impl HttpFetchProvider {
         let (bytes, truncated_by_bytes) = self.read_capped(response, signal).await?;
         let (decoded, _used_encoding, _had_errors) = encoding.decode(&bytes);
         let decoded = decoded.into_owned();
+        // The source measures and slices this cap with JavaScript string semantics, which count
+        // UTF-16 code units rather than Unicode scalar values, so an astral character costs two.
         let truncated_by_chars =
-            crate::numeric::exceeds(decoded.chars().count(), self.limits.max_body_chars);
+            crate::numeric::exceeds(decoded.encode_utf16().count(), self.limits.max_body_chars);
         let content = if truncated_by_chars {
-            decoded
-                .chars()
-                .take(crate::numeric::floor_to_usize(self.limits.max_body_chars))
-                .collect()
+            String::from_utf16_lossy(
+                &decoded
+                    .encode_utf16()
+                    .take(crate::numeric::floor_to_usize(self.limits.max_body_chars))
+                    .collect::<Vec<u16>>(),
+            )
         } else {
             decoded
         };
