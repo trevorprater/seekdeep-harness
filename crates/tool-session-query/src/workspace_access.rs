@@ -73,8 +73,8 @@ pub fn caller_of(run: &ToolRunContext) -> anyhow::Result<Caller> {
 }
 
 /// Resolves an explicit target or defaults to the captured caller.
-pub fn target_id(value: Option<&str>, caller: &Caller) -> SessionId {
-    value.map_or_else(|| caller.id.clone(), SessionId::new)
+pub fn target_id(value: Option<&SessionId>, caller: &Caller) -> SessionId {
+    value.map_or_else(|| caller.id.clone(), SessionId::clone)
 }
 
 /// Authorizes a direct target without revealing existence across workspaces.

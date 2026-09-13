@@ -158,7 +158,7 @@ pub async fn execute_event_search(
     max_results: usize,
 ) -> anyhow::Result<JsonString> {
     let caller = workspace_access::caller_of(run)?;
-    let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
+    let session_id = workspace_access::target_id(args.session_id.as_ref(), &caller);
     let signal = run.signal();
     workspace_access::authorize_target(context, &caller, &session_id, &signal).await?;
     let query = input::normalize_query(&args.query)?;
@@ -278,7 +278,7 @@ pub async fn execute_session_trace(
     run: &ToolRunContext,
 ) -> anyhow::Result<JsonString> {
     let caller = workspace_access::caller_of(run)?;
-    let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
+    let session_id = workspace_access::target_id(args.session_id.as_ref(), &caller);
     let signal = run.signal();
     workspace_access::authorize_target(context, &caller, &session_id, &signal).await?;
     let service = query_service(context)?;
@@ -330,7 +330,7 @@ pub async fn execute_event_trace(
 ) -> anyhow::Result<JsonString> {
     let seq = input::non_negative_safe("seq", args.seq)?;
     let caller = workspace_access::caller_of(run)?;
-    let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
+    let session_id = workspace_access::target_id(args.session_id.as_ref(), &caller);
     let signal = run.signal();
     workspace_access::authorize_target(context, &caller, &session_id, &signal).await?;
     let service = query_service(context)?;
@@ -369,7 +369,7 @@ pub async fn execute_event_read(
         .map(|value| input::non_negative_safe("after", value))
         .transpose()?;
     let caller = workspace_access::caller_of(run)?;
-    let session_id = workspace_access::target_id(args.session_id.as_deref(), &caller);
+    let session_id = workspace_access::target_id(args.session_id.as_ref(), &caller);
     let signal = run.signal();
     workspace_access::authorize_target(context, &caller, &session_id, &signal).await?;
     let service = query_service(context)?;

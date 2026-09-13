@@ -582,6 +582,24 @@ fn register_listeners(runtime: &Arc<InstructionRuntime>, context: &Context) -> a
         EventOptions::default(),
     )?;
 
+    // Every session-keyed entry retires with its session, so the maps stop growing in a
+    // long-lived Host and a session reallocated at the same address starts clean.
+    let disposal_runtime = runtime.clone();
+    context.events().on_sync(
+        context,
+        "session/disposed",
+        move |_, args| {
+            if let Some(session) = args.get::<Session>(0) {
+                let key = session_key(&session);
+                disposal_runtime.instruction_versions.lock().remove(&key);
+                disposal_runtime.baseline_preparations.lock().remove(&key);
+                disposal_runtime.open_steps.lock().remove(&key);
+                disposal_runtime.step_touches.lock().remove(&key);
+            }
+            Ok(EventReply::Undefined)
+        },
+        EventOptions::default(),
+    )?;
     let pre_step_runtime = runtime.clone();
     context.events().on_waterfall(
         context,

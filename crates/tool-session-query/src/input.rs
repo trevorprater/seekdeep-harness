@@ -18,13 +18,13 @@ pub struct SessionSearchArgs {
     /// Literal full-text query.
     pub query: String,
     /// Optional included session ids.
-    pub session_ids: Option<Vec<String>>,
+    pub session_ids: Option<Vec<SessionId>>,
     /// Inclusive creation-time lower bound.
     pub created_at_from: Option<String>,
     /// Inclusive creation-time upper bound.
     pub created_at_to: Option<String>,
     /// Optional direct parent ids.
-    pub parent_session_ids: Option<Vec<String>>,
+    pub parent_session_ids: Option<Vec<SessionId>>,
     /// Whether roots join the parent clause.
     pub include_root_sessions: Option<bool>,
     /// Required source availability alternatives.
@@ -48,7 +48,7 @@ pub struct SessionSearchArgs {
 #[serde(deny_unknown_fields)]
 pub struct EventSearchArgs {
     /// Target session, defaulting to the caller.
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
     /// Literal full-text query.
     pub query: String,
     /// Inclusive event sequence lower bound.
@@ -70,7 +70,7 @@ pub struct EventSearchArgs {
 #[serde(deny_unknown_fields)]
 pub struct SessionTargetArgs {
     /// Target session, defaulting to the caller.
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
 }
 
 /// One target event.
@@ -78,7 +78,7 @@ pub struct SessionTargetArgs {
 #[serde(deny_unknown_fields)]
 pub struct EventTargetArgs {
     /// Target session, defaulting to the caller.
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
     /// Target sequence.
     pub seq: i64,
 }
@@ -88,7 +88,7 @@ pub struct EventTargetArgs {
 #[serde(deny_unknown_fields)]
 pub struct EventReadArgs {
     /// Target session, defaulting to the caller.
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
     /// Target sequence.
     pub seq: i64,
     /// Preceding event count.
@@ -171,7 +171,7 @@ pub fn build_session_filters(args: &SessionSearchArgs) -> anyhow::Result<Vec<Ses
     if let Some(values) = &args.session_ids {
         assert_non_empty_array("session_ids", values)?;
         filters.push(SessionResultFilter::Id {
-            values: values.iter().map(SessionId::new).collect(),
+            values: values.clone(),
         });
     }
     if let Some((from, to)) = timestamp_range(
@@ -196,7 +196,7 @@ pub fn build_session_filters(args: &SessionSearchArgs) -> anyhow::Result<Vec<Ses
 ///
 /// Returns a typed invalid-filter failure for a supplied empty list.
 pub fn materialize_parent_session_ids(
-    values: Option<&[String]>,
+    values: Option<&[SessionId]>,
 ) -> anyhow::Result<Option<Vec<SessionId>>> {
     let Some(values) = values else {
         return Ok(None);
@@ -206,8 +206,8 @@ pub fn materialize_parent_session_ids(
     Ok(Some(
         values
             .iter()
-            .map(SessionId::new)
-            .filter(|id| seen.insert(id.clone()))
+            .filter(|id| seen.insert((*id).clone()))
+            .cloned()
             .collect(),
     ))
 }

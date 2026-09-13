@@ -55,12 +55,16 @@ fn normalizes_queries_sequences_lists_and_parent_identity() {
         );
     }
     assert_eq!(
-        materialize_parent_session_ids(Some(&["a".to_owned(), "a".to_owned(), "b".to_owned(),]))
-            .unwrap()
-            .unwrap()
-            .iter()
-            .map(seekdeep_core::session::SessionId::as_str)
-            .collect::<Vec<_>>(),
+        materialize_parent_session_ids(Some(&[
+            seekdeep_core::session::SessionId::new("a"),
+            seekdeep_core::session::SessionId::new("a"),
+            seekdeep_core::session::SessionId::new("b"),
+        ]))
+        .unwrap()
+        .unwrap()
+        .iter()
+        .map(seekdeep_core::session::SessionId::as_str)
+        .collect::<Vec<_>>(),
         ["a", "b"]
     );
 }
