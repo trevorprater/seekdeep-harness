@@ -185,7 +185,10 @@ pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
             let config = serde_json::from_value::<Config>(config)?;
-            install(&context, config)?;
+            // The contribution outlives this plugin only if nothing owns its revocation;
+            // owning it here withdraws the setup when the plugin unloads or reloads.
+            let contribution = install(&context, config)?;
+            context.own(contribution)?;
             Ok(())
         })
     })

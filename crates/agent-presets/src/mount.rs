@@ -603,10 +603,20 @@ impl AgentPresetRegistry {
         }
         let fiber = scope.fiber();
         let cleanup_fiber = fiber.clone();
-        self.context.own(EffectHandle::new(
+        if let Err(error) = self.context.own(EffectHandle::new(
             format!("agent preset {}", preset.id),
             move || Box::pin(async move { cleanup_fiber.dispose().await }),
-        ))?;
+        )) {
+            // The registry context began disposing while the composition was awaited:
+            // nothing will own the scope, so it is torn down here instead of leaking
+            // its plugin fibers past the failed mount.
+            let _ = scope.dispose().await;
+            return Err(PresetMountError::new(
+                &preset.id,
+                format!("registry context no longer accepts the mount: {error}"),
+            )
+            .into());
+        }
         Ok(Arc::new(StandingMount {
             preset_id: preset.id.clone(),
             key: scope_of(&scope.context).expect("created scope carries a key"),

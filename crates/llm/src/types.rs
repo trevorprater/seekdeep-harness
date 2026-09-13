@@ -710,7 +710,7 @@ pub struct GenerateOptions {
     /// request lineage. This field is deliberately absent from every wire
     /// representation and cannot be supplied by callers.
     #[serde(skip)]
-    agent_loop_request: Option<uuid::Uuid>,
+    agent_loop_request: Option<std::num::NonZeroU64>,
 }
 
 impl GenerateOptions {
@@ -736,12 +736,13 @@ impl GenerateOptions {
 
     /// Marks this request as assembled from an agent session's durable log.
     ///
-    /// The random process-local identity survives the internal by-value moves
-    /// and clones required by the Rust middleware chain, but never survives a
-    /// serialization boundary.
+    /// The process-local mark survives the internal by-value moves and clones
+    /// required by the Rust middleware chain, but never survives a serialization
+    /// boundary. It is a presence marker drawn from a process counter, so marking
+    /// a request pulls no entropy into this path.
     #[must_use]
     pub fn mark_agent_loop_request(mut self) -> Self {
-        self.agent_loop_request = Some(uuid::Uuid::new_v4());
+        self.agent_loop_request = Some(next_agent_loop_mark());
         self
     }
 
@@ -769,6 +770,14 @@ impl GenerateOptions {
     pub(crate) fn clear_agent_loop_request(&mut self) {
         self.agent_loop_request = None;
     }
+}
+
+/// Process-local sequence behind the agent-loop marks; every mark is distinct within
+/// the process, which is all the exact-object semantics of the source's `WeakSet` need.
+fn next_agent_loop_mark() -> std::num::NonZeroU64 {
+    static MARKS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let mark = MARKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::num::NonZeroU64::new(mark).unwrap_or(std::num::NonZeroU64::MIN)
 }
 
 impl Clone for GenerateOptions {
