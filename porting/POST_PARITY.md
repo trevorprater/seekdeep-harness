@@ -44,6 +44,16 @@ An explicitly invoked flow that re-submits the durably retained `cordis_define` 
 
 The full host compiled to `wasm32` with OPFS persistence, host and client in one tab. The typed gateway then runs over an in-memory seam, which ADR open decision 4 already requires the browser ABI to tolerate. Largest greenfield item; last in order.
 
+## Compiled CLI distribution through npm
+
+`@seekdeep-ai/seekdeep` publishes `seekdeep` as `lib/bin.js`, a launcher that `cargo xtask build-client` generates from `xtask/src/cli_launcher.rs`; it runs the compiled Rust executable named by `SEEKDEEP_EXECUTABLE` or found in `@seekdeep-ai/seekdeep-<platform>-<arch>/bin/seekdeep` next to the package, answers only `--version` from its manifest without one, and the executable locates the web frontend and shipped presets through `seekdeep_util::product_assets` (variable, `node_modules` walk from the installation anchor and the executable, executable-adjacent directory, checkout). What remains is producing and verifying the platform packages:
+
+- Platform packages (`os`/`cpu` manifests, `files: ["bin"]`) built by a release matrix like the Landlock prebuilds (`native/landlock-run/packages/<platform>`, `release:assemble-prebuilds`), carrying `bin/seekdeep`, the Node code-runtime closure, and the ripgrep closure beside it; `release:pack` must refuse a platform package without its executable, and `release:verify-packed-install` must install the host's platform package as a direct dependency (npm rejects other platforms' `os`/`cpu`) while keeping `--omit=optional`.
+- The Node code-runtime closure's integrity manifest (`crates/code-runtime-worker-thread/src/node_assets.rs`) requires `node_modules/chokidar` and `node_modules/readdirp` inside the closure; npm never packs nested `node_modules`, so the npm layout needs a manifest mode that resolves those two pinned packages as ordinary dependencies of the platform package, and the launcher must pass its own `process.execPath` as `SEEKDEEP_NODE_BINARY` because that closure bundles no Node.
+- Windows platform packages follow once the native Windows lane builds release executables.
+
+Parity-era provisions: the launcher and `product_assets` lookup above; the executable-adjacent `code-runtime-node` and `ripgrep/<os-arch>` closures the Host already resolves; the manylinux and macOS matrix in `.github/workflows/build-exe-for-python-sdk.yml`.
+
 ## Ordering
 
 Determinism spike, then effect transcripts, then deterministic simulation, then turn-per-invocation (with re-materialization), then browser-hosted deployment. The first three also serve port verification itself; the last two are deployment modes with no parity-era footprint beyond the provisions named above.
