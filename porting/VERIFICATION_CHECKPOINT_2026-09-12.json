@@ -241,6 +241,9 @@
     "next_steps": [
       "Read the store state at the header golden: log options and the session's agentPreset from the driver after the failing case, which separates 'not landed yet' from 'filtered out'.",
       "If it is filtering, compare the controller's option filter with the source's roster controller; if it is timing, compare when the source loads the roster relative to the header's first paint."
-    ]
+    ],
+    "falsified": "Two candidate mechanisms are now dead, both by evidence rather than argument. The roster the fixture serves contains all four presets, and minimal carries trust system with no broken field, so the controller's preset_options filter (which drops only presets the host reports broken) keeps it. And the label's own load does fire and succeed: the fixture's RPC log for the failing case shows /api/session.history, then /api/subagent.list, then /api/agentPreset.list answering 200, all before the further calls the app makes afterwards.",
+    "remaining_hypothesis": "The label nevertheless rendered its fallback id, which happens only when its lookup finds no option with that id, and the option's own name is non-null in the roster, so a trust mismatch would have rendered the roster name rather than the id. The options list the label read was therefore empty even though the roster request had succeeded: the store instance the label subscribes to is not the one the loader fills, or the subscription does not deliver the update to that component. Runtime inspection of both store instances at golden time is what separates these.",
+    "instrument_note": "The driver truncates every captured RPC body to 400 characters, which is why the roster response could not be read from the failure artifact at first; it was widened temporarily to 40,000, the scenario rerun, and the change reverted. The full response is what falsified the broken-preset theory."
   }
 }
