@@ -116,6 +116,9 @@ thread_local! {
     // Window arrays are few and large: keep only the latest handful so an old window's events
     // do not stay alive through this cache.
     static PARSED_EVENT_ARRAYS: RefCell<ParsedFaces<Vec<Rc<crate::ConversationLocationEvent>>>> = RefCell::new(ParsedFaces::with_capacity(4));
+    /// JavaScript member names by their source spelling.
+    static MEMBER_NAMES: RefCell<std::collections::HashMap<String, JsValue, crate::FnvBuildHasher>> =
+        RefCell::new(std::collections::HashMap::default());
 }
 
 /// The immutable JSON behind a face, or a fresh parse of a foreign object.
@@ -156,18 +159,30 @@ fn events_from_js(
     })
 }
 
+/// The window's JSON text, which crosses as UTF-8 bytes so neither module converts it to and
+/// from UTF-16. A test face may still hand over a JavaScript string.
+fn window_text(value: &JsValue) -> Result<Option<String>, JsValue> {
+    if let Some(bytes) = value.dyn_ref::<js_sys::Uint8Array>() {
+        let text = String::from_utf8(bytes.to_vec()).map_err(|_| {
+            js_sys::Error::new("Conversation Definition matchMany text is not UTF-8")
+        })?;
+        return Ok(Some(text));
+    }
+    Ok(value.as_string())
+}
+
 /// The events behind one window array from the window's JSON text: one parse per module,
 /// with each event recorded as the parse of its face so the update phase finds it.
 fn events_from_text(
     array: &JsValue,
-    text: &str,
+    text: String,
 ) -> Result<Rc<Vec<Rc<crate::ConversationLocationEvent>>>, JsValue> {
     PARSED_EVENT_ARRAYS.with(|cache| {
         cache.borrow_mut().get_or_parse(array, || {
             let faces = array.dyn_ref::<Array>().ok_or_else(|| {
                 js_sys::Error::new("Conversation Definition matchMany takes an array of events")
             })?;
-            let rows = crate::ConversationValue::parse(text.to_owned())
+            let rows = crate::ConversationValue::parse(text)
                 .map_err(|error| js_sys::Error::new(&error.to_string()))?;
             let rows = rows.as_array().ok_or_else(|| {
                 js_sys::Error::new("Conversation Definition matchMany text must be an array")
@@ -272,8 +287,8 @@ pub fn native_conversation_node_definition_to_js_with_batch(
         move |events: JsValue, text: JsValue| -> Result<JsValue, JsValue> {
             // With the window's JSON text the module parses it once; a caller without it
             // (a test face) still gets the events read from the faces.
-            let events = match text.as_string() {
-                Some(text) => events_from_text(&events, &text)?,
+            let events = match window_text(&text)? {
+                Some(text) => events_from_text(&events, text)?,
                 None => events_from_js(&events)?,
             };
             let mut rows = Vec::with_capacity(events.len());
@@ -290,9 +305,9 @@ pub fn native_conversation_node_definition_to_js_with_batch(
                         }),
                 );
             }
-            let text = serde_json::to_string(&rows)
+            let rows = serde_json::to_vec(&rows)
                 .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-            Ok(JsValue::from_str(&text))
+            Ok(js_sys::Uint8Array::from(rows.as_slice()).into())
         },
     )
         as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
@@ -1208,8 +1223,24 @@ fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, Js
         .ok_or_else(|| js_sys::Error::new(&format!("{owner} {key:?} must be a string")).into())
 }
 
+/// A JavaScript member name, created once per name.
+///
+/// Reading one field of one face per event would otherwise encode the name into the JavaScript
+/// heap on every read, which is most of the boundary cost of decoding a conversation.
+pub(crate) fn member(key: &str) -> JsValue {
+    MEMBER_NAMES.with(|names| {
+        let mut names = names.borrow_mut();
+        if let Some(name) = names.get(key) {
+            return name.clone();
+        }
+        let name = JsValue::from_str(key);
+        names.insert(key.to_owned(), name.clone());
+        name
+    })
+}
+
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let value = Reflect::get(value, &JsValue::from_str(key))?;
+    let value = Reflect::get(value, &member(key))?;
     if value.is_undefined() {
         Err(js_sys::Error::new(&format!("{owner} omitted {key:?}")).into())
     } else {
@@ -1218,12 +1249,12 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
 }
 
 fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
-    let value = Reflect::get(value, &JsValue::from_str(key))?;
+    let value = Reflect::get(value, &member(key))?;
     Ok((!value.is_undefined()).then_some(value))
 }
 
 fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsValue, JsValue> {
-    let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
+    let method = Reflect::get(value, &member(name))?.dyn_into::<Function>()?;
     let args = Array::new();
     for argument in arguments {
         args.push(argument);
@@ -1240,7 +1271,7 @@ fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
 }
 
 fn set(value: &Object, key: &str, entry: &JsValue) -> Result<(), JsValue> {
-    Reflect::set(value, &JsValue::from_str(key), entry).map(|_| ())
+    Reflect::set(value, &member(key), entry).map(|_| ())
 }
 
 fn u64_as_f64(value: u64) -> f64 {

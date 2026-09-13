@@ -428,15 +428,16 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
             faces.push(&event_face(event).map_err(adapter_error)?);
         }
         // The window also crosses as one JSON text, so a module parses it once instead of
-        // re-reading every face.
-        let text = serde_json::to_string(
+        // re-reading every face. It crosses as UTF-8 bytes: a JavaScript string would be encoded
+        // to UTF-16 on the way out and decoded again in every module that reads it.
+        let text = serde_json::to_vec(
             &events
                 .iter()
                 .map(|event| event.wire_value())
                 .collect::<Vec<_>>(),
         )
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
-        let text = JsValue::from_str(&text);
+        let text: JsValue = js_sys::Uint8Array::from(text.as_slice()).into();
         let mut table = PrematchTable::default();
         let mut covered = false;
         for node in self
@@ -446,15 +447,22 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
             .cloned()
             .chain(self.registry.fallback())
         {
-            let batch = Reflect::get(&node.payload, &JsValue::from_str("matchMany"))
-                .map_err(adapter_error)?;
+            let batch = Reflect::get(
+                &node.payload,
+                &crate::wasm_native_definition::member("matchMany"),
+            )
+            .map_err(adapter_error)?;
             let Some(batch) = batch.dyn_ref::<Function>() else {
                 continue;
             };
             let rows = batch
                 .call2(&node.payload, &faces, &text)
                 .map_err(adapter_error)?;
-            let rows = rows.as_string().ok_or_else(|| {
+            let rows = match rows.dyn_ref::<js_sys::Uint8Array>() {
+                Some(bytes) => String::from_utf8(bytes.to_vec()).ok(),
+                None => rows.as_string(),
+            }
+            .ok_or_else(|| {
                 ConversationAssemblerError::new(format!(
                     "Conversation Definition {} matchMany must return JSON text",
                     node.kind
@@ -1300,7 +1308,7 @@ fn status_name(status: ConversationBoundaryStatus) -> &'static str {
 }
 
 fn optional_function(value: &JsValue, key: &str) -> Option<Function> {
-    let member = Reflect::get(value, &JsValue::from_str(key)).ok()?;
+    let member = Reflect::get(value, &crate::wasm_native_definition::member(key)).ok()?;
     if member.is_undefined() {
         return None;
     }
@@ -1321,7 +1329,7 @@ fn call_method(value: &JsValue, method: &str, arguments: &[JsValue]) -> Result<J
 }
 
 fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
-    let member = Reflect::get(value, &JsValue::from_str(key))?;
+    let member = Reflect::get(value, &crate::wasm_native_definition::member(key))?;
     if member.is_undefined() || member.is_null() {
         Err(js_sys::Error::new(&format!("{owner} requires {key:?}")).into())
     } else {
@@ -1346,7 +1354,7 @@ fn required_u64(value: &JsValue, key: &str, owner: &str) -> Result<u64, JsValue>
 }
 
 fn set(object: &Object, key: &str, value: &JsValue) -> Result<(), JsValue> {
-    if Reflect::set(object, &JsValue::from_str(key), value)? {
+    if Reflect::set(object, &crate::wasm_native_definition::member(key), value)? {
         Ok(())
     } else {
         Err(js_sys::Error::new(&format!("failed to set Conversation member {key:?}")).into())
