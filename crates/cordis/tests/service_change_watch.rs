@@ -89,3 +89,33 @@ fn checked_listener_rolls_back_a_rejected_service_before_observers_or_lookup() {
     assert_eq!(context.service_revision(), 0);
     assert_eq!(context.service_slot_revision(VALUE), 0);
 }
+
+
+#[test]
+fn service_guards_refuse_in_registration_order() {
+    let context = Context::new();
+    context
+        .on_service_change_checked(|_| anyhow::bail!("first guard refused"))
+        .unwrap();
+    // Four guards, not two: with a hash-ordered set, two entries can coincidentally iterate in
+    // registration order, which would let a broken implementation pass by luck.
+    for message in ["second", "third", "fourth"] {
+        let message = message.to_owned();
+        context
+            .on_service_change_checked(move |_| anyhow::bail!("{message} guard refused"))
+            .unwrap();
+    }
+
+    // The oracle's dispatch is ordered and bail-sensitive ("returns the first bail value"), so the
+    // guard registered first is the one whose refusal the caller sees. Under a hash-ordered guard
+    // set this assertion is decided by hashing rather than by registration.
+    let error = context.provide(VALUE, Arc::new(1)).unwrap_err();
+    assert!(
+        matches!(
+            error,
+            seekdeep_cordis::CordisError::ServicePublication(ref message)
+                if message.contains("first guard refused")
+        ),
+        "{error:?}"
+    );
+}
