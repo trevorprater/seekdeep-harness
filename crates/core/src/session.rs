@@ -1210,7 +1210,7 @@ fn invalid(message: impl Into<String>) -> SessionError {
     SessionError::InvalidEvent(message.into())
 }
 
-fn now_millis() -> u64 {
+pub(crate) fn now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| {

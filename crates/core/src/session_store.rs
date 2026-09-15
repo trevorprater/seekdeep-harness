@@ -17,8 +17,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::session::{
-    SESSION_FORMAT_VERSION, Session, SessionError, SessionEvent, SessionHeader, SessionId,
-    SessionOrigin, SessionPublisher,
+    SESSION_FORMAT_VERSION, Session, SessionClock, SessionError, SessionEvent, SessionHeader,
+    SessionId, SessionOrigin, SessionPublisher, now_millis,
 };
 
 /// Typed context service key for the live session store.
@@ -31,9 +31,16 @@ pub const INJECT: &[&str] = &[];
 /// Builds the source-compatible `SessionStore` service plugin.
 #[must_use]
 pub fn plugin() -> Plugin {
+    plugin_with_clock(Arc::new(now_millis))
+}
+
+/// Builds a store plugin whose created sessions share the supplied durable clock.
+#[must_use]
+pub fn plugin_with_clock(clock: SessionClock) -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), move |context, _config| {
+        let clock = clock.clone();
         Box::pin(async move {
-            SessionStore::install(&context)?;
+            SessionStore::install_with_clock(&context, clock)?;
             Ok(())
         })
     })
@@ -246,6 +253,7 @@ impl SessionEntry {
 
 struct SessionStoreInner {
     context: Context,
+    clock: SessionClock,
     sessions: Mutex<IndexMap<SessionId, Arc<SessionEntry>>>,
     counter: Mutex<u64>,
     typert_effect: Mutex<Option<EffectHandle>>,
@@ -279,9 +287,23 @@ impl SessionStore {
     ///
     /// Returns a Cordis service-registration failure.
     pub fn install(context: &Context) -> Result<Arc<Self>, CordisError> {
+        Self::install_with_clock(context, Arc::new(now_millis))
+    }
+
+    /// Installs a store whose headers, seed boundaries, and appends use one clock.
+    /// Explicit creation timestamps override only the new session's header.
+    ///
+    /// # Errors
+    ///
+    /// Returns a Cordis service-registration failure.
+    pub fn install_with_clock(
+        context: &Context,
+        clock: SessionClock,
+    ) -> Result<Arc<Self>, CordisError> {
         let store = Arc::new(Self {
             inner: Arc::new(SessionStoreInner {
                 context: context.clone(),
+                clock,
                 sessions: Mutex::new(IndexMap::new()),
                 counter: Mutex::new(0),
                 typert_effect: Mutex::new(None),
@@ -368,18 +390,21 @@ impl SessionStore {
         if self.inner.sessions.lock().contains_key(&id) {
             return Err(SessionStoreError::AlreadyExists(id));
         }
-        let mut header = SessionHeader::new(id.clone());
+        let created_at = options.created_at.unwrap_or_else(|| (self.inner.clock)());
+        let mut header = SessionHeader::new_with_created_at(id.clone(), created_at);
         header.version = SESSION_FORMAT_VERSION;
-        if let Some(created_at) = options.created_at {
-            header.created_at = created_at;
-        }
         header.cwd = options.cwd;
         header.parent_session = options.parent_session;
         header.seed_length = options.seed_length;
         header.origin = options.origin;
         header.delegation_depth = options.delegation_depth;
         header.agent_preset = options.agent_preset;
-        Ok(Session::create(&id, options.seed, Some(header))?)
+        Ok(Session::create_with_clock(
+            &id,
+            options.seed,
+            Some(header),
+            self.inner.clock.clone(),
+        )?)
     }
 
     /// Enters an unpublished session and returns its detach effect.
