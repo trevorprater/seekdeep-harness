@@ -259,6 +259,13 @@ async fn optional_projection_service_mounts_unmounts_and_rebinds_after_plan_mode
         json!({"active": false, "pending": false})
     );
     second_fiber.dispose().await.unwrap();
+    assert!(
+        !second
+            .snapshot(&session)
+            .unwrap()
+            .values
+            .contains_key("plan")
+    );
     controller_fiber.dispose().await.unwrap();
 }
 

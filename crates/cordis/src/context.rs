@@ -706,6 +706,9 @@ impl Context {
 
     /// Provides a typed service until the returned effect is disposed.
     ///
+    /// Native disposal withdraws the service and waits for dependent plugins in the same
+    /// isolation scope to finish their lifecycle work.
+    ///
     /// # Errors
     ///
     /// Returns [`CordisError::InactiveEffect`] after the owning fiber begins disposal.
@@ -820,14 +823,25 @@ impl Context {
         let plugins = self.root.plugins.clone();
         let service_changes = self.root.service_changes.clone();
         let disposal_slot = slot.clone();
-        let effect = EffectHandle::synchronous(format!("ctx.provide({name:?})"), move || {
-            if services.remove(&disposal_slot, id) {
-                services.mark_changed(&disposal_slot);
-                notify_provider(&plugins, &disposal_slot, browser_notifies);
-                service_changes.notify();
-                service_changes.check(&disposal_slot.name)?;
-            }
-            Ok(())
+        #[cfg(not(target_arch = "wasm32"))]
+        let owner = self.fiber.id();
+        let effect = EffectHandle::new(format!("ctx.provide({name:?})"), move || {
+            Box::pin(async move {
+                if services.remove(&disposal_slot, id) {
+                    services.mark_changed(&disposal_slot);
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let dependents = plugins.service_dependents(owner, &disposal_slot);
+                    notify_provider(&plugins, &disposal_slot, browser_notifies);
+                    service_changes.notify();
+                    service_changes.check(&disposal_slot.name)?;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let _ = futures::future::join_all(
+                        dependents.iter().map(|fiber| fiber.await_settled()),
+                    )
+                    .await;
+                }
+                Ok(())
+            })
         });
         match self.own(effect.clone()) {
             Ok(effect) => Ok(effect),

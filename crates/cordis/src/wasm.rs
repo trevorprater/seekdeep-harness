@@ -1316,7 +1316,10 @@ impl BrowserProvider {
 
 fn native_provider_waiters(context: &Context, name: &str) -> Result<JsValue, JsValue> {
     let pending = Array::new();
-    for dependent in context.registry().service_dependents(context, name) {
+    for dependent in context
+        .registry()
+        .service_dependents(context.fiber().id(), &context.slot(name))
+    {
         let face = dependent.browser_face();
         if face.is_undefined() {
             pending.push(&future_to_promise(async move {

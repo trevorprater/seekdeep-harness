@@ -378,17 +378,20 @@ impl PluginRegistry {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) fn service_dependents(&self, owner: &Context, name: &str) -> Vec<Arc<PluginFiber>> {
+    pub(crate) fn service_dependents(
+        &self,
+        owner: Uuid,
+        slot: &crate::service::ServiceSlot,
+    ) -> Vec<Arc<PluginFiber>> {
         self.live_fibers()
             .into_iter()
             .filter(|fiber| {
-                !Arc::ptr_eq(fiber.fiber(), owner.fiber())
+                fiber.fiber().id() != owner
                     && fiber
                         .required_services()
                         .iter()
-                        .any(|required| required == name)
-                    && fiber.context().slot(name) == owner.slot(name)
+                        .any(|required| required == &slot.name)
+                    && fiber.context().slot(&slot.name) == *slot
             })
             .collect()
     }
