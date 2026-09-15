@@ -1,0 +1,29 @@
+[package]
+name = "seekdeep-sandbox-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Durable per-session sandbox policy owner for SeekDeep Harness"
+readme = "README.md"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+path-clean.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+seekdeep-llm = { path = "../llm" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

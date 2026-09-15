@@ -1,0 +1,28 @@
+[package]
+name = "seekdeep-subagent-fork-in-process"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Completed-turn-prefix in-process subagent provider"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+
+[dev-dependencies]
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+tokio.workspace = true
+
+[lints]
+workspace = true

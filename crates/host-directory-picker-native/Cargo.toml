@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-host-directory-picker-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Host-display native directory chooser backend"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-host-directory-picker = { path = "../host-directory-picker" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-util = { path = "../util" }
+seekdeep-win32-directory-dialog = { path = "../win32-directory-dialog" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

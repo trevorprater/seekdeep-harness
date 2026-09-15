@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-06-11-microkernel-event-taxonomy.md
+2026-06-11-microkernel-event-taxonomy.md: 18d962f12cf3d655b93648ddf2b15e4dd6548bed
+2026-06-11-microkernel-event-taxonomy.zh.md: b282f884de2ca8a8594aaac64c31309b77dbbc8d

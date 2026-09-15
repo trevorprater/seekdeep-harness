@@ -1,0 +1,58 @@
+[package]
+name = "seekdeep-loader-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust subprocess and Agent-turn harness for assembled Loader fixtures"
+
+[features]
+default = []
+fixture-bins = []
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-scope = { path = "../scope" }
+
+[[bin]]
+name = "loader-smoke-success"
+path = "src/bin/success.rs"
+test = false
+bench = false
+required-features = ["fixture-bins"]
+
+[[bin]]
+name = "loader-smoke-fail"
+path = "src/bin/fail.rs"
+test = false
+bench = false
+required-features = ["fixture-bins"]
+
+[[bin]]
+name = "loader-smoke-hang"
+path = "src/bin/hang.rs"
+test = false
+bench = false
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "process_parity"
+path = "tests/process_parity.rs"
+required-features = ["fixture-bins"]
+
+[lints]
+workspace = true

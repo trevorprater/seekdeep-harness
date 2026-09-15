@@ -13,6 +13,7 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
 uuid.workspace = true
 
 [dev-dependencies]

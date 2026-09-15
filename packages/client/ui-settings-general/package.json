@@ -1,0 +1,91 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-ui-settings-general",
+  "description": "Settings ownerless-copy and product onboarding plugin: the General section, shell trigger/header chrome content, settings dictionaries, and the versioned welcome notice",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/ui-settings-general"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-client-ui-settings",
+        "@seekdeep-ai/seekdeep-client-locale",
+        "@seekdeep-ai/seekdeep-client-connection",
+        "@seekdeep-ai/seekdeep-api-remotes",
+        "@seekdeep-ai/seekdeep-client-ui-sidebar"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-settings-general --artifact seekdeep_client_ui_settings_general --module-id @seekdeep-ai/seekdeep-client-ui-settings-general --out-dir packages/client/ui-settings-general/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-settings-general --artifact seekdeep_client_ui_settings_general --module-id @seekdeep-ai/seekdeep-client-ui-settings-general --out-dir packages/client/ui-settings-general/lib --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/schemastery": "workspace:^",
+    "clsx": "^2.0.0"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-sidebar": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-web-react": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-test-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-sidebar": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-web-react": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

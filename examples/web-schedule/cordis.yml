@@ -1,0 +1,9 @@
+# Opt-in Schedule patch over the shipped Web composition. The owner observes
+# only roots published after this overlay loads.
+
+- insert:
+    - id: time-context
+      name: '@seekdeep-ai/seekdeep-time-context'
+
+    - id: schedule
+      name: '@seekdeep-ai/seekdeep-schedule'

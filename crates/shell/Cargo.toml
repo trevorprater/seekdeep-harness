@@ -1,0 +1,27 @@
+[package]
+name = "seekdeep-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+regex.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-subprocess = { path = "../subprocess" }
+serde.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

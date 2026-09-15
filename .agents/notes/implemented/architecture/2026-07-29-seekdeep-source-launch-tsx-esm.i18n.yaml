@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-29-seekdeep-source-launch-tsx-esm.md
+2026-07-29-seekdeep-source-launch-tsx-esm.md: bb9bfe4de78a4ecb118dff489d37743c7be0e7ae
+2026-07-29-seekdeep-source-launch-tsx-esm.zh.md: 1bbfbf5c3ea9b4e1900c44263780b88e7277c7af

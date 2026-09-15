@@ -1,0 +1,222 @@
+# CI for the landlock-run packages under native/landlock-run. A separate
+# workflow from ci.yml keeps the native OS/architecture matrix independent of
+# the harness Node matrix. Release assembly and publication use the companion
+# Landlock Run Release workflow.
+name: Landlock Run
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/landlock-run.yml'
+      - '.github/workflows/landlock-run-release.yml'
+      - 'native/landlock-run/**'
+      - 'crates/landlock-run/**'
+      - 'crates/landlock-tools/**'
+      - 'crates/landlock-entry-wasm/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'SOURCE_SNAPSHOT'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/landlock-run.yml'
+      - '.github/workflows/landlock-run-release.yml'
+      - 'native/landlock-run/**'
+      - 'crates/landlock-run/**'
+      - 'crates/landlock-tools/**'
+      - 'crates/landlock-entry-wasm/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'SOURCE_SNAPSHOT'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked
+  # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  SEEKDEEP_TELEMETRY_DISABLED: '1'
+  CARGO_INCREMENTAL: '0'
+  SEEKDEEP_PARITY_SOURCE: ${{ github.workspace }}/.parity-oracle
+
+defaults:
+  run:
+    working-directory: native/landlock-run
+
+jobs:
+  matrix:
+    name: Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      ci: ${{ steps.matrix.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - id: matrix
+        run: echo "ci=$(cargo run --locked --quiet --manifest-path ../../Cargo.toml --package seekdeep-landlock-tools --bin landlock-github-matrix -- ci)" >> "$GITHUB_OUTPUT"
+
+  native:
+    name: ${{ matrix.platform }}
+    needs: matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.ci) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read source oracle pin
+        id: oracle
+        run: |
+          source_commit=$(sed -n 's/^commit=//p' ../../SOURCE_SNAPSHOT)
+          [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
+          echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.oracle.outputs.commit }}
+          path: .parity-oracle
+          persist-credentials: false
+          sparse-checkout: native/landlock-run
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: landlock-${{ matrix.platform }}
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: native/landlock-run/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: native/landlock-run/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install musl toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq musl-tools
+          rustup target add "$(rustc -vV | sed -n 's/^host: //p' | sed 's/-gnu$/-musl/')"
+
+      - name: Build compiled Rust/WASM entry
+        run: pnpm build:ts
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build native binaries (this architecture is the builder of record)
+        run: pnpm build:native
+
+      - name: Entry tests (keyless)
+        run: pnpm test:entry
+
+      - name: Build and release script source comparisons
+        run: pnpm test:tools
+
+      # NALR_REQUIRE_LANDLOCK: a self-skip on the very platform that exists to
+      # prove enforcement would be a false green, so an unenforcing kernel
+      # fails the leg instead of skipping.
+      - name: Launcher tests (real kernel enforcement)
+        run: pnpm test:launcher
+        env:
+          NALR_REQUIRE_LANDLOCK: 1
+          SEEKDEEP_REQUIRE_LANDLOCK: 1
+
+      - name: Pack rehearsal (pack → install → confine, this platform only)
+        run: |
+          pnpm release:pack .release/npm --current-platform-only
+          pnpm release:verify-packed-install .release/npm --current-platform-only
+        env:
+          NALR_REQUIRE_LANDLOCK: 1
+
+  darwin:
+    name: darwin (no platform package — degradation proof)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read source oracle pin
+        id: oracle
+        run: |
+          source_commit=$(sed -n 's/^commit=//p' ../../SOURCE_SNAPSHOT)
+          [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
+          echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ steps.oracle.outputs.commit }}
+          path: .parity-oracle
+          persist-credentials: false
+          sparse-checkout: native/landlock-run
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: landlock-darwin
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: native/landlock-run/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: native/landlock-run/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build compiled Rust/WASM entry
+        run: pnpm build:ts
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Entry tests (keyless)
+        run: pnpm test:entry
+
+      - name: Build and release script source comparisons
+        run: pnpm test:tools
+
+      - name: Launcher tests (unsupported hosts fail closed)
+        run: pnpm test:launcher
+
+      - name: Pack rehearsal (entry only — fallback resolution + unusable probe)
+        run: |
+          pnpm release:pack .release/npm --current-platform-only
+          pnpm release:verify-packed-install .release/npm --current-platform-only

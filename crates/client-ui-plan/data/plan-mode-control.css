@@ -1,0 +1,49 @@
+/* Active plan status follows Figma's warn-state pill. */
+
+.seekdeep-plan-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seekdeep-plan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 34px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.seekdeep-plan-chip:hover:not(:disabled) {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.seekdeep-plan-chip:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-warn-label);
+  outline-offset: 2px;
+}
+
+.seekdeep-plan-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.seekdeep-plan-close {
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+
+.seekdeep-plan-error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}

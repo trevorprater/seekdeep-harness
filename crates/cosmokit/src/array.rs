@@ -56,6 +56,27 @@ pub fn make_array<T>(source: Option<T>) -> Vec<T> {
     source.into_iter().collect()
 }
 
+/// Rust representation of the source helper's nullish, scalar, or array union.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MaybeArray<T> {
+    /// `null` or `undefined`.
+    Nullish,
+    /// One scalar value.
+    Scalar(T),
+    /// An already materialized array.
+    Array(Vec<T>),
+}
+
+/// Normalizes the complete source union without nesting an existing array.
+#[must_use]
+pub fn make_array_source<T>(source: MaybeArray<T>) -> Vec<T> {
+    match source {
+        MaybeArray::Nullish => Vec::new(),
+        MaybeArray::Scalar(value) => vec![value],
+        MaybeArray::Array(values) => values,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +95,15 @@ mod tests {
         assert!(remove(&mut items, &1));
         assert_eq!(items, [2, 1]);
         assert!(!remove(&mut items, &3));
+    }
+
+    #[test]
+    fn make_array_preserves_existing_arrays() {
+        assert_eq!(
+            make_array_source::<i32>(MaybeArray::Nullish),
+            Vec::<i32>::new()
+        );
+        assert_eq!(make_array_source(MaybeArray::Scalar(1)), [1]);
+        assert_eq!(make_array_source(MaybeArray::Array(vec![1, 2])), [1, 2]);
     }
 }

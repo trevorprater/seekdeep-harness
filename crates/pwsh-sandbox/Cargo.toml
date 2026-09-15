@@ -1,0 +1,28 @@
+[package]
+name = "seekdeep-pwsh-sandbox"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Sandbox-consuming PowerShell executor for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-pwsh-local = { path = "../pwsh-local" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-shell = { path = "../shell" }
+serde_json.workspace = true
+
+[dev-dependencies]
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

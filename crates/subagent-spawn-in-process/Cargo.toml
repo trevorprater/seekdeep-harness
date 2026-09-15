@@ -1,0 +1,23 @@
+[package]
+name = "seekdeep-subagent-spawn-in-process"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fresh-session in-process subagent provider"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -6,15 +6,33 @@ pub mod context;
 pub mod events;
 /// Plugin lifecycle ownership.
 pub mod fiber;
+/// Structured, exporter-driven logging with injectable time.
+pub mod logger;
 /// Plugin registration and dependency-driven activation.
 pub mod plugin;
 /// Typed and type-erased services.
 pub mod service;
+mod test_invariant_paths;
+/// Identity-disposable and error-composition utility substrate.
+pub mod utils;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
-pub use context::Context;
+pub use context::{Context, DynamicValue, MixinHandle, MixinMember};
 pub use events::{
-    DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventValue, PreparedEmission,
+    BailReply, DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventSubjectToken,
+    EventValue, PreparedEmission,
 };
-pub use fiber::{CordisError, Fiber, FiberState};
-pub use plugin::{Plugin, PluginFiber, PluginRegistry};
-pub use service::{Service, ServiceKey};
+pub use fiber::{CordisError, DisposalScheduling, Fiber, FiberState};
+pub use logger::{
+    CordisClock, LogExporter, LogFormatter, LogMessage, Logger, LoggerLevel, LoggerOptions,
+    LoggerService, LoggerType, SystemCordisClock,
+};
+pub use plugin::{Plugin, PluginFiber, PluginRegistry, PluginRuntimeSnapshot};
+pub use service::{Service, ServiceKey, ServiceProviderSnapshot};
+pub use test_invariant_paths::{
+    TEST_INVARIANT_READY_SERVICE, test_invariant_companion_paths, uses_manual_invariant_tree,
+};
+pub use utils::{DisposableList, DisposableListHandle, compose_error, is_json_object_like};
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;

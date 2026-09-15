@@ -1,0 +1,39 @@
+[package]
+name = "seekdeep-tool-lsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-facing language-server navigation tool for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+percent-encoding.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-lsp = { path = "../lsp" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+url.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-lsp-stdio = { path = "../lsp-stdio" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-tool-timeout-policy = { path = "../tool-timeout-policy" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

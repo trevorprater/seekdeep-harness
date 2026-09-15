@@ -1,0 +1,39 @@
+[package]
+name = "seekdeep-client-ui-settings-general"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM settings shell, General section, and onboarding settings owner"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-trait.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true
