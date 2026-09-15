@@ -323,6 +323,10 @@ impl SqliteSessionPersistence {
 
     async fn drain_all(self: &Arc<Self>) -> anyhow::Result<()> {
         let lives = self.live.lock().values().cloned().collect::<Vec<_>>();
+        let controllers = lives
+            .iter()
+            .map(|live| live.writes.clone())
+            .collect::<Vec<_>>();
         let mut errors = Vec::new();
         for live in lives {
             live.writes.cancel_automatic_wait();
@@ -362,6 +366,9 @@ impl SqliteSessionPersistence {
             {
                 self.retirements.lock().remove(retirement.session.id());
             }
+        }
+        for writes in controllers {
+            writes.close_after_flush().await;
         }
         if errors.is_empty() {
             Ok(())
@@ -707,6 +714,7 @@ impl SqliteSessionPersistence {
             if live.init.await.is_ok() {
                 live.writes.flush().await?;
             }
+            live.writes.close_after_flush().await;
         }
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
@@ -1627,4 +1635,68 @@ fn assert_supported_version(meta: &SessionHeader) -> anyhow::Result<()> {
         None,
     )
     .into())
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use seekdeep_cordis::Fiber;
+    use seekdeep_core::session::AppendOptions;
+    use serde_json::json;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn backend_disposal_closes_retained_live_controllers() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("sessions.sqlite");
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).unwrap();
+        let owner = Fiber::active_child("SQLite backend owner");
+        let backend = SqliteSessionPersistence::build(
+            sessions.clone(),
+            SqliteConfig {
+                path: path.clone(),
+                journal_mode: JournalMode::Wal,
+                prepared_session_cache_size: 5,
+                write_batch_max_delay_ms: 60_000,
+            },
+        )
+        .unwrap();
+        backend
+            .install_write_path(&context.with_fiber(owner.clone()))
+            .unwrap();
+        let session = sessions
+            .create(
+                &context,
+                Some(SessionId::new("retained-controller")),
+                CreateSessionOptions::default(),
+            )
+            .unwrap();
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .unwrap();
+        let retained = backend.live.lock()[&session_key(&session)].writes.clone();
+        session
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .unwrap();
+        owner.dispose().await.unwrap();
+        assert!(sessions.get(session.id()).is_some());
+        let database = Connection::open(path).unwrap();
+        let count: i64 = database
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE session_id = ?1",
+                [session.id().as_str()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 2);
+        let closed = retained.flush().await.is_err();
+        context.fiber().dispose().await.unwrap();
+        assert!(closed, "the retained backend kept its write actor open");
+        assert!(!retained.has_work());
+    }
 }

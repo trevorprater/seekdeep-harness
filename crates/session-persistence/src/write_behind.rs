@@ -9,7 +9,10 @@ use std::{
     time::Duration,
 };
 
-use futures::future::BoxFuture;
+use futures::{
+    FutureExt as _,
+    future::{BoxFuture, Shared},
+};
 use seekdeep_core::session::SessionEvent;
 use tokio::sync::{mpsc, oneshot};
 
@@ -54,6 +57,7 @@ enum Command {
     Enqueue(SessionEvent),
     Flush(oneshot::Sender<anyhow::Result<()>>),
     CancelAutomaticWait,
+    Close,
 }
 
 struct ActiveWrite {
@@ -66,8 +70,9 @@ struct ActiveWrite {
 /// write, failure retention, and explicit quiescence barrier.
 #[derive(Clone)]
 pub struct SessionWriteBehind {
-    sender: mpsc::UnboundedSender<Command>,
+    sender: Arc<parking_lot::Mutex<Option<mpsc::UnboundedSender<Command>>>>,
     has_work: Arc<AtomicBool>,
+    finished: Shared<BoxFuture<'static, ()>>,
 }
 
 impl std::fmt::Debug for SessionWriteBehind {
@@ -118,16 +123,21 @@ impl SessionWriteBehind {
         let actor_has_work = has_work.clone();
         let write: WriteFn = Arc::new(move |events| Box::pin(write(events)));
         let report: FailureFn = Arc::new(report_background_failure);
+        let (finished_sender, finished_receiver) = oneshot::channel();
         let spawner = Arc::clone(&runtime);
-        spawner.spawn_actor(Box::pin(run_actor(
-            receiver,
-            actor_has_work,
-            max_delay,
-            write,
-            report,
-            runtime,
-        )));
-        Self { sender, has_work }
+        spawner.spawn_actor(Box::pin(async move {
+            run_actor(receiver, actor_has_work, max_delay, write, report, runtime).await;
+            let _ = finished_sender.send(());
+        }));
+        Self {
+            sender: Arc::new(parking_lot::Mutex::new(Some(sender))),
+            has_work,
+            finished: async move {
+                let _ = finished_receiver.await;
+            }
+            .boxed()
+            .shared(),
+        }
     }
 
     /// Whether this controller owns queued events or an active durable write.
@@ -143,8 +153,12 @@ impl SessionWriteBehind {
     ///
     /// Returns when the controller actor has already stopped.
     pub fn enqueue(&self, event: &SessionEvent) -> anyhow::Result<()> {
+        let admission = self.sender.lock();
+        let sender = admission
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("session write-behind controller stopped"))?;
         self.has_work.store(true, Ordering::Release);
-        self.sender
+        sender
             .send(Command::Enqueue(event.clone()))
             .map_err(|_| anyhow::anyhow!("session write-behind controller stopped"))
     }
@@ -157,9 +171,14 @@ impl SessionWriteBehind {
     /// Returns the durable retry failure or actor shutdown.
     pub async fn flush(&self) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
-        self.sender
-            .send(Command::Flush(sender))
-            .map_err(|_| anyhow::anyhow!("session write-behind controller stopped"))?;
+        {
+            let admission = self.sender.lock();
+            admission
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("session write-behind controller stopped"))?
+                .send(Command::Flush(sender))
+                .map_err(|_| anyhow::anyhow!("session write-behind controller stopped"))?;
+        }
         receiver
             .await
             .map_err(|_| anyhow::anyhow!("session write-behind flush was abandoned"))?
@@ -167,7 +186,23 @@ impl SessionWriteBehind {
 
     /// Cancels the current automatic deadline without draining retained work.
     pub fn cancel_automatic_wait(&self) {
-        let _ = self.sender.send(Command::CancelAutomaticWait);
+        if let Some(sender) = self.sender.lock().as_ref() {
+            let _ = sender.send(Command::CancelAutomaticWait);
+        }
+    }
+
+    /// Seals all clones and joins the actor after the owner's final flush attempt.
+    ///
+    /// The owner must first stop producers and handle its final flush or initialization outcome.
+    /// Close requests no retry; a failed flush's retained events are released.
+    /// Concurrent close callers await the same completion, even if an earlier caller stops waiting.
+    pub async fn close_after_flush(&self) {
+        {
+            if let Some(sender) = self.sender.lock().take() {
+                let _ = sender.send(Command::Close);
+            }
+        }
+        self.finished.clone().await;
     }
 }
 
@@ -189,64 +224,12 @@ async fn run_actor(
     let mut commands_closed = false;
 
     loop {
+        if commands_closed && active.is_none() && pending.is_empty() {
+            break;
+        }
         tokio::select! {
+            // Queued producers cannot starve a ready write or batching deadline.
             biased;
-            command = wait_command(&mut commands, commands_closed) => {
-                let Some(command) = command else {
-                    commands_closed = true;
-                    if active.is_none() && pending.is_empty() {
-                        break;
-                    }
-                    if active.is_none() {
-                        start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
-                    }
-                    continue;
-                };
-                match command {
-                    Command::Enqueue(event) => {
-                        let was_empty = pending.is_empty();
-                        pending.push(event);
-                        has_work.store(true, Ordering::Release);
-                        if !barriers.is_empty() {
-                            if active.is_none() {
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
-                            }
-                        } else if automatic_paused {
-                            automatic_paused = false;
-                            deadline_expired = false;
-                            timer = Some(runtime.sleep(max_delay));
-                        } else if was_empty {
-                            timer = Some(runtime.sleep(max_delay));
-                        }
-                    }
-                    Command::Flush(waiter) => {
-                        timer = None;
-                        deadline_expired = false;
-                        automatic_paused = false;
-                        barriers.push(waiter);
-                        if active.is_none() {
-                            if pending.is_empty() {
-                                resolve_barriers(&mut barriers, None);
-                                has_work.store(false, Ordering::Release);
-                            } else {
-                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
-                            }
-                        }
-                    }
-                    Command::CancelAutomaticWait => {
-                        timer = None;
-                        deadline_expired = false;
-                    }
-                }
-            }
-            () = wait_timer(&mut timer) => {
-                timer = None;
-                if active.is_some() {
-                    deadline_expired = true;
-                } else if !pending.is_empty() {
-                    start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
-                }
-            }
             result = wait_active(&mut active) => {
                 let Some((batch, background, result)) = result else { continue };
                 match result {
@@ -294,6 +277,69 @@ async fn run_actor(
                                 resolve_barriers(&mut barriers, Some(&error.to_string()));
                             }
                         }
+                    }
+                }
+            }
+            () = wait_timer(&mut timer) => {
+                timer = None;
+                if active.is_some() {
+                    deadline_expired = true;
+                } else if !pending.is_empty() {
+                    start_write(&mut active, &mut pending, true, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
+                }
+            }
+            command = wait_command(&mut commands, commands_closed) => {
+                let Some(command) = command else {
+                    commands_closed = true;
+                    if active.is_none() && pending.is_empty() {
+                        break;
+                    }
+                    if active.is_none() {
+                        start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
+                    }
+                    continue;
+                };
+                match command {
+                    Command::Enqueue(event) => {
+                        let was_empty = pending.is_empty();
+                        pending.push(event);
+                        has_work.store(true, Ordering::Release);
+                        if !barriers.is_empty() {
+                            if active.is_none() {
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
+                            }
+                        } else if automatic_paused {
+                            automatic_paused = false;
+                            deadline_expired = false;
+                            timer = Some(runtime.sleep(max_delay));
+                        } else if was_empty {
+                            timer = Some(runtime.sleep(max_delay));
+                        }
+                    }
+                    Command::Flush(waiter) => {
+                        timer = None;
+                        deadline_expired = false;
+                        automatic_paused = false;
+                        barriers.push(waiter);
+                        if active.is_none() {
+                            if pending.is_empty() {
+                                resolve_barriers(&mut barriers, None);
+                                has_work.store(false, Ordering::Release);
+                            } else {
+                                start_write(&mut active, &mut pending, false, &mut timer, &mut deadline_expired, &write, runtime.as_ref());
+                            }
+                        }
+                    }
+                    Command::CancelAutomaticWait => {
+                        timer = None;
+                        deadline_expired = false;
+                    }
+                    Command::Close => {
+                        if let Some(write) = active.take() {
+                            let _ = write.task.await;
+                        }
+                        has_work.store(false, Ordering::Release);
+                        break;
                     }
                 }
             }
@@ -437,6 +483,150 @@ mod tests {
             .await
             .expect("the actor exits instead of parking with the unrecoverable batch");
         assert_eq!(failures.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_successful_final_drain_releases_the_actor() {
+        for already_active in [false, true] {
+            let exited = Arc::new(Notify::new());
+            let entered = Arc::new(Notify::new());
+            let release = Arc::new(Notify::new());
+            let writes = Arc::new(AtomicUsize::new(0));
+            let write_entered = entered.clone();
+            let write_release = release.clone();
+            let write_count = writes.clone();
+            let behind = SessionWriteBehind::new_with_runtime(
+                if already_active {
+                    Duration::ZERO
+                } else {
+                    Duration::from_secs(86_400)
+                },
+                move |_events| {
+                    let entered = write_entered.clone();
+                    let release = write_release.clone();
+                    write_count.fetch_add(1, Ordering::AcqRel);
+                    async move {
+                        entered.notify_one();
+                        release.notified().await;
+                        Ok(())
+                    }
+                },
+                |error| panic!("unexpected write failure: {error:#}"),
+                Arc::new(ExitingRuntime {
+                    exited: exited.clone(),
+                }),
+            );
+            behind.enqueue(&event(1)).unwrap();
+            if already_active {
+                entered.notified().await;
+            }
+            drop(behind);
+            release.notify_one();
+            tokio::time::timeout(Duration::from_secs(1), exited.notified())
+                .await
+                .expect("the final successful write must release the actor");
+            assert_eq!(writes.load(Ordering::Acquire), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn closing_seals_retained_clones_and_releases_the_actor_without_retry() {
+        for fail in [false, true] {
+            let dependency = Arc::new(());
+            let weak = Arc::downgrade(&dependency);
+            let attempts = Arc::new(AtomicUsize::new(0));
+            let writes = attempts.clone();
+            let reports = Arc::new(AtomicUsize::new(0));
+            let failures = reports.clone();
+            let behind = SessionWriteBehind::new(
+                Duration::from_secs(86_400),
+                move |_events| {
+                    let dependency = dependency.clone();
+                    writes.fetch_add(1, Ordering::AcqRel);
+                    async move {
+                        drop(dependency);
+                        anyhow::ensure!(!fail, "final flush failed");
+                        Ok(())
+                    }
+                },
+                move |_error| {
+                    failures.fetch_add(1, Ordering::AcqRel);
+                },
+            );
+            let retained = behind.clone();
+            behind.enqueue(&event(1)).unwrap();
+            assert_eq!(behind.flush().await.is_err(), fail);
+            assert!(weak.upgrade().is_some());
+            let mut first_close = Box::pin(behind.close_after_flush());
+            assert!(futures::poll!(first_close.as_mut()).is_pending());
+            drop(first_close);
+            retained.close_after_flush().await;
+            behind.close_after_flush().await;
+            assert!(
+                weak.upgrade().is_none(),
+                "the actor retained its write callback"
+            );
+            assert!(!retained.has_work());
+            assert!(retained.enqueue(&event(2)).is_err());
+            assert!(retained.flush().await.is_err());
+            assert!(!retained.has_work());
+            assert_eq!(attempts.load(Ordering::Acquire), 1);
+            assert_eq!(reports.load(Ordering::Acquire), 0);
+        }
+    }
+
+    #[derive(Default)]
+    struct PolledRuntime {
+        actor: Mutex<Option<BoxFuture<'static, ()>>>,
+    }
+
+    impl WriteBehindRuntime for PolledRuntime {
+        fn spawn_actor(&self, actor: BoxFuture<'static, ()>) {
+            assert!(self.actor.lock().unwrap().replace(actor).is_none());
+        }
+
+        fn sleep(&self, delay: Duration) -> BoxFuture<'static, ()> {
+            Box::pin(tokio::time::sleep(delay))
+        }
+
+        fn spawn_write(&self, write: WriteFuture) -> BoxFuture<'static, anyhow::Result<()>> {
+            write
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_expired_deadline_preempts_the_queued_command_backlog() {
+        let runtime = Arc::new(PolledRuntime::default());
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let written = batches.clone();
+        let behind = SessionWriteBehind::new_with_runtime(
+            Duration::from_secs(1),
+            move |events| {
+                let written = written.clone();
+                async move {
+                    written
+                        .lock()
+                        .unwrap()
+                        .push(events.into_iter().map(|event| event.seq).collect());
+                    Ok(())
+                }
+            },
+            |error| panic!("unexpected write failure: {error:#}"),
+            runtime.clone(),
+        );
+        let mut actor = runtime.actor.lock().unwrap().take().unwrap();
+        behind.enqueue(&event(1)).unwrap();
+        assert!(futures::poll!(tokio::task::unconstrained(actor.as_mut())).is_pending());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        // Hold the actor until its deadline is due, then admit a later backlog.
+        for sequence in 2..=4096 {
+            behind.enqueue(&event(sequence)).unwrap();
+        }
+        assert!(futures::poll!(tokio::task::unconstrained(actor.as_mut())).is_pending());
+        let first = batches.lock().unwrap().first().cloned();
+        drop(actor);
+        drop(behind);
+        assert_eq!(first, Some(vec![1]));
     }
 
     /// A runtime whose deadlines resolve only when the test releases them.

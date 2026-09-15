@@ -353,6 +353,10 @@ impl JsonlSessionPersistence {
 
     async fn drain_all(self: &Arc<Self>) -> anyhow::Result<()> {
         let lives = self.live.lock().values().cloned().collect::<Vec<_>>();
+        let controllers = lives
+            .iter()
+            .map(|live| live.writes.clone())
+            .collect::<Vec<_>>();
         let mut errors = Vec::new();
         for live in lives {
             live.writes.cancel_automatic_wait();
@@ -392,6 +396,9 @@ impl JsonlSessionPersistence {
             {
                 self.retirements.lock().remove(retirement.session.id());
             }
+        }
+        for writes in controllers {
+            writes.close_after_flush().await;
         }
         if errors.is_empty() {
             Ok(())
@@ -753,6 +760,7 @@ impl JsonlSessionPersistence {
             if live.init.await.is_ok() {
                 live.writes.flush().await?;
             }
+            live.writes.close_after_flush().await;
         }
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
@@ -2422,6 +2430,60 @@ mod tests {
                 .events,
             session.events()
         );
+    }
+
+    #[tokio::test]
+    async fn backend_disposal_closes_retained_live_controllers() {
+        let temporary = tempfile::tempdir().unwrap();
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).unwrap();
+        let owner = Fiber::active_child("JSONL backend owner");
+        let backend = JsonlSessionPersistence::build(
+            sessions.clone(),
+            JsonlConfig {
+                root: temporary.path().to_owned(),
+                pack_chunks: true,
+                compression: JsonlCompression::None,
+                write_batch_max_delay_ms: 60_000,
+                prepared_session_cache_size: 5,
+            },
+        )
+        .unwrap();
+        backend
+            .install_write_path(&context.with_fiber(owner.clone()))
+            .unwrap();
+        let session = sessions
+            .create(
+                &context,
+                Some(SessionId::new("retained-controller")),
+                CreateSessionOptions::default(),
+            )
+            .unwrap();
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .unwrap();
+        let retained = backend.live.lock()[&session_key(&session)].writes.clone();
+        session
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .unwrap();
+        owner.dispose().await.unwrap();
+        assert!(sessions.get(session.id()).is_some());
+        assert_eq!(
+            backend
+                .cold_inspection(session.id(), false)
+                .await
+                .unwrap()
+                .events,
+            session.events()
+        );
+        let closed = retained.flush().await.is_err();
+        context.fiber().dispose().await.unwrap();
+        assert!(closed, "the retained backend kept its write actor open");
+        assert!(!retained.has_work());
     }
 
     #[tokio::test]
