@@ -45,6 +45,7 @@ pub mod md_links;
 pub mod md_wrap;
 pub mod mermaid;
 pub mod module_graph;
+pub mod native_test_gates;
 pub mod node_next_types;
 pub mod npm_baseline;
 pub mod package_graph;

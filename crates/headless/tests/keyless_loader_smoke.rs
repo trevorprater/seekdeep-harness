@@ -1,7 +1,5 @@
 //! Keyless Loader, real Bash, stream result, and compressed persistence parity.
 
-#![cfg(not(windows))]
-
 use std::{path::Path, sync::Arc};
 
 use async_trait::async_trait;

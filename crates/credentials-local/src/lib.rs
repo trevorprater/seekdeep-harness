@@ -832,6 +832,8 @@ async fn assert_owner_only(path: &Path) -> anyhow::Result<()> {
             path.display()
         );
     }
+    #[cfg(not(unix))]
+    let _ = metadata;
     Ok(())
 }
 

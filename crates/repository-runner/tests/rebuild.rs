@@ -46,29 +46,36 @@ fn workspace(root: &Path) {
     write(
         root,
         "crates/repository-tools/Cargo.toml",
-        "[package]\nname = \"seekdeep-repository-tools\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[[bin]]\nname = \"run-gates\"\npath = \"src/main.rs\"\n",
+        "[package]\nname = \"seekdeep-repository-tools\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[[bin]]\nname = \"run-gates\"\npath = \"src/main.rs\"\n[[bin]]\nname = \"native-suite\"\npath = \"src/main.rs\"\n",
     );
     write(root, "crates/repository-tools/src/main.rs", PROCESSOR);
 }
 
 #[test]
 fn workspace_rebuild_preserves_arguments_exit_status_and_temporary_runner_cleanup() {
+    for tool in [None, Some("native-suite")] {
+        rebuild(tool);
+    }
+}
+
+fn rebuild(tool: Option<&str>) {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("workspace with 中文 and spaces");
     workspace(&root);
     let target = root.join("compiler outputs 中文");
-    let output = Command::new(env!("CARGO"))
-        .args([
-            "run",
-            "--quiet",
-            "--package",
-            "seekdeep-repository-runner",
-            "--",
-            "ci-windows-complete",
-            "two words",
-            "中文",
-            "",
-        ])
+    let mut command = Command::new(env!("CARGO"));
+    command.args([
+        "run",
+        "--quiet",
+        "--package",
+        "seekdeep-repository-runner",
+        "--",
+    ]);
+    if let Some(tool) = tool {
+        command.args(["--bin", tool]);
+    }
+    let output = command
+        .args(["ci-windows-complete", "two words", "中文", ""])
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", &target)
         .env("CARGO_INCREMENTAL", "0")
@@ -95,7 +102,11 @@ fn workspace_rebuild_preserves_arguments_exit_status_and_temporary_runner_cleanu
     assert!(
         target
             .join("debug")
-            .join(format!("run-gates{}", std::env::consts::EXE_SUFFIX))
+            .join(format!(
+                "{}{}",
+                tool.unwrap_or("run-gates"),
+                std::env::consts::EXE_SUFFIX
+            ))
             .is_file()
     );
 }

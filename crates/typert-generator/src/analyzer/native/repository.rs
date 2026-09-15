@@ -68,9 +68,7 @@ impl RepositoryCompiler {
     pub fn load(library: &Path) -> Result<Self> {
         Ok(Self {
             compiler: Compiler::load(
-                &library
-                    .canonicalize()
-                    .unwrap_or_else(|_| library.to_owned()),
+                &dunce::canonicalize(library).unwrap_or_else(|_| library.to_owned()),
             )?,
         })
     }
@@ -142,11 +140,8 @@ impl TypeScriptProject {
     /// Returns compiler loading, configuration, or program construction errors.
     pub fn with_compiler(root: &Path, library: &Path) -> Result<Self> {
         let root = paths::resolve(root);
-        let mut compiler = Compiler::load(
-            &library
-                .canonicalize()
-                .unwrap_or_else(|_| library.to_owned()),
-        )?;
+        let mut compiler =
+            Compiler::load(&dunce::canonicalize(library).unwrap_or_else(|_| library.to_owned()))?;
         let (root_names, options, program, checker) = compiler.run(|scope, ts| {
             let (root_names, options) = config::load_project_graph(scope, ts, &root)?;
             let mut options = options;

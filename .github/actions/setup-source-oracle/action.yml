@@ -56,8 +56,8 @@ runs:
         DSH_TELEMETRY_DISABLED: '1'
       run: pnpm --dir "$SEEKDEEP_PARITY_SOURCE" install --frozen-lockfile
 
-    - name: Build original Host artifacts
+    - name: Build original library artifacts
       shell: bash
       env:
         DSH_TELEMETRY_DISABLED: '1'
-      run: pnpm --dir "$SEEKDEEP_PARITY_SOURCE" run build:lib:host
+      run: pnpm --dir "$SEEKDEEP_PARITY_SOURCE" run build:lib

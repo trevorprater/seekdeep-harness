@@ -1,9 +1,8 @@
 //! Port of the source `scripts/ci-workflow.spec.ts`: the shape of the CI, E2B, and git-hook
 //! configuration that the runbooks rely on, read from the checked-in YAML.
 //!
-//! The source's two Vitest-project assertions (LSP source under native Windows coverage,
-//! process-isolated projects) have no counterpart: the port carries no Vitest projects, and
-//! native Windows coverage is the `cargo test` invocation the native job runs.
+//! Native Windows LSP coverage selection and per-project process isolation still need
+//! equivalent assertions against the Rust coverage inventory.
 
 use serde_json::Value;
 

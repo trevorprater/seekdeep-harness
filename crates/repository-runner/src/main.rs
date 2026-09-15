@@ -4,7 +4,9 @@
 //! must not relink the Windows executable that waits for the gate processor.
 
 use std::{
-    env, fs, io,
+    env,
+    ffi::OsString,
+    fs, io,
     path::{Path, PathBuf},
     process::{self, Command, ExitStatus},
 };
@@ -21,9 +23,8 @@ fn main() {
 }
 
 fn run() -> io::Result<ExitStatus> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?;
+    let (tool, arguments) = command_line()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let launcher = env::current_exe()?;
     let profile_directory = launcher
         .parent()
@@ -39,7 +40,7 @@ fn run() -> io::Result<ExitStatus> {
         "--package",
         "seekdeep-repository-tools",
         "--bin",
-        "run-gates",
+        &tool,
     ]);
     if profile != "debug" {
         build.args(["--profile", profile]);
@@ -49,14 +50,14 @@ fn run() -> io::Result<ExitStatus> {
         return Ok(status);
     }
 
-    let filename = format!("run-gates{}", env::consts::EXE_SUFFIX);
+    let filename = format!("{tool}{}", env::consts::EXE_SUFFIX);
     let compiled = profile_directory.join(&filename);
     let directory = create_runner_directory()?;
     let staged = directory.join(filename);
     let execution = (|| {
         fs::copy(compiled, &staged)?;
         Command::new(&staged)
-            .args(env::args_os().skip(1))
+            .args(arguments)
             .current_dir(&root)
             .status()
     })();
@@ -70,6 +71,37 @@ fn run() -> io::Result<ExitStatus> {
         );
     }
     execution
+}
+
+fn command_line() -> io::Result<(String, Vec<OsString>)> {
+    let mut arguments = env::args_os().skip(1).collect::<Vec<_>>();
+    if arguments.first().is_none_or(|value| value != "--bin") {
+        return Ok(("run-gates".to_owned(), arguments));
+    }
+    if arguments.len() < 2 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--bin requires a repository tool name",
+        ));
+    }
+    let tool = arguments.remove(1).into_string().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "repository tool name must be UTF-8",
+        )
+    })?;
+    arguments.remove(0);
+    if tool.is_empty()
+        || !tool
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid repository tool name",
+        ));
+    }
+    Ok((tool, arguments))
 }
 
 fn create_runner_directory() -> io::Result<PathBuf> {

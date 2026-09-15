@@ -56,7 +56,7 @@ pub(crate) fn real_path(path: &Path) -> PathBuf {
     if !absolute.exists() {
         return absolute;
     }
-    let resolved = std::fs::canonicalize(&absolute).unwrap_or_else(|_| absolute.clone());
+    let resolved = dunce::canonicalize(&absolute).unwrap_or_else(|_| absolute.clone());
     REAL_PATHS.with(|cache| {
         cache.borrow_mut().insert(absolute, resolved.clone());
     });

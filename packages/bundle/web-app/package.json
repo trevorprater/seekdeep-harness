@@ -94,7 +94,14 @@
     "@seekdeep-ai/seekdeep-session-projection-cache": "workspace:^",
     "@seekdeep-ai/seekdeep-session-log-export": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "@seekdeep-ai/seekdeep-code-runtime-worker-thread": "workspace:^",
+    "@seekdeep-ai/seekdeep-storage": "workspace:^",
+    "@seekdeep-ai/seekdeep-storage-json": "workspace:^",
+    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
+    "@seekdeep-ai/seekdeep-workspace": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
+    "@seekdeep-ai/seekdeep-host-webserver": "workspace:^"
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",

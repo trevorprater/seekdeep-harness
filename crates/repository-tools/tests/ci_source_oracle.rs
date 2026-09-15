@@ -82,7 +82,7 @@ fn every_source_dependent_lane_prepares_the_oracle_before_running_its_gate() {
         .unwrap();
     let build = steps
         .iter()
-        .position(|step| step["run"] == "pnpm --dir \"$SEEKDEEP_PARITY_SOURCE\" run build:lib:host")
+        .position(|step| step["run"] == "pnpm --dir \"$SEEKDEEP_PARITY_SOURCE\" run build:lib")
         .unwrap();
     assert!(checkout < install && install < build);
     assert_eq!(

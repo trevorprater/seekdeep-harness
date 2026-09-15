@@ -41,48 +41,11 @@ if (!origin) {
 
 try {
 const artifact = path => pathToFileURL(join(root, path)).href
-const cordisWasm = await import(`${artifact('vendor/cordis/lib/client.js')}?built-remote-smoke`)
+const cordisWasm = await import(artifact('vendor/cordis/lib/client.js'))
 await cordisWasm.default({
   module_or_path: await readFile(join(root, 'vendor/cordis/lib/client_bg.wasm')),
 })
-const tracker = Symbol.for('cordis.service.tracker')
-const trace = (ctx, value) => {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[tracker] !== true) return value
-  let proxy
-  proxy = new Proxy(value, {
-    get(target, key, receiver) {
-      if (key === 'ctx') return ctx
-      const inner = Reflect.get(target, key, receiver)
-      return typeof inner === 'function' ? (...args) => Reflect.apply(inner, proxy, args) : inner
-    },
-  })
-  return proxy
-}
-const wrapContext = core => {
-  let context
-  context = new Proxy(core, {
-    get(target, key, receiver) {
-      if (key === 'emit') return (name, ...args) => target.emitArgs(name, args)
-      if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args)
-      if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
-      if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
-      if (key === 'get') return name => trace(context, target.get(name))
-      if (Reflect.has(target, key)) {
-        const value = Reflect.get(target, key, receiver)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-      const metadata = target.metaGet(key)
-      if (metadata !== undefined) return metadata
-      return typeof key === 'string' ? trace(context, target.get(key)) : undefined
-    },
-  })
-  return context
-}
-cordisWasm.configureContextWrapper(wrapContext)
-class Context {
-  constructor() { return cordisWasm.createContext() }
-}
-const cordis = { ...cordisWasm, Context }
+const cordis = await import(artifact('vendor/cordis/lib/index.js'))
 const handoffs = new Map()
 globalThis.window = globalThis
 globalThis.__ModuleLoader__ = {
@@ -139,7 +102,7 @@ for (const id of [
   '@seekdeep-ai/seekdeep-api-remotes',
 ]) {
   const plugin = instantiate(id)
-  await client.plugin({ name: id, inject: plugin.inject, apply: plugin.apply })
+  await client.plugin({ inject: plugin.inject, apply: plugin.apply })
 }
 const disposeBinder = client.typert.contexts.registerClient('agent', {
   identity: context => context.builtAgentId,

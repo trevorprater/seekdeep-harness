@@ -30,7 +30,14 @@ fn every_materialized_locale_navigation_and_search_setting_matches_the_source() 
         .join("\n")
         .replace(
             "from '../docs.ts'",
-            &format!("from {}", json!(oracle.join("website/docs.ts"))),
+            &format!(
+                "from {}",
+                json!(
+                    url::Url::from_file_path(oracle.join("website/docs.ts"))
+                        .unwrap()
+                        .as_str()
+                )
+            ),
         )
         .replace("projectDocs()", "void 0")
         .replace(
@@ -50,7 +57,7 @@ fn every_materialized_locale_navigation_and_search_setting_matches_the_source() 
         .args([
             "--input-type=module",
             "-e",
-            "const m=await import(process.argv[1]);console.log(JSON.stringify(m.default));",
+            "import { pathToFileURL } from 'node:url';const m=await import(pathToFileURL(process.argv[1]).href);console.log(JSON.stringify(m.default));",
         ])
         .arg(&module)
         .env("DOCS_BASE", "/preview/")

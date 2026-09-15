@@ -364,7 +364,7 @@ fn real_path<'s>(
     mut result: v8::ReturnValue<'s>,
 ) {
     let path = argument_path(scope, &args, 0);
-    let resolved = std::fs::canonicalize(&path).unwrap_or(path);
+    let resolved = dunce::canonicalize(&path).unwrap_or(path);
     result.set(js::string(scope, &resolved.to_string_lossy()));
 }
 

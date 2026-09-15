@@ -20,6 +20,7 @@ sys-locale.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dunce.workspace = true
 v8.workspace = true
 
 [dev-dependencies]

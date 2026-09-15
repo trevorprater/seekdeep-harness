@@ -278,9 +278,10 @@ pub(super) fn run(source: &Path, filter: Option<&str>) -> anyhow::Result<()> {
         .current_dir(&metadata.workspace_root)
         .status()?;
     anyhow::ensure!(status.success(), "typert generator runner build failed");
-    let runner = metadata
-        .target_directory
-        .join("debug/seekdeep-typert-generator");
+    let runner = metadata.target_directory.join("debug").join(format!(
+        "seekdeep-typert-generator{}",
+        std::env::consts::EXE_SUFFIX
+    ));
     let corpus = metadata.target_directory.join("xtask/typert-corpus");
     if corpus.exists() {
         std::fs::remove_dir_all(&corpus)?;
@@ -378,10 +379,7 @@ pub(super) fn run(source: &Path, filter: Option<&str>) -> anyhow::Result<()> {
         status.success(),
         "pinned Typert generator corpus failed against the Rust generator"
     );
-    println!(
-        "Typert corpus: {} pinned generator spec files passed against the Rust generator",
-        SPECS.len()
-    );
+    println!("Typert corpus: selected pinned generator specs completed against the Rust generator");
     Ok(())
 }
 

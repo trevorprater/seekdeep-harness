@@ -9258,6 +9258,7 @@ name = "seekdeep-source-oracle"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "dunce",
  "tempfile",
 ]
 
@@ -10431,6 +10432,7 @@ dependencies = [
 name = "seekdeep-typert-generator"
 version = "0.1.0-rc.5"
 dependencies = [
+ "dunce",
  "icu_collator",
  "icu_locale",
  "indexmap 2.14.0",

@@ -64,6 +64,6 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
     println!("{}", serde_json::to_string(&result)?);
-    context.fiber().restart().await?;
+    context.fiber().dispose().await?;
     Ok(())
 }

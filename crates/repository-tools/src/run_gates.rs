@@ -12,7 +12,7 @@ use std::{
 
 use indexmap::IndexMap;
 
-use crate::coverage_exempt::{COVERAGE_EXEMPT_ENV, COVERAGE_EXEMPT_HEAVY_SUITES};
+use crate::coverage_exempt::COVERAGE_EXEMPT_ENV;
 
 const MODES: &str = "ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | doc-sync";
 
@@ -752,24 +752,19 @@ fn coverage_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
         coverage.display_command.push_str(&instrumented.join(" "));
     }
     coverage.environment = environment_map(&[(COVERAGE_EXEMPT_ENV, Some("1"))]);
-    let mut exempt_args = vec!["vitest".to_owned(), "run".to_owned()];
-    exempt_args.extend(
-        COVERAGE_EXEMPT_HEAVY_SUITES
-            .iter()
-            .map(|suite| suite.filter.to_owned()),
+    let mut exempt = pnpm_script(
+        environment,
+        "coverage-exempt-heavy",
+        "test:coverage-exempt-heavy",
     );
-    exempt_args.extend(exempt_workers);
-    Ok(vec![
-        coverage,
-        pnpm_exec_owned(
-            environment,
-            "coverage-exempt-heavy",
-            exempt_args,
-            Some("test:coverage-exempt-heavy"),
-            &[],
-            IndexMap::new(),
-        ),
-    ])
+    exempt
+        .args
+        .extend(exempt_workers.iter().map(OsString::from));
+    if !exempt_workers.is_empty() {
+        exempt.display_command.push(' ');
+        exempt.display_command.push_str(&exempt_workers.join(" "));
+    }
+    Ok(vec![coverage, exempt])
 }
 
 fn snapshot_gate(environment: &GateEnvironment, needs: &[&str]) -> Gate {
@@ -996,26 +991,10 @@ fn doc_sync_leaf_gates(environment: &GateEnvironment, options: DocSyncOptions) -
 }
 
 fn built_bin_smoke_gate(environment: &GateEnvironment, needs: &[&str]) -> Gate {
-    pnpm_exec(
+    script_with(
         environment,
         "built-bin-smoke",
-        &[
-            "vitest",
-            "run",
-            "--config",
-            "vitest.e2e.config.ts",
-            "examples/headless-agent/tests/keyless-smoke.e2e.ts",
-            "apps/cli/tests/built-bin.e2e.ts",
-            "packages/examples/acp-demo/tests/built-bin.e2e.ts",
-            "packages/host/directory-picker-native/tests/built-worker.e2e.ts",
-            "packages/sdk/server/tests/built-scope-carrier.e2e.ts",
-            "packages/subagent/subagent-codex/tests/loader-composition.e2e.ts",
-            "packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts",
-            "packages/api/remotes/tests/built-lib.e2e.ts",
-            "packages/workflow/workflow-worker-thread/tests/built-worker.e2e.ts",
-            "packages/code-runtime/code-runtime-worker-thread/tests/built-lib.e2e.ts",
-            "packages/lsp/lsp-stdio/tests/built-lib.e2e.ts",
-        ],
+        "test:built-bin",
         Some("built-bin smoke"),
         needs,
         environment_map(&[("SEEKDEEP_EXAMPLE_MODE", Some("lib"))]),
@@ -1044,53 +1023,6 @@ fn script_with(
         id: id.to_owned(),
         label: label.unwrap_or(script).to_owned(),
         display_command: format!("pnpm run {script}"),
-        command: environment.node_executable.clone(),
-        args,
-        needs: needs.iter().map(|need| (*need).to_owned()).collect(),
-        environment: gate_environment,
-        allow_failure: false,
-        serial_group: None,
-    }
-}
-
-fn pnpm_exec(
-    environment: &GateEnvironment,
-    id: &str,
-    arguments: &[&str],
-    label: Option<&str>,
-    needs: &[&str],
-    gate_environment: IndexMap<String, Option<String>>,
-) -> Gate {
-    pnpm_exec_owned(
-        environment,
-        id,
-        arguments
-            .iter()
-            .map(|argument| (*argument).to_owned())
-            .collect(),
-        label,
-        needs,
-        gate_environment,
-    )
-}
-
-fn pnpm_exec_owned(
-    environment: &GateEnvironment,
-    id: &str,
-    arguments: Vec<String>,
-    label: Option<&str>,
-    needs: &[&str],
-    gate_environment: IndexMap<String, Option<String>>,
-) -> Gate {
-    let displayed_arguments = arguments.join(" ");
-    let label = label.map_or_else(|| format!("pnpm exec {displayed_arguments}"), str::to_owned);
-    let mut args = vec![environment.pnpm_entrypoint.as_os_str().to_owned()];
-    args.push(OsString::from("exec"));
-    args.extend(arguments.into_iter().map(OsString::from));
-    Gate {
-        id: id.to_owned(),
-        label,
-        display_command: format!("pnpm exec {displayed_arguments}"),
         command: environment.node_executable.clone(),
         args,
         needs: needs.iter().map(|need| (*need).to_owned()).collect(),

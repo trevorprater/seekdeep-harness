@@ -23,4 +23,4 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Check tracked filenames
-        run: scripts/check-expected-filenames.sh
+        run: bash scripts/check-expected-filenames.sh

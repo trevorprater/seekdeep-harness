@@ -60,14 +60,41 @@ fn relocated_adjacent_checkout_precedes_the_recorded_path_and_explicit_override_
     let recorded = temporary.path().join("unavailable-original-location");
     snapshot(&root, &recorded, &revision);
     let oracle = SourceOracle::open_with_root(&root, None).unwrap();
-    assert_eq!(oracle.root(), adjacent.canonicalize().unwrap());
+    assert_eq!(oracle.root(), dunce::canonicalize(&adjacent).unwrap());
 
     let relocated = temporary.path().join("explicit source");
     std::fs::rename(&adjacent, &relocated).unwrap();
     assert_eq!(source_location(&root, None).unwrap(), recorded);
     assert!(SourceOracle::open_with_root(&root, None).is_err());
     let oracle = SourceOracle::open_with_root(&root, Some(&relocated)).unwrap();
-    assert_eq!(oracle.root(), relocated.canonicalize().unwrap());
+    assert_eq!(oracle.root(), dunce::canonicalize(&relocated).unwrap());
+}
+
+#[test]
+fn canonical_oracle_paths_support_plain_node_modules_and_entrypoints() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("target");
+    let original = temporary.path().join("source with spaces 中文");
+    let revision = source(&original);
+    snapshot(&root, &original, &revision);
+    std::fs::write(original.join("value.cjs"), "module.exports = 73;\n").unwrap();
+    std::fs::write(
+        original.join("main.cjs"),
+        "process.stdout.write(String(require('./value.cjs')));\n",
+    )
+    .unwrap();
+    let oracle = SourceOracle::open_with_root(&root, Some(&original)).unwrap();
+    let output = Command::new("node")
+        .arg(oracle.root().join("main.cjs"))
+        .current_dir(oracle.root())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"73");
 }
 
 #[test]

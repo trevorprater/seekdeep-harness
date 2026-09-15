@@ -80,8 +80,7 @@ impl SourceOracle {
         let snapshot = std::fs::read_to_string(repository.join("SOURCE_SNAPSHOT"))?;
         let revision = SourceRevision::parse(&snapshot)?;
         let root = source_location(repository, source)?;
-        let root = root
-            .canonicalize()
+        let root = dunce::canonicalize(&root)
             .with_context(|| format!("Resolve source oracle at {}", root.display()))?;
         let oracle = Self { root, revision };
         let head = oracle.git(&["rev-parse", "HEAD"])?;

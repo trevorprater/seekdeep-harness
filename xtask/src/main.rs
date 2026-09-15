@@ -3307,7 +3307,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
     }
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
         return format!(
-            "() => {{ {global}.configureApiRemotes({global}.generatedApiRemotes()); return {{ name: 'api-remotes', apply: {global}.applyApiRemotes, inject: ['remote'] }}; }}"
+            "() => {{ {global}.configureApiRemotes({global}.generatedApiRemotes()); const apply = new Proxy(async function apply(ctx) {{}}, {{ apply(_target, _receiver, args) {{ return {global}.applyApiRemotes(args[0]); }} }}); Object.defineProperty(apply, 'name', {{ value: 'apply', configurable: true }}); return Object.defineProperty({{ apply, inject: ['remote'] }}, Symbol.toStringTag, {{ value: 'Module' }}); }}"
         );
     }
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
@@ -7175,7 +7175,7 @@ mod tests {
         .unwrap();
         for expected in [
             "configureApiRemotes(__seekdeep_api_remotes_client_wasm.generatedApiRemotes())",
-            "apply: __seekdeep_api_remotes_client_wasm.applyApiRemotes",
+            "return __seekdeep_api_remotes_client_wasm.applyApiRemotes(args[0])",
             "inject: ['remote']",
         ] {
             assert!(bundle.contains(expected), "missing {expected:?}");
@@ -7194,6 +7194,58 @@ mod tests {
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }
+    }
+
+    #[test]
+    fn api_remotes_entrypoint_is_async_nonconstructible_and_forwards_the_rust_promise() {
+        let factory = module_factory("bridge", "@seekdeep-ai/seekdeep-api-remotes");
+        let bundle = super::remote_contracts::bundle_zod(
+            Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap(),
+            &format!(
+                "const bridge = globalThis.__seekdeepBridge; globalThis.__seekdeepPlugin = ({factory})();"
+            ),
+        )
+        .unwrap();
+        let script = r"
+import assert from 'node:assert/strict';
+const contribution = {}, context = {}, dispose = () => {};
+const pending = Promise.resolve(dispose);
+const bridge = {
+  generatedApiRemotes() { return contribution; },
+  configureApiRemotes(value) { assert.equal(value, contribution); },
+  applyApiRemotes(value) { assert.equal(value, context); return pending; },
+};
+globalThis.__seekdeepBridge = bridge;
+__BUNDLE__
+const plugin = globalThis.__seekdeepPlugin;
+assert.deepEqual(Object.keys(plugin), ['apply', 'inject']);
+assert.equal(Object.getPrototypeOf(plugin), Object.prototype);
+assert.equal(Object.isExtensible(plugin), true);
+assert.deepEqual(Object.getOwnPropertyDescriptor(plugin, Symbol.toStringTag), {
+  value:'Module', writable:false, enumerable:false, configurable:false,
+});
+assert.equal(plugin.apply.name, 'apply');
+assert.equal(plugin.apply.length, 1);
+assert.equal(Object.getPrototypeOf(plugin.apply), Object.getPrototypeOf(async function () {}));
+assert.equal(plugin.apply.prototype, undefined);
+assert.throws(() => new plugin.apply(context), TypeError);
+const result = plugin.apply(context);
+assert.equal(result, pending);
+assert.equal(await result, dispose);
+"
+        .replace("__BUNDLE__", &bundle);
+        let directory = tempfile::tempdir().unwrap();
+        let entry = directory.path().join("remotes-shape.mjs");
+        std::fs::write(&entry, script).unwrap();
+        let output = std::process::Command::new("node")
+            .arg(entry)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[test]

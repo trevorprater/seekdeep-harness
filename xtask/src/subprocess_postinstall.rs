@@ -78,10 +78,17 @@ pub(super) fn run(metadata: &super::CargoMetadata, check: bool) -> anyhow::Resul
     let script = embed(&bindings, &bytes)?;
     let output = metadata.workspace_root.join(ENTRY);
     if check {
-        anyhow::ensure!(
-            std::fs::read_to_string(&output)? == script,
-            "stale subprocess postinstall binding; run cargo xtask subprocess-postinstall"
-        );
+        if std::fs::read_to_string(&output)? != script {
+            let diagnostic = target.join("mismatch");
+            std::fs::create_dir_all(&diagnostic)?;
+            std::fs::write(diagnostic.join("ensure-spawn-helper.mjs"), &script)?;
+            std::fs::write(diagnostic.join("postinstall.js"), &bindings)?;
+            std::fs::write(diagnostic.join("postinstall_bg.wasm"), &bytes)?;
+            anyhow::bail!(
+                "stale subprocess postinstall binding; run cargo xtask subprocess-postinstall; generated files retained at {}",
+                diagnostic.display()
+            );
+        }
     } else {
         std::fs::create_dir_all(output.parent().unwrap_or(Path::new(".")))?;
         std::fs::write(&output, script)?;

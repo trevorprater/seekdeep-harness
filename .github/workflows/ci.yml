@@ -618,6 +618,14 @@ jobs:
           --package seekdeep-sandbox-windows-acl-native
           --all-targets --all-features
 
+      - name: Run portable repository boundary tests
+        shell: pwsh
+        run: >-
+          cargo test --locked
+          --package seekdeep-source-oracle
+          --package seekdeep-repository-runner
+          --all-targets --all-features
+
       # Extracting the many-file pnpm store cache is slower than a clean
       # install on hosted Windows runners, and saving it adds latency after
       # the gates. The self-hosted VM's persistent store makes caching
@@ -639,6 +647,15 @@ jobs:
       - name: Run complete native Windows gate inventory
         shell: pwsh
         run: pnpm run check:ci:windows-complete
+
+      - name: Retain mismatched installer generation
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-postinstall-mismatch
+          path: target/xtask/subprocess-postinstall/mismatch
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The hosted reference jobs below are temporarily disabled; the self-hosted
   # standby remains active. Each enabled host executes the complete, unsharded

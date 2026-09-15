@@ -33,6 +33,8 @@
     "duplication": "jscpd --config .jscpd.json packages scripts",
     "test": "cargo test --workspace --all-features",
     "test:coverage": "cargo run --quiet -p seekdeep-repository-tools --bin run-coverage --",
+    "test:coverage-exempt-heavy": "cargo run --quiet --package seekdeep-repository-runner -- --bin run-native-test-gate coverage-exempt-heavy",
+    "test:built-bin": "cargo run --quiet --package seekdeep-repository-runner -- --bin run-native-test-gate built-bin",
     "test:e2e": "bash scripts/run-e2e-lane.sh",
     "test:issue-management": "cargo test -p seekdeep-issue-policy",
     "test:snapshot": "cargo xtask host-assets && cargo test -p seekdeep-acp-demo --test acp_snapshot_suite",

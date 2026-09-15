@@ -216,6 +216,9 @@ importers:
       '@seekdeep-ai/seekdeep-skill-filesystem':
         specifier: workspace:^
         version: link:../../packages/skill/skill-filesystem
+      '@seekdeep-ai/seekdeep-time-context':
+        specifier: workspace:^
+        version: link:../../packages/context/time-context
       '@seekdeep-ai/seekdeep-tool-bash':
         specifier: workspace:^
         version: link:../../packages/shell/tool-bash
@@ -386,6 +389,9 @@ importers:
       '@seekdeep-ai/seekdeep-acp-demo':
         specifier: workspace:*
         version: link:../packages/examples/acp-demo
+      '@seekdeep-ai/seekdeep-agent':
+        specifier: workspace:*
+        version: link:../packages/core/agent
       '@seekdeep-ai/seekdeep-agent-instructions':
         specifier: workspace:*
         version: link:../packages/context/agent-instructions
@@ -395,12 +401,18 @@ importers:
       '@seekdeep-ai/seekdeep-app-boot':
         specifier: workspace:*
         version: link:../packages/boot/app-boot
+      '@seekdeep-ai/seekdeep-attachment-local':
+        specifier: workspace:*
+        version: link:../packages/attachment/attachment-local
       '@seekdeep-ai/seekdeep-bash-local':
         specifier: workspace:*
         version: link:../packages/shell/bash-local
       '@seekdeep-ai/seekdeep-bash-sandbox':
         specifier: workspace:*
         version: link:../packages/shell/bash-sandbox
+      '@seekdeep-ai/seekdeep-code-runtime-worker-thread':
+        specifier: workspace:*
+        version: link:../packages/code-runtime/code-runtime-worker-thread
       '@seekdeep-ai/seekdeep-command-goal':
         specifier: workspace:*
         version: link:../packages/goal/command-goal
@@ -419,6 +431,9 @@ importers:
       '@seekdeep-ai/seekdeep-cordis-host-runner':
         specifier: workspace:*
         version: link:../packages/extensions/cordis-host-runner
+      '@seekdeep-ai/seekdeep-credentials-local':
+        specifier: workspace:*
+        version: link:../packages/credentials/credentials-local
       '@seekdeep-ai/seekdeep-e2b':
         specifier: workspace:*
         version: link:../packages/e2b/e2b
@@ -455,6 +470,9 @@ importers:
       '@seekdeep-ai/seekdeep-llm':
         specifier: workspace:*
         version: link:../packages/llm/llm
+      '@seekdeep-ai/seekdeep-llm-deepseek':
+        specifier: workspace:*
+        version: link:../packages/llm/llm-deepseek
       '@seekdeep-ai/seekdeep-llm-replay':
         specifier: workspace:*
         version: link:../packages/test-support/llm-replay
@@ -476,12 +494,27 @@ importers:
       '@seekdeep-ai/seekdeep-pwsh-local':
         specifier: workspace:*
         version: link:../packages/shell/pwsh-local
+      '@seekdeep-ai/seekdeep-repeat-tool-reminder':
+        specifier: workspace:*
+        version: link:../packages/guard/repeat-tool-reminder
+      '@seekdeep-ai/seekdeep-sandbox-local':
+        specifier: workspace:*
+        version: link:../packages/sandbox/sandbox-local
+      '@seekdeep-ai/seekdeep-sandbox-policy':
+        specifier: workspace:*
+        version: link:../packages/sandbox/sandbox-policy
       '@seekdeep-ai/seekdeep-sdk-jsonrpc-server':
         specifier: workspace:*
         version: link:../packages/sdk/server
       '@seekdeep-ai/seekdeep-session':
         specifier: workspace:*
         version: link:../packages/core/session
+      '@seekdeep-ai/seekdeep-session-checkpoint-policy':
+        specifier: workspace:*
+        version: link:../packages/session/session-checkpoint-policy
+      '@seekdeep-ai/seekdeep-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../packages/session/session-persistence-jsonl
       '@seekdeep-ai/seekdeep-session-projection':
         specifier: workspace:*
         version: link:../packages/session/session-projection
@@ -503,12 +536,24 @@ importers:
       '@seekdeep-ai/seekdeep-session-title-first-prompt-llm':
         specifier: workspace:*
         version: link:../packages/session/session-title-first-prompt-llm
+      '@seekdeep-ai/seekdeep-settings-file':
+        specifier: workspace:*
+        version: link:../packages/settings/settings-file
+      '@seekdeep-ai/seekdeep-shell-env':
+        specifier: workspace:*
+        version: link:../packages/shell/shell-env
       '@seekdeep-ai/seekdeep-skill':
         specifier: workspace:*
         version: link:../packages/skill/skill
       '@seekdeep-ai/seekdeep-skill-filesystem':
         specifier: workspace:*
         version: link:../packages/skill/skill-filesystem
+      '@seekdeep-ai/seekdeep-spill-local':
+        specifier: workspace:*
+        version: link:../packages/spill/spill-local
+      '@seekdeep-ai/seekdeep-spill-policy':
+        specifier: workspace:*
+        version: link:../packages/spill/spill-policy
       '@seekdeep-ai/seekdeep-subagent':
         specifier: workspace:*
         version: link:../packages/subagent/subagent
@@ -533,6 +578,27 @@ importers:
       '@seekdeep-ai/seekdeep-subprocess-e2b':
         specifier: workspace:*
         version: link:../packages/e2b/subprocess-e2b
+      '@seekdeep-ai/seekdeep-subprocess-local':
+        specifier: workspace:*
+        version: link:../packages/subprocess/subprocess-local
+      '@seekdeep-ai/seekdeep-system-prompt':
+        specifier: workspace:*
+        version: link:../packages/core/system-prompt
+      '@seekdeep-ai/seekdeep-terminal':
+        specifier: workspace:*
+        version: link:../packages/terminal/terminal
+      '@seekdeep-ai/seekdeep-terminal-bash':
+        specifier: workspace:*
+        version: link:../packages/terminal/terminal-bash
+      '@seekdeep-ai/seekdeep-time-context':
+        specifier: workspace:*
+        version: link:../packages/context/time-context
+      '@seekdeep-ai/seekdeep-token-meter':
+        specifier: workspace:*
+        version: link:../packages/llm/token-meter
+      '@seekdeep-ai/seekdeep-tool-ask-user':
+        specifier: workspace:*
+        version: link:../packages/interaction/tool-ask-user
       '@seekdeep-ai/seekdeep-tool-bash':
         specifier: workspace:*
         version: link:../packages/shell/tool-bash
@@ -587,6 +653,9 @@ importers:
       '@seekdeep-ai/seekdeep-tool-terminal':
         specifier: workspace:*
         version: link:../packages/terminal/tool-terminal
+      '@seekdeep-ai/seekdeep-tool-todo':
+        specifier: workspace:*
+        version: link:../packages/todo/tool-todo
       '@seekdeep-ai/seekdeep-tool-web':
         specifier: workspace:*
         version: link:../packages/web/tool-web
@@ -837,18 +906,33 @@ importers:
       '@seekdeep-ai/cordis-plugin-timer':
         specifier: workspace:^
         version: link:../../../vendor/timer
+      '@seekdeep-ai/seekdeep-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
+      '@seekdeep-ai/seekdeep-agent-default-model':
+        specifier: workspace:^
+        version: link:../../core/agent-default-model
       '@seekdeep-ai/seekdeep-agent-instructions':
         specifier: workspace:^
         version: link:../../context/agent-instructions
+      '@seekdeep-ai/seekdeep-agent-loop':
+        specifier: workspace:^
+        version: link:../../core/agent-loop
       '@seekdeep-ai/seekdeep-api-gateway':
         specifier: workspace:^
         version: link:../../api/gateway
+      '@seekdeep-ai/seekdeep-attachment-local':
+        specifier: workspace:^
+        version: link:../../attachment/attachment-local
       '@seekdeep-ai/seekdeep-bash-sandbox':
         specifier: workspace:^
         version: link:../../shell/bash-sandbox
       '@seekdeep-ai/seekdeep-command-compact':
         specifier: workspace:^
         version: link:../../compaction/command-compact
+      '@seekdeep-ai/seekdeep-command-feedback':
+        specifier: workspace:^
+        version: link:../../feedback/command-feedback
       '@seekdeep-ai/seekdeep-command-goal':
         specifier: workspace:^
         version: link:../../goal/command-goal
@@ -861,6 +945,9 @@ importers:
       '@seekdeep-ai/seekdeep-compaction-tool-result-pruner':
         specifier: workspace:^
         version: link:../../compaction/compaction-tool-result-pruner
+      '@seekdeep-ai/seekdeep-credentials-local':
+        specifier: workspace:^
+        version: link:../../credentials/credentials-local
       '@seekdeep-ai/seekdeep-fs-local':
         specifier: workspace:^
         version: link:../../fs/fs-local
@@ -882,6 +969,15 @@ importers:
       '@seekdeep-ai/seekdeep-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@seekdeep-ai/seekdeep-llm-deepseek':
+        specifier: workspace:^
+        version: link:../../llm/llm-deepseek
+      '@seekdeep-ai/seekdeep-llm-pi-ai':
+        specifier: workspace:^
+        version: link:../../llm/llm-pi-ai
+      '@seekdeep-ai/seekdeep-llm-retry':
+        specifier: workspace:^
+        version: link:../../llm/llm-retry
       '@seekdeep-ai/seekdeep-permission-presets':
         specifier: workspace:^
         version: link:../../interaction/permission-presets
@@ -891,9 +987,24 @@ importers:
       '@seekdeep-ai/seekdeep-pwsh-sandbox':
         specifier: workspace:^
         version: link:../../shell/pwsh-sandbox
+      '@seekdeep-ai/seekdeep-repeat-tool-reminder':
+        specifier: workspace:^
+        version: link:../../guard/repeat-tool-reminder
+      '@seekdeep-ai/seekdeep-sandbox-local':
+        specifier: workspace:^
+        version: link:../../sandbox/sandbox-local
+      '@seekdeep-ai/seekdeep-sandbox-policy':
+        specifier: workspace:^
+        version: link:../../sandbox/sandbox-policy
       '@seekdeep-ai/seekdeep-session':
         specifier: workspace:^
         version: link:../../core/session
+      '@seekdeep-ai/seekdeep-session-checkpoint-policy':
+        specifier: workspace:^
+        version: link:../../session/session-checkpoint-policy
+      '@seekdeep-ai/seekdeep-session-persistence-jsonl':
+        specifier: workspace:^
+        version: link:../../session/session-persistence-jsonl
       '@seekdeep-ai/seekdeep-session-projection':
         specifier: workspace:^
         version: link:../../session/session-projection
@@ -909,6 +1020,12 @@ importers:
       '@seekdeep-ai/seekdeep-session-title-first-prompt-llm':
         specifier: workspace:^
         version: link:../../session/session-title-first-prompt-llm
+      '@seekdeep-ai/seekdeep-settings-file':
+        specifier: workspace:^
+        version: link:../../settings/settings-file
+      '@seekdeep-ai/seekdeep-shell-env':
+        specifier: workspace:^
+        version: link:../../shell/shell-env
       '@seekdeep-ai/seekdeep-skill':
         specifier: workspace:^
         version: link:../../skill/skill
@@ -918,6 +1035,12 @@ importers:
       '@seekdeep-ai/seekdeep-skill-filesystem':
         specifier: workspace:^
         version: link:../../skill/skill-filesystem
+      '@seekdeep-ai/seekdeep-spill-local':
+        specifier: workspace:^
+        version: link:../../spill/spill-local
+      '@seekdeep-ai/seekdeep-spill-policy':
+        specifier: workspace:^
+        version: link:../../spill/spill-policy
       '@seekdeep-ai/seekdeep-subagent':
         specifier: workspace:^
         version: link:../../subagent/subagent
@@ -927,6 +1050,15 @@ importers:
       '@seekdeep-ai/seekdeep-subagent-spawn-in-process':
         specifier: workspace:^
         version: link:../../subagent/subagent-spawn-in-process
+      '@seekdeep-ai/seekdeep-subprocess-local':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess-local
+      '@seekdeep-ai/seekdeep-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@seekdeep-ai/seekdeep-token-meter':
+        specifier: workspace:^
+        version: link:../../llm/token-meter
       '@seekdeep-ai/seekdeep-tool-bash':
         specifier: workspace:^
         version: link:../../shell/tool-bash
@@ -966,6 +1098,9 @@ importers:
       '@seekdeep-ai/seekdeep-tool-subagent-report':
         specifier: workspace:^
         version: link:../../subagent/tool-subagent-report
+      '@seekdeep-ai/seekdeep-tool-todo':
+        specifier: workspace:^
+        version: link:../../todo/tool-todo
       '@seekdeep-ai/seekdeep-tool-web':
         specifier: workspace:^
         version: link:../../web/tool-web
@@ -1012,6 +1147,9 @@ importers:
       '@seekdeep-ai/seekdeep-cmdline':
         specifier: workspace:^
         version: link:../../boot/cmdline
+      '@seekdeep-ai/seekdeep-code-runtime-worker-thread':
+        specifier: workspace:^
+        version: link:../../code-runtime/code-runtime-worker-thread
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -1151,6 +1289,9 @@ importers:
       '@seekdeep-ai/seekdeep-cmdline':
         specifier: workspace:^
         version: link:../../boot/cmdline
+      '@seekdeep-ai/seekdeep-code-runtime-worker-thread':
+        specifier: workspace:^
+        version: link:../../code-runtime/code-runtime-worker-thread
       '@seekdeep-ai/seekdeep-cordis-client-runner':
         specifier: workspace:^
         version: link:../../extensions/cordis-client-runner
@@ -1172,6 +1313,9 @@ importers:
       '@seekdeep-ai/seekdeep-host-plugin-inventory':
         specifier: workspace:^
         version: link:../../host/plugin-inventory
+      '@seekdeep-ai/seekdeep-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
       '@seekdeep-ai/seekdeep-message-feedback':
         specifier: workspace:^
         version: link:../../feedback/message-feedback
@@ -1181,9 +1325,24 @@ importers:
       '@seekdeep-ai/seekdeep-session-projection-cache':
         specifier: workspace:^
         version: link:../../session/session-projection-cache
+      '@seekdeep-ai/seekdeep-session-stats':
+        specifier: workspace:^
+        version: link:../../session/session-stats
+      '@seekdeep-ai/seekdeep-storage':
+        specifier: workspace:^
+        version: link:../../storage/storage
+      '@seekdeep-ai/seekdeep-storage-domain':
+        specifier: workspace:^
+        version: link:../../storage/storage-domain
+      '@seekdeep-ai/seekdeep-storage-json':
+        specifier: workspace:^
+        version: link:../../storage/storage-json
       '@seekdeep-ai/seekdeep-web-frontend':
         specifier: workspace:^
         version: link:../../../apps/web
+      '@seekdeep-ai/seekdeep-workspace':
+        specifier: workspace:^
+        version: link:../../workspace/workspace
       commander:
         specifier: ^15.0.0
         version: 15.0.0

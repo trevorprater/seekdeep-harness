@@ -314,6 +314,10 @@ fn coverage_gate_uses_the_public_compiled_reporter_entry_and_worker_budget() {
         .iter()
         .find(|gate| gate.id == "coverage-exempt-heavy")
         .unwrap();
+    assert_eq!(
+        exempt.args[..3],
+        ["/private/pnpm.cjs", "run", "test:coverage-exempt-heavy"].map(OsString::from)
+    );
     assert!(exempt.args.contains(&OsString::from("--maxWorkers=3")));
     assert!(!exempt.args.contains(&OsString::from("--coverage")));
 }
@@ -447,9 +451,10 @@ fn consumer_graph_owns_build_and_orders_all_artifact_readers() {
         .iter()
         .find(|gate| gate.id == "built-bin-smoke")
         .unwrap();
-    assert!(built.args.contains(&OsString::from(
-        "packages/subagent/subagent-codex/tests/loader-composition.e2e.ts"
-    )));
+    assert_eq!(
+        built.args,
+        ["/private/pnpm.cjs", "run", "test:built-bin"].map(OsString::from)
+    );
     let web = gates.iter().find(|gate| gate.id == "web-snapshot").unwrap();
     assert_eq!(
         web.display_command,

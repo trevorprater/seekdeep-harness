@@ -46,7 +46,8 @@
   "dependencies": {
     "@seekdeep-ai/seekdeep-cmdline": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "@seekdeep-ai/seekdeep-code-runtime-worker-thread": "workspace:^"
   },
   "peerDependencies": {
     "@seekdeep-ai/cordis-plugin-loader": "workspace:^",

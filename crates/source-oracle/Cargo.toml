@@ -9,6 +9,7 @@ description = "Pinned source checkout resolution for parity and repository tooli
 
 [dependencies]
 anyhow.workspace = true
+dunce.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
