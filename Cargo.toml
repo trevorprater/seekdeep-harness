@@ -209,6 +209,7 @@ members = [
   "crates/subprocess",
   "crates/subprocess-e2b",
   "crates/subprocess-local",
+  "crates/subprocess-postinstall",
   "crates/system-prompt",
   "crates/terminal",
   "crates/terminal-bash",

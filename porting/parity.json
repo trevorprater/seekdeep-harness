@@ -38144,7 +38144,7 @@
         "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy",
         "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints",
         "test:issue-management delegates to the verified seekdeep-issue-policy crate",
-        "cargo test -p xtask --test root_validation_commands: real native and WASM compiler failures propagate through root typecheck/lint, including all test targets, features, Client recipes, Node runtime, Landlock entry, and docs runtime; Clippy fixes browser code in a dirty fixture",
+        "cargo test -p xtask --test root_validation_commands: real native and WASM compiler failures propagate through root typecheck/lint, including all test targets, features, Client recipes, Node runtime, Landlock entry, docs runtime, and subprocess postinstall; Clippy fixes browser code in a dirty fixture",
         "cargo test -p xtask --bin xtask node_runtime::tests: Host staging prefers the installed ripgrep package, copies its bytes beside the Host, and retains the PATH fallback",
         "npm run typecheck and npm run lint pass with native workspace and production WASM checks; cargo xtask check-client derives its 46 unique Rust packages from the Client build recipes",
         "npm run build completes the native Host, runtime assets, 48 Client artifacts, npm launcher, and Vite frontend",
@@ -38152,6 +38152,7 @@
         "cargo xtask remote-declarations --capture-source /Users/trevor/ws/deepseek-harness --check: fresh read-only source solution build with zero compiler diagnostics matched all 1312 public declarations from 229 packages and 5 generated Remote declaration pairs",
         "cargo xtask remote-consumer: 2 positive and 20 negative cases passed with only installed public declarations available; a return type weakened to any in an isolated copy fails the strict consumer",
         "pnpm install --frozen-lockfile --ignore-scripts: 53 restored workspace manifests resolved with pnpm 11.7.0; no existing lockfile importer changed; constraints and all 9 vendored links passed",
+        "CI=true pnpm install --frozen-lockfile in a fresh checkout without node_modules completes the actual package and root lifecycle scripts; the subprocess postinstall entry contains compiled Rust and passes 11 pinned source comparisons",
         "verify-package-invariants passes for 219 companions and verify-runtime-closure passes for 78 workspace packages; verify-built-package-invariants reports 188 missing lib/invariant.js modules and 31 Loader initialization failures in plain Node",
         "pnpm doc-sync: all 28 checks passed; pinned source-object checks preserve declaration and JSDoc comparison, all 986 translation pairs pass, and all 426 archived artifacts retain their seals",
         "pnpm docs:runtime:check: 26 Node source comparisons and 7 real Chromium scenarios passed, including disposal of sidebar listeners/timers and VitePress hydration with both local images",
@@ -80005,10 +80006,14 @@
       "status": "verified",
       "targets": [
         "crates/subprocess-local/Cargo.toml",
+        "crates/subprocess-postinstall/Cargo.toml",
+        "packages/subprocess/subprocess-local/package.json",
+        "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs",
         "Cargo.lock"
       ],
       "evidence": [
-        "cargo metadata --no-deps --format-version 1 resolves seekdeep-subprocess-local 0.1.0-rc.5 as a Rust 2024 library and test target with the renamed public metadata and native PTY dependency graph"
+        "cargo metadata --no-deps --format-version 1 resolves seekdeep-subprocess-local 0.1.0-rc.5 as a Rust 2024 library and test target with the renamed public metadata and native PTY dependency graph",
+        "a fresh checkout without node_modules completes CI=true pnpm install --frozen-lockfile, including the original package postinstall command through its self-contained compiled Rust binding"
       ]
     },
     {
@@ -80016,12 +80021,19 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/subprocess-local/Cargo.toml",
-        "Cargo.lock"
+        "crates/subprocess-postinstall/src/wasm.rs",
+        "crates/subprocess-postinstall/tests/postinstall_parity.rs",
+        "crates/subprocess-postinstall/tests/postinstall-parity.mjs",
+        "crates/subprocess-postinstall/tests/fixtures/source.mjs",
+        "crates/subprocess-postinstall/tests/fixtures/source.json",
+        "xtask/src/subprocess_postinstall.rs",
+        "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs"
       ],
       "evidence": [
-        "portable-pty is compiled through Cargo and has no installed prebuilt spawn-helper whose executable bit can be stripped",
-        "the real PTY bridge and direct host-exit terminal-tree integration tests pass without a postinstall repair script"
+        "11 differential cases against pinned source blob 54386fcf1d0d483d5bb3602f03049cb9530cd9e9 preserve both candidate paths, 0755 modes, absent helpers, directories, live and broken symlinks, platform selection, original error identity, early failure, and empty module exports",
+        "the package entry embeds compiled Rust WebAssembly and runs with only Node available; a fresh frozen-lockfile installation executes the package lifecycle successfully",
+        "cargo xtask subprocess-postinstall --check verifies identical generated bytes from a relocated checkout; Host asset builds require the committed binding to match the Rust source",
+        "changing the Rust mode to 0700 and regenerating the actual published entry makes the source comparison fail; restoring 0755 and rebuilding passes all 11 cases"
       ]
     },
     {

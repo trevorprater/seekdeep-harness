@@ -1,6 +1,6 @@
 {
   "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
-  "verified_at": "2026-09-15T14:02:19Z",
+  "verified_at": "2026-09-15T15:13:00Z",
   "completion": "incomplete",
   "checks": {
     "cargo_fmt_all_check": "passed",
@@ -96,13 +96,30 @@
       "regression_proof": "An isolated consumer copy rejects a Binary.toBase64 return type weakened to any. The actual public build catches declaration drift after all specialized package builders."
     },
     "workspace_package_metadata": {
-      "frozen_install": "passed with pnpm 11.7.0, --frozen-lockfile --ignore-scripts",
+      "frozen_install": "passed with pnpm 11.7.0, CI=true pnpm install --frozen-lockfile in a fresh checkout without node_modules; package and root lifecycle scripts executed",
       "restored_manifests": 53,
       "existing_importer_changes": 0,
       "constraints": "passed",
       "invariant_declarations": "219 passed",
       "runtime_dependency_closure": "78 workspace packages passed",
       "vendored_links": "9 passed"
+    },
+    "subprocess_postinstall": {
+      "status": "passed",
+      "source_blob": "54386fcf1d0d483d5bb3602f03049cb9530cd9e9",
+      "source_comparisons": 11,
+      "coverage": "Both helper paths, 0755 permissions, missing files, directories, live and broken symlinks, platform selection, original error identity, early failure, and empty module exports",
+      "node_only_bootstrap": "The published entry embeds compiled Rust WebAssembly; differential child processes have no executables on PATH and no NODE_PATH override",
+      "regression_proof": "Changing the Rust permission mode to 0700 and regenerating the actual package entry makes the source comparison fail. Restoring 0755 and rebuilding passes all 11 cases.",
+      "relocated_rebuild": "cargo xtask subprocess-postinstall --check produces identical bytes in a second checkout",
+      "fresh_install": "CI=true pnpm install --frozen-lockfile succeeds in a fresh checkout, including the subprocess package postinstall and root lifecycle scripts",
+      "package_entry": {
+        "path": "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs",
+        "bytes": 31659,
+        "npm_pack_dry_run": "included"
+      },
+      "validation": "Native and WASM Clippy pass with warnings denied; public pnpm build, four root-command regressions, and cargo fmt --all -- --check pass. Host asset builds verify the generated installer against its Rust source.",
+      "ci": "The preceding dbe20ee17864e7b875730494bf9757f17d12948c CI jobs failed during installation because this entry was absent. Remote verification of the repair is pending."
     },
     "docs_source_and_packaging_regressions": {
       "documentation_suites": "32 passed across declaration equivalence, repository TypeScript commands, source links, package paths, site configuration/projection, and archive fixtures",

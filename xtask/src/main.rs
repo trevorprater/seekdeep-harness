@@ -18,6 +18,7 @@ mod client_test_runtime_built_smoke_driver;
 mod node_runtime;
 mod remote_built_smoke_driver;
 mod remote_contracts;
+mod subprocess_postinstall;
 mod typert_corpus;
 mod typert_host_artifacts;
 mod web_assembled;
@@ -82,6 +83,11 @@ enum Command {
     HostAssets {
         #[arg(long)]
         release: bool,
+    },
+    /// Generate or verify the compiled Rust npm postinstall bootstrap.
+    SubprocessPostinstall {
+        #[arg(long)]
+        check: bool,
     },
     /// Build the actual Web frontend with the isolated, pinned browser dependencies.
     WebBuild,
@@ -601,6 +607,7 @@ fn main() -> anyhow::Result<()> {
             web_settings::run_keyless(&source, scenario.as_deref())
         }
         Command::HostAssets { release } => {
+            subprocess_postinstall::run(&cargo_metadata()?, true)?;
             remote_contracts::declarations(Path::new("."), false, None)?;
             let staged = node_runtime::stage(
                 &cargo_metadata()?,
@@ -608,6 +615,9 @@ fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", staged.display());
             Ok(())
+        }
+        Command::SubprocessPostinstall { check } => {
+            subprocess_postinstall::run(&cargo_metadata()?, check)
         }
         Command::WebAssembledSnapshots { source, suite } => {
             web_assembled_snapshots::run(&source, suite.as_deref())
@@ -5422,6 +5432,8 @@ fn is_allowed_non_rust_surface(path: &str) -> bool {
         "crates/code-runtime-worker-thread/node/loader.mjs"
             | "crates/code-runtime-worker-thread/node/plugin-loader.cjs"
             | "crates/code-runtime-worker-thread/node/wasm-runtime.cjs"
+            // Self-contained Node binding for the compiled Rust npm installer.
+            | "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs"
             // npm entry points for the Landlock native helper.
             | "native/landlock-run/packages/entry/index.d.ts"
             | "native/landlock-run/packages/entry/index.js"

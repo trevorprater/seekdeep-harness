@@ -13,6 +13,7 @@ const HOST_WASM_PACKAGES: &[&str] = &[
     "seekdeep-code-runtime-node",
     "seekdeep-landlock-entry-wasm",
     "seekdeep-docs-site-runtime",
+    "seekdeep-subprocess-postinstall",
 ];
 
 impl Fixture {

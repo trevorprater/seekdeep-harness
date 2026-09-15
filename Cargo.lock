@@ -9654,6 +9654,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subprocess-postinstall"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "seekdeep-system-prompt"
 version = "0.1.0-rc.5"
 dependencies = [
