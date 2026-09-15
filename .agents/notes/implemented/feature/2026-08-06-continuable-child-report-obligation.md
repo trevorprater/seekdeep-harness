@@ -23,7 +23,7 @@ The return channel is an instruction the child receives, not a capability it may
 
 They address different failure modes. The tool description is read when the model is already considering `report`; the prompt section is read when it is deciding whether it is finished. The obligation belongs at both points because the failure this fixes — a child that simply stops — happens at the second one.
 
-The section is registered on the child's own scope, the same mechanism [child composition](../../../../packages/subagent/subagent/src/child-agent.ts) already uses for a shadowing persona, so the parent and every sibling see neither the tool nor the guidance. `installReportTool` rolls the section back if tool registration fails, and its returned disposer attempts both revocations before surfacing cleanup failures.
+The section is registered on the child's own scope, the same mechanism [child composition](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/child-agent.ts) already uses for a shadowing persona, so the parent and every sibling see neither the tool nor the guidance. `installReportTool` rolls the section back if tool registration fails, and its returned disposer attempts both revocations before surfacing cleanup failures.
 
 ### Instruction, not enforcement
 

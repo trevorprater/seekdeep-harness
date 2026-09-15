@@ -7,6 +7,7 @@ use seekdeep_repository_tools::{
     agent_note_tree::compiled_repository_root,
     doc_site::DocsManifest,
     doc_source_links::{oracle_revision, pin_oracle_source_links},
+    source_oracle::SourceOracle,
 };
 
 #[derive(Parser)]
@@ -20,11 +21,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let root = compiled_repository_root();
     let revision = oracle_revision(root)?;
-    let snapshot = std::fs::read_to_string(root.join("SOURCE_SNAPSHOT"))?;
-    let source = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .ok_or_else(|| anyhow::anyhow!("SOURCE_SNAPSHOT has no repository."))?;
+    let source = SourceOracle::open(root)?;
     let files = if args.files.is_empty() {
         DocsManifest::read(&root.join("website/docs.json"))?
             .pages
@@ -38,7 +35,7 @@ fn main() -> anyhow::Result<()> {
     for file in files {
         let path = root.join(&file);
         let before = std::fs::read_to_string(&path)?;
-        let after = pin_oracle_source_links(&before, &file, &PathBuf::from(source), &revision)?;
+        let after = pin_oracle_source_links(&before, &file, source.root(), &revision)?;
         if before != after {
             updates.push((file, after));
         }

@@ -83,6 +83,8 @@ pub mod scoped_events_generator;
 pub mod skill_invocation_metadata;
 /// Client slot contract and registration scans.
 pub mod slot_walk;
+/// Read-only access to the pinned source checkout.
+pub mod source_oracle;
 pub mod third_party_notices;
 /// Minimal-update translation briefing assembly.
 pub mod translation_brief;

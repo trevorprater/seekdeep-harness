@@ -16,7 +16,7 @@ Web `minimal` preset 与独立 JSON-RPC minimal 组合对外提供持久 `bash` 
 
 独立的 [`minimal.cordis.yml`](../../../../examples/jsonrpc-agent/minimal.cordis.yml) 仍是完整的 JSON-RPC 进程组合。它挂载 `seekdeep-sdk-jsonrpc-server`、持久 Bash 所需的本地 PTY 和子进程服务、`fs-local`、两个工具消费方，以及未压缩的 JSONL 持久化。它不挂载 `token-meter`、`compaction-basic`、`fs-sandbox` 或 `fs-observation-policy`。持久 Bash 仍消费部署的 danger-full-access 沙箱策略；编辑器不受该策略限制。
 
-`SEEKDEEP_SYSTEM_PROMPT` 选择独立组合的 persona。`SEEKDEEP_MODEL` 命名 DeepSeek 提供方目录项，`SEEKDEEP_CONTEXT_WINDOW` 提供该目录项的容量。由于 SDK 客户端拥有 JSON-RPC `initialize` 请求，[`minimal.py`](../../../../examples/jsonrpc-agent/minimal.py)也使用 `SEEKDEEP_MODEL` 作为 `model` 参数的默认值；显式 `--model` 仍具有最高优先级。端点与凭据变量继续由 DeepSeek 适配器现有的环境解析路径持有。
+`SEEKDEEP_SYSTEM_PROMPT` 选择独立组合的 persona。`SEEKDEEP_MODEL` 命名 DeepSeek 提供方目录项，`SEEKDEEP_CONTEXT_WINDOW` 提供该目录项的容量。由于 SDK 客户端拥有 JSON-RPC `initialize` 请求，[`minimal.py`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/examples/jsonrpc-agent/minimal.py)也使用 `SEEKDEEP_MODEL` 作为 `model` 参数的默认值；显式 `--model` 仍具有最高优先级。端点与凭据变量继续由 DeepSeek 适配器现有的环境解析路径持有。
 
 ## 验证
 

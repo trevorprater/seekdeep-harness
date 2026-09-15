@@ -1,6 +1,6 @@
 {
   "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
-  "verified_at": "2026-09-15T09:52:42Z",
+  "verified_at": "2026-09-15T14:02:19Z",
   "completion": "incomplete",
   "checks": {
     "cargo_fmt_all_check": "passed",
@@ -10,9 +10,11 @@
       "passed": 5757,
       "failed": 0,
       "ignored": 26,
-      "seconds": 3212.5
+      "seconds": 3212.5,
+      "commit": "09c3cfc3689c4627364a05f36d745cef5168335c",
+      "scope": "Previous full workspace verification; a fresh full run remains required after the subsequent lifecycle and package/documentation changes."
     },
-    "pnpm_build": "passed: native Host, runtime assets, Rust/WASM public Client packages, declarations, and Vite frontend",
+    "pnpm_build": "passed: native Host and runtime assets, all 48 Client artifacts, npm launcher, all 1312 canonical public declarations, 2 positive and 20 negative isolated consumer cases, and Vite frontend",
     "pnpm_lint": "passed",
     "wasm_loader_and_runtime_clippy": "passed for both packages, all targets, with warnings denied",
     "wasm_loader_regressions": "3 passed, including entry ownership and refresh after disposal",
@@ -60,19 +62,81 @@
     "doc_site_and_gate_regressions": "38 passed across CI routing, site configuration, fragment checking, site projection, and gate construction",
     "cargo_xtask_parity_all": "failed: 6 pending, 0 ported but unverified, 3 withdrawn",
     "pnpm_doc_sync": {
-      "status": "failed",
-      "passed": 21,
-      "failed": 7,
+      "status": "passed",
+      "passed": 28,
+      "failed": 0,
       "skipped": 0,
-      "failing_checks": [
-        "documentation TypeScript compilation",
-        "Markdown links",
-        "package paths",
-        "package README model experience",
-        "type equivalence",
-        "translation pairing",
-        "package README limitations"
+      "seconds": 239.21
+    },
+    "phase3_lifecycle": {
+      "status": "passed",
+      "passed": 270,
+      "ignored": 3,
+      "coverage": "CoreSessionStore clock injection, Schedule ownership and teardown, persistence fairness, natural exit, and explicit seal-close in both storage backends",
+      "commits": [
+        "0f1b014fa66c7184c9128ea671970a6c912b1edf",
+        "e56af7d03bc4b4e58ce9fc6d468c9480f393b629",
+        "078c1d5c46b4dbb1efdd69ab15bcee4e2405ed7f"
       ]
+    },
+    "public_package_declarations": {
+      "status": "passed",
+      "source_compiler": "6.0.3",
+      "source_diagnostics": 0,
+      "public_declarations": 1312,
+      "public_packages": 229,
+      "remote_declaration_pairs": 5,
+      "capture": "Read-only source solution build, keeping Host and Client programs separate; a fresh capture matched the committed model and every final published header.",
+      "consumer": {
+        "host_positive": 1,
+        "host_negative": 7,
+        "client_positive": 1,
+        "client_negative": 13
+      },
+      "regression_proof": "An isolated consumer copy rejects a Binary.toBase64 return type weakened to any. The actual public build catches declaration drift after all specialized package builders."
+    },
+    "workspace_package_metadata": {
+      "frozen_install": "passed with pnpm 11.7.0, --frozen-lockfile --ignore-scripts",
+      "restored_manifests": 53,
+      "existing_importer_changes": 0,
+      "constraints": "passed",
+      "invariant_declarations": "219 passed",
+      "runtime_dependency_closure": "78 workspace packages passed",
+      "vendored_links": "9 passed"
+    },
+    "docs_source_and_packaging_regressions": {
+      "documentation_suites": "32 passed across declaration equivalence, repository TypeScript commands, source links, package paths, site configuration/projection, and archive fixtures",
+      "source_header_tests": "2 passed, including actual UI branding and the terminal prompt declaration",
+      "website_dependency_install": "Passed, failed with the old skip-on-present-binary behavior restored, and passed again after restoring the fingerprint receipt implementation",
+      "root_commands": "4 passed, including deliberate native/WASM type errors and Clippy warnings through the public scripts",
+      "typert_dependency_copy": "1 passed; an absolute source Zod link resolves to the corpus-owned copy"
+    },
+    "documentation_browser_runtime": {
+      "status": "passed",
+      "node_comparisons": 26,
+      "chromium_scenarios": 7,
+      "disposed_listener_and_timer": true,
+      "vite_dev_hydrated": true,
+      "local_images_loaded": 2
+    },
+    "windows_xtask_cross_check": {
+      "status": "blocked by the local cross-compilation environment",
+      "cause": "ring's Windows C compilation cannot find assert.h in the macOS cross toolchain; native Windows CI remains required",
+      "related_proof": "The platform-specific link helper passes its native regression. The repository-tools Windows metadata fix passed its separate MSVC Clippy check."
+    },
+    "built_package_runtime": {
+      "status": "failed",
+      "companions_checked": 219,
+      "missing_invariant_modules": 188,
+      "loader_initialization_failures_in_plain_node": 31,
+      "note": "Public declaration and manifest checks do not establish runtime parity. Host runtime exports, functional invariant companions, and native CLI platform packages remain incomplete."
+    },
+    "documentation_integrity": {
+      "primary_type_equivalence": 384,
+      "paired_type_equivalence": 384,
+      "translation_pairs": 986,
+      "agent_notes": 552,
+      "sealed_archived_artifacts": 426
     }
   },
   "manifest": {
@@ -96,9 +160,10 @@
   "remaining_work": [
     "Verify the real-provider browser smoke and record the PR GIF after the requested payload approval.",
     "Implement the native E2B SDK factory and verify the real E2B composition and fixture paths after sandbox authorization.",
-    "Produce and test the public Host npm exports and native CLI platform packages.",
+    "Produce and test the public Host npm exports, functional invariant companions, and native CLI platform packages.",
     "Complete native aggregate-test and coverage routing, and audit the three withdrawn tooling configurations.",
-    "Repair the seven documentation checks without weakening their assertions.",
-    "Finish the PR-finding audit and repair the confirmed open lifecycle and deterministic-input cases."
+    "Provision the pinned source oracle and required Rust/WASM tooling in every CI and documentation lane that consumes them; remove remaining machine-local oracle assumptions.",
+    "Finish the PR-finding audit and repair remaining confirmed lifecycle and deterministic-input cases.",
+    "Run the full workspace formatting, Clippy, tests, and parity gate fresh after all remaining changes."
   ]
 }

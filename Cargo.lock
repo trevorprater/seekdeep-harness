@@ -12880,6 +12880,7 @@ dependencies = [
  "oxc_codegen",
  "oxc_parser",
  "oxc_span",
+ "regex",
  "ryu-js",
  "seekdeep-agent",
  "seekdeep-attachment-local",

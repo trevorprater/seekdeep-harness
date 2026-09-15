@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/headless/README.md
-README.md: cdb6643739dc54dd2decacf4e2579f33c278e8b5
-README.zh.md: 93a8e3081c66fab5bf2e318927f5913ce86ffc49
+README.md: 75a327f1aead8a0d66351f07e5070db62c40498b
+README.zh.md: 49a6f4f135ba8ceb07b8697a2f5dbaae003fc556

@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-composer 的文本由两层叠放绘制（见 [InputBar](../../../../packages/client/ui-conversation/src/client/skeleton/InputBar.tsx)）：`<textarea>` 持有值、选区与光标，但它自己的字形以 `color: transparent` 渲染；用户看到的每一个字符都由其下的 `[data-input-backdrop]` 层绘制，该层同时承载 claim token 高亮、chip 与提示影子文本。这一拆分正是 chip 与高亮得以存在的前提——textarea 无法为自身文本的某个区间单独设置样式。草稿框的高度上限为 14 行，因此超过上限之后总得有东西滚动。
+composer 的文本由两层叠放绘制（见 [InputBar](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/client/skeleton/InputBar.tsx)）：`<textarea>` 持有值、选区与光标，但它自己的字形以 `color: transparent` 渲染；用户看到的每一个字符都由其下的 `[data-input-backdrop]` 层绘制，该层同时承载 claim token 高亮、chip 与提示影子文本。这一拆分正是 chip 与高亮得以存在的前提——textarea 无法为自身文本的某个区间单独设置样式。草稿框的高度上限为 14 行，因此超过上限之后总得有东西滚动。
 
 两层各自持有一个滚动偏移，会分两个阶段失效，本次改动是其中的第二个。
 
@@ -71,9 +71,9 @@ composer 的文本由两层叠放绘制（见 [InputBar](../../../../packages/cl
 
 ## 测试
 
-[input-bar.spec.tsx](../../../../packages/client/ui-conversation/tests/input-bar.client.spec.tsx) 中的单元用例断言 jsdom 能看见的部分：同一个滚动盒同时包含 textarea 与 backdrop，backdrop 的文本现在就是草稿本身、不多不少，且渲染后才到达的持久化草稿会回视其光标，同时不从其他控件夺走焦点。jsdom 对任何元素都报告 `scrollHeight === clientHeight` 且从不滚动，因此几何属于浏览器场景；滚轮接力用例改为桩接滚动容器的度量，而非 textarea 的。
+[input-bar.spec.tsx](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/tests/input-bar.client.spec.tsx) 中的单元用例断言 jsdom 能看见的部分：同一个滚动盒同时包含 textarea 与 backdrop，backdrop 的文本现在就是草稿本身、不多不少，且渲染后才到达的持久化草稿会回视其光标，同时不从其他控件夺走焦点。jsdom 对任何元素都报告 `scrollHeight === clientHeight` 且从不滚动，因此几何属于浏览器场景；滚轮接力用例改为桩接滚动容器的度量，而非 textarea 的。
 
-[composer-draft-scroll.e2e.ts](../../../../apps/web/tests/composer-draft-scroll.e2e.ts) 在 chromium 中针对构建产物度量其余部分：全新工作区的空白 composer 中一份 40 行草稿，零模型调用。每个度量都在光标自己的坐标系里读取——即 textarea 把第 n 行放在哪，含其自身偏移——再与 backdrop 同一行文本上的 DOM Range 相比，因为这个差值正是用户看到的东西。决定性的用例改变偏移，并**在本任务结束之前**重新读取该差值，也就是在任何 `scroll` 监听可能运行之前：单一滚动容器下为 0，镜像方案下则是整个增量。空洞性保护先断言草稿确实超过了带上限的盒子；其余用例分别覆盖高度上限、三层同一折行宽度、滚轮手势、以换行结尾的草稿，以及过去由 textarea 自身滚动承担的光标回视路径——滚离光标后输入，必须把滚动容器带回光标处。
+[composer-draft-scroll.e2e.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/apps/web/tests/composer-draft-scroll.e2e.ts) 在 chromium 中针对构建产物度量其余部分：全新工作区的空白 composer 中一份 40 行草稿，零模型调用。每个度量都在光标自己的坐标系里读取——即 textarea 把第 n 行放在哪，含其自身偏移——再与 backdrop 同一行文本上的 DOM Range 相比，因为这个差值正是用户看到的东西。决定性的用例改变偏移，并**在本任务结束之前**重新读取该差值，也就是在任何 `scroll` 监听可能运行之前：单一滚动容器下为 0，镜像方案下则是整个增量。空洞性保护先断言草稿确实超过了带上限的盒子；其余用例分别覆盖高度上限、三层同一折行宽度、滚轮手势、以换行结尾的草稿，以及过去由 textarea 自身滚动承担的光标回视路径——滚离光标后输入，必须把滚动容器带回光标处。
 
 另有一个用例端到端覆盖粘贴路径：短草稿、光标停在末尾，然后派发一个携带真实剪贴板数据的 `paste` 事件——与 Cmd-V 送达的是同一个事件，走同一个处理器——再检查偏移与所粘内容的最后一行。它等待的是偏移而不是「草稿是否溢出」，因为恢复发生在状态机提交草稿之后的下一帧；没有这次回视的构建会卡在这个等待上失败。
 

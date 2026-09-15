@@ -24,7 +24,7 @@ Status: implemented
 
 **`seekdeep-tool-cordis`** 让模型写一段 JavaScript 并挂成临时插件。它的 README 写明了这个界限:「The sandbox is containment for honest code, not a security boundary — host-realm helpers on the sandbox global are reachable, so mount code can reach Node」([Known limitations](../../../../packages/extensions/tool-cordis/README.md))。`node:vm` 的 realm 就在 harness 进程内,而 `seekdeep-sandbox-local` 只约束它 spawn 出去的 argv,因此在 Web surface 上,沙箱与批准接缝是被绕过而非被执行。
 
-**`seekdeep-web-fetch-http`** 保持不挂,`seekdeep-tool-web` 保持 `fetch: false`。SSRF 防护在实现中是 deferred 状态([`policy.ts`](../../../../packages/web/web-fetch-http/src/policy.ts) 只校验协议、凭据与长度),包里也直说了:「this provider is an SSRF primitive and **must not be enabled** in a deployment that can reach sensitive internal network targets」([README](../../../../packages/web/web-fetch-http/README.md))。目标由模型选择,其中包括 harness 自己跑在环回地址上的网关、内网段和云元数据端点。
+**`seekdeep-web-fetch-http`** 保持不挂,`seekdeep-tool-web` 保持 `fetch: false`。SSRF 防护在实现中是 deferred 状态([`policy.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/web/web-fetch-http/src/policy.ts) 只校验协议、凭据与长度),包里也直说了:「this provider is an SSRF primitive and **must not be enabled** in a deployment that can reach sensitive internal network targets」([README](../../../../packages/web/web-fetch-http/README.md))。目标由模型选择,其中包括 harness 自己跑在环回地址上的网关、内网段和云元数据端点。
 
 不挂载它收窄的是接触面而非可达性：`bash` 是挂着的,`curl` 照样能拿到同一个页面——一次真实运行确认了这点。这个缺席买到的是去掉一个无需 shell、以参数成形的请求原语,以及随之而来的那条意外路径:一次「帮我总结这个页面」悄悄打到环回地址。真要收住出站流量的部署需要的是网络层管控。
 
@@ -44,7 +44,7 @@ Status: implemented
 
 同一份冒烟还根据同一份产物固定 TUI 的执行姿态。那些沙箱 schema 与初始权限断言归[workspace-write 默认值决策](2026-07-31-workspace-write-surface-default.md)所有，独立于本工具清单决策。
 
-[`apps/web/tests/shipped-composition.e2e.ts`](../../../../apps/web/tests/shipped-composition.e2e.ts) 在构建产物 lane 中覆盖 Web surface,断言它的工具目录、它的访问默认值未被触碰,以及 `workspace-write` 的可写根包含临时目录——一个会让沙箱测试说谎的陷阱,当工作区落在 `/tmp` 下时([`roots.ts`](../../../../packages/sandbox/sandbox/src/roots.ts))。
+[`apps/web/tests/shipped-composition.e2e.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/apps/web/tests/shipped-composition.e2e.ts) 在构建产物 lane 中覆盖 Web surface,断言它的工具目录、它的访问默认值未被触碰,以及 `workspace-write` 的可写根包含临时目录——一个会让沙箱测试说谎的陷阱,当工作区落在 `/tmp` 下时([`roots.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/sandbox/sandbox/src/roots.ts))。
 
 `glob` 与 `grep` 被作为固定成员断言，而不是一对宿主依赖：`seekdeep-tool-fs-search` spawn 打包的 ripgrep 二进制并无条件注册两个工具，因此这一对始终在场。
 

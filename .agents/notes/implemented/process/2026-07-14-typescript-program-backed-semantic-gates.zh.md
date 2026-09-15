@@ -20,13 +20,13 @@ Status: implemented
 
 ### 一个项目模型展开根项目配置
 
-[`TypeScriptProject`](../../../../scripts/ts-project.ts) 解析根 `tsconfig.json`，递归展开每个项目引用，并将各引用项目的源码根合并为一个不输出文件的语义 Program。直接从根项目配置创建普通 Program 时，TypeScript 可能将引用项目重定向到构建后的声明文件；显式展开可以让门禁继续遍历各包的 `src` 文件，并保留符号同一性。
+[`TypeScriptProject`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/ts-project.ts) 解析根 `tsconfig.json`，递归展开每个项目引用，并将各引用项目的源码根合并为一个不输出文件的语义 Program。直接从根项目配置创建普通 Program 时，TypeScript 可能将引用项目重定向到构建后的声明文件；显式展开可以让门禁继续遍历各包的 `src` 文件，并保留符号同一性。
 
 该封装统一负责配置诊断、语义编译选项、仓库相对路径、源码查找和共享 TypeChecker。各门禁不再自行按文件通配模式扫描包源码，也不再分别构建不完整的 Program。
 
 ### A. 事件关系由接收者类型和值类型决定
 
-[`gen-doc-graphs`](../../../../scripts/gen-doc-graphs.ts) 根据调用接收者与仓库中真实 `Context`、`AgentEventDispatch` 和 Cordis `EventsService` 类型之间的可赋值关系进行分类。变量名和属性拼写不再决定某次调用是否属于事件操作。
+[`gen-doc-graphs`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/gen-doc-graphs.ts) 根据调用接收者与仓库中真实 `Context`、`AgentEventDispatch` 和 Cordis `EventsService` 类型之间的可赋值关系进行分类。变量名和属性拼写不再决定某次调用是否属于事件操作。
 
 Context 与 AgentEventDispatch 调用只贡献由字符串字面量构成的有限事件集合。对于直接调用 `EventsService.dispatch()` 的路径，生成器会沿数组字面量、常量别名、条件分支和未导出本地辅助函数的已解析调用点恢复事件槽位。泛型转发参数不算作具体生产方：事件仍归属于传入封闭事件值的调用点。
 

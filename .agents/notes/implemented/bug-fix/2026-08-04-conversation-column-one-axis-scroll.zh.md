@@ -28,7 +28,7 @@ Status: implemented
 
 ## 测试
 
-[apps/web/tests/conversation-column-overflow.e2e.ts](../../../../apps/web/tests/conversation-column-overflow.e2e.ts) 扫过一组把椭圆宽度夹在中间的视口宽度，在每一档上于列上触发横向滚轮事件并读取 `scrollLeft`。提交的 golden 逐档记录该关系；最宽的一档是椭圆根本不外溢的对照。
+[apps/web/tests/conversation-column-overflow.e2e.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/apps/web/tests/conversation-column-overflow.e2e.ts) 扫过一组把椭圆宽度夹在中间的视口宽度，在每一档上于列上触发横向滚轮事件并读取 `scrollLeft`。提交的 golden 逐档记录该关系；最宽的一档是椭圆根本不外溢的对照。
 
 两道防线保证该场景不流于形式。空断言防线断言窄档上椭圆确实仍伸出列外，使这项主张不可能因为症状出于无关原因消失而通过。变异对照则在页面内把 `overflow-x: auto` 强制改回，证明同一手势在同一时序下能把列带到正向滚动边界。测试直接测量该边界，因为稳定的滚动条槽可能让部分外溢处于滚动原点的负向。没有这项对照，`scrollLeft` 读到 0 同样可以解释为滚轮事件根本没送达。
 

@@ -2,6 +2,7 @@ use std::{path::Path, process::Command};
 
 use anyhow::Context as _;
 use serde_json::{Value, json};
+use sha1::{Digest as _, Sha1};
 
 use super::{DocsManifest, docs_source_files, project_docs, site_configuration};
 
@@ -114,6 +115,13 @@ fn run(command: &mut Command) -> anyhow::Result<()> {
 }
 
 fn install_site_dependencies(root: &Path) -> anyhow::Result<()> {
+    install_site_dependencies_with_runner(root, run)
+}
+
+fn install_site_dependencies_with_runner(
+    root: &Path,
+    install: impl FnOnce(&mut Command) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
     let website = root.join("website");
     let cache = website.join(".cache/dependencies");
     let package: Value = serde_json::from_slice(&std::fs::read(website.join("package.json"))?)?;
@@ -145,24 +153,94 @@ fn install_site_dependencies(root: &Path) -> anyhow::Result<()> {
         ),
         (cache.join("pnpm-lock.yaml"), serde_yml::to_string(&lock)?),
     ];
-    let mut changed = false;
+    let mut digest = Sha1::new();
     for (path, contents) in artifacts {
+        digest.update(contents.as_bytes());
+        digest.update([0]);
         if std::fs::read_to_string(&path).ok().as_deref() != Some(&contents) {
             std::fs::write(path, contents)?;
-            changed = true;
         }
     }
-    if changed || !website.join("node_modules/.bin/vitepress").exists() {
-        run(Command::new("pnpm")
-            .args([
-                "install",
-                "--ignore-workspace",
-                "--ignore-scripts",
-                "--frozen-lockfile",
-                "--modules-dir",
-            ])
-            .arg(website.join("node_modules"))
-            .current_dir(&cache))?;
+    let fingerprint = format!("{:x}\n", digest.finalize());
+    let installed = cache.join("installed-fingerprint");
+    if std::fs::read_to_string(&installed).ok().as_deref() != Some(&fingerprint)
+        || !website.join("node_modules/.bin/vitepress").exists()
+    {
+        install(
+            Command::new("pnpm")
+                .args([
+                    "install",
+                    "--ignore-workspace",
+                    "--ignore-scripts",
+                    "--frozen-lockfile",
+                    "--modules-dir",
+                ])
+                .arg(website.join("node_modules"))
+                .env("CI", "true")
+                .current_dir(&cache),
+        )?;
+        std::fs::write(installed, fingerprint)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_dependency_refresh_retries_with_noninteractive_frozen_install() -> anyhow::Result<()>
+    {
+        let directory = tempfile::tempdir()?;
+        let root = directory.path();
+        let binary = root.join("website/node_modules/.bin/vitepress");
+        std::fs::create_dir_all(binary.parent().expect("binary directory"))?;
+        std::fs::write(&binary, "stale executable")?;
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"packageManager":"pnpm@11.1.1"}"#,
+        )?;
+        std::fs::write(
+            root.join("website/package.json"),
+            r#"{"devDependencies":{"vitepress":"1.6.4"}}"#,
+        )?;
+        std::fs::write(
+            root.join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\nimporters:\n  website: {}\n",
+        )?;
+        let installed = root.join("website/.cache/dependencies/installed-fingerprint");
+        let failed = install_site_dependencies_with_runner(root, |command| {
+            assert!(command.get_envs().any(|(key, value)| {
+                key == "CI" && value == Some(std::ffi::OsStr::new("true"))
+            }));
+            assert!(command.get_args().any(|arg| arg == "--frozen-lockfile"));
+            anyhow::bail!("dependency install failed")
+        });
+        assert!(failed.is_err());
+        assert!(!installed.exists());
+
+        let mut retried = false;
+        install_site_dependencies_with_runner(root, |_| {
+            retried = true;
+            Ok(())
+        })?;
+        assert!(
+            retried,
+            "a preexisting executable cannot hide a failed refresh"
+        );
+        assert!(installed.is_file());
+        install_site_dependencies_with_runner(root, |_| panic!("unchanged successful install"))?;
+
+        std::fs::remove_file(binary)?;
+        let mut repaired = false;
+        install_site_dependencies_with_runner(root, |_| {
+            repaired = true;
+            Ok(())
+        })?;
+        assert!(
+            repaired,
+            "a missing executable invalidates the install receipt"
+        );
+        Ok(())
+    }
 }

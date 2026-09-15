@@ -20,7 +20,7 @@ The response has three ordered top-level sections: `translation`, `review`, and 
 
 Section delimiter lines are reserved by the wire format. When a Markdown body line consists of a delimiter tag, possibly preceded by backslashes, the serializer and model add one leading backslash; the parser removes exactly one. This count-preserving escape round-trips both a literal delimiter and an already escaped delimiter without changing inline tag mentions.
 
-The executable contract lives in [the renderer, request assembler, parser, and response consumer](../../../../scripts/translation-prompt.ts). Unit tests cover both directions, request order, placeholder validation, target-path validation, strict section order and cardinality, fenced responses, inline tag mentions, delimiter lines inside Markdown bodies, and frontmatter-preserving new-pair switcher correction. A keyless subprocess snapshot pins the assembled prompt and five reviewed example turns together with a frontmatter-bearing recorded response consumed through the target-path correction.
+The executable contract lives in [the renderer, request assembler, parser, and response consumer](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/translation-prompt.ts). Unit tests cover both directions, request order, placeholder validation, target-path validation, strict section order and cardinality, fenced responses, inline tag mentions, delimiter lines inside Markdown bodies, and frontmatter-preserving new-pair switcher correction. A keyless subprocess snapshot pins the assembled prompt and five reviewed example turns together with a frontmatter-bearing recorded response consumed through the target-path correction.
 
 ## Alternatives considered
 

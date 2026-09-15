@@ -23,7 +23,7 @@ Status: implemented
 
 两者针对不同的失效模式。工具描述是在模型已经在考虑 `report` 时被读到的；提示词 section 是在它判断自己是否已经完成时被读到的。这条义务必须同时出现在两处，因为本次修复的失效——child 直接停下——发生在第二处。
 
-该 section 注册在 child 自己的作用域上，与[child 组合](../../../../packages/subagent/subagent/src/child-agent.ts)为遮蔽式 persona 已经使用的机制相同，因此 parent 与所有同级都看不到该工具与该指引。工具注册失败时，`installReportTool` 会回滚该 section；它返回的 disposer 会先尝试撤销两项注册，再抛出清理失败。
+该 section 注册在 child 自己的作用域上，与[child 组合](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/child-agent.ts)为遮蔽式 persona 已经使用的机制相同，因此 parent 与所有同级都看不到该工具与该指引。工具注册失败时，`installReportTool` 会回滚该 section；它返回的 disposer 会先尝试撤销两项注册，再抛出清理失败。
 
 ### 是指令，不是强制
 

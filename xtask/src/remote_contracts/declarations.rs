@@ -125,6 +125,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn public_headers_rename_product_paths_and_keep_provider_names() {
+        assert_eq!(
+            super::super::normalize(
+                "DSH_HOME=~/.dsh @deepseek-ai/dsh-subagent-dsh-sdk dsh-sdk DEEPSEEK_API_KEY deepseek-chat dsh web UI handshake user-dsh dsh.profile"
+            ),
+            "SEEKDEEP_HOME=~/.seekdeep @seekdeep-ai/seekdeep-subagent-seekdeep-sdk seekdeep-sdk DEEPSEEK_API_KEY deepseek-chat seekdeep web UI handshake user-seekdeep seekdeep.profile"
+        );
+    }
+
+    #[test]
     fn emits_source_owned_package_maps_and_detects_stale_declarations() -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;
         run(directory.path(), false, None)?;
@@ -136,6 +146,19 @@ mod tests {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         write_package(&root, "@seekdeep-ai/cordis", &cordis_output)?;
         assert_eq!(std::fs::read_to_string(&cordis_index)?, cordis_header);
+        let icons = std::fs::read_to_string(
+            directory
+                .path()
+                .join("packages/client/ui-primitives/lib/types/icons/index.d.ts"),
+        )?;
+        assert!(icons.contains("seekdeep web UI"));
+        assert!(!icons.contains("dsh web UI"));
+        let prompt = std::fs::read_to_string(
+            directory
+                .path()
+                .join("packages/terminal/terminal-bash/lib/types/sanitize.d.ts"),
+        )?;
+        assert!(prompt.contains("CONTROLLED_PROMPT = \"seekdeep> \""));
         run(directory.path(), true, None)?;
         let goal = directory
             .path()

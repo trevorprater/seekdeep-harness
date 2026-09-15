@@ -10,8 +10,10 @@ mod registry_driver;
 use std::{
     path::{Path, PathBuf},
     process::Command,
+    sync::LazyLock,
 };
 
+use regex::Regex;
 use seekdeep_typert_generator::{emitter::FaceModelEmitter, model::FaceModel};
 use serde_json::{Value, json};
 
@@ -168,11 +170,21 @@ pub(super) fn consumer(browser: bool, source: &Path) -> anyhow::Result<()> {
 }
 
 fn normalize(value: &str) -> String {
-    value
-        .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
+    static CLI: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\bdsh\b").expect("static CLI identity regex"));
+    let value = value
+        .replace("subagent-dsh-sdk", "subagent-seekdeep-sdk")
+        .replace("@deepseek-ai/dsh", "@seekdeep-ai/seekdeep")
         .replace("@deepseek-ai/", "@seekdeep-ai/")
         .replace("_deepseek_ai_dsh_", "_seekdeep_ai_seekdeep_")
-        .replace("DeepSeek Harness", "SeekDeep Harness")
+        .replace("DSH_", "SEEKDEEP_")
+        .replace("DshEnvironment", "SeekdeepEnvironment")
+        .replace("dshEnv", "seekdeepEnv")
+        .replace("__dsh_main__", "__seekdeep_main__")
+        .replace("dsh-", "seekdeep-")
+        .replace("~/.dsh", "~/.seekdeep")
+        .replace("DeepSeek Harness", "SeekDeep Harness");
+    CLI.replace_all(&value, "seekdeep").into_owned()
 }
 
 pub(super) fn bundle_zod(root: &Path, bundle: &str) -> anyhow::Result<String> {

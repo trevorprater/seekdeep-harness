@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-04-conversation-column-one-axis-scroll.md
-2026-08-04-conversation-column-one-axis-scroll.md: 9a487c506a75033d0854f08e95da24704309003d
-2026-08-04-conversation-column-one-axis-scroll.zh.md: b86f86f55757dff4fddab4c4e2ac64fa7c19fe59
+2026-08-04-conversation-column-one-axis-scroll.md: 5d5757ce68060308b7fff62f290207478041b57a
+2026-08-04-conversation-column-one-axis-scroll.zh.md: 723c57aa9eb6b96e08ca5f86cfec82471ca9e550

@@ -48,7 +48,7 @@ fn read_model(root: &Path) -> anyhow::Result<Model> {
     );
     for module in &model.modules {
         let output = Path::new(&module.output);
-        let prefix = Path::new(&module.package_root).join("lib/types");
+        let prefix = Path::new(&module.package_root).join("lib");
         anyhow::ensure!(
             output.starts_with(prefix)
                 && module.output.ends_with(".d.ts")
@@ -65,7 +65,11 @@ fn read_model(root: &Path) -> anyhow::Result<Model> {
 pub(super) fn write_all(root: &Path, output: &Path, check: bool) -> anyhow::Result<()> {
     let model = read_model(root)?;
     for module in &model.modules {
-        write(&output.join(&module.output), &module_content(module), check)?;
+        write(
+            &output.join(super::super::normalize(&module.output)),
+            &module_content(module),
+            check,
+        )?;
     }
     println!(
         "published {} canonical compatibility declarations",

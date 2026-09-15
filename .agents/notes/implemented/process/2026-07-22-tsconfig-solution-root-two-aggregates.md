@@ -15,6 +15,8 @@ The GUI split introduced a second aggregate program (`tsconfig.client.json`, [la
 
 ## Decision
 
+The [Rust package declaration build](2026-09-15-rust-package-declarations-and-source-docs.md) preserves these separate source programs when capturing compatibility types. This note retains ownership of the source project boundaries.
+
 One solution root, two check units, one shared base pair, no separate build or vitest config:
 
 | File | Role | Forms a program? |

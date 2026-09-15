@@ -38120,7 +38120,13 @@
         "xtask/src/client_build.rs",
         "xtask/src/node_runtime.rs",
         "xtask/tests/root_validation_commands.rs",
-        "porting/VERIFICATION_CHECKPOINT_2026-09-15.json"
+        "porting/VERIFICATION_CHECKPOINT_2026-09-15.json",
+        "xtask/src/remote_contracts/declarations.rs",
+        "xtask/src/remote_contracts/declarations/capture.rs",
+        "xtask/src/remote_contracts/declarations/public.rs",
+        "xtask/src/remote_contracts/declarations/consumer.rs",
+        "crates/repository-tools/src/source_oracle.rs",
+        "crates/repository-tools/tests/type_equiv_oracle.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
@@ -38142,10 +38148,17 @@
         "cargo test -p xtask --bin xtask node_runtime::tests: Host staging prefers the installed ripgrep package, copies its bytes beside the Host, and retains the PATH fallback",
         "npm run typecheck and npm run lint pass with native workspace and production WASM checks; cargo xtask check-client derives its 46 unique Rust packages from the Client build recipes",
         "npm run build completes the native Host, runtime assets, 48 Client artifacts, npm launcher, and Vite frontend",
-        "verify-package-invariants passes for 166 companions and verify-runtime-closure passes for 78 workspace packages; verify-built-package-invariants reports 135 missing lib/invariant.js modules and 31 Loader initialization failures in plain Node",
-        "pnpm run doc-sync (2026-09-15): 21 checks passed, including the Rust documentation-site suites and website build; 7 failed for documentation TypeScript compilation, Markdown links, package paths, README model experience, type equivalence, translation pairing, and README limitations."
+        "pnpm build (2026-09-15, package/documentation checkpoint): native Host and runtime assets, all 48 Rust Client artifacts, npm launcher, Vite frontend, post-build canonical-header check, and isolated public consumers passed",
+        "cargo xtask remote-declarations --capture-source /Users/trevor/ws/deepseek-harness --check: fresh read-only source solution build with zero compiler diagnostics matched all 1312 public declarations from 229 packages and 5 generated Remote declaration pairs",
+        "cargo xtask remote-consumer: 2 positive and 20 negative cases passed with only installed public declarations available; a return type weakened to any in an isolated copy fails the strict consumer",
+        "pnpm install --frozen-lockfile --ignore-scripts: 53 restored workspace manifests resolved with pnpm 11.7.0; no existing lockfile importer changed; constraints and all 9 vendored links passed",
+        "verify-package-invariants passes for 219 companions and verify-runtime-closure passes for 78 workspace packages; verify-built-package-invariants reports 188 missing lib/invariant.js modules and 31 Loader initialization failures in plain Node",
+        "pnpm doc-sync: all 28 checks passed; pinned source-object checks preserve declaration and JSDoc comparison, all 986 translation pairs pass, and all 426 archived artifacts retain their seals",
+        "pnpm docs:runtime:check: 26 Node source comparisons and 7 real Chromium scenarios passed, including disposal of sidebar listeners/timers and VitePress hydration with both local images",
+        "pnpm lint passed for the complete native workspace, the Host-side WASM boundary crates, and all 46 Rust Client packages; 4 root-command regressions passed with real compiler failures and fixes",
+        "cargo xtask web-smoke: 4 keyless source cases passed through the built npm launcher and native Host"
       ],
-      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The 2026-09-15 full workspace run passed 5757 tests with 26 ignored; public build and lint passed. Installation prepares the pinned Node runtime dependencies, and Host staging uses the packaged ripgrep with a PATH fallback. Host npm compatibility artifacts remain incomplete: 135 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. The built-bin and coverage-exempt-heavy gates still name retired TypeScript tests. Documentation declarations, links, package paths, README policy, type equivalence, and translation pairing also block doc-sync. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The full workspace run at 09c3cfc3689c4627364a05f36d745cef5168335c passed 5757 tests with 26 ignored; later lifecycle and package/documentation changes have their own scoped evidence and still require a fresh final workspace run. The public build, lint, canonical declarations, strict consumers, frozen dependency install, all 28 documentation gates, documentation browser runtime, and 4 keyless CLI smoke cases pass. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. Native CLI platform packages, built-bin and coverage-exempt-heavy routing, and portable source-oracle/toolchain setup in CI also remain open. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
     },
     {
       "source": "packages/AGENTS.md",

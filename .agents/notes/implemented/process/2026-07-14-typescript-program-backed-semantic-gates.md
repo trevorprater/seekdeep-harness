@@ -20,13 +20,13 @@ These two mechanisms preserve semantic ownership on their respective execution p
 
 ### One project model expands the root solution
 
-[`TypeScriptProject`](../../../../scripts/ts-project.ts) parses the root `tsconfig.json`, recursively expands every project reference, and combines the referenced source roots into one no-emit semantic program. A normal program created from the solution config can redirect referenced projects to built declarations; explicit expansion keeps the package `src` files available for AST traversal and symbol identity.
+[`TypeScriptProject`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/ts-project.ts) parses the root `tsconfig.json`, recursively expands every project reference, and combines the referenced source roots into one no-emit semantic program. A normal program created from the solution config can redirect referenced projects to built declarations; explicit expansion keeps the package `src` files available for AST traversal and symbol identity.
 
 The wrapper owns config diagnostics, semantic compiler options, repository-relative paths, source lookup, and the shared checker. Individual gates do not glob package sources or construct partial programs independently.
 
 ### A. Event relations follow receiver and value types
 
-[`gen-doc-graphs`](../../../../scripts/gen-doc-graphs.ts) classifies calls by assignability to the repository's actual `Context`, `AgentEventDispatch`, and Cordis `EventsService` types. Variable names and property spellings do not determine whether a call is an event operation.
+[`gen-doc-graphs`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/gen-doc-graphs.ts) classifies calls by assignability to the repository's actual `Context`, `AgentEventDispatch`, and Cordis `EventsService` types. Variable names and property spellings do not determine whether a call is an event operation.
 
 Context and agent-dispatch calls contribute only finite string-literal event sets. Direct `EventsService.dispatch()` calls recover the event slot through array literals, constant aliases, conditional branches, and resolved call sites of non-exported local helpers. Generic forwarding parameters are not concrete producers: attribution stays with the call sites that supply a closed event value.
 

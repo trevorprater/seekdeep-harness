@@ -37,6 +37,13 @@ pub struct PackagePathReport {
 /// Returns repository traversal, canonicalization, or file-read failures.
 pub fn inspect_package_paths(root: &Path) -> anyhow::Result<PackagePathReport> {
     let package_names = real_package_names(root)?;
+    // Preserved specification paths resolve at the pinned revision. Local Markdown
+    // destinations remain subject to the independent Markdown-link check.
+    let oracle_paths = root
+        .join("SOURCE_SNAPSHOT")
+        .is_file()
+        .then(|| crate::source_oracle::SourceOracle::open(root)?.paths())
+        .transpose()?;
     let files = unique_repo_files(root, PACKAGE_PATH_PATTERNS, package_path_excluded)?;
     let mut violations = Vec::new();
     for file in &files {
@@ -45,6 +52,10 @@ pub fn inspect_package_paths(root: &Path) -> anyhow::Result<PackagePathReport> {
             &file.absolute,
             &package_names,
         )?);
+    }
+    if let Some(paths) = oracle_paths {
+        violations
+            .retain(|violation| !paths.contains(&violation.reference.replace("seekdeep-", "dsh-")));
     }
     Ok(PackagePathReport {
         checked: files.len(),

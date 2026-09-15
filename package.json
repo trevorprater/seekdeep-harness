@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "build": "npm run build:lib && npm run build:web",
-    "build:lib": "npm run build:lib:host && npm run build:lib:client",
+    "build:lib": "npm run build:lib:host && npm run build:lib:client && cargo xtask remote-declarations --check && cargo xtask remote-consumer",
     "build:lib:host": "cargo build --workspace --all-features && cargo xtask host-assets",
     "build:lib:client": "cargo xtask build-client",
     "build:web": "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build",
@@ -61,7 +61,7 @@
     "check:ci:windows-observational": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- ci-windows-observational",
     "check:node-compat": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- node-compat",
     "publint": "cargo run --quiet --package seekdeep-repository-tools --bin publint-all",
-    "doc-typecheck": "cargo run --quiet -p seekdeep-repository-tools --bin doc-typecheck --",
+    "doc-typecheck": "cargo xtask remote-declarations && cargo run --quiet -p seekdeep-repository-tools --bin doc-typecheck -- --use-build-output",
     "doc-typecheck:contracts-ready": "cargo run --quiet -p seekdeep-repository-tools --bin doc-typecheck -- --use-build-output",
     "verify-md-wrap": "cargo run --quiet --package seekdeep-repository-tools --bin verify-md-wrap",
     "verify-md-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-md-links",

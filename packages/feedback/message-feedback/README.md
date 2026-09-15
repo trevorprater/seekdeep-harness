@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Host-owned editable feedback for one finalized assistant message. The package registers `ctx.messageFeedback`, persists one lifecycle-bound sidecar row per Session in storage-domain, and publishes the Host `messageFeedback.list`, `messageFeedback.put`, and `messageFeedback.delete` unary Remote contract. It is separate from the immutable Session-level `feedback/record` event and performs no telemetry handoff. The [message-feedback sidecar Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-message-feedback-sidecar.md) owns the design boundary.
 
-Public request, value, version, and failure types are exported from the package root and `@seekdeep-ai/seekdeep-message-feedback/types`; [`src/types.ts`](src/types.ts) is their source.
+Public request, value, version, and failure types are exported from the package root and `@seekdeep-ai/seekdeep-message-feedback/types`; [`src/types.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/feedback/message-feedback/src/types.ts) is their source.
 
 ## Configuration
 

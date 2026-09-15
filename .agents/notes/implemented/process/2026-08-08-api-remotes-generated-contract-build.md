@@ -12,6 +12,8 @@ This ordering dependency must not change the repository's ordinary package rule.
 
 ## Decision
 
+The [Rust package declaration build](2026-09-15-rust-package-declarations-and-source-docs.md) owns compatibility publication in the port. The source project boundaries and generated-dependency ordering below remain oracle requirements.
+
 The root build completes Host tsc and Host tsdown first, with Host tsdown running Typert and generating the Remote Client contract. It then completes Client tsc, Client tsdown, and the Web build:
 
 ~~~text

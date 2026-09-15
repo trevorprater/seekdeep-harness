@@ -8,9 +8,9 @@ Status: implemented
 
 一个含有 HTTP header value 无法承载的字符的 API Key，曾被每个配置入口接受，直到构造请求时才失败——离引发它的那个字段已经很远。
 
-把含 emoji、中日韩文字或全角标点的 Key 粘进 Web 模型设置页，保存会报成功。首个轮次随即失败，报错为 `Cannot convert argument to a ByteString because the character at index 7 has a value of 55357 which is greater than 255`——其中的下标与码点是 UTF-16 内部细节，不附带任何可执行动作，却泄露了 Key 中某一个字符的码点。`llm-deepseek` 之所以产出这句，是因为 `fetch` 在 [adapter.ts](../../../../packages/llm/llm-deepseek/src/adapter.ts) 的 `try` 内部构造 `Bearer` header，而那个 `catch` 把一切失败都标为 `TRANSPORT`；该标签又在 `DEFAULT_RETRYABLE_CODES` 之中，于是一个永久且确定的故障还会被重试三次。
+把含 emoji、中日韩文字或全角标点的 Key 粘进 Web 模型设置页，保存会报成功。首个轮次随即失败，报错为 `Cannot convert argument to a ByteString because the character at index 7 has a value of 55357 which is greater than 255`——其中的下标与码点是 UTF-16 内部细节，不附带任何可执行动作，却泄露了 Key 中某一个字符的码点。`llm-deepseek` 之所以产出这句，是因为 `fetch` 在 [adapter.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-deepseek/src/adapter.ts) 的 `try` 内部构造 `Bearer` header，而那个 `catch` 把一切失败都标为 `TRANSPORT`；该标签又在 `DEFAULT_RETRYABLE_CODES` 之中，于是一个永久且确定的故障还会被重试三次。
 
-同样的输入在 `llm-pi-ai` 上更糟。它的探测路径在 [discovery.ts](../../../../packages/llm/llm-pi-ai/src/discovery.ts) 里用裸 `fetch` 构造同一个 header，并把一切失败包装成 `could not reach <url>`，于是一个本地的 Key 故障被报成网络不可达。这条探测在保存之前就够得着：`ProviderEditor` 把用户输入的 `keyDraft` 直接放进探测请求，所以「获取模型列表」按钮会在任何东西落盘之前就把非法 Key 发出去。
+同样的输入在 `llm-pi-ai` 上更糟。它的探测路径在 [discovery.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-pi-ai/src/discovery.ts) 里用裸 `fetch` 构造同一个 header，并把一切失败包装成 `could not reach <url>`，于是一个本地的 Key 故障被报成网络不可达。这条探测在保存之前就够得着：`ProviderEditor` 把用户输入的 `keyDraft` 直接放进探测请求，所以「获取模型列表」按钮会在任何东西落盘之前就把非法 Key 发出去。
 
 空白字符能通过每一道检查。`ProviderEditor` 判的是 `keyDraft.length`，于是三个空格构成的 Key 会被存下，随后以 `Bearer` 加若干空格去认证。两个适配器都不检查来自凭据或环境的 Key——而那正是 Models 页写入的路径，也就是用户真正走的路径。
 
@@ -32,7 +32,7 @@ Status: implemented
 
 规则作用于*已提供*的值；至于究竟有没有提供，由各个调用方自行判断。
 
-**未点名凭据。** 省略 `apiKeyEnv` 的 pi-ai profile 可以在 harness 持有的凭据路径之外鉴权。[provider.ts](../../../../packages/llm/llm-pi-ai/src/provider.ts) 中的 `routeAuth` 保留内置 catalog 提供方自身的鉴权，正是为了让提供方原生的 ambient 发现继续工作；而该 catalog 附带的 `openai-codex` 通过 OAuth 鉴权。`namesCredential` 承载这一区分；省略不是需要校验的值。
+**未点名凭据。** 省略 `apiKeyEnv` 的 pi-ai profile 可以在 harness 持有的凭据路径之外鉴权。[provider.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm-pi-ai/src/provider.ts) 中的 `routeAuth` 保留内置 catalog 提供方自身的鉴权，正是为了让提供方原生的 ambient 发现继续工作；而该 catalog 附带的 `openai-codex` 通过 OAuth 鉴权。`namesCredential` 承载这一区分；省略不是需要校验的值。
 
 **Web UI 中留空的输入框。** 即便某个提供方的 Key 已经存好，该输入框也是空着打开的——`keyStored` 的文案写的是「已配置——输入新值以替换」——所以留空意味着*保持已存储的值*。`ProviderEditor` 在草稿为空时完全跳过 `credentials.set`，这一点保持不变：留空绝不拦截提交，否则改一个 base URL 都得重新输一遍 Key。
 
@@ -42,7 +42,7 @@ Status: implemented
 
 ### 规则住在哪里
 
-`normalizeApiKey` 是 `seekdeep-llm` Service Definition 的一个模块，与已经承担共享 header 事务的 [attribution.ts](../../../../packages/llm/llm/src/attribution.ts) 并列。两个适配器都依赖该 seam 且都需要这条规则，因此它拥有两个当前消费方而非一个预设消费方。它返回 trim 后的值，或一个原因（`empty`、`illegalCharacters`）。
+`normalizeApiKey` 是 `seekdeep-llm` Service Definition 的一个模块，与已经承担共享 header 事务的 [attribution.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/llm/llm/src/attribution.ts) 并列。两个适配器都依赖该 seam 且都需要这条规则，因此它拥有两个当前消费方而非一个预设消费方。它返回 trim 后的值，或一个原因（`empty`、`illegalCharacters`）。
 
 两个适配器同样都需要那句完全相同的「拒绝一个已存储凭据」的诊断，差别仅在包名前缀。`LlmError` 声明在 Service Definition 的 `index.ts` 中，因此 `assertUsableApiKey(raw, pkg, ref)` 就住在它旁边，两个适配器都不再各留一份。断言模块本身保持零依赖：把 `LlmError` 引入 `api-key.ts` 会与 `index.ts` 对它的再导出成环。
 

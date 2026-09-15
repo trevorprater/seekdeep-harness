@@ -35,7 +35,7 @@ The Rust `seekdeep-client-runtime` registries own this lifecycle directly: uniqu
 
 ### Overall `ConversationNodeDefinition` contract
 
-Each [`ConversationNodeDefinition`](../../../../packages/client/runtime/src/client/contract/conversation.ts) independently owns one business object's conversion from Events to State and final view Nodes. A Definition's `kind` is its unique Registry name and the namespace for its business IDs.
+Each [`ConversationNodeDefinition`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/runtime/src/client/contract/conversation.ts) independently owns one business object's conversion from Events to State and final view Nodes. A Definition's `kind` is its unique Registry name and the namespace for its business IDs.
 
 One Event may be claimed by several ordinary Definitions. For example, an Assistant Event updates both the Assistant Node and Turn Tail, while a Retry Event updates Retry, Assistant, and Turn Error. The Assembler asks the fallback only when every ordinary Definition returns `null`.
 
@@ -162,7 +162,7 @@ IDs are never reused. Completed Contexts remain in the current window, providing
 
 ### Location is a first-class engine fact
 
-[`ConversationLocationIndex`](../../../../packages/client/runtime/src/client/sessions/conversation-location-index.ts) maps Events to Locations from `turn/start`, `step/start`, explicit turn and step payloads, `step/end`, and `turn/end`.
+[`ConversationLocationIndex`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/runtime/src/client/sessions/conversation-location-index.ts) maps Events to Locations from `turn/start`, `step/start`, explicit turn and step payloads, `step/end`, and `turn/end`.
 
 Location has four shapes: `session`, `turn`, `step`, and `unresolved`. Turns and Steps each carry `open`, `closed`, or `unknown` status plus any loaded start and end Events.
 
@@ -308,19 +308,19 @@ Unknown fallback demonstrates Registry ownership: it handles only append-surface
 
 ## View Builder and React identity
 
-[`ConversationViewRegistry`](../../../../packages/client/runtime/src/client/conversation/view-registry.ts) creates an independent per-Session builder for each target. The Registry stores factories and shares no Session's ordering or caches.
+[`ConversationViewRegistry`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/runtime/src/client/conversation/view-registry.ts) creates an independent per-Session builder for each target. The Registry stores factories and shares no Session's ordering or caches.
 
 The Assembler calls `replace({ nodes, timeline })` on low-frequency complete replacements and `apply({ upserts, timeline })` for ordinary prepend/append flushes. Builders receive only final target Nodes already constructed by Definitions.
 
-[`ChatSnapshotBuilder`](../../../../packages/client/ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts) maintains `order`, a keyed `nodes` store, the turn/step `locations` index, `timeline`, and the `legacy` slice used by StatsLine and mirrored into top-level public compatibility fields.
+[`ChatSnapshotBuilder`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts) maintains `order`, a keyed `nodes` store, the turn/step `locations` index, `timeline`, and the `legacy` slice used by StatsLine and mirrored into top-level public compatibility fields.
 
 Only a new key or a change to `anchorSeq`, visibility, or Location identity makes a Chat update structural. An ordinary content change does not rebuild `order`; the keyed Node store replaces only that key's value.
 
 For a structural change, the Builder computes visible order from current store values and reuses unchanged index arrays by reference. Prepend may add earlier history keys, append may add a key at the tail or its business anchor, and ordering never renames existing keys.
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) only traverses `order`. Each [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) remains in the same parent list under its Context key and dispatches the `'conversation.chat.node'` keyed slot by `node.kind`. The compiled Rust/WASM seat in [`browser_chat_seat.rs`](../../../../crates/client-ui-conversation/src/browser_chat_seat.rs) owns the one-node selector, dependency-keyed owner memo, routed-owner copy, hook context, anchor metadata, keyed slot call, and localized JsonBlock fallback; broader ChatView traversal and renderer registration remain separate pending surfaces.
+[`ChatView`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/client/chat/ChatView.tsx) only traverses `order`. Each [`ChatNodeSeat`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) remains in the same parent list under its Context key and dispatches the `'conversation.chat.node'` keyed slot by `node.kind`. The compiled Rust/WASM seat in [`browser_chat_seat.rs`](../../../../crates/client-ui-conversation/src/browser_chat_seat.rs) owns the one-node selector, dependency-keyed owner memo, routed-owner copy, hook context, anchor metadata, keyed slot call, and localized JsonBlock fallback; broader ChatView traversal and renderer registration remain separate pending surfaces.
 
-[`ChatNodeDataMap`](../../../../packages/client/ui-conversation/src/client/contract/chat-nodes.ts) is a declaration-merged renderer payload registry. Each business module registers its own Definition and keyed renderer; `registerConversationNodes()` and `registerChatNodeRenderers()` only assemble those independent contributions and do not interpret business through a closed union or central switch. Built-ins still live in `ui-conversation`, but this type and registration boundary allows a business to move into an independent package without changing the Chat dispatcher.
+[`ChatNodeDataMap`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/ui-conversation/src/client/contract/chat-nodes.ts) is a declaration-merged renderer payload registry. Each business module registers its own Definition and keyed renderer; `registerConversationNodes()` and `registerChatNodeRenderers()` only assemble those independent contributions and do not interpret business through a closed union or central switch. Built-ins still live in `ui-conversation`, but this type and registration boundary allows a business to move into an independent package without changing the Chat dispatcher.
 
 The Chat entry in `conversation.view` registers `ChatNodeTurnDataInjected` once when it declares the `conversation.chat.node` child slot. `ChatNodeSeat` passes only the stable Node key as `hookContext`; the Slot renderer combines that key with `useSession` from the official standard props to construct `useTurnData(businessKey)`. Every keyed Chat renderer therefore reads strongly typed, read-only data from its own Node's Turn, and the Assistant renderer has no special injection authority.
 

@@ -12,6 +12,8 @@ Host 的 `@Remote` 方法需要先由 Typert 生成 `/remote` 声明和运行时
 
 ## 决策
 
+[Rust 包声明构建](2026-09-15-rust-package-declarations-and-source-docs.md) 负责移植仓库中的兼容发布。下述源码项目边界与生成依赖顺序仍是 oracle 要求。
+
 根构建先完成 Host tsc 和 Host tsdown，由 Host tsdown 运行 Typert 并生成 Remote Client 约定；随后完成 Client tsc、Client tsdown 和 Web 构建：
 
 ~~~text

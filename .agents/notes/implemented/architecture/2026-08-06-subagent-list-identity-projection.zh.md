@@ -32,7 +32,7 @@ mode 与 label 由新的 `subagent` projection unit（纯身份两臂）折叠�
 
 ### `subagent` projection unit
 
-挂在现有 `subagentTiming` 旁（[projection.ts](../../../../packages/subagent/subagent/src/projection.ts)、[projection-types.ts](../../../../packages/subagent/subagent/src/projection-types.ts)），key 为 `subagent`：
+挂在现有 `subagentTiming` 旁（[projection.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/projection.ts)、[projection-types.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/projection-types.ts)），key 为 `subagent`：
 
 ```ts ignore-check
 export type SubagentIdentityProjection =
@@ -53,7 +53,7 @@ declare module '@seekdeep-ai/seekdeep-session-projection/types' {
 
 ### 枚举：subagent 自管 live-preferred 合并
 
-`listChildren`（[list-children.ts](../../../../packages/subagent/subagent/src/list-children.ts)）的枚举不经任何查询服务：`ctx.sessions.list()` 与 `ctx.get('sessionPersistence')?.list()` 两个来源按 id 合并，live 记录整条覆盖同 id 持久化记录、不做 header 一致性校验。枚举所需全部是 header 事实：
+`listChildren`（[list-children.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/subagent/subagent/src/list-children.ts)）的枚举不经任何查询服务：`ctx.sessions.list()` 与 `ctx.get('sessionPersistence')?.list()` 两个来源按 id 合并，live 记录整条覆盖同 id 持久化记录、不做 header 一致性校验。枚举所需全部是 header 事实：
 
 - 过滤：`header.origin === 'subagent' && header.parentSession === parentSessionId`。
 - `hasChildren`：同一份合并材料向下看一层——存在 `origin === 'subagent'` 且 `parentSession` 为该 child 的直接后代。
@@ -155,7 +155,7 @@ export type SubagentListEntry =
 
 **彻底删除 diagnostic 行。** 删除把库损坏的可见性外溢为行静默消失，wire/tool/GUI 反要各自承担约定与快照变更；而保留只需列表侧按投影值缺席与 activity 派生分类，零成本。库里的坏、死子会话必须可见是 diagnostic 存在的原始动机，保留后消费面整体零改动。
 
-**registry 计算失败通道（per-unit 容错加 `failures` 附加字段）。** 为把损坏、版本不认识报告给消费方，由 registry 捕获 unit 异常并在 snapshot 旁附 per-key 失败态。被否：failure 不是值，也不必是通道——unit 永不抛错，缺席本身就是信号，「大不了算出来没有」，如何呈现是消费方要考虑的事。一个独立观察：vendor cordis 的 `emit`（[vendor/cordis/src/events.ts](../../../../vendor/cordis/src/events.ts)）对 listener 抛错零捕获，投影驱动挂在 `session/event` 上时 unit 异常会沿 emit 逃逸——这加重了「unit 永不抛错」纪律的分量，但 emit 容错的修复不属于本记录范围。
+**registry 计算失败通道（per-unit 容错加 `failures` 附加字段）。** 为把损坏、版本不认识报告给消费方，由 registry 捕获 unit 异常并在 snapshot 旁附 per-key 失败态。被否：failure 不是值，也不必是通道——unit 永不抛错，缺席本身就是信号，「大不了算出来没有」，如何呈现是消费方要考虑的事。一个独立观察：vendor cordis 的 `emit`（[vendor/cordis/src/events.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/vendor/cordis/src/events.ts)）对 listener 抛错零捕获，投影驱动挂在 `session/event` 上时 unit 异常会沿 emit 逃逸——这加重了「unit 永不抛错」纪律的分量，但 emit 容错的修复不属于本记录范围。
 
 **值随 query 索引 preparation 落库。** 投影值在 sqlite backend 的对账重建里折叠落进 session 索引行，读稳态零日志：`projectionsFor` 批量读面、行值随 `(key → stateVersion)` 注册集存储的失效对账与 SCHEMA bump。整体退役：方向反了——查询基础设施被迫认识领域词汇（投影列、注册集对账），而唯一消费方 subagent 列表读时现算即可满足；消费方归零后，这套派生持久化没有存在理由。`SESSION_QUERY_PROJECTIONS_UNAVAILABLE` 随读面一并删除。
 

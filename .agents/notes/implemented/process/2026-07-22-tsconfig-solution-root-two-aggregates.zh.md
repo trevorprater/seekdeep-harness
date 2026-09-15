@@ -15,6 +15,8 @@ GUI 拆分引入了第二个聚合 program（`tsconfig.client.json`，见[分层
 
 ## 决策
 
+[Rust 包声明构建](2026-09-15-rust-package-declarations-and-source-docs.md) 在捕获兼容类型时保留这些独立的源码 Program。本记录继续负责源码项目边界。
+
 一个 solution 根文件，两个检查单元，一对共享 base，不再单设 build 或 vitest 配置：
 
 | 文件 | 角色 | 是否构成 program？ |

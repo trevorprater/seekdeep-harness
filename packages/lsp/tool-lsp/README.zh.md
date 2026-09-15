@@ -46,7 +46,7 @@ Use search/read for ordinary navigation. Use lsp when textual matches are ambigu
 
 #### 模型看到的内容
 
-模型会看到生成的 [`lsp` schema](../../../docs/tool-catalog.md#deepseek-aiseekdeep-tool-lsp)。
+模型会看到生成的 [`lsp` schema](../../../docs/tool-catalog.md#seekdeep-aiseekdeep-tool-lsp)。
 
 #### Token 影响
 

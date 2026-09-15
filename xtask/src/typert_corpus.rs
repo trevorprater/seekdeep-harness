@@ -439,7 +439,11 @@ fn materialize_node_modules(
     for entry in std::fs::read_dir(source.join("node_modules"))? {
         let entry = entry?;
         if entry.file_name() != ".pnpm" {
-            std::os::unix::fs::symlink(entry.path(), root_modules.join(entry.file_name()))?;
+            create_link(
+                &entry.path(),
+                &root_modules.join(entry.file_name()),
+                entry.path().is_dir(),
+            )?;
         }
     }
     for entry in std::fs::read_dir(source.join("node_modules/.pnpm"))? {
@@ -448,7 +452,7 @@ fn materialize_node_modules(
         if entry.file_name() == store_entry.as_os_str() {
             copy_directory(&entry.path(), &target)?;
         } else {
-            std::os::unix::fs::symlink(entry.path(), target)?;
+            create_link(&entry.path(), &target, entry.path().is_dir())?;
         }
     }
     let generator_modules = generator.join("node_modules");
@@ -457,9 +461,13 @@ fn materialize_node_modules(
         let entry = entry?;
         let target = generator_modules.join(entry.file_name());
         if entry.file_name() == "zod" {
-            std::os::unix::fs::symlink(std::fs::read_link(&zod_link)?, target)?;
+            create_link(
+                &root_modules.join(".pnpm").join(zod_relative),
+                &target,
+                true,
+            )?;
         } else {
-            std::os::unix::fs::symlink(entry.path(), target)?;
+            create_link(&entry.path(), &target, entry.path().is_dir())?;
         }
     }
     Ok(())
@@ -472,7 +480,11 @@ fn copy_directory(from: &Path, to: &Path) -> anyhow::Result<()> {
         let target: PathBuf = to.join(entry.file_name());
         let file_type = entry.file_type()?;
         if file_type.is_symlink() {
-            std::os::unix::fs::symlink(std::fs::read_link(entry.path())?, &target)?;
+            create_link(
+                &std::fs::read_link(entry.path())?,
+                &target,
+                entry.path().is_dir(),
+            )?;
         } else if file_type.is_dir() {
             copy_directory(&entry.path(), &target)?;
         } else {
@@ -480,4 +492,76 @@ fn copy_directory(from: &Path, to: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn create_link(from: &Path, to: &Path, _directory: bool) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(from, to)
+}
+
+#[cfg(windows)]
+fn create_link(from: &Path, to: &Path, directory: bool) -> std::io::Result<()> {
+    if directory {
+        std::os::windows::fs::symlink_dir(from, to)
+    } else {
+        std::os::windows::fs::symlink_file(from, to)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn corpus_owns_zod_after_an_absolute_source_link_and_keeps_other_dependency_kinds() {
+        let temporary = tempfile::tempdir().unwrap();
+        let source = temporary.path().join("source");
+        let corpus = temporary.path().join("corpus");
+        let generator_relative = "packages/typert/generator";
+        let source_generator = source.join(generator_relative);
+        let generator = corpus.join(generator_relative);
+        let zod_relative = "zod@4.4.3/node_modules/zod";
+        let source_zod = source.join("node_modules/.pnpm").join(zod_relative);
+        std::fs::create_dir_all(&source_zod).unwrap();
+        std::fs::write(
+            source_zod.join("index.d.ts"),
+            "export type Value = string;\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(source_generator.join("node_modules")).unwrap();
+        create_link(
+            &source_zod,
+            &source_generator.join("node_modules/zod"),
+            true,
+        )
+        .unwrap();
+        let file_dependency = source.join("node_modules/metadata.json");
+        std::fs::write(&file_dependency, "{}\n").unwrap();
+        let directory_dependency = source.join("node_modules/other");
+        std::fs::create_dir_all(&directory_dependency).unwrap();
+        std::fs::write(directory_dependency.join("index.d.ts"), "export {};\n").unwrap();
+
+        materialize_node_modules(&source, &source_generator, &corpus, &generator).unwrap();
+
+        let copied_zod = corpus.join("node_modules/.pnpm").join(zod_relative);
+        assert_eq!(
+            generator.join("node_modules/zod").canonicalize().unwrap(),
+            copied_zod.canonicalize().unwrap()
+        );
+        assert_eq!(
+            std::fs::read(copied_zod.join("index.d.ts")).unwrap(),
+            std::fs::read(source_zod.join("index.d.ts")).unwrap()
+        );
+        assert_eq!(
+            corpus
+                .join("node_modules/metadata.json")
+                .canonicalize()
+                .unwrap(),
+            file_dependency.canonicalize().unwrap()
+        );
+        assert_eq!(
+            corpus.join("node_modules/other").canonicalize().unwrap(),
+            directory_dependency.canonicalize().unwrap()
+        );
+    }
 }

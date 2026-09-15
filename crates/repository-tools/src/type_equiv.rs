@@ -15,6 +15,7 @@ use crate::{
     doc_typecheck::{MARKDOWN_GLOBS, markdown_files},
     markdown_util::markdown_fences,
     paired_markdown_derivatives::partition_paired_markdown_derivatives,
+    source_oracle::SourceOracle,
     ts_project::{RepositoryCompiler, RepositoryDeclaration},
 };
 
@@ -311,6 +312,7 @@ fn verify_sources(
     report: &mut TypeEquivReport,
 ) -> anyhow::Result<()> {
     let mut sources = HashMap::<String, Vec<RepositoryDeclaration>>::new();
+    let mut oracle = None;
     for entry in entries {
         let Some(block) = blocks.get(&key(&entry.doc, &entry.symbol, entry.projection.as_deref()))
         else {
@@ -320,7 +322,24 @@ fn verify_sources(
             std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
             std::collections::hash_map::Entry::Vacant(vacant) => {
                 let path = root.join(&entry.source);
-                let code = std::fs::read_to_string(&path)?;
+                let code = match std::fs::read_to_string(&path) {
+                    Ok(code) => code,
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::NotFound
+                            && root.join("SOURCE_SNAPSHOT").is_file() =>
+                    {
+                        if oracle.is_none() {
+                            oracle = Some(SourceOracle::open(root)?);
+                        }
+                        let source = entry.source.replace("seekdeep-", "dsh-");
+                        let code = oracle
+                            .as_ref()
+                            .expect("oracle initialized before reading")
+                            .read(&source)?;
+                        target_identity(&code)
+                    }
+                    Err(error) => return Err(error.into()),
+                };
                 vacant.insert(compiler.declarations(&path.to_string_lossy(), &code)?)
             }
         };
@@ -353,6 +372,22 @@ fn verify_sources(
         report.verified += 1;
     }
     Ok(())
+}
+
+fn target_identity(code: &str) -> String {
+    static CLI: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\bdsh\b").expect("static CLI identity regex"));
+    let code = code
+        .replace("DeepSeek Harness", "SeekDeep Harness")
+        .replace("deepseek-harness", "seekdeep-harness")
+        .replace("@deepseek-ai/dsh", "@seekdeep-ai/seekdeep")
+        .replace("@deepseek-ai/", "@seekdeep-ai/")
+        .replace("DSH_", "SEEKDEEP_")
+        .replace("DshEnvironment", "SeekdeepEnvironment")
+        .replace("dshEnv", "seekdeepEnv")
+        .replace("__dsh_main__", "__seekdeep_main__")
+        .replace("dsh-", "seekdeep-");
+    CLI.replace_all(&code, "seekdeep").into_owned()
 }
 
 fn projection_name(projection: Option<&str>) -> &str {

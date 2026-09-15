@@ -31,7 +31,7 @@
 
 该包没有提供方协调器、回退实现或独立具体插件。具体服务后端继承已实现的读取、过滤和跟踪，同时负责全文观察、对账、排名、游标世代和查询执行；第一个实现是 [`@seekdeep-ai/seekdeep-session-query-sqlite`](../session-query-sqlite/README.md)。
 
-`SessionQueryError.code` 是一个封闭联合，覆盖请求验证、缺失目标、格式错误的表层、来源冲突、持久化/索引失败、取消，以及无效或陈旧游标；精确字面值在 [`src/config.ts`](src/config.ts) 中定义。
+`SessionQueryError.code` 是一个封闭联合，覆盖请求验证、缺失目标、格式错误的表层、来源冲突、持久化/索引失败、取消，以及无效或陈旧游标；精确字面值在 [`src/config.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/session-query/session-query/src/config.ts) 中定义。
 
 `listEvents()`、`readSurface()` 和 `traceEvent()` 执行同一个单遍 `seekdeep-session` 表层 fold。只有当事件 seq 从零开始且连续、表层标记符合事件类型的适用性要求、源事件数组非空且无重复、引用指向较早事件，且每个位置替换都命名并引用它移除的每个表层节点时，加载的日志才有效；任何违规都以 `SESSION_QUERY_INVALID_SURFACE` 失败。
 

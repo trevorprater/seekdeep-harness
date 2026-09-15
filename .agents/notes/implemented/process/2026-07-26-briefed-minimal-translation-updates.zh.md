@@ -12,7 +12,7 @@ Status: implemented
 
 扩展的手动工作流使用生成的简报（briefing）而非指导语料来更新配对；该工作流中的新配对仍采用保持不变的整篇文档路径。常规 agent 工作采用由[轻量翻译决策](2026-08-08-lightweight-routine-documentation-translation.md)定义的直接路径。
 
-- **`pnpm run gen-translation-brief [--apply] [pair...]`**（[scripts/gen-translation-brief.ts](../../../../crates/repository-tools/src/bin/gen-translation-brief.rs)，组装逻辑在 [scripts/translation-brief.ts](../../../../scripts/translation-brief.ts)）针对每个失去同步的配对，打印被改一侧从其记录在案的上次确认 blob 到当前工作区的 diff，并附上以能安全对齐的最窄粒度映射的这次改动，映射失败时粒度确定性地逐级放宽：仅落在配对中逐字节一致的围栏代码块内的改动会直接算出（`--apply` 会把它拼接进对侧文件，并在写入前用配对门禁的结构签名校验所得结果）；否则，每个有改动的 Markdown 单元（标题、段落、表格行、列表项、围栏代码块、块引用、HTML 块、分隔线、链接定义；匹配依据是以容器为作用域的种类序列）都带上各自的上次确认源文、当前源文与当前对侧文本及行号；无法对齐的单元回退到按深度匹配的标题章节；当章节也无法对齐或两侧同时漂移时，简报会明说这一点并省略映射，而不是靠猜。术语表行只与改动块匹配（英文术语按词边界匹配，含复数变形）；当目标侧是中文时，简报还会跟踪每个相关术语在整篇文档中的首次出现：一旦某次编辑使其移位，腾出的与接收的两处区间就会附一条解释性说明加入简报，因为「首次出现」括注必须随之移动。单元映射、代码拼接与首次出现机制采纳了增量提示词流水线工作的规划器设计；该项工作中接入提供方的对比评测，已为自动流水线独立验证了同一套范围阶梯。简报就是译者的全部工作集；简报回答不了的决策，仍以完整的真源文档作为升级求证路径。
+- **`pnpm run gen-translation-brief [--apply] [pair...]`**（[scripts/gen-translation-brief.ts](../../../../crates/repository-tools/src/bin/gen-translation-brief.rs)，组装逻辑在 [scripts/translation-brief.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/translation-brief.ts)）针对每个失去同步的配对，打印被改一侧从其记录在案的上次确认 blob 到当前工作区的 diff，并附上以能安全对齐的最窄粒度映射的这次改动，映射失败时粒度确定性地逐级放宽：仅落在配对中逐字节一致的围栏代码块内的改动会直接算出（`--apply` 会把它拼接进对侧文件，并在写入前用配对门禁的结构签名校验所得结果）；否则，每个有改动的 Markdown 单元（标题、段落、表格行、列表项、围栏代码块、块引用、HTML 块、分隔线、链接定义；匹配依据是以容器为作用域的种类序列）都带上各自的上次确认源文、当前源文与当前对侧文本及行号；无法对齐的单元回退到按深度匹配的标题章节；当章节也无法对齐或两侧同时漂移时，简报会明说这一点并省略映射，而不是靠猜。术语表行只与改动块匹配（英文术语按词边界匹配，含复数变形）；当目标侧是中文时，简报还会跟踪每个相关术语在整篇文档中的首次出现：一旦某次编辑使其移位，腾出的与接收的两处区间就会附一条解释性说明加入简报，因为「首次出现」括注必须随之移动。单元映射、代码拼接与首次出现机制采纳了增量提示词流水线工作的规划器设计；该项工作中接入提供方的对比评测，已为自动流水线独立验证了同一套范围阶梯。简报就是译者的全部工作集；简报回答不了的决策，仍以完整的真源文档作为升级求证路径。
 - **显式调用时，[seekdeep-translate-docs](../../../skills/seekdeep-translate-docs/SKILL.md) 中的更新路径**消费这份简报：机械类改动（只涉及围栏代码块）用 `--apply` 应用，不动用 subagent；行文类 diff 交给 subagent，其提示词就是简报本身，而非指导语料；核验只对改动块逐句进行，不覆盖整篇文档。
 - **配对门禁接受配对参数。**`verify-translation-pairing [pair...]` 只检查被点名的配对（配对三个文件中的任意一个，或其裸词干，都能指代该配对）；全语料扫描仍是 `doc-sync`（文档同步门禁）与 CI 运行的无参数形式。`--write` 现在要求点名已确认的配对：裸 `--write` 会拒绝执行，重新记录全部配对必须显式写 `--write --all`；原因是旧的裸形式会默默为树中每一个漂移的配对背书，包括调用者从未看过的那些，纯行文层面的漂移于是可以永远保持绿灯。每份记录的注释都写明针对该配对自身的按对命令。写下记录之前，`--write` 用 `git hash-object -w --stdin` 存入每一侧的精确字节，并在内容寻址的本地 `refs/seekdeep/translation-pairing/snapshots/` ref 下固定该 blob；未提交的上次确认快照因此能被简报生成器之后的 `git cat-file` 取回，而不只是留下一个 Git 无法解析的 hash 名称或暴露于垃圾回收。
 
@@ -34,7 +34,7 @@ Status: implemented
 - **把整篇重译作为更新路径**（朴素流水线的做法）：依据基准测试证据否决，理由是保留度崩塌、术语漂移、成本最高。约定的最小更新规则得以延续，且从此有数据支撑。
 - **每个 subagent 批量处理多对文档**：否决。没有实测出节省（简报本身已对固定内容做了去重），而且一对文档停滞或陷入混乱会把其余配对一并拖住。
 - **在伴随记录中保存逐段的翻译记忆条目**（用分段 hash 取代整文件 hash）：否决。配对两侧的段落边界可以合理地不同，任一侧都可能先撰写，这类条目还会不断膨胀并在合并时产生冲突。基于现有整文件 hash 按需计算的区间映射，在对齐可信时能恢复同样的对齐关系，不可信时会明确说明。
-- **给自动提示词流水线加一个更新模式（prompt-v5）**：推迟，本文不做设计。今天没有任何调用方在驱动 [scripts/translation-prompt.ts](../../../../scripts/translation-prompt.ts)，实际的成本中心是 agent 路径。流水线在拥有消费方之前，维持其整篇文档的 v4 约定。
+- **给自动提示词流水线加一个更新模式（prompt-v5）**：推迟，本文不做设计。今天没有任何调用方在驱动 [scripts/translation-prompt.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/translation-prompt.ts)，实际的成本中心是 agent 路径。流水线在拥有消费方之前，维持其整篇文档的 v4 约定。
 
 ## 后果
 
@@ -48,4 +48,4 @@ Status: implemented
 
 ## 测试
 
-[scripts/translation-brief.spec.ts](../../../../scripts/translation-brief.spec.ts) 固定单元与章节的区间提取（以容器为作用域的种类、只按深度对齐章节从而让已翻译的标题文字仍能映射、首个标题前的序言）、对齐与改动索引检测、机械代码拼接及其每一个拒绝条件、带词边界与复数变形约束的双向术语行匹配、首次出现移位跟踪、围栏升级，以及渲染后简报的约定（带三方上下文的单元条目、机械／章节／整篇文档三种范围、分方向的规则摘要、按对的收尾命令）。[scripts/translation-pairing.spec.ts](../../../../scripts/translation-pairing.spec.ts) 固定未提交快照的精确字节持久化与取回、在不可用对象进入伴随记录前失败、参数归一化（配对的任一文件或裸词干都归一到锚点），以及 CLI（命令行界面）用例矩阵：按对检查、裸 `--write` 拒绝执行、`--write <pair>`、`--write --all`、`--list` 的互斥性、未知标志。
+[scripts/translation-brief.spec.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/translation-brief.spec.ts) 固定单元与章节的区间提取（以容器为作用域的种类、只按深度对齐章节从而让已翻译的标题文字仍能映射、首个标题前的序言）、对齐与改动索引检测、机械代码拼接及其每一个拒绝条件、带词边界与复数变形约束的双向术语行匹配、首次出现移位跟踪、围栏升级，以及渲染后简报的约定（带三方上下文的单元条目、机械／章节／整篇文档三种范围、分方向的规则摘要、按对的收尾命令）。[scripts/translation-pairing.spec.ts](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/translation-pairing.spec.ts) 固定未提交快照的精确字节持久化与取回、在不可用对象进入伴随记录前失败、参数归一化（配对的任一文件或裸词干都归一到锚点），以及 CLI（命令行界面）用例矩阵：按对检查、裸 `--write` 拒绝执行、`--write <pair>`、`--write --all`、`--list` 的互斥性、未知标志。

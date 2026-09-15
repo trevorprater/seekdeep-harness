@@ -16,7 +16,7 @@ Both shipped minimal profiles expose exactly persistent `bash` and `str_replace_
 
 The standalone [`minimal.cordis.yml`](../../../../examples/jsonrpc-agent/minimal.cordis.yml) remains a complete JSON-RPC process composition. It mounts `seekdeep-sdk-jsonrpc-server`, the local PTY and subprocess services required by persistent Bash, `fs-local`, the two tool consumers, and uncompressed JSONL persistence. It does not mount `token-meter`, `compaction-basic`, `fs-sandbox`, or `fs-observation-policy`. Persistent Bash still consumes the deployment's danger-full-access sandbox policy; the editor is not confined by that policy.
 
-`SEEKDEEP_SYSTEM_PROMPT` selects the standalone persona. `SEEKDEEP_MODEL` names the DeepSeek provider catalog entry, and `SEEKDEEP_CONTEXT_WINDOW` supplies that entry's capacity. Because the SDK client owns the JSON-RPC `initialize` request, [`minimal.py`](../../../../examples/jsonrpc-agent/minimal.py) also uses `SEEKDEEP_MODEL` as its default `model` argument; an explicit `--model` remains authoritative. Endpoint and credential variables stay owned by the DeepSeek adapter's existing environment-resolution path.
+`SEEKDEEP_SYSTEM_PROMPT` selects the standalone persona. `SEEKDEEP_MODEL` names the DeepSeek provider catalog entry, and `SEEKDEEP_CONTEXT_WINDOW` supplies that entry's capacity. Because the SDK client owns the JSON-RPC `initialize` request, [`minimal.py`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/examples/jsonrpc-agent/minimal.py) also uses `SEEKDEEP_MODEL` as its default `model` argument; an explicit `--model` remains authoritative. Endpoint and credential variables stay owned by the DeepSeek adapter's existing environment-resolution path.
 
 ## Verification
 

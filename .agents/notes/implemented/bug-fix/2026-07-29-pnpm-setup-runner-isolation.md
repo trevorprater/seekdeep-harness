@@ -12,7 +12,7 @@ English | [中文](2026-07-29-pnpm-setup-runner-isolation.zh.md)
 
 Every `pnpm/action-setup` step in [the primary CI workflow](../../../../.github/workflows/ci.yml) sets `dest: ${{ runner.temp }}/setup-pnpm`. Each runner service owns its temporary directory, so one setup cannot replace another runner's install directory. Persistent store reuse remains separate through `PNPM_CONFIG_STORE_DIR`, as established by the [pnpm provisioning decision](../process/2026-07-26-pnpm-action-setup-for-symmetric-ci-caching.md).
 
-[The workflow regression test](../../../../scripts/ci-workflow.spec.ts) discovers every `pnpm/action-setup` step in `ci.yml` and rejects one without the runner-private destination. This keeps newly added jobs inside the same isolation boundary.
+[The workflow regression test](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/scripts/ci-workflow.spec.ts) discovers every `pnpm/action-setup` step in `ci.yml` and rejects one without the runner-private destination. This keeps newly added jobs inside the same isolation boundary.
 
 ## Alternatives considered
 

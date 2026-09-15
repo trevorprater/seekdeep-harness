@@ -38,7 +38,7 @@ Status: proposed
 
 `tool-cordis` 只依赖 Host Runner 的进程内服务，不导入 Client 实现。`ui-cordis` 只消费 Client Runner face 和 Client-safe wire 类型，不导入 Host 实现。Host 与 Client 的运行控制通过已有生成 Remote 面和转发事件连接，网关不拥有动态 Plugin 的领域逻辑。
 
-Rust 端以原生 Rust 实现 Host Runner 与生命周期权威。由 Rust 所有且与源码兼容的基础设施，按照 [`porting/DYNAMIC_PLUGIN_RELOAD.md`](../../../porting/DYNAMIC_PLUGIN_RELOAD.md) 所选策略对模型编写的 Host JavaScript 求值或进行转换；跨越该边界的类型化消息只携带无损 JSON 与生命周期命令。Host/Client wire 类型位于可面向目标平台构建的 `seekdeep-cordis-dynamic-types` crate，因此 Rust/WASM Client 不依赖 Host evaluator、Host Tool 或 Agent 运行时代码。浏览器 Runner 由 Rust 编译为 WebAssembly，控制 Client 求值，而不把注册、审批、代际所有权、teardown 或协议状态移入手写浏览器 JavaScript。自定义 Cordis 核心提供类型化 Service、精确代际 Fiber、可逆 effect ledger、确定性取消以及可注入的计时与调度策略。这些正确性机制可以强化原实现，但不得改变其可观察协议。
+Rust 端以原生 Rust 实现 Host Runner 与生命周期权威。由 Rust 所有且与源码兼容的基础设施，按照 [`porting/DYNAMIC_PLUGIN_RELOAD.md`](../../../../porting/DYNAMIC_PLUGIN_RELOAD.md) 所选策略对模型编写的 Host JavaScript 求值或进行转换；跨越该边界的类型化消息只携带无损 JSON 与生命周期命令。Host/Client wire 类型位于可面向目标平台构建的 `seekdeep-cordis-dynamic-types` crate，因此 Rust/WASM Client 不依赖 Host evaluator、Host Tool 或 Agent 运行时代码。浏览器 Runner 由 Rust 编译为 WebAssembly，控制 Client 求值，而不把注册、审批、代际所有权、teardown 或协议状态移入手写浏览器 JavaScript。自定义 Cordis 核心提供类型化 Service、精确代际 Fiber、可逆 effect ledger、确定性取消以及可注入的计时与调度策略。这些正确性机制可以强化原实现，但不得改变其可观察协议。
 
 自定义核心还负责与原实现兼容的插件运行时分组和单调 Fiber ID、可反射的 Service/accessor/mixin 注册、使用可注入时钟的 exporter 驱动日志，以及生成的 Host Catalog 与 Tool 定义。`tool-cordis` 直接消费这些能力，不在 Host Runner 内重复实现生命周期、反射、日志或模型可见 schema。
 

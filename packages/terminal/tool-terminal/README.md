@@ -41,7 +41,7 @@ Prefix-stable while the registration scope and guidance text are unchanged.
 
 #### What the model sees
 
-The six generated schemas are listed in the [`seekdeep-tool-terminal` catalog section](../../../docs/tool-catalog.md#deepseek-aiseekdeep-tool-terminal). Their fixed schema tokens are present whenever this plugin is active; agent-scoped tool filtering may hide them.
+The six generated schemas are listed in the [`seekdeep-tool-terminal` catalog section](../../../docs/tool-catalog.md#seekdeep-aiseekdeep-tool-terminal). Their fixed schema tokens are present whenever this plugin is active; agent-scoped tool filtering may hide them.
 
 #### Token effect
 

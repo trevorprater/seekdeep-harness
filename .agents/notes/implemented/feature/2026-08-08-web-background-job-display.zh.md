@@ -26,7 +26,7 @@ mux 流中的一帧：
 | { type: 'session/jobs'; sessionId: SessionId; jobs: JobView[] }
 ```
 
-`JobView` 是浏览器安全类型，由载体在 [`packages/host/apiproxy/src/api/jobs.ts`](../../../../packages/host/apiproxy/src/api/jobs.ts) 里拥有，与其他领域契约并列，线路 schema 就在旁边的 `jobs.schema.ts`：
+`JobView` 是浏览器安全类型，由载体在 [`packages/host/apiproxy/src/api/jobs.ts`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/apiproxy/src/api/jobs.ts) 里拥有，与其他领域契约并列，线路 schema 就在旁边的 `jobs.schema.ts`：
 
 ```ts
 import type { JobId } from '@seekdeep-ai/seekdeep-jobs/brand'
@@ -42,13 +42,13 @@ export interface JobView {
 }
 ```
 
-`JobId` 取自不依赖 cordis 的 [`@seekdeep-ai/seekdeep-jobs/brand`](../../../../packages/jobs/jobs/src/brand.ts) 叶子——与 `api/subagents.ts` 已经在用的 `@seekdeep-ai/seekdeep-llm/brand` 导入是同一种安排，因为 `seekdeep-jobs` 根出口会牵到 `seekdeep-agent`，即便只作类型也无法被客户端程序触及。和本仓库其他每一个非根子路径一样，它带有显式的 `tsconfig.base.json` `paths` 条目；没有这一条，Typert 分析器会把该 specifier 解析到 `lib/types/` 并判定该引用未被导出。
+`JobId` 取自不依赖 cordis 的 [`@seekdeep-ai/seekdeep-jobs/brand`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/jobs/src/brand.ts) 叶子——与 `api/subagents.ts` 已经在用的 `@seekdeep-ai/seekdeep-llm/brand` 导入是同一种安排，因为 `seekdeep-jobs` 根出口会牵到 `seekdeep-agent`，即便只作类型也无法被客户端程序触及。和本仓库其他每一个非根子路径一样，它带有显式的 `tsconfig.base.json` `paths` 条目；没有这一条，Typert 分析器会把该 specifier 解析到 `lib/types/` 并判定该引用未被导出。
 
 线路上的 `kind` 是 `string` 而非 `JobKind`。kind 映射由生产者插件按声明合并扩展，客户端构建无法枚举这个闭集；遇到无法识别的 kind，呈现层走一条有文档的默认分支。
 
 `JobSnapshot` 的三个字段被刻意省去：`ownerSession`（帧的 `sessionId` 已经带了）、`reported`（内部的通知投递位，对用户无意义），以及 `outputLimitBytes`（生产者拥有的模型呈现策略）。
 
-这一帧带整份快照而非增量，理由就是 [`session/queue`](../../../../packages/host/apiproxy/src/api/events.ts) 为自己写下的那条：启动、中断、结算、重连，以及第二个浏览器标签页，全都通过同一个权威值收敛。一个会话的任务集是个位数，帧很小。
+这一帧带整份快照而非增量，理由就是 [`session/queue`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/apiproxy/src/api/events.ts) 为自己写下的那条：启动、中断、结算、重连，以及第二个浏览器标签页，全都通过同一个权威值收敛。一个会话的任务集是个位数，帧很小。
 
 ### 任务注册表变更订阅
 
@@ -72,7 +72,7 @@ abstract onJobsChanged(listener: JobsChangedListener): () => void
 
 载体守着四条规则：
 
-- **绝不 resume。** 变更推送用监听器给出的确切 `Agent` 调 `jobs.list(owner)`，即使该 owner 的 scope 正在拆除、按 id 查找已经查不到，它依然正确。baseline 则读 `ctx.jobs.list(ctx.agents.get(session.id))`——不触发 resume 的注册表读法，没有活体 Agent 的会话正确地只得到无主任务。两条路径都不碰 [`api-remotes` 的 Agent 解析器](../../../../packages/api/remotes/src/agent-lookup.ts)，那个解析器会把查询变成复活冷会话的副作用；列个任务不该让用户随手划过的会话活过来。
+- **绝不 resume。** 变更推送用监听器给出的确切 `Agent` 调 `jobs.list(owner)`，即使该 owner 的 scope 正在拆除、按 id 查找已经查不到，它依然正确。baseline 则读 `ctx.jobs.list(ctx.agents.get(session.id))`——不触发 resume 的注册表读法，没有活体 Agent 的会话正确地只得到无主任务。两条路径都不碰 [`api-remotes` 的 Agent 解析器](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/api/remotes/src/agent-lookup.ts)，那个解析器会把查询变成复活冷会话的副作用；列个任务不该让用户随手划过的会话活过来。
 - **无主变更要扇出。** `owner` 为 `undefined` 时向每一个已订阅会话推一份新快照，因为无主任务对所有调用方可见。
 - **保持可选。** 载体读 `ctx.get('jobs')`。没有挂注册表的组合不发任何帧，客户端也就不渲染入口——`sessionProjections` 在这个文件里已经是这个姿态。
 - **没有就不说。** baseline 只为列表非空的会话推送，客户端上键缺失即表示空列表。把列表清空的那次变更仍然推 `[]`，因为这一个转换是客户端唯一无法从「缺失」推断出来的东西。
@@ -101,11 +101,11 @@ abstract onJobsChanged(listener: JobsChangedListener): () => void
 
 ## 备选方案
 
-**信号帧加 RPC 拉取，即 subagent 目录的形状。** 推一个无 payload 的 `jobs-changed` 信号，防抖后用一元 RPC 重读权威状态。subagent 目录就是这么做的，代价在 [`SessionManager`](../../../../packages/client/runtime/src/client/sessions/manager.ts) 里一览无余：`catalogInflight` 做单飞行、`catalogStale` 在成员帧落于请求中途时补一次尾拉、`updateCatalogActivity` 既就地打补丁又往在途请求里写一份好让比帧更旧的响应被覆盖、`parentAvailableOverride` 重放一个过期的 `false`，还有重连时逐一重拉每个打开的目录。这套装置之所以存在，是因为目录的权威被劈成两半——持久血缘来自投影，活跃度是响应时刻的采样——而任务没有持久的那一半，不该继承这份复杂度。它还恰好在输出那一期最在意的时刻失效：任务结算，输出流立即关闭，状态却要等防抖加一次往返才到，那段窗口里 UI 显示一个流已死的运行中任务。
+**信号帧加 RPC 拉取，即 subagent 目录的形状。** 推一个无 payload 的 `jobs-changed` 信号，防抖后用一元 RPC 重读权威状态。subagent 目录就是这么做的，代价在 [`SessionManager`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/client/runtime/src/client/sessions/manager.ts) 里一览无余：`catalogInflight` 做单飞行、`catalogStale` 在成员帧落于请求中途时补一次尾拉、`updateCatalogActivity` 既就地打补丁又往在途请求里写一份好让比帧更旧的响应被覆盖、`parentAvailableOverride` 重放一个过期的 `false`，还有重连时逐一重拉每个打开的目录。这套装置之所以存在，是因为目录的权威被劈成两半——持久血缘来自投影，活跃度是响应时刻的采样——而任务没有持久的那一半，不该继承这份复杂度。它还恰好在输出那一期最在意的时刻失效：任务结算，输出流立即关闭，状态却要等防抖加一次往返才到，那段窗口里 UI 显示一个流已死的运行中任务。
 
 **只在弹层打开时轮询，不改 seam。** 最省事，也是唯一不碰 `JobRegistry` 的选项。它无法在不常驻轮询的前提下支持触发器上的常驻计数，而后面两期反正都需要一条真正的变更订阅，所以它省下一周又还回去。
 
-**基于持久任务事件的 session-projection 单元。** 投影单元在已提交的会话事件上折叠，所以这条路要先让任务生命周期变持久——`job/started` … `job/settled` 作为一对独立的开合括号，由最后一个 [`session/end-seed`](../../../../packages/core/session/src/types.ts) 把未配对的开括号标为死历史，与 compaction 括号已有的做法完全一致。它在客户端确实更省：`seekdeep-tool-todo` 用十五行的单元展示了整套模式，而现成的 `session/projection` 帧、history-tail 块和持久化 checkpoint 缓存本可以承载这批数据，无需新线路面、无需载体订阅、无需 manager 状态。否决它，是因为这要拿一次持久格式变更去换一个浏览器列表，而且它并不能延伸到最需要它的那一期：[`spill/`](../../../../packages/spill/README.md) 的存在正是为了让超大工具输出留在日志之外，所以流式任务输出无论如何都不能骑在持久事件上。如果持久任务历史将来凭自身价值站得住，本设计不阻挡重新考虑它。
+**基于持久任务事件的 session-projection 单元。** 投影单元在已提交的会话事件上折叠，所以这条路要先让任务生命周期变持久——`job/started` … `job/settled` 作为一对独立的开合括号，由最后一个 [`session/end-seed`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/core/session/src/types.ts) 把未配对的开括号标为死历史，与 compaction 括号已有的做法完全一致。它在客户端确实更省：`seekdeep-tool-todo` 用十五行的单元展示了整套模式，而现成的 `session/projection` 帧、history-tail 块和持久化 checkpoint 缓存本可以承载这批数据，无需新线路面、无需载体订阅、无需 manager 状态。否决它，是因为这要拿一次持久格式变更去换一个浏览器列表，而且它并不能延伸到最需要它的那一期：[`spill/`](../../../../packages/spill/README.md) 的存在正是为了让超大工具输出留在日志之外，所以流式任务输出无论如何都不能骑在持久事件上。如果持久任务历史将来凭自身价值站得住，本设计不阻挡重新考虑它。
 
 **复用 `seekdeep-tool-jobs` 的 `PublicJobSnapshot`。** 字段几乎就是对的，但它属于面向模型的控制面。浏览器程序从一个 tool 包导入线路类型，会把客户端呈现耦合到面向 prompt 的决策上，并把一个 host-only 包拖进客户端构建。
 
@@ -115,9 +115,9 @@ abstract onJobsChanged(listener: JobsChangedListener): () => void
 
 ## 测试
 
-[web e2e 场景](../../../../apps/web/tests/background-job-list.e2e.ts)是端到端的证据，且无需密钥：一次真实的 `run_in_background` bash 调用注册进 `ctx.jobs`，header 的计数与行在没有任何用户操作的情况下出现，通过注册表杀掉该任务后打开着的列表翻到生产者给出的 detail。它断言的是整条投递链路，而不是其中某一层。
+[web e2e 场景](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/apps/web/tests/background-job-list.e2e.ts)是端到端的证据，且无需密钥：一次真实的 `run_in_background` bash 调用注册进 `ctx.jobs`，header 的计数与行在没有任何用户操作的情况下出现，通过注册表杀掉该任务后打开着的列表翻到生产者给出的 detail。它断言的是整条投递链路，而不是其中某一层。
 
-在它之下，[`jobs-local`](../../../../packages/jobs/jobs-local/tests/jobs.spec.ts) 钉住变更订阅的全部四个提交点、对抛错观察者的包容，以及显式销毁与 fiber 拆除两条路径上的注销；[`api-proxy-jobs`](../../../../packages/host/apiproxy/tests/api-proxy-jobs.spec.ts) 钉住「非空才发 baseline」、三次变更推送、被丢弃的内部字段、无主扇出、不 resume 的保证，以及没有注册表的组合；客户端各套件钉住 last-wins 折叠、缺失键表示、两处清理，以及组件的排序、时长与关闭行为。
+在它之下，[`jobs-local`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/jobs/jobs-local/tests/jobs.spec.ts) 钉住变更订阅的全部四个提交点、对抛错观察者的包容，以及显式销毁与 fiber 拆除两条路径上的注销；[`api-proxy-jobs`](https://github.com/fugue-labs/deepseek-harness/blob/37200a934324dd7167ec8a8d3ac1fd01e2239909/packages/host/apiproxy/tests/api-proxy-jobs.spec.ts) 钉住「非空才发 baseline」、三次变更推送、被丢弃的内部字段、无主扇出、不 resume 的保证，以及没有注册表的组合；客户端各套件钉住 last-wins 折叠、缺失键表示、两处清理，以及组件的排序、时长与关闭行为。
 
 ## 影响
 
