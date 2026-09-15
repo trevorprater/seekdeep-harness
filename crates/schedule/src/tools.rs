@@ -1,6 +1,4 @@
-//! Pure Schedule tool argument validation and stable error mapping.
-//!
-//! The tool registrations themselves are ported separately.
+//! Schedule tool registration, argument validation, and stable error mapping.
 
 use crate::runtime::ScheduleClock;
 use crate::{
@@ -293,6 +291,7 @@ fn present(title: &str, kind: ToolCallKind, raw_input: Option<&str>) -> ToolCall
 }
 
 /// Registers all three Schedule tools in one exact agent scope.
+/// The returned handle removes the group; a rejected registration rolls back prior effects.
 ///
 /// # Errors
 ///
@@ -317,9 +316,38 @@ pub fn register_schedule_tools(
     )?;
     let list = schedule_list_definition(root_ctx, agent.clone(), clock, on_durable_change.clone())?;
     let delete = schedule_delete_definition(root_ctx, agent, on_durable_change.clone())?;
-    let _ = tools.register(tool_ctx, create)?;
-    let _ = tools.register(tool_ctx, list)?;
-    tools.register(tool_ctx, delete)
+    let mut effects = Vec::with_capacity(3);
+    for definition in [create, list, delete] {
+        match tools.register(tool_ctx, definition) {
+            Ok(effect) => effects.push(effect),
+            Err(error) => {
+                return Err(match futures::executor::block_on(dispose_tools(effects)) {
+                    Ok(()) => error,
+                    Err(rollback) => {
+                        error.context(format!("Schedule tool rollback failed: {rollback:#}"))
+                    }
+                });
+            }
+        }
+    }
+    Ok(EffectHandle::new("schedule tools", move || {
+        Box::pin(dispose_tools(effects))
+    }))
+}
+
+async fn dispose_tools(effects: Vec<EffectHandle>) -> anyhow::Result<()> {
+    let mut failures = Vec::new();
+    for effect in effects.into_iter().rev() {
+        if let Err(error) = effect.dispose().await {
+            failures.push(format!("{error:#}"));
+        }
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "Schedule tool disposal failed: {}",
+        failures.join("; ")
+    );
+    Ok(())
 }
 
 fn view_schema() -> Value {

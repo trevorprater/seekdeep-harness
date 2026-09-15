@@ -12,11 +12,14 @@ use seekdeep_agent_loop::{
 use seekdeep_agent_loop_testkit::{
     AgentLoopTestDependenciesOptions, mount_agent_loop_test_dependencies,
 };
-use seekdeep_cordis::{Context, EventOptions, EventReply};
+use seekdeep_cordis::{Context, EventOptions, EventReply, Fiber};
 use seekdeep_core::session::SessionId;
 use seekdeep_llm::{AbortSignal, CallId};
-use seekdeep_schedule::{INJECT, PACKAGE_NAME, plugin};
-use seekdeep_tools::ToolExecutionInput;
+use seekdeep_schedule::{INJECT, PACKAGE_NAME, plugin, register_schedule_tools, system_clock};
+use seekdeep_tools::{
+    ToolExecutionInput,
+    testing::{ContentToolFixtureOptions, define_content_tool_fixture},
+};
 use serde_json::{Value, json};
 
 struct PluginHarness {
@@ -111,6 +114,107 @@ fn exports_loader_safe_function_plugin_shape() {
         INJECT,
         ["agents", "sessions", "tools", "sessionPersistence"]
     );
+}
+
+#[tokio::test]
+async fn public_registration_handle_releases_all_tools_and_allows_remount() {
+    let test = PluginHarness::new();
+    let agent = test.create("schedule-registration", None).await;
+    let owner = Fiber::active_child("schedule registration");
+    let context = agent.agent.context().with_fiber(owner.clone());
+    let register = || {
+        register_schedule_tools(
+            &test.context,
+            &context,
+            agent.agent.clone(),
+            system_clock(),
+            || {},
+        )
+    };
+    let names = ["schedule_create", "schedule_list", "schedule_delete"];
+    for _ in 0..2 {
+        let registration = register().unwrap();
+        for name in names {
+            assert!(
+                test.dependencies
+                    .tools
+                    .get(name, Some(agent.agent.scope_key()))
+                    .is_some(),
+                "missing {name}"
+            );
+        }
+        registration.dispose().await.unwrap();
+        for name in names {
+            assert!(
+                test.dependencies
+                    .tools
+                    .get(name, Some(agent.agent.scope_key()))
+                    .is_none(),
+                "registration handle retained {name}"
+            );
+        }
+    }
+    owner.dispose().await.unwrap();
+    test.dispose().await;
+}
+
+#[tokio::test]
+async fn public_registration_failure_rolls_back_its_prior_tools() {
+    let test = PluginHarness::new();
+    let agent = test.create("schedule-registration-rollback", None).await;
+    let owner = Fiber::active_child("schedule registration rollback");
+    let context = agent.agent.context().with_fiber(owner.clone());
+    let existing = test
+        .dependencies
+        .tools
+        .register(
+            &context,
+            define_content_tool_fixture(ContentToolFixtureOptions::<Value>::new(
+                "schedule_list",
+                "existing provider",
+                json!({}),
+                Arc::new(|_, _| Box::pin(async { Ok(Vec::new()) })),
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+    let prior = test
+        .dependencies
+        .tools
+        .get("schedule_list", Some(agent.agent.scope_key()))
+        .unwrap();
+    let register = || {
+        register_schedule_tools(
+            &test.context,
+            &context,
+            agent.agent.clone(),
+            system_clock(),
+            || {},
+        )
+    };
+    let error = register().unwrap_err();
+    assert!(error.to_string().contains("schedule_list"), "{error:#}");
+    for name in ["schedule_create", "schedule_delete"] {
+        assert!(
+            test.dependencies
+                .tools
+                .get(name, Some(agent.agent.scope_key()))
+                .is_none(),
+            "failed registration retained {name}"
+        );
+    }
+    assert!(Arc::ptr_eq(
+        &prior,
+        &test
+            .dependencies
+            .tools
+            .get("schedule_list", Some(agent.agent.scope_key()))
+            .unwrap()
+    ));
+    existing.dispose().await.unwrap();
+    register().unwrap().dispose().await.unwrap();
+    owner.dispose().await.unwrap();
+    test.dispose().await;
 }
 
 #[tokio::test]

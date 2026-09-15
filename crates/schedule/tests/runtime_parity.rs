@@ -669,6 +669,25 @@ async fn rejected_preflight_keeps_due_record_pending_and_dispose_stops_idle_wait
 }
 
 #[tokio::test(start_paused = true)]
+async fn disposal_joins_the_timer_before_releasing_the_runtime() {
+    let test = Harness::new();
+    test.append_after("schedule-timer", 3600, BASE, "future reminder");
+    let runtime = test.runtime();
+    let weak = Arc::downgrade(&runtime);
+    runtime.start();
+    settle().await;
+    runtime.dispose().await;
+    drop(runtime);
+    let retained = weak.upgrade().is_some();
+    settle().await;
+    test.dispose().await;
+    assert!(
+        !retained,
+        "disposal left an unjoined timer holding the runtime"
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn disposal_during_idle_admission_releases_the_unpolled_waiter() {
     let test = Harness::new();
     test.append_after("schedule-1", 1, BASE - 2_000, "busy at disposal");
@@ -849,7 +868,7 @@ async fn rejected_dispatch_barrier_waits_for_another_trigger_preflight() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn dispose_waits_for_inflight_preflight_and_stops_post_dispose_work() {
+async fn cancelled_dispose_still_joins_inflight_preflight_and_stops_later_work() {
     let test = Harness::new();
     test.append_after("schedule-1", 1, BASE - 2_000, "pending preflight");
     let entered = Arc::new(tokio::sync::Notify::new());
@@ -886,11 +905,21 @@ async fn dispose_waits_for_inflight_preflight_and_stops_post_dispose_work() {
     let disposal = tokio::spawn(async move { disposal_runtime.dispose().await });
     tokio::task::yield_now().await;
     assert!(!disposal.is_finished());
+    disposal.abort();
+    assert!(disposal.await.unwrap_err().is_cancelled());
+    let disposal_runtime = runtime.clone();
+    let disposal = tokio::spawn(async move { disposal_runtime.dispose().await });
+    tokio::task::yield_now().await;
+    let resumed_waits_for_preflight = !disposal.is_finished();
     release.notify_waiters();
     disposal.await.unwrap();
     assert!(test.controls.followed.lock().is_empty());
     drop(entered);
     test.dispose().await;
+    assert!(
+        resumed_waits_for_preflight,
+        "cancellation detached the preflight"
+    );
 }
 
 #[tokio::test(start_paused = true)]

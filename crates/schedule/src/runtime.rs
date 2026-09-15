@@ -1,10 +1,14 @@
 //! Due-reminder selection and the disposable timer projection.
 
 use std::{
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use futures::{
+    FutureExt as _,
+    future::{BoxFuture, Shared},
+};
 use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent};
 use seekdeep_cordis::Context;
@@ -130,17 +134,27 @@ pub fn due_decision(folded: &FoldedSchedules, now: i64) -> Result<DueDecision, S
 struct RuntimeInner {
     state: Mutex<RuntimeState>,
     stop: AbortSignal,
-    disposed: tokio::sync::OnceCell<()>,
+    disposed: OnceLock<Shared<BoxFuture<'static, ()>>>,
 }
 
 #[derive(Default)]
 struct RuntimeState {
-    run: Option<JoinHandle<()>>,
-    idle_wait: Option<JoinHandle<()>>,
-    timer: Option<AbortHandle>,
+    run: Option<AbortHandle>,
+    idle_wait: Option<AbortHandle>,
+    timer: Option<(Arc<()>, AbortHandle)>,
+    tasks: Vec<JoinHandle<()>>,
     requested: bool,
     stopping: bool,
     faulted: bool,
+}
+
+impl RuntimeState {
+    fn own_task(&mut self, task: JoinHandle<()>) -> AbortHandle {
+        let abort = task.abort_handle();
+        self.tasks.retain(|task| !task.is_finished());
+        self.tasks.push(task);
+        abort
+    }
 }
 
 /// One process-local, disposable projection of an exact agent's durable schedules.
@@ -243,7 +257,7 @@ impl ScheduleRuntime {
             inner: Arc::new(RuntimeInner {
                 state: Mutex::new(RuntimeState::default()),
                 stop: AbortSignal::default(),
-                disposed: tokio::sync::OnceCell::new(),
+                disposed: OnceLock::new(),
             }),
             clock,
             messages,
@@ -261,7 +275,7 @@ impl ScheduleRuntime {
         if state.stopping || state.faulted {
             return;
         }
-        if let Some(timer) = state.timer.take() {
+        if let Some((_, timer)) = state.timer.take() {
             timer.abort();
         }
         state.requested = true;
@@ -308,37 +322,43 @@ impl ScheduleRuntime {
                 this.request_drive();
             }
         });
-        state.run = Some(handle);
+        let abort = state.own_task(handle);
+        state.run = Some(abort);
     }
 
     /// Stops future work, cancels timers, and awaits every outstanding runtime promise.
+    /// Repeated callers share the drain if an earlier caller stops waiting.
     pub async fn dispose(&self) {
         self.inner
             .disposed
-            .get_or_init(|| async {
-                let (run, idle_wait) = {
+            .get_or_init(|| {
+                let tasks = {
                     let mut state = self.inner.state.lock();
                     state.stopping = true;
                     state.requested = false;
-                    if let Some(timer) = state.timer.take() {
+                    if let Some((_, timer)) = state.timer.take() {
                         timer.abort();
                     }
-                    (state.run.take(), state.idle_wait.take())
+                    state.run = None;
+                    state.idle_wait = None;
+                    std::mem::take(&mut state.tasks)
                 };
                 self.inner.stop.abort();
-                if let Some(run) = run {
-                    let _ = run.await;
+                async move {
+                    for task in tasks {
+                        let _ = task.await;
+                    }
                 }
-                if let Some(idle_wait) = idle_wait {
-                    let _ = idle_wait.await;
-                }
+                .boxed()
+                .shared()
             })
+            .clone()
             .await;
     }
 
     fn clear_timer(&self) {
         let mut state = self.inner.state.lock();
-        if let Some(timer) = state.timer.take() {
+        if let Some((_, timer)) = state.timer.take() {
             timer.abort();
         }
     }
@@ -346,16 +366,34 @@ impl ScheduleRuntime {
     fn arm(self: &Arc<Self>, target: i64, now: i64) {
         let max_delay = i64::try_from(MAX_TIMER_DELAY_MS).unwrap_or(i64::MAX);
         let delay_ms = u64::try_from((target - now).clamp(0, max_delay)).unwrap_or(0);
+        let mut state = self.inner.state.lock();
+        if state.stopping || state.faulted {
+            return;
+        }
+        if let Some((_, timer)) = state.timer.take() {
+            timer.abort();
+        }
+        let identity = Arc::new(());
+        let task_identity = identity.clone();
         let this = self.clone();
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             {
                 let mut state = this.inner.state.lock();
+                if state.stopping
+                    || state
+                        .timer
+                        .as_ref()
+                        .is_none_or(|(current, _)| !Arc::ptr_eq(current, &task_identity))
+                {
+                    return;
+                }
                 state.timer = None;
             }
             this.request_drive();
         });
-        self.inner.state.lock().timer = Some(handle.abort_handle());
+        let abort = state.own_task(handle);
+        state.timer = Some((identity, abort));
     }
 
     fn is_live(&self) -> bool {
@@ -456,7 +494,8 @@ impl ScheduleRuntime {
             }
             this.request_drive();
         });
-        state.idle_wait = Some(handle);
+        let abort = state.own_task(handle);
+        state.idle_wait = Some(abort);
     }
 
     async fn drive_once(self: &Arc<Self>) -> anyhow::Result<()> {
