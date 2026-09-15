@@ -472,3 +472,110 @@ async fn on_demand_capture_retires_its_cursor_when_the_session_is_disposed() {
             .all(|record| record.channel != SessionTelemetryChannel::Ops)
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_waits_for_a_session_retirement_record_that_is_being_redacted() {
+    let context = Context::new();
+    SessionStore::install(&context).unwrap();
+    let backend = Arc::new(FakeBackend::default());
+    let telemetry_owner = seekdeep_cordis::Fiber::active_child("telemetry-owner");
+    SessionTelemetryCoordinator::install(
+        &context.with_fiber(telemetry_owner.clone()),
+        backend.clone(),
+        SessionTelemetryCapture::Live,
+    )
+    .unwrap();
+    let session_owner = seekdeep_cordis::Fiber::active_child("session-owner");
+    let _session = live_session(&context.with_fiber(session_owner.clone()), "retiring");
+    backend.calls.lock().clear();
+
+    let (entered, retirement_entered) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let held = Arc::new(Mutex::new(Some(released)));
+    context
+        .events()
+        .on_waterfall(
+            &context,
+            "session-telemetry/record",
+            move |_, args, next| {
+                let release = args
+                    .get::<SessionTelemetryRecord>(0)
+                    .filter(|record| record.channel == SessionTelemetryChannel::Ops)
+                    .and_then(|_| held.lock().take());
+                let entered = entered.clone();
+                Box::pin(async move {
+                    if let Some(release) = release {
+                        entered.send(()).unwrap();
+                        let _ = release.recv();
+                    }
+                    next.run().await
+                })
+            },
+            EventOptions {
+                global: true,
+                ..EventOptions::default()
+            },
+        )
+        .unwrap();
+    let retirement = tokio::spawn(async move { session_owner.dispose().await });
+    retirement_entered
+        .recv_timeout(Duration::from_secs(5))
+        .expect("session retirement did not enter redaction");
+    let mut disposal = Box::pin(telemetry_owner.dispose());
+    let first_poll = futures::poll!(disposal.as_mut());
+    let shutdown_started_early = backend.calls.lock().iter().any(|call| call == "shutdown");
+    release.send(()).unwrap();
+    retirement.await.unwrap().unwrap();
+    match first_poll {
+        std::task::Poll::Ready(result) => result.unwrap(),
+        std::task::Poll::Pending => disposal.await.unwrap(),
+    }
+    assert!(
+        !shutdown_started_early,
+        "the backend shut down before the admitted retirement record was handed off"
+    );
+    assert_eq!(*backend.calls.lock(), ["emit:shutdown", "shutdown"]);
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn shutdown_contains_final_record_redaction_failures_and_still_drains_the_backend() {
+    let context = Context::new();
+    SessionStore::install(&context).unwrap();
+    context
+        .events()
+        .on_waterfall(
+            &context,
+            "session-telemetry/record",
+            |_, args, next| {
+                let shutdown = args
+                    .get::<SessionTelemetryRecord>(0)
+                    .is_some_and(|record| record.channel == SessionTelemetryChannel::Ops);
+                Box::pin(async move {
+                    anyhow::ensure!(!shutdown, "final record redaction failed");
+                    next.run().await
+                })
+            },
+            EventOptions {
+                global: true,
+                ..EventOptions::default()
+            },
+        )
+        .unwrap();
+    let backend = Arc::new(FakeBackend::default());
+    let telemetry_owner = seekdeep_cordis::Fiber::active_child("telemetry-owner");
+    SessionTelemetryCoordinator::install(
+        &context.with_fiber(telemetry_owner.clone()),
+        backend.clone(),
+        SessionTelemetryCapture::Live,
+    )
+    .unwrap();
+    let session_owner = seekdeep_cordis::Fiber::active_child("session-owner");
+    let _session = live_session(&context.with_fiber(session_owner.clone()), "still-live");
+    backend.calls.lock().clear();
+
+    telemetry_owner.dispose().await.unwrap();
+    assert_eq!(*backend.calls.lock(), ["shutdown"]);
+    session_owner.dispose().await.unwrap();
+    context.fiber().dispose().await.unwrap();
+}

@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
+use futures::channel::oneshot;
 use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentEvent};
 use seekdeep_agent_loop::AgentErrorEvent;
@@ -95,16 +96,48 @@ fn now_millis() -> i64 {
         })
 }
 
+/// A retiring session can leave the live set before its final record reaches the backend.
+/// Active guards keep that handoff inside the shutdown boundary.
+#[derive(Default)]
+struct CaptureState {
+    closing: bool,
+    active: usize,
+    waiters: Vec<oneshot::Sender<()>>,
+}
+
+struct CaptureGuard<'a>(&'a Mutex<CaptureState>);
+
+impl Drop for CaptureGuard<'_> {
+    fn drop(&mut self) {
+        let waiters = {
+            let mut state = self.0.lock();
+            state.active -= 1;
+            if state.active == 0 {
+                std::mem::take(&mut state.waiters)
+            } else {
+                Vec::new()
+            }
+        };
+        for waiter in waiters {
+            let _ = waiter.send(());
+        }
+    }
+}
+
 /// Installs the telemetry capture side onto a context for one backend.
 pub struct SessionTelemetryCoordinator {
     context: Context,
     backend: Arc<dyn SessionTelemetrySink>,
     adopted: Mutex<HashMap<usize, Arc<Session>>>,
     chunk_seen: Mutex<HashMap<usize, HashSet<String>>>,
+    capture: Mutex<CaptureState>,
 }
 
 impl SessionTelemetryCoordinator {
     /// Installs live or on-demand capture for one backend.
+    ///
+    /// Disposal closes capture admission and joins every admitted handoff before backend
+    /// shutdown.
     ///
     /// # Errors
     ///
@@ -119,6 +152,7 @@ impl SessionTelemetryCoordinator {
             backend,
             adopted: Mutex::new(HashMap::new()),
             chunk_seen: Mutex::new(HashMap::new()),
+            capture: Mutex::new(CaptureState::default()),
         });
         // Pointer-keyed capture state must die with its session in every mode, as the source's
         // weak-keyed maps do; only live capture also follows creation, events, and flush hints.
@@ -129,9 +163,13 @@ impl SessionTelemetryCoordinator {
         let cleanup = coordinator.clone();
         context.own(EffectHandle::new("telemetry capture", move || {
             Box::pin(async move {
+                cleanup.close_capture().await;
                 let sessions: Vec<_> = cleanup.adopted.lock().values().cloned().collect();
                 for session in sessions {
-                    cleanup.deliver(&session, cleanup.redact(shutdown_record(&session))?, None);
+                    Self::contain(|| {
+                        cleanup.deliver(&session, cleanup.redact(shutdown_record(&session))?, None);
+                        Ok(())
+                    });
                 }
                 if let Err(error) = cleanup.backend.shutdown().await {
                     tracing::warn!("telemetry: backend shutdown failed: {error}");
@@ -140,6 +178,32 @@ impl SessionTelemetryCoordinator {
             })
         }))?;
         Ok(coordinator)
+    }
+
+    fn begin_capture(&self) -> Option<CaptureGuard<'_>> {
+        let mut state = self.capture.lock();
+        if state.closing {
+            return None;
+        }
+        state.active += 1;
+        Some(CaptureGuard(&self.capture))
+    }
+
+    async fn close_capture(&self) {
+        let pending = {
+            let mut state = self.capture.lock();
+            state.closing = true;
+            if state.active == 0 {
+                None
+            } else {
+                let (sender, receiver) = oneshot::channel();
+                state.waiters.push(sender);
+                Some(receiver)
+            }
+        };
+        if let Some(pending) = pending {
+            let _ = pending.await;
+        }
     }
 
     fn register_retirement(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
@@ -151,6 +215,7 @@ impl SessionTelemetryCoordinator {
                 let Some(session) = args.get::<Session>(0) else {
                     return Ok(EventReply::Undefined);
                 };
+                let capture = disposed.begin_capture();
                 Self::contain(|| {
                     // Every pointer-keyed capture state retires with the session: a later
                     // session allocated at the same address must start from its own cursor
@@ -158,6 +223,9 @@ impl SessionTelemetryCoordinator {
                     let key = session_key(&session);
                     HANDOFF_CURSOR.lock().remove(&key);
                     disposed.chunk_seen.lock().remove(&key);
+                    if capture.is_none() {
+                        return Ok(());
+                    }
                     if disposed.adopted.lock().remove(&key).is_none() {
                         return Ok(());
                     }
@@ -251,6 +319,13 @@ impl SessionTelemetryCoordinator {
 
     /// Projects and hands over the canonical session-log suffix after the handoff cursor.
     pub fn capture_session(&self, session: &Arc<Session>, through_seq: Option<u64>) {
+        let Some(_capture) = self.begin_capture() else {
+            return;
+        };
+        self.capture_session_inner(session, through_seq);
+    }
+
+    fn capture_session_inner(&self, session: &Arc<Session>, through_seq: Option<u64>) {
         let cursor = HANDOFF_CURSOR
             .lock()
             .get(&session_key(session))
@@ -266,13 +341,16 @@ impl SessionTelemetryCoordinator {
                     self.track(session, event);
                     Ok(())
                 } else {
-                    self.capture_event(session, event)
+                    self.capture_event_inner(session, event)
                 }
             });
         }
     }
 
     fn adopt(&self, session: &Arc<Session>) {
+        let Some(_capture) = self.begin_capture() else {
+            return;
+        };
         if self
             .adopted
             .lock()
@@ -281,7 +359,7 @@ impl SessionTelemetryCoordinator {
         {
             return;
         }
-        self.capture_session(session, None);
+        self.capture_session_inner(session, None);
     }
 
     fn track(&self, session: &Arc<Session>, event: &SessionEvent) {
@@ -296,6 +374,17 @@ impl SessionTelemetryCoordinator {
     }
 
     fn capture_event(&self, session: &Arc<Session>, event: &SessionEvent) -> anyhow::Result<()> {
+        let Some(_capture) = self.begin_capture() else {
+            return Ok(());
+        };
+        self.capture_event_inner(session, event)
+    }
+
+    fn capture_event_inner(
+        &self,
+        session: &Arc<Session>,
+        event: &SessionEvent,
+    ) -> anyhow::Result<()> {
         if event.event_type == "assistant/chunk" {
             let key = format!(
                 "{}:{}",
@@ -350,6 +439,9 @@ impl SessionTelemetryCoordinator {
     }
 
     fn hint_flush(&self, session: &Arc<Session>) {
+        let Some(_capture) = self.begin_capture() else {
+            return;
+        };
         if self.adopted.lock().contains_key(&session_key(session)) {
             self.backend.flush();
         }
@@ -362,6 +454,9 @@ impl SessionTelemetryCoordinator {
         step: u64,
         error: &str,
     ) -> anyhow::Result<()> {
+        let Some(_capture) = self.begin_capture() else {
+            return Ok(());
+        };
         let detail = error_detail(error);
         let mut attributes = Map::new();
         attributes.insert("telemetry.op".to_owned(), json!("agent-error"));
