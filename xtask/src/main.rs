@@ -396,7 +396,12 @@ fn main() -> anyhow::Result<()> {
         }
         Command::RemoteArtifacts { out_dir } => remote_contracts::artifacts(&out_dir),
         Command::RemoteConsumer { browser, source } => {
-            remote_contracts::consumer(browser, &source_path(source.as_deref())?)
+            let source = if browser {
+                source_path(source.as_deref())?
+            } else {
+                seekdeep_source_oracle::source_location(Path::new("."), source.as_deref())?
+            };
+            remote_contracts::consumer(browser, &source)
         }
         Command::RemoteDeclarations {
             out_dir,
@@ -560,7 +565,11 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn source_path(source: Option<&Path>) -> anyhow::Result<PathBuf> {
-    seekdeep_source_oracle::source_location(Path::new("."), source)
+    Ok(
+        seekdeep_source_oracle::SourceOracle::open_with_root(Path::new("."), source)?
+            .root()
+            .to_owned(),
+    )
 }
 
 const WEB_FRONTEND_ENTRY: &str = r"/** Generated mount binding for the compiled Rust/WASM Web shell. */

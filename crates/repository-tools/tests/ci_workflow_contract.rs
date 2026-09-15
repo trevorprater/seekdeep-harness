@@ -290,7 +290,7 @@ fn release_publication_requires_complete_parity_against_the_pinned_source_checko
     let steps = pack["steps"].as_array().expect("pack steps");
     let parity_index = steps
         .iter()
-        .position(|step| step["run"] == "cargo xtask parity --source .parity-oracle --scope all")
+        .position(|step| step["run"] == "cargo xtask parity --scope all")
         .expect("complete parity gate");
     assert!(steps[parity_index]["if"].is_null());
     assert!(steps[parity_index]["continue-on-error"].is_null());
@@ -304,12 +304,18 @@ fn release_publication_requires_complete_parity_against_the_pinned_source_checko
     let setup_steps = setup["runs"]["steps"].as_array().unwrap();
     let oracle = setup_steps
         .iter()
-        .find(|step| step["with"]["path"] == ".parity-oracle")
+        .find(|step| step["id"] == "checkout")
         .expect("complete source checkout");
-    assert_eq!(oracle["with"]["repository"], "deepseek-ai/deepseek-harness");
-    assert_eq!(oracle["with"]["ref"], "${{ steps.pin.outputs.commit }}");
-    assert_eq!(oracle["with"]["persist-credentials"], false);
-    assert!(oracle["with"]["sparse-checkout"].is_null());
+    assert_eq!(
+        oracle["env"]["SOURCE_COMMIT"],
+        "${{ steps.pin.outputs.commit }}"
+    );
+    assert!(
+        oracle["run"]
+            .as_str()
+            .unwrap()
+            .contains("https://github.com/deepseek-ai/deepseek-harness.git")
+    );
     assert!(setup_steps.iter().any(|step| {
         step["id"] == "pin"
             && step["run"]

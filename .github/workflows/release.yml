@@ -98,7 +98,7 @@ jobs:
         run: pnpm run build
 
       - name: Verify complete Rust parity
-        run: cargo xtask parity --source .parity-oracle --scope all
+        run: cargo xtask parity --scope all
 
       - name: Pack release tarballs
         run: pnpm run release:pack --family seekdeep --out dist/npm

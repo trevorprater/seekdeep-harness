@@ -117,9 +117,19 @@ fn mismatched_or_malformed_revisions_fail_before_source_execution() {
         .err()
         .unwrap();
     assert!(error.to_string().contains(&revision));
-    for revision in ["", "short", "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"] {
+    for revision in [
+        "",
+        "short",
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    ] {
         snapshot(&root, &original, revision);
         assert!(SourceRevision::read(&root).is_err());
+    }
+    for duplicate in [&revision, &"a".repeat(40)] {
+        snapshot(&root, &original, &format!("{revision}\ncommit={duplicate}"));
+        let error = SourceRevision::read(&root).unwrap_err();
+        assert!(error.to_string().contains("exactly one commit"));
     }
     assert_eq!(
         source_location(&PathBuf::from("absent-target"), Some(&original)).unwrap(),

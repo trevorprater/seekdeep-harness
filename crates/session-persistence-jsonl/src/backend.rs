@@ -1398,7 +1398,7 @@ impl JsonlSessionPersistence {
             })
             .await??;
             let _ = parent;
-            return Ok(());
+            Ok(())
         }
         #[cfg(not(windows))]
         {
@@ -1807,6 +1807,7 @@ fn assert_zstd_header_frame(plaintext: &[u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 async fn sync_directory(path: &Path) -> anyhow::Result<()> {
     #[cfg(unix)]
     {

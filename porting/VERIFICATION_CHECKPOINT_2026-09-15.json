@@ -1,6 +1,6 @@
 {
   "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
-  "verified_at": "2026-09-15T17:03:43Z",
+  "verified_at": "2026-09-15T18:14:22Z",
   "completion": "incomplete",
   "checks": {
     "cargo_fmt_all_check": "passed",
@@ -66,8 +66,8 @@
       "passed": 28,
       "failed": 0,
       "skipped": 0,
-      "seconds": 296.04,
-      "source_checkout": "Fresh pinned checkout with access to the recorded machine-local source path denied"
+      "seconds": 668.52,
+      "source_checkout": "Fresh pinned checkout with original source access denied; all 28 gates ran through the staged Rust repository runner."
     },
     "phase3_lifecycle": {
       "status": "passed",
@@ -152,7 +152,7 @@
     "portable_source_oracle": {
       "status": "passed",
       "source_revision": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
-      "source_setup": "A fresh source clone completed the composite action's actual pin validation, native path export, normal frozen dependency installation, and original Host build; both the original and fresh source checkouts remained clean.",
+      "source_setup": "The actual composite action allocates the oracle under RUNNER_TEMP outside the project, fetches the exact public source commit, and completes normal frozen dependency installation and the original Host build. A fresh run passed all five steps and left the source checkout clean.",
       "resolution": "Native tests and repository tooling use SEEKDEEP_PARITY_SOURCE, an adjacent deepseek-harness checkout, or the recorded SOURCE_SNAPSHOT path. Revision drift is rejected before source execution; immutable source files are read from the pinned Git objects.",
       "checks": {
         "groups": 16,
@@ -168,14 +168,17 @@
       "documentation": "All 28 doc-sync gates passed with access to the original checkout denied, including source-dependent catalogs and type checks, projection, and the production site build.",
       "public_validation": "pnpm lint, cargo fmt --all -- --check, workspace constraints, third-party notices, and all four built keyless CLI source smoke cases passed with access to the original checkout denied.",
       "manifest_gate": "The fresh all-surface gate admits the relocated source and fails only on the existing six pending rows; three withdrawn entries still require final audit.",
-      "ci_setup_checks": "Three tests cover source setup before all 13 consuming job inventories, documentation triggers and build prerequisites, and execution of the action's actual Node scripts with malformed pins and a Unicode path.",
+      "ci_setup_checks": "Four tests cover all 13 source-dependent job inventories, documentation triggers and toolchains, the actual pin/location scripts, and the unchanged Git checkout script fetching an older pinned commit from a local remote into a separate temporary directory.",
       "clippy": "The full native workspace and changed Remotes WASM target pass with all targets, all features, and warnings denied.",
-      "platform_ci": "Fresh verification remains required after this source setup change is pushed."
+      "platform_ci": "CI run 35000940775 at 4e96ee974b99e1cceca961ce57b130226082a0f6 completed source setup in all four primary consuming lanes; Linux source catalogs, declaration checks, and documentation gates passed. The follow-up move outside the project and stricter CLI admission still require their own CI run.",
+      "cli_admission": "Three real xtask process regressions reject missing sources and unchanged source files at a different commit, and preserve explicit --source precedence over SEEKDEEP_PARITY_SOURCE. The actual client-catalog command that accepted a drifted clone before the fix now fails with both actual and expected revisions.",
+      "pin_validation": "SourceRevision rejects missing, malformed, uppercase, or duplicate commit entries, matching the CI pin parser.",
+      "source_optional_consumer": "The real remote-consumer command passes both valid and all 20 invalid declaration cases with an explicitly nonexistent source path when --browser is absent."
     },
     "latest_ci": {
-      "commit": "581c7d5a2196a71984e6e04da75076b6d9e916df",
-      "run": "https://github.com/trevorprater/seekdeep-harness/actions/runs/34987732970",
-      "status": "failed",
+      "commit": "4e96ee974b99e1cceca961ce57b130226082a0f6",
+      "run": "https://github.com/trevorprater/seekdeep-harness/actions/runs/35000940775",
+      "status": "in_progress",
       "passed": [
         "Node 22.19 compatibility",
         "Node 26 compatibility",
@@ -184,11 +187,13 @@
         "Release-shaped Linux Python SDK and runtime wheels"
       ],
       "remaining_failures": [
-        "Source-dependent catalog and documentation commands cannot find the recorded machine-local oracle; the portable checkout repair has local evidence and awaits its own CI run.",
-        "Coverage and built-bin leaves still invoke removed TypeScript tests.",
-        "Public Host npm runtime files and invariant companions are missing; publint and built-package checks remain required.",
-        "Windows cannot replace the running run-gates.exe during the workspace build; documentation preparation cannot resolve pnpm.cmd; platform Clippy and a generated client catalog also fail."
-      ]
+        "Static gates: 31 passed; Cordis config dependency declarations, translation pairing of the nested source checkout, and a stale module graph failed. The external source checkout repair has fresh local action evidence.",
+        "Coverage and built-bin leaves still invoke removed TypeScript tests; the nested source checkout was also discovered as local Vitest tests.",
+        "Public Host npm runtime files and invariant companions remain missing; publint and built-package checks still fail.",
+        "The preceding native Windows run exposed a running-executable replacement failure, pnpm command resolution, and platform Clippy errors. Their local repairs and staged-runner checks pass; native Windows CI must validate them."
+      ],
+      "required_aggregate": "failed",
+      "native_windows": "in_progress at this checkpoint"
     },
     "documentation_integrity": {
       "primary_type_equivalence": 384,
@@ -196,6 +201,29 @@
       "translation_pairs": 986,
       "agent_notes": 552,
       "sealed_archived_artifacts": 426
+    },
+    "windows_repository_gates": {
+      "status": "local checks passed; native Windows CI required",
+      "runner": "All 14 root gate aggregates launch a dependency-free Rust bootstrap that builds run-gates, copies it outside Cargo outputs, forwards arguments and process status, and removes its temporary directory after exit. Its real Cargo fixture rebuilds the running gate workspace and checks empty, Unicode, and spaced arguments, exit 17, and cleanup.",
+      "runner_regression_proof": "Running the gate directly from the Cargo output instead of the staged copy fails the regression; restoring the copy passes.",
+      "documentation_launcher": "Dependency preparation executes pnpm.cmd on Windows and pnpm on Unix. The platform process fixture checks the actual argument vector and successful-install receipt; the failed-refresh retry regression also passes.",
+      "jsonl": "The platform code removes four Windows Clippy failures without changing the durable directory or MoveFileEx behavior; all five Win32 publication logic tests pass.",
+      "clippy": "Native repository-runner, repository-tools, source-oracle, xtask, and JSONL checks pass. Repository-runner, repository-tools, and source-oracle also pass all-target, all-feature MSVC Clippy with warnings denied.",
+      "local_cross_limit": "The macOS cross toolchain lacks Windows C headers for zstd-sys, so the JSONL crate still requires native Windows CI.",
+      "public_build": "pnpm build passed in 604.02 seconds; all 28 doc-sync gates passed in 668.52 seconds through the staged bootstrap.",
+      "scoped_tests": {
+        "native": 44,
+        "wasm": 5,
+        "pinned_source": 2,
+        "failed": 0
+      }
+    },
+    "review_source_contracts": {
+      "status": "passed",
+      "preset_label": "The pinned source explicitly tests that the session preset ID remains visible until the roster supplies its name. The compiled WASM regression passes for idle, loading, ready-without-metadata, and ready-with-metadata states.",
+      "web_host": "The pinned source explicitly tests rejection of --host 0.0.0.0 before consumer activation. The Rust startup test preserves that result and diagnostic.",
+      "source_cases": "Both named source cases passed fresh; 31 other cases were outside the selected filter.",
+      "review_disposition": "Two findings in review 5685060608 were dismissed against these executable source contracts; the other five remain open."
     }
   },
   "manifest": {
@@ -221,7 +249,7 @@
     "Implement the native E2B SDK factory and verify the real E2B composition and fixture paths after sandbox authorization.",
     "Produce and test the public Host npm exports, functional invariant companions, and native CLI platform packages.",
     "Complete native aggregate-test and coverage routing, and audit the three withdrawn tooling configurations.",
-    "Verify the portable source setup in GitHub Actions and repair the remaining Windows gate-runner, documentation process, platform lint, and catalog failures.",
+    "Verify the staged Windows gate runner, pnpm.cmd dispatch, platform lint fixes, and external pinned-source checkout in GitHub Actions; repair Cordis config dependencies and the stale module graph.",
     "Finish the PR-finding audit and repair remaining confirmed lifecycle and deterministic-input cases.",
     "Run the full workspace formatting, Clippy, tests, and parity gate fresh after all remaining changes."
   ]

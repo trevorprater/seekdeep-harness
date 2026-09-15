@@ -167,6 +167,59 @@ fn label_loads_only_for_named_sessions_and_resolves_roster_copy() {
 }
 
 #[wasm_bindgen_test]
+fn label_keeps_the_session_preset_id_until_the_roster_supplies_its_name() {
+    let bench = configure();
+    let state = object(&[
+        ("status", JsValue::from_str("idle")),
+        ("options", Array::new().into()),
+    ]);
+    let selected_state = state.clone();
+    let presets = Closure::wrap(Box::new(move |selector: Function| {
+        selector
+            .call1(&JsValue::UNDEFINED, &selected_state)
+            .unwrap()
+    }) as Box<dyn FnMut(Function) -> JsValue>);
+    let loads = Array::new();
+    let load_calls = loads.clone();
+    let load = Closure::wrap(Box::new(move || {
+        load_calls.push(&JsValue::TRUE);
+    }) as Box<dyn FnMut()>);
+    let props = object(&[
+        ("sessionId", JsValue::from_str("s1")),
+        (
+            "useSessions",
+            Function::new_with_args(
+                "selector",
+                "return selector({byId:{s1:{agentPreset:'standard'}}})",
+            )
+            .into(),
+        ),
+        ("useAgentPresets", presets.into_js_value()),
+        ("load", load.into_js_value()),
+        ("t", property(&bench, "t")),
+    ]);
+    let component = agent_preset_label_component().unwrap();
+    for status in ["idle", "loading", "ready"] {
+        Reflect::set(
+            &state,
+            &JsValue::from_str("status"),
+            &JsValue::from_str(status),
+        )
+        .unwrap();
+        let tree = apRender(&bench, &component, &props);
+        assert_eq!(apText(&tree), "standard", "{status}");
+        assert_eq!(
+            apProp(&tree, "title").as_string().as_deref(),
+            Some("Session agent preset")
+        );
+    }
+    Reflect::set(&state, &JsValue::from_str("options"), &options()).unwrap();
+    let tree = apRender(&bench, &component, &props);
+    assert_eq!(apText(&tree), "Standard");
+    assert_eq!(loads.length(), 1);
+}
+
+#[wasm_bindgen_test]
 fn settings_row_uses_shared_menu_copy_closes_then_selects_and_forces_read_only_closed() {
     let bench = configure();
     let state = object(&[

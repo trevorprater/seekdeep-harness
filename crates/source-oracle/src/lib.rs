@@ -23,13 +23,22 @@ impl SourceRevision {
     }
 
     fn parse(snapshot: &str) -> anyhow::Result<Self> {
-        let revision = snapshot
+        let mut revisions = snapshot
             .lines()
-            .find_map(|line| line.strip_prefix("commit="))
+            .filter_map(|line| line.strip_prefix("commit="));
+        let revision = revisions
+            .next()
             .ok_or_else(|| anyhow::anyhow!("SOURCE_SNAPSHOT has no commit."))?;
         anyhow::ensure!(
-            revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
-            "SOURCE_SNAPSHOT commit must be a full Git object ID."
+            revisions.next().is_none(),
+            "SOURCE_SNAPSHOT must contain exactly one commit."
+        );
+        anyhow::ensure!(
+            revision.len() == 40
+                && revision
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+            "SOURCE_SNAPSHOT commit must be a full lowercase Git object ID."
         );
         Ok(Self(revision.to_owned()))
     }

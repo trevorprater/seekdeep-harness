@@ -72,20 +72,21 @@ fn every_source_dependent_lane_prepares_the_oracle_before_running_its_gate() {
     let steps = setup["runs"]["steps"].as_array().unwrap();
     let checkout = steps
         .iter()
-        .position(|step| step["uses"] == "actions/checkout@v6")
+        .position(|step| step["id"] == "checkout")
         .unwrap();
     let install = steps
         .iter()
-        .position(|step| step["run"] == "pnpm --dir .parity-oracle install --frozen-lockfile")
+        .position(|step| {
+            step["run"] == "pnpm --dir \"$SEEKDEEP_PARITY_SOURCE\" install --frozen-lockfile"
+        })
         .unwrap();
     let build = steps
         .iter()
-        .position(|step| step["run"] == "pnpm --dir .parity-oracle run build:lib:host")
+        .position(|step| step["run"] == "pnpm --dir \"$SEEKDEEP_PARITY_SOURCE\" run build:lib:host")
         .unwrap();
     assert!(checkout < install && install < build);
-    assert_eq!(steps[checkout]["with"]["persist-credentials"], false);
     assert_eq!(
-        steps[checkout]["with"]["ref"],
+        steps[checkout]["env"]["SOURCE_COMMIT"],
         "${{ steps.pin.outputs.commit }}"
     );
     assert!(steps.iter().all(|step| step["continue-on-error"].is_null()));
@@ -101,6 +102,7 @@ fn docs_deployment_covers_rust_inputs_and_has_the_complete_build_toolchain() {
     for source in [
         "crates/repository-tools/src/doc_site.rs",
         "crates/repository-tools/src/doc_site/prepare.rs",
+        "crates/repository-runner/src/main.rs",
         "crates/docs-site-runtime/src/lib.rs",
         "crates/source-oracle/src/lib.rs",
         "xtask/src/main.rs",
@@ -142,6 +144,7 @@ fn execute(script: &str, root: &Path, output: &Path, environment: &Path) -> std:
         .current_dir(root)
         .env("GITHUB_OUTPUT", output)
         .env("GITHUB_ENV", environment)
+        .env("RUNNER_TEMP", root.parent().unwrap())
         .output()
         .unwrap()
 }
@@ -158,7 +161,7 @@ fn actual_action_scripts_reject_bad_pins_and_export_a_native_absolute_path() {
         .unwrap();
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("space and 中文");
-    std::fs::create_dir_all(root.join(".parity-oracle")).unwrap();
+    std::fs::create_dir(&root).unwrap();
     let output = root.join("output");
     let environment = root.join("environment");
     let revision = "0123456789abcdef0123456789abcdef01234567";
@@ -191,10 +194,13 @@ fn actual_action_scripts_reject_bad_pins_and_export_a_native_absolute_path() {
             .unwrap(),
     );
     assert!(path.is_absolute());
-    assert_eq!(
-        path.canonicalize().unwrap(),
-        root.join(".parity-oracle").canonicalize().unwrap()
+    assert!(
+        !path
+            .canonicalize()
+            .unwrap()
+            .starts_with(root.canonicalize().unwrap())
     );
+    assert!(path.is_dir());
     for snapshot in [
         "commit=short\n".to_owned(),
         "repository=missing\n".to_owned(),
@@ -206,4 +212,110 @@ fn actual_action_scripts_reject_bad_pins_and_export_a_native_absolute_path() {
         assert!(!result.status.success());
         assert_eq!(std::fs::read(&output).unwrap(), before);
     }
+}
+
+fn git(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args([
+            "-c",
+            "user.name=CI oracle fixture",
+            "-c",
+            "user.email=oracle@example.invalid",
+            "-c",
+            "commit.gpgSign=false",
+        ])
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+#[test]
+fn actual_checkout_script_fetches_the_pin_outside_the_project() {
+    let setup = setup();
+    let steps = setup["runs"]["steps"].as_array().unwrap();
+    let location = steps.iter().find(|step| step["id"] == "location").unwrap()["run"]
+        .as_str()
+        .unwrap();
+    let checkout = steps.iter().find(|step| step["id"] == "checkout").unwrap()["run"]
+        .as_str()
+        .unwrap();
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("project 中文");
+    let original = temporary.path().join("source remote");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::create_dir(&original).unwrap();
+    std::fs::write(original.join(".gitattributes"), "original.txt -text\n").unwrap();
+    std::fs::write(original.join("original.txt"), "pinned content\n").unwrap();
+    git(&original, &["init", "--quiet"]);
+    git(&original, &["add", "."]);
+    git(&original, &["commit", "--quiet", "-m", "Source pin"]);
+    let revision = git(&original, &["rev-parse", "HEAD"]);
+    std::fs::write(original.join("original.txt"), "newer content\n").unwrap();
+    git(&original, &["commit", "--quiet", "-am", "Newer source"]);
+
+    let output = root.join("output");
+    let environment = root.join("environment");
+    let allocated = execute(location, &root, &output, &environment);
+    assert!(
+        allocated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&allocated.stderr)
+    );
+    let environment = std::fs::read_to_string(&environment).unwrap();
+    let source = Path::new(
+        environment
+            .trim()
+            .strip_prefix("SEEKDEEP_PARITY_SOURCE=")
+            .unwrap(),
+    );
+    // Redirect only the public Git remote to a local fixture; execute the action unchanged.
+    let fetched = Command::new("bash")
+        .args(["-eu", "-c", checkout])
+        .current_dir(&root)
+        .env("SEEKDEEP_PARITY_SOURCE", source)
+        .env("SOURCE_COMMIT", &revision)
+        .env("GIT_CONFIG_COUNT", "1")
+        .env(
+            "GIT_CONFIG_KEY_0",
+            format!(
+                "url.{}.insteadOf",
+                original.to_string_lossy().replace('\\', "/")
+            ),
+        )
+        .env(
+            "GIT_CONFIG_VALUE_0",
+            "https://github.com/deepseek-ai/deepseek-harness.git",
+        )
+        .output()
+        .unwrap();
+    assert!(
+        fetched.status.success(),
+        "{}",
+        String::from_utf8_lossy(&fetched.stderr)
+    );
+    assert!(
+        !source
+            .canonicalize()
+            .unwrap()
+            .starts_with(root.canonicalize().unwrap())
+    );
+    assert_eq!(git(source, &["rev-parse", "HEAD"]), revision);
+    assert_eq!(
+        std::fs::read_to_string(source.join("original.txt")).unwrap(),
+        "pinned content\n"
+    );
+    assert!(git(source, &["status", "--porcelain"]).is_empty());
+    let detached = Command::new("git")
+        .args(["symbolic-ref", "--quiet", "HEAD"])
+        .current_dir(source)
+        .status()
+        .unwrap();
+    assert!(!detached.success());
 }

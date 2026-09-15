@@ -26,34 +26,38 @@ runs:
         appendFileSync(process.env.GITHUB_OUTPUT, commits[0] + '\n');
         NODE
 
-    - uses: actions/checkout@v6
-      with:
-        repository: deepseek-ai/deepseek-harness
-        ref: ${{ steps.pin.outputs.commit }}
-        path: .parity-oracle
-        persist-credentials: false
-
-    - name: Export source checkout location
+    - name: Allocate source checkout outside the project
       id: location
       shell: bash
       run: |
         node --input-type=module <<'NODE'
-        import { appendFileSync } from 'node:fs';
-        import { realpathSync } from 'node:fs';
-        const root = realpathSync('.parity-oracle');
+        import { appendFileSync, mkdtempSync, realpathSync } from 'node:fs';
+        import { join } from 'node:path';
+        const root = realpathSync(mkdtempSync(join(process.env.RUNNER_TEMP, 'seekdeep-source-oracle-')));
         appendFileSync(process.env.GITHUB_ENV, `SEEKDEEP_PARITY_SOURCE=${root}\n`);
         appendFileSync(process.env.GITHUB_OUTPUT, `root=${root}\n`);
         NODE
+
+    - name: Check out the exact source revision
+      id: checkout
+      shell: bash
+      env:
+        SOURCE_COMMIT: ${{ steps.pin.outputs.commit }}
+      run: |
+        git -C "$SEEKDEEP_PARITY_SOURCE" init --quiet
+        git -C "$SEEKDEEP_PARITY_SOURCE" remote add origin https://github.com/deepseek-ai/deepseek-harness.git
+        git -C "$SEEKDEEP_PARITY_SOURCE" fetch --no-tags --depth=1 origin "$SOURCE_COMMIT"
+        git -C "$SEEKDEEP_PARITY_SOURCE" checkout --quiet --detach FETCH_HEAD
 
     - name: Install original source dependencies
       shell: bash
       env:
         CI: 'true'
         DSH_TELEMETRY_DISABLED: '1'
-      run: pnpm --dir .parity-oracle install --frozen-lockfile
+      run: pnpm --dir "$SEEKDEEP_PARITY_SOURCE" install --frozen-lockfile
 
     - name: Build original Host artifacts
       shell: bash
       env:
         DSH_TELEMETRY_DISABLED: '1'
-      run: pnpm --dir .parity-oracle run build:lib:host
+      run: pnpm --dir "$SEEKDEEP_PARITY_SOURCE" run build:lib:host

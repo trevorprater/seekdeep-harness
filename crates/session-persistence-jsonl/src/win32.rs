@@ -194,7 +194,7 @@ impl Win32Move for SystemMove {
         {
             seekdeep_win32_durable_namespace::move_new_write_through(existing, replacement).map_err(
                 |error| {
-                    let code = error.raw_os_error().map_or(0, |code| code.cast_unsigned());
+                    let code = error.raw_os_error().map_or(0, i32::cast_unsigned);
                     win32_error(code, existing, replacement)
                 },
             )

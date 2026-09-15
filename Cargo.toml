@@ -159,6 +159,7 @@ members = [
   "crates/pwsh-sandbox",
   "crates/repeat-tool-reminder",
   "crates/repository-tools",
+  "crates/repository-runner",
   "crates/sandbox",
   "crates/sandbox-local",
   "crates/sandbox-policy",

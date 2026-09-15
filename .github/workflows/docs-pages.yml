@@ -11,6 +11,7 @@ on:
       - 'rust-toolchain.toml'
       - 'SOURCE_SNAPSHOT'
       - 'crates/repository-tools/**'
+      - 'crates/repository-runner/**'
       - 'crates/docs-site-runtime/**'
       - 'crates/source-oracle/**'
       - 'crates/typert-generator/**'

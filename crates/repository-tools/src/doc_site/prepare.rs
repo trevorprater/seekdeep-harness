@@ -167,7 +167,7 @@ fn install_site_dependencies_with_runner(
         || !website.join("node_modules/.bin/vitepress").exists()
     {
         install(
-            Command::new("pnpm")
+            Command::new(if cfg!(windows) { "pnpm.cmd" } else { "pnpm" })
                 .args([
                     "install",
                     "--ignore-workspace",
@@ -187,6 +187,72 @@ fn install_site_dependencies_with_runner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dependency_refresh_executes_the_platform_launcher_from_path() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let root = directory.path().join("documentation with 中文 and spaces");
+        std::fs::create_dir_all(root.join("website"))?;
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"packageManager":"pnpm@11.7.0"}"#,
+        )?;
+        std::fs::write(
+            root.join("website/package.json"),
+            r#"{"devDependencies":{}}"#,
+        )?;
+        std::fs::write(
+            root.join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\nimporters:\n  website: {}\n",
+        )?;
+        let programs = root.join("programs");
+        std::fs::create_dir(&programs)?;
+        std::fs::write(
+            programs.join("capture.mjs"),
+            "import { writeFileSync } from 'node:fs';\nwriteFileSync(process.env.SEEKDEEP_INSTALL_ARGUMENTS, JSON.stringify(process.argv.slice(2)));\n",
+        )?;
+        let program = programs.join(if cfg!(windows) { "pnpm.cmd" } else { "pnpm" });
+        std::fs::write(
+            &program,
+            if cfg!(windows) {
+                "@echo off\r\nnode \"%~dp0capture.mjs\" %*\r\n"
+            } else {
+                "#!/bin/sh\nexec node \"$(dirname \"$0\")/capture.mjs\" \"$@\"\n"
+            },
+        )?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755))?;
+        }
+        let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+        let path = std::env::join_paths(
+            std::iter::once(programs).chain(std::env::split_paths(&inherited_path)),
+        )?;
+        let arguments = root.join("arguments.json");
+        install_site_dependencies_with_runner(&root, |command| {
+            command
+                .env("PATH", path)
+                .env("SEEKDEEP_INSTALL_ARGUMENTS", &arguments);
+            run(command)
+        })?;
+        assert_eq!(
+            serde_json::from_slice::<Value>(&std::fs::read(arguments)?)?,
+            json!([
+                "install",
+                "--ignore-workspace",
+                "--ignore-scripts",
+                "--frozen-lockfile",
+                "--modules-dir",
+                root.join("website/node_modules")
+            ])
+        );
+        assert!(
+            root.join("website/.cache/dependencies/installed-fingerprint")
+                .is_file()
+        );
+        Ok(())
+    }
 
     #[test]
     fn failed_dependency_refresh_retries_with_noninteractive_frozen_install() -> anyhow::Result<()>

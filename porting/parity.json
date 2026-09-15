@@ -23556,7 +23556,8 @@
       "evidence": [
         "cargo test -p seekdeep-repository-tools --all-features --test ci_workflow_contract (11 passed; hosted Linux/Windows defaults, explicit runner overrides, and Rust/WASM setup before the four primary job inventories)",
         "ci_source_oracle: 3 passed, including all 13 source-dependent job inventories and execution of the actual action scripts against malformed pins and a relocated Unicode path; a fresh source clone completed the action's frozen install and Host build",
-        "205 scoped native and WASM tests passed against the relocated pinned checkout while the original source path was inaccessible; unrelated CI coverage, packaging, and Windows failures remain recorded in the verification checkpoint"
+        "205 scoped native and WASM tests passed against the relocated pinned checkout while the original source path was inaccessible; unrelated CI coverage, packaging, and Windows failures remain recorded in the verification checkpoint",
+        "ci_source_oracle: 4 passed, including execution of the exact Git checkout script at an older pin outside the project; a fresh public source checkout completed all five action steps, frozen dependency installation, and original Host build without a dirty source worktree"
       ],
       "note": "Hosted ubuntu-24.04 and windows-latest defaults remain overridable; the explicit self-hosted failover switches and pool labels remain supported. The browser jobs install the Rust/WASM target, matching binding generator, and locked browser dependencies before their gates."
     },
@@ -23713,7 +23714,8 @@
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
         "2026-09-15: ci_workflow_contract passed the release dependency and step-order check: full source checkout at SOURCE_SNAPSHOT, cargo xtask parity --source .parity-oracle --scope all before every pack step, and publication dependent on successful packing",
-        "ci_source_oracle passes: release packing uses the shared source action, including the frozen source dependency install and Host build, before building target artifacts"
+        "ci_source_oracle passes: release packing uses the shared source action, including the frozen source dependency install and Host build, before building target artifacts",
+        "The all-surface release gate uses the action-exported SEEKDEEP_PARITY_SOURCE; ci_workflow_contract still verifies it precedes every pack step. The action places the pinned checkout outside project test and documentation discovery."
       ]
     },
     {
@@ -38147,7 +38149,10 @@
         "crates/repository-tools/tests/type_equiv_oracle.rs",
         "crates/source-oracle/src/lib.rs",
         "crates/source-oracle/tests/checkout.rs",
-        "crates/repository-tools/tests/ci_source_oracle.rs"
+        "crates/repository-tools/tests/ci_source_oracle.rs",
+        "crates/repository-runner/src/main.rs",
+        "crates/repository-runner/tests/rebuild.rs",
+        "xtask/tests/source_admission.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
@@ -38180,9 +38185,10 @@
         "pnpm lint passed for the complete native workspace, the Host-side WASM boundary crates, and all 46 Rust Client packages; 4 root-command regressions passed with real compiler failures and fixes",
         "cargo xtask web-smoke: 4 keyless source cases passed through the built npm launcher and native Host",
         "205 scoped native and WASM tests passed with SEEKDEEP_PARITY_SOURCE selecting a fresh pinned source checkout while the recorded machine-local path was inaccessible; the actual source action completed a normal frozen dependency install and Host build",
-        "The source reader ignores checkout-specific Git environment exported by hooks; restoring inherited GIT_DIR handling makes the actual type-equivalence CLI regression fail, and clearing it restores the passing result"
+        "The source reader ignores checkout-specific Git environment exported by hooks; restoring inherited GIT_DIR handling makes the actual type-equivalence CLI regression fail, and clearing it restores the passing result",
+        "The public build passed in 604.02 seconds and all 28 doc-sync gates passed through the staged Rust gate runner; three real source-admission CLI regressions, the actual outside-project checkout action, and all three tooling packages under MSVC Clippy passed."
       ],
-      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The full workspace run at 09c3cfc3689c4627364a05f36d745cef5168335c passed 5757 tests with 26 ignored; later lifecycle and package/documentation changes have scoped evidence and still require a fresh final workspace run. The public build, lint, canonical declarations, strict consumers, frozen dependency install, documentation gates, documentation browser runtime, and keyless CLI smoke cases have passing checkpoints. The shared source resolver and CI setup pass relocated-source checks; platform CI verification remains required. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. Native CLI platform packages, built-bin and coverage-exempt-heavy routing, and the Windows gate runner, documentation command, and platform lint failures remain open. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The full workspace run at 09c3cfc3689c4627364a05f36d745cef5168335c passed 5757 tests with 26 ignored; later lifecycle and package/documentation changes have scoped evidence and still require a fresh final workspace run. The public build, lint, canonical declarations, strict consumers, frozen dependency install, documentation gates, documentation browser runtime, and keyless CLI smoke cases have passing checkpoints. The shared source resolver and CI setup pass relocated-source checks; platform CI verification remains required. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. Native CLI platform packages and built-bin/coverage-exempt-heavy routing remain open. The Windows gate runner, pnpm.cmd dispatch, and platform lint fixes have passing scoped local checks and require native Windows CI. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
     },
     {
       "source": "packages/AGENTS.md",
@@ -39944,7 +39950,8 @@
       ],
       "evidence": [
         "pinned source startup spec passed 5/5",
-        "Rust unit parity and real Loader pending-consumer early-exit acceptance passed"
+        "Rust unit parity and real Loader pending-consumer early-exit acceptance passed",
+        "2026-09-15: the exact original all-interface rejection case and the Rust startup flag/default/error regression both passed; changing CLI admission to allow 0.0.0.0 would diverge from the pinned executable specification."
       ]
     },
     {
@@ -42883,7 +42890,8 @@
       ],
       "evidence": [
         "pinned source component suite: 28 passed",
-        "live compiled label/shared-menu/default-row/seat interaction and motion matrix passed"
+        "live compiled label/shared-menu/default-row/seat interaction and motion matrix passed",
+        "2026-09-15: the exact pinned shows-the-id-until-the-roster-resolves case passed; all 5 compiled WASM component tests pass, including idle/loading/ready ID fallback, later display-name resolution, and one roster-load effect."
       ]
     },
     {
@@ -88009,12 +88017,15 @@
       "targets": [
         "crates/repository-tools/src/run_gates.rs",
         "crates/repository-tools/src/bin/run-gates.rs",
-        "package.json"
+        "package.json",
+        "crates/repository-runner/src/main.rs",
+        "crates/repository-runner/tests/rebuild.rs"
       ],
       "evidence": [
         "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
         "cargo test -p seekdeep-repository-tools --all-features --test run_gates_parity (14 passed)",
-        "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)"
+        "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)",
+        "All 14 public aggregate scripts enter the std-only Rust bootstrap. A real Cargo workspace rebuild succeeds while the staged processor executes, preserving arguments, exit code, and cleanup; executing the Cargo output directly makes that regression fail."
       ],
       "note": "The Rust scheduler implements graph validation, bounded concurrency, failure propagation, process outcomes, and Cargo resource serialization. The documentation-site gate now runs the Rust suites. The built-bin-smoke and coverage-exempt-heavy leaves still invoke removed TypeScript tests and must be connected to their compiled Rust counterparts before this command is fully verified."
     },
