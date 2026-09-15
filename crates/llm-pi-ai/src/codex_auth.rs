@@ -28,7 +28,8 @@ const MAX_CODEX_AUTH_BYTES: u64 = 1024 * 1024;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// OAuth credential shape expected by the provider SDK compatibility layer.
-#[derive(Clone, Debug, PartialEq)]
+/// Debug output redacts both tokens.
+#[derive(Clone, PartialEq)]
 pub struct OAuthCredential {
     /// Bearer access token.
     pub access: String,
@@ -40,8 +41,20 @@ pub struct OAuthCredential {
     pub account_id: Option<String>,
 }
 
+impl std::fmt::Debug for OAuthCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("OAuthCredential")
+            .field("access", &"<redacted>")
+            .field("refresh", &"<redacted>")
+            .field("expires", &self.expires)
+            .field("account_id", &self.account_id)
+            .finish()
+    }
+}
+
 /// Extensible credential input accepted from a refresh callback.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Credential {
     /// OAuth credential.
     OAuth(OAuthCredential),
@@ -50,6 +63,18 @@ pub enum Credential {
         /// Secret API key.
         key: String,
     },
+}
+
+impl std::fmt::Debug for Credential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OAuth(credential) => formatter.debug_tuple("OAuth").field(credential).finish(),
+            Self::ApiKey { .. } => formatter
+                .debug_struct("ApiKey")
+                .field("key", &"<redacted>")
+                .finish(),
+        }
+    }
 }
 
 /// Secret-free credential listing row.
@@ -61,11 +86,20 @@ pub struct CredentialInfo {
     pub credential_type: &'static str,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct CodexAuthDocument {
     root: Map<String, Value>,
     tokens: Map<String, Value>,
     credential: OAuthCredential,
+}
+
+impl std::fmt::Debug for CodexAuthDocument {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CodexAuthDocument")
+            .field("credential", &self.credential)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Resolved official Codex credential bridge.
@@ -645,6 +679,52 @@ mod refresh_tests {
     };
 
     use super::*;
+
+    #[test]
+    fn credential_debug_redacts_nested_and_preserved_token_fields() {
+        let credential = OAuthCredential {
+            access: "access-debug-sentinel".to_owned(),
+            refresh: "refresh-debug-sentinel".to_owned(),
+            expires: 123_456.0,
+            account_id: Some("public-account".to_owned()),
+        };
+        let document = CodexAuthDocument {
+            root: Map::from_iter([("unknown".to_owned(), json!("preserved-root-secret"))]),
+            tokens: Map::from_iter([("id_token".to_owned(), json!("preserved-id-secret"))]),
+            credential: credential.clone(),
+        };
+        let oauth = Credential::OAuth(credential.clone());
+        let api_key = Credential::ApiKey {
+            key: "api-key-debug-sentinel".to_owned(),
+        };
+        for output in [
+            format!("{credential:?}"),
+            format!("{credential:#?}"),
+            format!("{oauth:?}"),
+            format!("{oauth:#?}"),
+            format!("{api_key:?}"),
+            format!("{api_key:#?}"),
+            format!("{document:?}"),
+            format!("{document:#?}"),
+        ] {
+            for secret in [
+                "access-debug-sentinel",
+                "refresh-debug-sentinel",
+                "api-key-debug-sentinel",
+                "preserved-root-secret",
+                "preserved-id-secret",
+            ] {
+                assert!(
+                    !output.contains(secret),
+                    "credential Debug exposed a secret: {output}"
+                );
+            }
+            assert!(output.contains("<redacted>"));
+        }
+        let debug = format!("{credential:?}");
+        assert!(debug.contains("123456"));
+        assert!(debug.contains("public-account"));
+    }
 
     struct TokenServer {
         url: String,
