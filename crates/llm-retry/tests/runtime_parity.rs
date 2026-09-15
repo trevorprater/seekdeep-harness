@@ -28,6 +28,22 @@ struct Harness {
 
 impl Harness {
     async fn new(random: f64) -> Self {
+        let minted = Arc::new(AtomicUsize::new(0));
+        let internals = RetryInternals::new(
+            move || random,
+            move || {
+                let index = minted.fetch_add(1, Ordering::AcqRel);
+                if index == 0 {
+                    RetryId::new("deterministic-retry-chain")
+                } else {
+                    RetryId::new(format!("deterministic-retry-chain-{}", index + 1))
+                }
+            },
+        );
+        Self::with_internals(internals).await
+    }
+
+    async fn with_internals(internals: RetryInternals) -> Self {
         let context = Context::new();
         let agents = Arc::new(AgentRegistry::new(context.clone()));
         agents.provide(&context).unwrap();
@@ -54,24 +70,7 @@ impl Harness {
             context.clone(),
             ScopeKey::new(),
         ));
-        let minted = Arc::new(AtomicUsize::new(0));
-        let minted_for_ids = minted.clone();
-        let plugin = install_with_internals(
-            &context,
-            RetryConfig::default(),
-            RetryInternals::new(
-                move || random,
-                move || {
-                    let index = minted_for_ids.fetch_add(1, Ordering::AcqRel);
-                    if index == 0 {
-                        RetryId::new("deterministic-retry-chain")
-                    } else {
-                        RetryId::new(format!("deterministic-retry-chain-{}", index + 1))
-                    }
-                },
-            ),
-        )
-        .unwrap();
+        let plugin = install_with_internals(&context, RetryConfig::default(), internals).unwrap();
         plugin.await_settled().await.unwrap();
         Self {
             context,
@@ -175,6 +174,133 @@ fn failure(code: &str, retry_after: Option<f64>) -> LlmFailure {
         status: Some(429),
         provider_retry_after_ms: retry_after,
         request_id: None,
+    }
+}
+
+struct DelayLease(Arc<AtomicUsize>);
+
+impl Drop for DelayLease {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+struct PendingDelay {
+    duration: Duration,
+    wake: tokio::sync::oneshot::Sender<()>,
+}
+
+struct ControlledDelays {
+    internals: RetryInternals,
+    pending: tokio::sync::mpsc::UnboundedReceiver<PendingDelay>,
+    active: Arc<AtomicUsize>,
+}
+
+impl ControlledDelays {
+    fn new() -> Self {
+        let (sender, pending) = tokio::sync::mpsc::unbounded_channel();
+        let active = Arc::new(AtomicUsize::new(0));
+        let active_for_sleep = active.clone();
+        let internals = RetryInternals::new(|| 0.5, || RetryId::new("scheduled-chain")).with_sleep(
+            move |duration| {
+                let (wake, release) = tokio::sync::oneshot::channel();
+                active_for_sleep.fetch_add(1, Ordering::AcqRel);
+                let lease = DelayLease(active_for_sleep.clone());
+                sender.send(PendingDelay { duration, wake }).unwrap();
+                async move {
+                    let _lease = lease;
+                    release.await.unwrap();
+                }
+            },
+        );
+        Self {
+            internals,
+            pending,
+            active,
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_injected_scheduler_owns_retry_wakeup_independently_of_tokio_time() {
+    let mut delays = ControlledDelays::new();
+    let harness = Harness::with_internals(delays.internals.clone()).await;
+    {
+        let request = harness.dispatch(
+            Some(normal(1, &["RATE_LIMIT"], 60_000.0)),
+            failure("RATE_LIMIT", Some(250.0)),
+            AbortSignal::default(),
+            Ok(RequestErrorAction::Terminal),
+            Arc::new(AtomicUsize::new(0)),
+        );
+        tokio::pin!(request);
+        assert!(futures::poll!(request.as_mut()).is_pending());
+        let delay = delays.pending.try_recv().expect("injected timer was armed");
+        assert_eq!(delay.duration, Duration::from_millis(250));
+        assert_eq!(delays.active.load(Ordering::Acquire), 1);
+        tokio::time::advance(Duration::from_secs(3_600)).await;
+        assert!(futures::poll!(request.as_mut()).is_pending());
+        delay.wake.send(()).unwrap();
+        assert_eq!(request.await.unwrap(), RequestErrorAction::Retry);
+    }
+    assert_eq!(delays.active.load(Ordering::Acquire), 0);
+    assert_eq!(harness.retry_events().len(), 1);
+    assert_eq!(
+        harness
+            .agent
+            .session()
+            .events()
+            .iter()
+            .filter(|event| event.event_type == "llm/retry-started")
+            .count(),
+        1
+    );
+    harness.close().await;
+}
+
+#[tokio::test]
+async fn cancellation_and_disposal_release_injected_retry_wakeups_without_starting_retry() {
+    for dispose_plugin in [false, true] {
+        let mut delays = ControlledDelays::new();
+        let harness = Harness::with_internals(delays.internals.clone()).await;
+        let signal = AbortSignal::default();
+        {
+            let request = harness.dispatch(
+                Some(normal(1, &["RATE_LIMIT"], 60_000.0)),
+                failure("RATE_LIMIT", Some(250.0)),
+                signal.clone(),
+                Ok(RequestErrorAction::Terminal),
+                Arc::new(AtomicUsize::new(0)),
+            );
+            tokio::pin!(request);
+            assert!(futures::poll!(request.as_mut()).is_pending());
+            let delay = delays.pending.try_recv().expect("injected timer was armed");
+            if dispose_plugin {
+                let disposal = harness.plugin.dispose();
+                tokio::pin!(disposal);
+                assert!(futures::poll!(disposal.as_mut()).is_pending());
+                assert_eq!(request.await.unwrap(), RequestErrorAction::Terminal);
+                disposal.await.unwrap();
+                assert!(
+                    delay.wake.send(()).is_err(),
+                    "cancelled wakeup remained live"
+                );
+            } else {
+                signal.abort();
+                delay.wake.send(()).unwrap();
+                assert_eq!(request.await.unwrap(), RequestErrorAction::Terminal);
+            }
+        }
+        assert_eq!(delays.active.load(Ordering::Acquire), 0);
+        assert!(
+            !harness
+                .agent
+                .session()
+                .events()
+                .iter()
+                .any(|event| event.event_type == "llm/retry-started")
+        );
+        harness.close().await;
     }
 }
 

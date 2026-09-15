@@ -54,6 +54,10 @@ positive finite provider `providerRetryAfterMs` at or below `maxDelayMs` replace
 local delay verbatim. An over-cap provider delay makes normal mode delegate;
 always mode uses local backoff instead, preserving its unbounded contract.
 
+Rust embedders can supply jitter and retry IDs with `RetryInternals::new` and
+replace the Tokio delay with `with_sleep`. The injected future owns its wakeup;
+turn cancellation and plugin disposal drop it before returning.
+
 ## Durable events
 
 Before waiting, the plugin appends a non-surface `llm/retry` event containing:

@@ -46,6 +46,9 @@ Always 模式先询问下游恢复中间件。若下游选择重试，该决定�
 `providerRetryAfterMs` 为正有限数且不超过 `maxDelayMs`，则原样替换本地延迟。超过上界的
 提供方延迟会使 normal 模式委托下游；always 模式改用本地退避，以保持无限重试约定。
 
+Rust 嵌入方可通过 `RetryInternals::new` 提供抖动和重试 ID，并用 `with_sleep` 替换 Tokio
+延迟。注入的 future 拥有其唤醒操作；轮次取消和插件释放都会在返回前丢弃该 future。
+
 ## 持久事件
 
 等待前，插件追加非 surface 的 `llm/retry` 事件，其中包括：

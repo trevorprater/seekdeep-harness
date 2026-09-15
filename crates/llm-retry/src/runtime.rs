@@ -1,6 +1,8 @@
 //! Provider-routed retry policy on the agent request-error waterfall.
 
 use std::{
+    future::Future,
+    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -36,11 +38,15 @@ const INJECT: &[&str] = &["agents"];
 #[serde(deny_unknown_fields)]
 pub struct RetryConfig {}
 
+type RetrySleep =
+    dyn Fn(Duration) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync + 'static;
+
 /// Process-local deterministic seams.
 #[derive(Clone)]
 pub struct RetryInternals {
     random: Arc<dyn Fn() -> f64 + Send + Sync + 'static>,
     random_retry_id: Arc<dyn Fn() -> RetryId + Send + Sync + 'static>,
+    sleep: Arc<RetrySleep>,
 }
 
 impl std::fmt::Debug for RetryInternals {
@@ -49,6 +55,7 @@ impl std::fmt::Debug for RetryInternals {
             .debug_struct("RetryInternals")
             .field("random", &"<function>")
             .field("random_retry_id", &"<function>")
+            .field("sleep", &"<function>")
             .finish()
     }
 }
@@ -60,24 +67,25 @@ fn unit_interval(sample: u32) -> f64 {
 }
 
 impl RetryInternals {
-    /// The process boundary's entropy: fresh jitter and a fresh retry id per call.
+    /// The process boundary's Tokio timer, fresh jitter, and fresh retry IDs.
     ///
     /// The retry policy sits inside the determinism perimeter, so it draws no entropy of its own.
-    /// A seeded scheduler injects [`RetryInternals::new`], and only the plugin the process boots
-    /// takes this seam, which keeps a run driven by injected seams reproducible.
+    /// Embedders use [`Self::new`] and [`Self::with_sleep`] to replace all three
+    /// inputs; the ordinary process plugin supplies these ambient defaults.
     #[must_use]
     pub fn ambient() -> Self {
-        Self {
-            random: Arc::new(|| {
+        Self::new(
+            || {
                 let bytes = uuid::Uuid::new_v4().into_bytes();
                 let sample = u32::from_be_bytes(bytes[..4].try_into().unwrap_or_default());
                 unit_interval(sample)
-            }),
-            random_retry_id: Arc::new(|| RetryId::new(uuid::Uuid::new_v4().to_string())),
-        }
+            },
+            || RetryId::new(uuid::Uuid::new_v4().to_string()),
+        )
     }
 
-    /// Creates deterministic timing and identity seams for tests or embedding.
+    /// Supplies jitter and retry identities with the process's Tokio timer.
+    /// Use [`Self::with_sleep`] to control retry wakeup through an injected scheduler.
     #[must_use]
     pub fn new(
         random: impl Fn() -> f64 + Send + Sync + 'static,
@@ -86,7 +94,22 @@ impl RetryInternals {
         Self {
             random: Arc::new(random),
             random_retry_id: Arc::new(random_retry_id),
+            sleep: Arc::new(|duration| Box::pin(tokio::time::sleep(duration))),
         }
+    }
+
+    /// Replaces the retry timer with an embedding's scheduler.
+    ///
+    /// The future completes at the requested delay and must release its pending
+    /// wakeup when dropped. Turn cancellation and plugin disposal drop that future.
+    #[must_use]
+    pub fn with_sleep<F, S>(mut self, sleep: S) -> Self
+    where
+        F: Future<Output = ()> + Send + 'static,
+        S: Fn(Duration) -> F + Send + Sync + 'static,
+    {
+        self.sleep = Arc::new(move |duration| Box::pin(sleep(duration)));
+        self
     }
 }
 
@@ -423,7 +446,7 @@ async fn backoff(
     tokio::select! {
         biased;
         () = fused.cancelled() => Ok(terminal_reply()),
-        () = tokio::time::sleep(duration) => {
+        () = (state.internals.sleep)(duration) => {
             event.agent.session().append(
                 "llm/retry-started",
                 serde_json::to_value(LlmRetryStartedEventData {
