@@ -531,6 +531,7 @@ fn built_pr_command_runs_the_complete_http_snapshot_and_validation_path() {
     let output = Command::new(env!("CARGO_BIN_EXE_seekdeep-issue-policy"))
         .arg("pr")
         .env("GITHUB_API_URL", format!("http://{address}"))
+        .env("GITHUB_REPOSITORY", "seekdeep-harness/seekdeep-harness")
         .env("GITHUB_TOKEN", "test-token")
         .env_remove("GH_TOKEN")
         .env("GITHUB_EVENT_PATH", event)
