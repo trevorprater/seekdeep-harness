@@ -73,8 +73,22 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: real-api-e2e
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
 
       # The with-key escalation e2e self-skips without a usable runner. Install
       # bwrap so trusted CI exercises it; the userns knob is best-effort and the

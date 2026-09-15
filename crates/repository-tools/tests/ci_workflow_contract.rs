@@ -237,6 +237,81 @@ fn requires_one_release_shaped_python_runtime_target_on_every_pull_request() {
 }
 
 #[test]
+fn release_publication_requires_complete_parity_against_the_pinned_source_checkout() {
+    let release = workflow(include_str!("../../../.github/workflows/release.yml"));
+    let pack = job(&release, "pack");
+    let steps = pack["steps"].as_array().expect("pack steps");
+    let parity_index = steps
+        .iter()
+        .position(|step| step["run"] == "cargo xtask parity --source .parity-oracle --scope all")
+        .expect("complete parity gate");
+    assert!(steps[parity_index]["if"].is_null());
+    assert!(steps[parity_index]["continue-on-error"].is_null());
+    let oracle = steps[..parity_index]
+        .iter()
+        .find(|step| step["with"]["path"] == ".parity-oracle")
+        .expect("oracle checked out before the gate");
+    assert_eq!(oracle["with"]["repository"], "deepseek-ai/deepseek-harness");
+    assert_eq!(oracle["with"]["ref"], "${{ steps.oracle.outputs.commit }}");
+    assert_eq!(oracle["with"]["persist-credentials"], false);
+    assert!(oracle["with"]["sparse-checkout"].is_null());
+    assert!(steps[..parity_index].iter().any(|step| {
+        step["id"] == "oracle"
+            && step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("SOURCE_SNAPSHOT"))
+    }));
+    for (index, step) in steps.iter().enumerate() {
+        if step["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("release:pack"))
+        {
+            assert!(
+                index > parity_index,
+                "packaging must follow successful parity"
+            );
+        }
+    }
+    assert_eq!(job(&release, "publish")["needs"], "pack");
+    assert!(
+        !job(&release, "publish")["if"]
+            .as_str()
+            .unwrap()
+            .contains("always()")
+    );
+}
+
+#[test]
+fn real_api_e2e_installs_the_rust_wasm_and_browser_build_dependencies_before_building() {
+    let e2e = workflow(include_str!("../../../.github/workflows/e2e.yml"));
+    let steps = job(&e2e, "e2e")["steps"].as_array().unwrap();
+    let build = steps
+        .iter()
+        .position(|step| step["run"] == "pnpm run build")
+        .expect("build step");
+    let setup = &steps[..build];
+    assert!(setup.iter().any(|step| {
+        step["uses"]
+            .as_str()
+            .is_some_and(|action| action.starts_with("dtolnay/rust-toolchain@"))
+            && step["with"]["targets"]
+                .as_str()
+                .is_some_and(|targets| targets.contains("wasm32-unknown-unknown"))
+    }));
+    for required in [
+        "cargo install --locked wasm-bindgen-cli --version 0.2.127",
+        "pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false",
+    ] {
+        let step = setup
+            .iter()
+            .find(|step| step["run"] == required)
+            .expect(required);
+        assert!(step["if"].is_null());
+        assert!(step["continue-on-error"].is_null());
+    }
+}
+
+#[test]
 fn e2b_e2e_workflow_is_manual_only_and_fails_loud_before_running_the_focused_live_suite() {
     let e2b = workflow(include_str!("../../../.github/workflows/e2b-e2e.yml"));
     assert_eq!(e2b["on"], serde_json::json!({"workflow_dispatch": null}));
