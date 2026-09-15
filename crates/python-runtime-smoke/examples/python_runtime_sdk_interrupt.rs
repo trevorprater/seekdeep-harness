@@ -143,7 +143,7 @@ fn check_interrupt(binary: &Path, python: &Path, group: bool) -> anyhow::Result<
     };
     anyhow::ensure!(
         Command::new("kill")
-            .args(["-INT", &target])
+            .args(["-INT", "--", &target])
             .status()?
             .success(),
         "could not interrupt owned CLI"
