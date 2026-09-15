@@ -27,6 +27,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
 v8.workspace = true
 
 [lints]

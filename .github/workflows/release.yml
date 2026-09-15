@@ -43,20 +43,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Read source oracle pin
-        id: oracle
-        run: |
-          source_commit=$(sed -n 's/^commit=//p' SOURCE_SNAPSHOT)
-          [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
-          echo "commit=$source_commit" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/checkout@v6
-        with:
-          repository: deepseek-ai/deepseek-harness
-          ref: ${{ steps.oracle.outputs.commit }}
-          path: .parity-oracle
-          persist-credentials: false
-
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm
@@ -95,6 +81,8 @@ jobs:
 
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Verify release version
         env:

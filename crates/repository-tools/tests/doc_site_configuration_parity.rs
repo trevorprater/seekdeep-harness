@@ -18,13 +18,7 @@ fn repository_root() -> PathBuf {
 fn every_materialized_locale_navigation_and_search_setting_matches_the_source() {
     let root = repository_root();
     let manifest = DocsManifest::read(&root.join("website/docs.json")).unwrap();
-    let snapshot = std::fs::read_to_string(root.join("SOURCE_SNAPSHOT")).unwrap();
-    let oracle = PathBuf::from(
-        snapshot
-            .lines()
-            .find_map(|line| line.strip_prefix("repository="))
-            .unwrap(),
-    );
+    let oracle = seekdeep_source_oracle::source_root(&root).unwrap();
     let original = std::fs::read_to_string(oracle.join("website/.vitepress/config.ts")).unwrap();
     let source = original
         .lines()

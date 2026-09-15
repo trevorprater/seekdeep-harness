@@ -2,15 +2,26 @@ name: Deploy documentation
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
     paths:
       - '.github/workflows/docs-pages.yml'
+      - '.github/actions/setup-source-oracle/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'SOURCE_SNAPSHOT'
+      - 'crates/repository-tools/**'
+      - 'crates/docs-site-runtime/**'
+      - 'crates/source-oracle/**'
+      - 'crates/typert-generator/**'
+      - 'xtask/**'
+      - 'packages/**/README*'
+      - 'packages/**/package.json'
+      - 'scripts/**'
       - 'docs/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
-      - 'scripts/project-doc-site.ts'
-      - 'scripts/project-doc-site.spec.ts'
       - 'website/**'
   workflow_dispatch:
 
@@ -23,6 +34,8 @@ permissions:
 
 env:
   PRIMARY_NODE_VERSION: '24'
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   SEEKDEEP_TELEMETRY_DISABLED: '1'
@@ -35,16 +48,37 @@ jobs:
       pages: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           cache: pnpm
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: documentation-rust-wasm
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Configure Pages
         id: pages

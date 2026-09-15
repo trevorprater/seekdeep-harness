@@ -30,28 +30,11 @@ struct SourceOutcome {
 }
 
 fn source_worker() -> PathBuf {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let pin = std::fs::read_to_string(root.join("SOURCE_SNAPSHOT")).unwrap();
-    let source = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .unwrap();
-    let commit = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .unwrap();
-    let head = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(source)
-        .output()
-        .unwrap();
-    assert!(head.status.success());
-    assert_eq!(String::from_utf8(head.stdout).unwrap().trim(), commit);
-    Path::new(source).join("packages/code-runtime/code-runtime-worker-thread/src/worker.ts")
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+    .join("packages/code-runtime/code-runtime-worker-thread/src/worker.ts")
 }
 
 fn source(program: &str) -> SourceOutcome {

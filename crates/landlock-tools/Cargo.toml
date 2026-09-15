@@ -21,5 +21,8 @@ tempfile.workspace = true
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true, features = ["fs"] }
 
+[dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
+
 [lints]
 workspace = true

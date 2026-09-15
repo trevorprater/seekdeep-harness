@@ -139,6 +139,27 @@ fn pinned_objects_preserve_strict_declarations_and_reject_document_or_revision_d
     assert!(passed, "{report}");
     assert!(report.contains("2 type-equiv block(s) match"), "{report}");
 
+    let library = locate_repository_library(compiled_repository_root()).unwrap();
+    let inherited = Command::new(env!("CARGO_BIN_EXE_verify-type-equiv"))
+        .arg("--root")
+        .arg(&root)
+        .env("SEEKDEEP_TYPESCRIPT_LIBRARY", library)
+        .env("SEEKDEEP_PARITY_SOURCE", &source)
+        .env("GIT_DIR", root.join("absent-git-directory"))
+        .env("GIT_WORK_TREE", &root)
+        .env("GIT_INDEX_FILE", root.join("absent-index"))
+        .env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", "core.bare")
+        .env("GIT_CONFIG_VALUE_0", "true")
+        .output()
+        .unwrap();
+    assert!(
+        inherited.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&inherited.stdout),
+        String::from_utf8_lossy(&inherited.stderr)
+    );
+
     write(
         &source,
         source_path,

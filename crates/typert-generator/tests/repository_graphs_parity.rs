@@ -14,8 +14,12 @@ use seekdeep_typert_generator::analyzer::{
 use serde_json::json;
 use tempfile::TempDir;
 
-const SOURCE: &str = "/Users/trevor/ws/deepseek-harness";
-const LIBRARY: &str = "/Users/trevor/ws/deepseek-harness/node_modules/typescript/lib/typescript.js";
+fn source_root() -> std::path::PathBuf {
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+}
 
 fn write(root: &Path, path: &str, content: &str) {
     let path = root.join(path);
@@ -43,7 +47,8 @@ const input=JSON.parse(fs.readFileSync(0,'utf8'));
 })().catch(error=>{console.error(error);process.exitCode=1});
 ";
     let mut child = Command::new("node")
-        .args(["--experimental-transform-types", "-e", script, SOURCE])
+        .args(["--experimental-transform-types", "-e", script])
+        .arg(source_root())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -169,7 +174,11 @@ recursive(['recursive/bounded'])
 }
 
 fn native(root: &Path, packages: Option<&[&str]>) -> EventRelations {
-    let mut project = TypeScriptProject::with_compiler(root, Path::new(LIBRARY)).unwrap();
+    let mut project = TypeScriptProject::with_compiler(
+        root,
+        &source_root().join("node_modules/typescript/lib/typescript.js"),
+    )
+    .unwrap();
     let mut sources = collect_package_sources(&mut project).unwrap();
     if let Some(packages) = packages {
         sources.retain(|source| packages.contains(&source.pkg.as_str()));
@@ -232,8 +241,8 @@ fn source_local_alias_escape_global_script_and_semantic_receiver_cases_match() {
 #[test]
 fn source_whole_repository_event_relations_match_byte_for_byte_as_data() {
     run_with_stack(|| {
-        let actual = native(Path::new(SOURCE), None);
-        let expected = oracle(Path::new(SOURCE), None);
+        let actual = native(&source_root(), None);
+        let expected = oracle(&source_root(), None);
         assert_eq!(
             serde_json::to_value(&actual).unwrap(),
             serde_json::to_value(&expected).unwrap()
@@ -251,8 +260,11 @@ fn missing_program_type_is_a_failure() {
             "export class Renamed {}\n",
         )
         .unwrap();
-        let mut project =
-            TypeScriptProject::with_compiler(root.path(), Path::new(LIBRARY)).unwrap();
+        let mut project = TypeScriptProject::with_compiler(
+            root.path(),
+            &source_root().join("node_modules/typescript/lib/typescript.js"),
+        )
+        .unwrap();
         let sources = collect_package_sources(&mut project).unwrap();
         assert!(
             collect_event_relations(&mut project, &sources)

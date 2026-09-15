@@ -17,7 +17,10 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 fn source_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness")
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
 }
 
 fn normalize(text: &str) -> String {

@@ -52,6 +52,7 @@ uuid.workspace = true
 zstd.workspace = true
 
 [dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
 seekdeep-credentials-local = { path = "../credentials-local" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-settings-file = { path = "../settings-file" }

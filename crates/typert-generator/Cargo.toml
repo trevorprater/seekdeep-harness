@@ -23,6 +23,7 @@ thiserror.workspace = true
 v8.workspace = true
 
 [dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
 tempfile.workspace = true
 
 [lints]

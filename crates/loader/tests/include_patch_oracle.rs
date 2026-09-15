@@ -3,7 +3,7 @@
 //! Rust composer must produce the same detached entries and the same skipped-
 //! patch diagnostics in the same order.
 
-use std::{path::PathBuf, process::Command};
+use std::process::Command;
 
 use seekdeep_loader::profile_patch::{
     ProfileEntry, ProfilePatch, apply_entry_patches_with_warning_sink,
@@ -84,10 +84,10 @@ fn to_patches(value: &Value) -> Vec<ProfilePatch> {
 
 #[test]
 fn rust_composer_matches_the_pinned_include_patch_semantics() {
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        Into::into,
-    );
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let cases = cases();
     let payload = serde_json::to_string(
         &cases

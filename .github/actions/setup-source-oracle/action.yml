@@ -1,0 +1,59 @@
+name: Prepare pinned source oracle
+description: Check out the SOURCE_SNAPSHOT revision and prepare its executable specifications.
+
+outputs:
+  root:
+    description: Native absolute path to the original source checkout.
+    value: ${{ steps.location.outputs.root }}
+  commit:
+    description: Full source revision from SOURCE_SNAPSHOT.
+    value: ${{ steps.pin.outputs.commit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read source oracle pin
+      id: pin
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE'
+        import { appendFileSync, readFileSync } from 'node:fs';
+        const snapshot = readFileSync('SOURCE_SNAPSHOT', 'utf8');
+        const commits = snapshot.split(/\r?\n/).filter(line => line.startsWith('commit='));
+        if (commits.length !== 1 || !/^commit=[0-9a-f]{40}$/.test(commits[0])) {
+          throw new Error('SOURCE_SNAPSHOT must contain one full source commit');
+        }
+        appendFileSync(process.env.GITHUB_OUTPUT, commits[0] + '\n');
+        NODE
+
+    - uses: actions/checkout@v6
+      with:
+        repository: deepseek-ai/deepseek-harness
+        ref: ${{ steps.pin.outputs.commit }}
+        path: .parity-oracle
+        persist-credentials: false
+
+    - name: Export source checkout location
+      id: location
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE'
+        import { appendFileSync } from 'node:fs';
+        import { realpathSync } from 'node:fs';
+        const root = realpathSync('.parity-oracle');
+        appendFileSync(process.env.GITHUB_ENV, `SEEKDEEP_PARITY_SOURCE=${root}\n`);
+        appendFileSync(process.env.GITHUB_OUTPUT, `root=${root}\n`);
+        NODE
+
+    - name: Install original source dependencies
+      shell: bash
+      env:
+        CI: 'true'
+        DSH_TELEMETRY_DISABLED: '1'
+      run: pnpm --dir .parity-oracle install --frozen-lockfile
+
+    - name: Build original Host artifacts
+      shell: bash
+      env:
+        DSH_TELEMETRY_DISABLED: '1'
+      run: pnpm --dir .parity-oracle run build:lib:host

@@ -45,7 +45,12 @@ mod tests {
 
     use super::*;
 
-    const SOURCE: &str = "/Users/trevor/ws/deepseek-harness";
+    fn source_root() -> std::path::PathBuf {
+        seekdeep_source_oracle::source_root(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".."),
+        )
+        .unwrap()
+    }
 
     fn write(root: &Path, relative: &str, content: &str) {
         let path = root.join(relative);
@@ -80,7 +85,7 @@ mod tests {
     #[test]
     fn every_graph_matches_the_pinned_generated_artifact_and_round_trips_freshness() {
         run_with_stack(|| {
-            let source = Path::new(SOURCE);
+            let source = &source_root();
             let root = tempfile::tempdir().unwrap();
             for entry in walkdir::WalkDir::new(source.join("packages"))
                 .min_depth(3)
@@ -250,8 +255,8 @@ mod tests {
             "packages/core/consumer/package.json",
             r#"{"name":"@seekdeep-ai/seekdeep-consumer","peerDependencies":{"@seekdeep-ai/seekdeep-invariants":"workspace:^"}}"#,
         );
-        copy_package_documentation(root.path(), Path::new(SOURCE));
-        assert!(run(root.path(), Path::new(SOURCE), false).unwrap());
+        copy_package_documentation(root.path(), &source_root());
+        assert!(run(root.path(), &source_root(), false).unwrap());
         for rel in [
             "docs/graph-atlas.md",
             "docs/capability-seams.md",
@@ -260,7 +265,7 @@ mod tests {
         ] {
             assert_eq!(
                 std::fs::read_to_string(root.path().join(rel)).unwrap(),
-                target_identity(&std::fs::read_to_string(Path::new(SOURCE).join(rel)).unwrap()),
+                target_identity(&std::fs::read_to_string(source_root().join(rel)).unwrap()),
                 "{rel}"
             );
         }

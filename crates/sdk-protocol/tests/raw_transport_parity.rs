@@ -297,24 +297,13 @@ fn typed_sdk_envelopes_decode_raw_payloads_in_either_member_order() {
 
 #[tokio::test]
 async fn lossless_transport_interoperates_with_the_pinned_source_endpoint() {
-    let snapshot = include_str!("../../../SOURCE_SNAPSHOT");
-    let source = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .unwrap();
-    let expected = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .unwrap();
-    let head = tokio::process::Command::new("git")
-        .args(["-C", source, "rev-parse", "HEAD"])
-        .output()
-        .await
-        .unwrap();
-    assert!(head.status.success());
-    assert_eq!(String::from_utf8(head.stdout).unwrap().trim(), expected);
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let script = r"
-const { JsonRpcLineTransport } = await import(process.argv[1]);
+const { pathToFileURL } = await import('node:url');
+const { JsonRpcLineTransport } = await import(pathToFileURL(process.argv[1]).href);
 const rpc = new JsonRpcLineTransport(process.stdin, process.stdout);
 rpc.onRequest(async (method, params) => {
   if (method === 'failure') throw new Error(String.fromCharCode(0xd800) + ' source failure');
@@ -331,7 +320,7 @@ rpc.start();
             "-e",
             script,
         ])
-        .arg(format!("{source}/packages/sdk/protocol/src/transport.ts"))
+        .arg(source.join("packages/sdk/protocol/src/transport.ts"))
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

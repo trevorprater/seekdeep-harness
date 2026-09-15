@@ -48,6 +48,7 @@ seekdeep-session-query = { path = "../crates/session-query" }
 seekdeep-session-query-sqlite = { path = "../crates/session-query-sqlite" }
 seekdeep-shell-env = { path = "../crates/shell-env" }
 seekdeep-skill = { path = "../crates/skill" }
+seekdeep-source-oracle = { path = "../crates/source-oracle" }
 seekdeep-subagent = { path = "../crates/subagent" }
 seekdeep-subprocess-local = { path = "../crates/subprocess-local" }
 seekdeep-system-prompt = { path = "../crates/system-prompt" }

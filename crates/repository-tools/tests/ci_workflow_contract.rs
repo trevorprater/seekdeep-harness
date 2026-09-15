@@ -294,16 +294,24 @@ fn release_publication_requires_complete_parity_against_the_pinned_source_checko
         .expect("complete parity gate");
     assert!(steps[parity_index]["if"].is_null());
     assert!(steps[parity_index]["continue-on-error"].is_null());
-    let oracle = steps[..parity_index]
+    steps[..parity_index]
+        .iter()
+        .find(|step| step["uses"] == "./.github/actions/setup-source-oracle")
+        .expect("oracle prepared before the gate");
+    let setup = workflow(include_str!(
+        "../../../.github/actions/setup-source-oracle/action.yml"
+    ));
+    let setup_steps = setup["runs"]["steps"].as_array().unwrap();
+    let oracle = setup_steps
         .iter()
         .find(|step| step["with"]["path"] == ".parity-oracle")
-        .expect("oracle checked out before the gate");
+        .expect("complete source checkout");
     assert_eq!(oracle["with"]["repository"], "deepseek-ai/deepseek-harness");
-    assert_eq!(oracle["with"]["ref"], "${{ steps.oracle.outputs.commit }}");
+    assert_eq!(oracle["with"]["ref"], "${{ steps.pin.outputs.commit }}");
     assert_eq!(oracle["with"]["persist-credentials"], false);
     assert!(oracle["with"]["sparse-checkout"].is_null());
-    assert!(steps[..parity_index].iter().any(|step| {
-        step["id"] == "oracle"
+    assert!(setup_steps.iter().any(|step| {
+        step["id"] == "pin"
             && step["run"]
                 .as_str()
                 .is_some_and(|run| run.contains("SOURCE_SNAPSHOT"))

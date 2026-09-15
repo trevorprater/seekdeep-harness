@@ -1,4 +1,5 @@
 /target/
+/.parity-oracle/
 node_modules/
 /dist-exe/
 /python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/

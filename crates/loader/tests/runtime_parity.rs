@@ -541,8 +541,10 @@ async fn host_hmr_observes_but_does_not_surface_old_generation_disposal_failure(
 
 #[tokio::test]
 async fn host_hmr_matches_source_commonjs_entry_cache_and_require_only_dependency_behavior() {
-    let source_root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness");
+    let source_root = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let output = std::process::Command::new("node")
         .args(["--experimental-transform-types", "--expose-internals"])
         .arg(

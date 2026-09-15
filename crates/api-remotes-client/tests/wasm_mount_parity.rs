@@ -11,8 +11,8 @@ use seekdeep_client_foundation_wasm::{
     client_api_gateway_plugin, client_connection_plugin, client_typert_registry_plugin,
     configure_client_api_gateway,
 };
-use seekdeep_cordis::{configure_context_wrapper, create_context};
-use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
+use seekdeep_cordis::{configure_context_wrapper, context_special_property, create_context};
+use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -31,13 +31,19 @@ export function apiRemotesBench(failAt) {
 }
 export function apiRemotesLog(bench) { return bench.log }
 
-export async function compareSourceLifecycle(target, oracle) {
+export async function compareSourceLifecycle(target, snapshot) {
+  const metadata = Object.fromEntries(snapshot.trim().split(/\r?\n/).map(line => {
+    const equals = line.indexOf('=');
+    return [line.slice(0, equals), line.slice(equals + 1)];
+  }));
+  const oracle = process.env.SEEKDEEP_PARITY_SOURCE ?? metadata.repository;
   const { createRequire } = await import('node:module');
   const { readFileSync } = await import('node:fs');
   const { execFileSync } = await import('node:child_process');
   const require = createRequire(oracle + '/package.json');
   const ts = require('typescript');
-  if (execFileSync('git', ['rev-parse', 'HEAD'], { cwd: oracle, encoding: 'utf8' }).trim() !== '37200a934324dd7167ec8a8d3ac1fd01e2239909') throw new Error('oracle pin differs');
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
+  if (execFileSync('git', ['--no-replace-objects', 'rev-parse', 'HEAD'], { cwd: oracle, env, encoding: 'utf8' }).trim() !== metadata.commit) throw new Error('oracle pin differs');
   const path = oracle + '/packages/api/remotes/src/client/index.ts';
   const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
   const apply = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'apply');
@@ -88,10 +94,10 @@ export async function compareSourceLifecycle(target, oracle) {
   return result;
 }
 
-export function remoteContextWrapper() {
-  const tracker = Symbol.for('cordis.service.tracker')
+export function remoteContextWrapper(isSpecialProperty) {
+  const tracker = Symbol.for('cordis.tracker')
   const trace = (ctx, value) => {
-    if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[tracker] !== true) return value
+    if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[tracker]?.property !== 'ctx') return value
     let proxy
     proxy = new Proxy(value, {
       get(target, key, receiver) {
@@ -111,13 +117,14 @@ export function remoteContextWrapper() {
         if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
         if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
         if (key === 'waterfall') return (...args) => target.eventArgs('waterfall', args)
-        if (key === 'get') return name => trace(ctx, target.get(name))
+        if (key === 'get') return (name, strict) => trace(ctx, target.serviceGet(name, strict))
         if (Reflect.has(target, key)) {
           const value = Reflect.get(target, key, receiver)
           return typeof value === 'function' ? value.bind(target) : value
         }
         const metadata = target.metaGet(key)
         if (metadata !== undefined) return metadata
+        if (isSpecialProperty(key)) return undefined
         return typeof key === 'string' ? trace(ctx, target.get(key)) : undefined
       },
     })
@@ -126,7 +133,7 @@ export function remoteContextWrapper() {
 }
 
 export function remoteGatewayFactories() {
-  const tracker = Symbol.for('cordis.service.tracker')
+  const tracker = Symbol.for('cordis.tracker')
   const remoteFactory = (ctx, core) => {
     const service = {
       ctx,
@@ -134,7 +141,7 @@ export function remoteGatewayFactories() {
       $on(event, listener) { return core.on(this.ctx, event, listener) },
       $dispatch(event, args) { return core.dispatch(event, args) },
     }
-    Object.defineProperty(service, tracker, { value: true })
+    Object.defineProperty(service, tracker, { value: { property: 'ctx' } })
     ctx.provide('remote', service)
     return service
   }
@@ -153,7 +160,7 @@ export function remoteGatewayFactories() {
       },
       remove(method) { delete this[method] },
     }
-    Object.defineProperty(service, tracker, { value: true })
+    Object.defineProperty(service, tracker, { value: { property: 'ctx' } })
     Object.defineProperty(service, 'invokeRemote', { value: invoke })
     return { service, dispose: ctx.provide('remote.' + namespace, service) }
   }
@@ -221,7 +228,7 @@ extern "C" {
     fn compareSourceLifecycle(target: &Function, oracle: &str) -> Promise;
     fn apiRemotesBench(fail_at: &str) -> JsValue;
     fn apiRemotesLog(bench: &JsValue) -> Array;
-    fn remoteContextWrapper() -> JsValue;
+    fn remoteContextWrapper(is_special_property: &JsValue) -> JsValue;
     fn remoteGatewayFactories() -> Array;
     fn installGoalFetch() -> JsValue;
     fn remotePlugin(root: &JsValue, plugin: &JsValue) -> Promise;
@@ -245,7 +252,7 @@ async fn lifecycle_timing_retries_and_overlap_match_source() {
     );
     let results = JsFuture::from(compareSourceLifecycle(
         target.as_ref().unchecked_ref(),
-        "/Users/trevor/ws/deepseek-harness",
+        include_str!("../../../SOURCE_SNAPSHOT"),
     ))
     .await
     .unwrap();
@@ -325,7 +332,10 @@ async fn generated_contributions_are_complete_and_goal_codecs_reject_invalid_req
 #[wasm_bindgen_test(async)]
 async fn generated_goal_remote_supports_explicit_and_agent_context_calls() {
     configure_zod().await;
-    configure_context_wrapper(remoteContextWrapper()).unwrap();
+    let special_property = Closure::wrap(Box::new(|key: JsValue| context_special_property(&key))
+        as Box<dyn Fn(JsValue) -> Result<bool, JsValue>>)
+    .into_js_value();
+    configure_context_wrapper(remoteContextWrapper(&special_property)).unwrap();
     let factories = remoteGatewayFactories();
     configure_client_api_gateway(factories.get(0), factories.get(1)).unwrap();
     let fetch = installGoalFetch();

@@ -258,10 +258,10 @@ fn passes_a_slot_whose_report_stays_within_the_budget() {
 
 #[test]
 fn collects_every_declared_slot_of_the_pinned_workspace_and_reproduces_the_committed_catalog() {
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || std::path::PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        Into::into,
-    );
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let entries = collect_slot_entries(Path::new(&source)).unwrap();
     assert!(entries.len() > 30);
     for entry in &entries {

@@ -21,12 +21,10 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 fn source_root() -> PathBuf {
-    PathBuf::from(
-        include_str!("../../../SOURCE_SNAPSHOT")
-            .lines()
-            .find_map(|line| line.strip_prefix("repository="))
-            .unwrap(),
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
     )
+    .unwrap()
 }
 
 fn compiler_library() -> PathBuf {

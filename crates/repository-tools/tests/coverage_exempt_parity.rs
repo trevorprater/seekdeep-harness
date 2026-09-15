@@ -9,7 +9,13 @@ fn target_environment_and_source_roster_are_exact() {
     assert_eq!(COVERAGE_EXEMPT_ENV, "SEEKDEEP_COVERAGE_EXEMPT_HEAVY");
     assert_eq!(COVERAGE_EXEMPT_HEAVY_SUITES.len(), 4);
     assert_eq!(
-        verify_coverage_exempt(std::path::Path::new("/Users/trevor/ws/deepseek-harness")).unwrap(),
+        verify_coverage_exempt(
+            &seekdeep_source_oracle::source_root(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+            )
+            .unwrap()
+        )
+        .unwrap(),
         Vec::<String>::new()
     );
 }

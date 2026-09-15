@@ -15,5 +15,8 @@ js-sys.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["Window", "Element", "Event", "EventTarget", "DomTokenList"] }
 
+[dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
+
 [lints]
 workspace = true

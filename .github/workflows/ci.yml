@@ -125,6 +125,8 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - uses: ./.github/actions/setup-source-oracle
+
       - name: Run static gates
         env:
           SEEKDEEP_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha }}
@@ -199,6 +201,8 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run exhaustive coverage
         run: pnpm run check:ci:coverage
@@ -292,6 +296,8 @@ jobs:
       - name: Install Playwright Chromium on the failover VM
         if: vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: pnpm --filter @seekdeep-ai/seekdeep-web-frontend exec playwright install chromium
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run compatibility, snapshot, and artifact gates
         run: pnpm run check:ci:consumers
@@ -628,6 +634,8 @@ jobs:
         shell: pwsh
         run: pnpm --filter @seekdeep-ai/seekdeep-web-frontend exec playwright install chromium
 
+      - uses: ./.github/actions/setup-source-oracle
+
       - name: Run complete native Windows gate inventory
         shell: pwsh
         run: pnpm run check:ci:windows-complete
@@ -682,6 +690,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
@@ -690,6 +708,8 @@ jobs:
 
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run complete unsharded primary Node CI serially
         env:
@@ -739,6 +759,16 @@ jobs:
       - name: Configure persistent pnpm store
         run: echo "PNPM_CONFIG_STORE_DIR=$HOME/.local/share/pnpm/store" >> "$GITHUB_ENV"
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
@@ -749,6 +779,8 @@ jobs:
 
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run complete unsharded primary Node CI serially
         env:
@@ -776,8 +808,20 @@ jobs:
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run complete unsharded primary Node CI serially
         env:
@@ -814,6 +858,8 @@ jobs:
           /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
 
       - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
 
       - uses: pnpm/action-setup@v4
         with:
@@ -837,9 +883,17 @@ jobs:
           $storeRoot = "$env:LOCALAPPDATA\pnpm\store"
           echo "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
 
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install (immutable)
         shell: pwsh
         run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run complete unsharded Windows gate inventory serially
         shell: pwsh
@@ -1019,6 +1073,16 @@ jobs:
           console.log(JSON.stringify({ arch: process.arch, cpus: os.cpus().length,
           memoryGiB: Math.round(os.totalmem() / 2 ** 30) }))"
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
       - name: Install and prepare Linux
         if: matrix.platform == 'linux'
         run: |
@@ -1037,6 +1101,8 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
 
       - name: Run complete unsharded primary Node CI concurrently
         if: matrix.platform == 'linux'

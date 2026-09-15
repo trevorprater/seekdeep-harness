@@ -57,17 +57,10 @@ fn built_node_entry_matches_pinned_source_exports_resolution_grants_and_probe() 
 }
 
 fn source_root() -> PathBuf {
-    std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || {
-            PathBuf::from(
-                include_str!("../../../SOURCE_SNAPSHOT")
-                    .lines()
-                    .find_map(|line| line.strip_prefix("repository="))
-                    .unwrap(),
-            )
-        },
-        PathBuf::from,
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
     )
+    .unwrap()
 }
 
 const DRIVER: &str = r#"

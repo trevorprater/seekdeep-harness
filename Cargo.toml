@@ -199,6 +199,7 @@ members = [
   "crates/session-title-all-prompts-llm",
   "crates/session-title-first-prompt-llm",
   "crates/session-title-llm",
+  "crates/source-oracle",
   "crates/spill",
   "crates/spill-local",
   "crates/spill-policy",

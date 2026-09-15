@@ -181,28 +181,10 @@ impl Drop for Fixture {
 }
 
 fn pinned_source() -> PathBuf {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let pin = std::fs::read_to_string(workspace.join("SOURCE_SNAPSHOT")).unwrap();
-    let repository = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .unwrap();
-    let commit = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .unwrap();
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(repository)
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), commit);
-    PathBuf::from(repository)
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
 }
 
 fn source(fixture: &Fixture, invocations: &[Invocation]) -> Vec<Observation> {

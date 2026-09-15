@@ -91,13 +91,10 @@ fn options<'a>(root: &'a Path, pages: &'a [DocsPage]) -> RewriteOptions<'a> {
 }
 
 fn source_root() -> PathBuf {
-    let snapshot = include_str!("../../../SOURCE_SNAPSHOT");
-    PathBuf::from(
-        snapshot
-            .lines()
-            .find_map(|line| line.strip_prefix("repository="))
-            .unwrap(),
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
     )
+    .unwrap()
 }
 
 fn source_call(input: &Value) -> Value {

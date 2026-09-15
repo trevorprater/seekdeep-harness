@@ -10,7 +10,10 @@ use serde_json::{Value, json};
 
 #[test]
 fn source_path_selection_matches_across_platforms_nesting_exceptions_and_unicode_order() {
-    let source = "/Users/trevor/ws/deepseek-harness";
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let available = [
         "../packages/core/tools/src/invariant.ts",
         "../packages/runtime-diagnostics/invariants/src/invariant.ts",
@@ -57,7 +60,7 @@ fn source_path_selection_matches_across_platforms_nesting_exceptions_and_unicode
             paths.push(format!("{prefix}/packages/core/tools/tests/{file}"));
         }
     }
-    let expected = oracle(source, &available, &paths);
+    let expected = oracle(&source, &available, &paths);
     for (path, expected) in paths.iter().zip(expected) {
         let selection = match test_invariant_companion_paths(path, available) {
             Ok(paths) => json!({"ok": paths}),
@@ -72,7 +75,7 @@ fn source_path_selection_matches_across_platforms_nesting_exceptions_and_unicode
     assert_eq!(paths.len(), 40);
 }
 
-fn oracle(source: &str, available: &[&str], paths: &[String]) -> Vec<Value> {
+fn oracle(source: &std::path::Path, available: &[&str], paths: &[String]) -> Vec<Value> {
     let script = r"
 const fs=require('node:fs');
 const vm=require('node:vm');
@@ -92,7 +95,8 @@ const code=ts.transpileModule(raw,{compilerOptions:{target:ts.ScriptTarget.ES202
 process.stdout.write(vm.runInNewContext(code,{input,testInvariantCompanions:Object.fromEntries(input.available.map(path=>[path,()=>{}]))}));
 ";
     let mut child = Command::new("node")
-        .args(["-e", script, source])
+        .args(["-e", script])
+        .arg(source)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

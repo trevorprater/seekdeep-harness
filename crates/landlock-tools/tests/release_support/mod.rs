@@ -17,19 +17,11 @@ use serde_json::{Value, json};
 pub(crate) const ENTRY_NAME: &str = "@seekdeep-ai/node-addon-landlock-run";
 
 pub(crate) fn source_root() -> PathBuf {
-    std::env::var_os("SEEKDEEP_PARITY_SOURCE")
-        .map_or_else(
-            || {
-                PathBuf::from(
-                    include_str!("../../../../SOURCE_SNAPSHOT")
-                        .lines()
-                        .find_map(|line| line.strip_prefix("repository="))
-                        .unwrap(),
-                )
-            },
-            PathBuf::from,
-        )
-        .join("native/landlock-run")
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+    .join("native/landlock-run")
 }
 
 pub(crate) struct Fixture {

@@ -9,7 +9,12 @@ use seekdeep_repository_tools::package_readme_model_experience::{
 };
 use tempfile::TempDir;
 
-const SOURCE: &str = "/Users/trevor/ws/deepseek-harness";
+fn source_root() -> std::path::PathBuf {
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+}
 const STRUCTURED: &str = "# Package\n\n## Model Experience\n\n### Tool result\n\n#### What the model sees\n\nThe model sees `result`.\n\n#### Token effect\n\nThe result uses one token.\n\n#### KV Cache effect\n\nEarlier messages remain stable.\n";
 const SHORT: &str = "# Package\n\n## Model Experience\n\nNone, as the package only checks files.\n\n#### KV Cache effect\n\nNo request changes.\n";
 
@@ -21,13 +26,16 @@ fn write(root: &std::path::Path, path: &str, contents: &str) {
 
 fn oracle(root: &std::path::Path, policy: Option<&ModelExperiencePolicy>) -> (bool, String) {
     let directory = TempDir::new().unwrap();
-    let mut source = std::fs::read_to_string(format!(
-        "{SOURCE}/scripts/verify-package-readme-model-experience.ts"
-    ))
+    let mut source = std::fs::read_to_string(
+        source_root().join("scripts/verify-package-readme-model-experience.ts"),
+    )
     .unwrap()
     .replace(
         "from './markdown.ts'",
-        &format!("from 'file://{SOURCE}/scripts/markdown.ts'"),
+        &format!(
+            "from '{}'",
+            url::Url::from_file_path(source_root().join("scripts/markdown.ts")).unwrap()
+        ),
     )
     .replace(
         "const root = resolve(import.meta.dirname, '..')",
@@ -244,15 +252,16 @@ fn audited_short_forms_omissions_and_policy_diagnostics_match_source() {
 
 #[test]
 fn pinned_source_corpus_and_real_native_cli_match_source_checker() {
-    let native = inspect_package_readme_model_experience(std::path::Path::new(SOURCE)).unwrap();
+    let native = inspect_package_readme_model_experience(&source_root()).unwrap();
     assert_eq!(
         (native.failures.is_empty(), render_report(&native)),
-        oracle(std::path::Path::new(SOURCE), None)
+        oracle(&source_root(), None)
     );
     assert!(native.checked >= 170, "{} packages", native.checked);
     assert!(native.failures.is_empty(), "{}", render_report(&native));
     let output = Command::new(env!("CARGO_BIN_EXE_verify-package-readme-model-experience"))
-        .args(["--root", SOURCE])
+        .arg("--root")
+        .arg(source_root())
         .output()
         .unwrap();
     assert!(

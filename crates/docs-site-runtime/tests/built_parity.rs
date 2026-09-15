@@ -11,11 +11,7 @@ fn built_callbacks_match_source_and_sidebar_ownership_unwinds() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    let snapshot = std::fs::read_to_string(root.join("SOURCE_SNAPSHOT")).unwrap();
-    let source = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .unwrap();
+    let source = seekdeep_source_oracle::source_root(&root).unwrap();
     let output = Command::new("node")
         .arg(root.join("crates/docs-site-runtime/tests/built-parity.mjs"))
         .arg(&root)

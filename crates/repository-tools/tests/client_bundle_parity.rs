@@ -10,10 +10,10 @@ use seekdeep_repository_tools::client_bundle::{self, ClientBundleOptions, Client
 use serde_json::{Value, json};
 
 fn source_root() -> PathBuf {
-    std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        PathBuf::from,
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
     )
+    .unwrap()
 }
 
 fn source_results(requests: &[Value]) -> Vec<Value> {

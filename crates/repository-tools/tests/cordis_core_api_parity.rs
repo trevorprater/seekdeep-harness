@@ -10,10 +10,10 @@ use seekdeep_repository_tools::cordis_core_api::{
 };
 
 fn source_root() -> std::path::PathBuf {
-    std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || std::path::PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        Into::into,
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
     )
+    .unwrap()
 }
 
 #[test]

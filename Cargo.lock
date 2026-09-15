@@ -6723,6 +6723,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-source-oracle",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -6910,6 +6911,7 @@ dependencies = [
  "ryu-js",
  "seekdeep-cosmokit",
  "seekdeep-schemastery",
+ "seekdeep-source-oracle",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -7091,6 +7093,7 @@ name = "seekdeep-docs-site-runtime"
 version = "0.1.0-rc.5"
 dependencies = [
  "js-sys",
+ "seekdeep-source-oracle",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -7118,6 +7121,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "ryu-js",
  "seekdeep-lossless-json",
+ "seekdeep-source-oracle",
  "serde_json",
 ]
 
@@ -7362,6 +7366,7 @@ dependencies = [
  "regress 0.11.1",
  "seekdeep-cordis",
  "seekdeep-loader",
+ "seekdeep-source-oracle",
  "serde",
  "serde_json",
  "tempfile",
@@ -7754,6 +7759,7 @@ dependencies = [
  "nix 0.30.1",
  "regex",
  "ryu-js",
+ "seekdeep-source-oracle",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7874,6 +7880,7 @@ dependencies = [
  "seekdeep-schemastery",
  "seekdeep-settings",
  "seekdeep-settings-file",
+ "seekdeep-source-oracle",
  "seekdeep-util",
  "serde",
  "serde_json",
@@ -7956,6 +7963,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-cordis-timer",
  "seekdeep-llm",
+ "seekdeep-source-oracle",
  "seekdeep-tools",
  "seekdeep-util",
  "serde",
@@ -8366,6 +8374,7 @@ dependencies = [
  "regex",
  "ryu-js",
  "scraper",
+ "seekdeep-source-oracle",
  "seekdeep-typert-generator",
  "serde",
  "serde_json",
@@ -8663,6 +8672,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-lossless-json",
+ "seekdeep-source-oracle",
  "seekdeep-subagent",
  "serde",
  "serde_json",
@@ -8805,6 +8815,7 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-session-persistence",
  "seekdeep-session-persistence-jsonl",
+ "seekdeep-source-oracle",
  "serde",
  "serde_json",
  "tempfile",
@@ -9233,6 +9244,14 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "seekdeep-source-oracle"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "tempfile",
 ]
 
 [[package]]
@@ -10388,6 +10407,7 @@ dependencies = [
  "seekdeep-scope",
  "seekdeep-session-persistence",
  "seekdeep-session-persistence-jsonl",
+ "seekdeep-source-oracle",
  "seekdeep-system-prompt",
  "seekdeep-user-approval",
  "serde",
@@ -10411,6 +10431,7 @@ dependencies = [
  "regress 0.11.1",
  "ryu-js",
  "seekdeep-cordis-api-catalog",
+ "seekdeep-source-oracle",
  "seekdeep-typert-model",
  "serde",
  "serde_json",
@@ -12914,6 +12935,7 @@ dependencies = [
  "seekdeep-session-query-sqlite",
  "seekdeep-shell-env",
  "seekdeep-skill",
+ "seekdeep-source-oracle",
  "seekdeep-subagent",
  "seekdeep-subprocess-local",
  "seekdeep-system-prompt",

@@ -9,8 +9,10 @@ use seekdeep_hmr::error::{code_frame, format_error};
 use serde_json::{Value, json};
 
 fn source_errors(cases: &[Value], color: bool) -> Vec<Value> {
-    let source_root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness");
+    let source_root = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let mut child = Command::new("node")
         .args(["--input-type=module", "-e", "import fs from 'node:fs'; import { handleError } from './vendor/hmr/src/error.ts'; const cases=JSON.parse(fs.readFileSync(0,'utf8')); const normalize=value=>value instanceof Error ? {name:value.name,message:value.message,...(value.code?{code:value.code}:{})} : value; const output=cases.map(value=>{const warnings=[]; try {handleError({logger:{warn(value){warnings.push(normalize(value))}}}, value); return {warnings};} catch(error){return {error:error.message}}}); process.stdout.write(JSON.stringify(output));"])
         .env("FORCE_COLOR", if color { "1" } else { "0" })

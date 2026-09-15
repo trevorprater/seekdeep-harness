@@ -26,7 +26,10 @@ fn test_context() -> Context {
 }
 
 fn source_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness")
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
 }
 
 fn source_warnings(error: &Value) -> anyhow::Result<Value> {

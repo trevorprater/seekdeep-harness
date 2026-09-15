@@ -273,8 +273,10 @@ fn default_picomatch_grammar_matches_the_pinned_source() {
 }
 
 fn assert_source_matches(patterns: &[String], paths: &[String]) {
-    let source_root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../deepseek-harness");
+    let source_root = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let mut child = Command::new("node")
         .args(["--input-type=module", "-e", "import { createRequire } from 'node:module'; import fs from 'node:fs'; const require=createRequire(process.cwd()+'/vendor/hmr/package.json'); const picomatch=require('picomatch'); const input=JSON.parse(fs.readFileSync(0,'utf8')); process.stdout.write(JSON.stringify(input.patterns.map(pattern=>({pattern,matches:input.paths.map(path=>picomatch(pattern)(path))}))));"])
         .current_dir(source_root)

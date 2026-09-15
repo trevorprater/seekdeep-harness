@@ -72,10 +72,10 @@ fn a_real_wasm_frame_maps_to_embedded_rust_source_in_chromium() {
     );
     let driver = root.join("browser.mjs");
     std::fs::write(&driver, BROWSER).unwrap();
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        PathBuf::from,
-    );
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     let browser = Command::new("node")
         .arg(&driver)
         .arg(&source)

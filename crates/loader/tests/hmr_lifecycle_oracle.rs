@@ -249,7 +249,12 @@ fn source_reports() -> anyhow::Result<Value> {
     let output = std::process::Command::new("node")
         .args(["--experimental-transform-types", "--expose-internals"])
         .arg(root.join("tests/fixtures/hmr_lifecycle_oracle.mjs"))
-        .arg(root.join("../../../deepseek-harness"))
+        .arg(
+            seekdeep_source_oracle::source_root(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            )
+            .unwrap(),
+        )
         .output()?;
     anyhow::ensure!(
         output.status.success(),

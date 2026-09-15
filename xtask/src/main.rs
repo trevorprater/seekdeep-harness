@@ -67,12 +67,8 @@ enum Command {
     },
     /// Generate or verify the source-faithful dependency and event graphs.
     DocGraphs {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         #[arg(long)]
         check: bool,
     },
@@ -93,144 +89,84 @@ enum Command {
     WebBuild,
     /// Verify the source workspace-management workflow through the built Web app and Rust Host.
     WebWorkspaces {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify settings, defaults, and cross-origin preference persistence in the built Web app.
     WebSettings {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify provider configuration and write-only credentials through the real Web profile.
     WebModelsSettings {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify staged plugin configuration edits through the real Web profile.
     WebPluginSettings {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify first-run credentials and provider readiness through the real Web profile.
     WebOnboarding {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify shared model defaults, unavailable routes, and declared reasoning in Chromium.
     WebModelSelection {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify cold blank-session filtering and stable startup composition in Chromium.
     WebStartup {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify composer scrolling and tab geometry with source browser measurements.
     WebComposer {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify responsive column overflow and sidebar scrollbar behavior in Chromium.
     WebScrollbars {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Run the pinned navigation assertions against the built Client and real Rust Host.
     WebNavigation {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify details-panel ownership through a real replayed Rust Agent turn.
     WebDetails {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify a live Rust Client rebuild updates Chromium without refreshing the page.
     WebHmr {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Run the source CLI smoke cases and, with a credential, the real-model browser flow.
     WebSmoke {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Include real provider, Bash, title, geometry, and reload assertions.
         #[arg(long)]
         live: bool,
     },
     /// Run pinned keyless source browser suites unchanged against the real Rust Host.
     WebKeyless {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Optional comma-separated source scenario filter (for example `plan-review,question-composer`).
         #[arg(long)]
         scenario: Option<String>,
     },
     /// Run the pinned assembled-jsdom snapshot suites against the port's built bundles.
     WebAssembledSnapshots {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Optional comma-separated suite filter (for example `search-card,todo-row`).
         #[arg(long)]
         suite: Option<String>,
@@ -243,36 +179,24 @@ enum Command {
     },
     /// Run the pinned Typert generator spec corpus against the Rust generator runner.
     TypertCorpus {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Optional Vitest name filter for a focused run.
         #[arg(long)]
         filter: Option<String>,
     },
     /// Verify the built Web application against persisted source history and a real Rust Host.
     WebAssembled {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the Header download against the exact persisted Session text.
         #[arg(long)]
         export: bool,
     },
     /// Verify browser Loader ownership of the real Remote dependency graph.
     RemoteLoader {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Build the selected public Remote values, declarations, and Client facade.
     RemoteArtifacts {
@@ -284,12 +208,8 @@ enum Command {
         /// Execute the checked consumer in Chromium against the built Rust Host.
         #[arg(long)]
         browser: bool,
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Publish generated Remote declarations and maps from the pinned Host model.
     RemoteDeclarations {
@@ -303,51 +223,31 @@ enum Command {
     },
     /// Verify the complete generated-Remote browser-to-Host milestone.
     RemoteMilestone {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Compare complete built Remote metadata and codec behavior with the pinned emitter.
     RemoteCodecOracle {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Run the pinned Client gateway corpus with the real browser WASM registry.
     RemoteGatewayOracle {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Validate the supplemental lifecycle cases on the source implementation.
         #[arg(long)]
         source_regressions: bool,
     },
     /// Verify the generated Remote path in Chromium against the real built Rust Host.
     RemoteBrowserPath {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Run the pinned registry corpus against the built browser WASM implementation.
     RemoteRegistryOracle {
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Generate browser Remote construction plans through the Rust Typert emitter.
     RemoteContracts {
@@ -361,12 +261,8 @@ enum Command {
     /// Generate or verify the plugin configuration catalog from the pinned source tree.
     ConfigCatalog {
         /// Pinned source checkout containing the TypeScript package declarations.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the tracked output without writing it.
         #[arg(long)]
         check: bool,
@@ -374,12 +270,8 @@ enum Command {
     /// Generate or verify the Cordis catalog regions, inherited page, runtime API data, and core API pages from the pinned source tree.
     CordisCatalog {
         /// Pinned source checkout containing the TypeScript packages and vendor declarations.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the tracked outputs without writing them.
         #[arg(long)]
         check: bool,
@@ -387,12 +279,8 @@ enum Command {
     /// Generate or verify the client slot catalog data from the pinned source tree.
     ClientCatalog {
         /// Pinned source checkout containing the client packages.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the tracked output without writing it.
         #[arg(long)]
         check: bool,
@@ -400,12 +288,8 @@ enum Command {
     /// Generate or verify the model-visible Client Service and Event inspect catalog from the pinned source tree.
     CordisInspectCatalog {
         /// Pinned source checkout containing the client packages.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the tracked output without writing it.
         #[arg(long)]
         check: bool,
@@ -415,12 +299,8 @@ enum Command {
     /// Synchronize the tracked source-file inventory while preserving evidence.
     Inventory {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Verify Mach-O deployment targets do not exceed the runtime wheel's macOS claim.
     MacosDeploymentTarget {
@@ -443,12 +323,8 @@ enum Command {
     /// Verify that every source surface has explicit parity evidence.
     Parity {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Surfaces enforced: `all` is the final gate, `runtime` defers
         /// localization artifacts (Chinese translations and their metadata).
         #[arg(long, value_enum, default_value_t = Scope::All)]
@@ -459,22 +335,14 @@ enum Command {
     /// Build and import the Client test runtime through real Vitest, React, and jsdom.
     ClientTestRuntimeBuiltSmoke {
         /// Pinned source checkout supplying the oracle's installed JavaScript test dependencies.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
     },
     /// Generate or verify the durable Session event catalog from the pinned source tree.
     PersistenceCatalog {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify tracked outputs without writing them.
         #[arg(long)]
         check: bool,
@@ -482,12 +350,8 @@ enum Command {
     /// Generate or verify the model-facing tool-schema catalog from Rust runtime registrations.
     ToolCatalog {
         /// Pinned source checkout used for the exhaustive `tool-*` inventory.
-        #[arg(
-            long,
-            env = "SEEKDEEP_PARITY_SOURCE",
-            default_value = "/Users/trevor/ws/deepseek-harness"
-        )]
-        source: PathBuf,
+        #[arg(long, env = "SEEKDEEP_PARITY_SOURCE")]
+        source: Option<PathBuf>,
         /// Verify the tracked output without writing it.
         #[arg(long)]
         check: bool,
@@ -527,40 +391,58 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
-        Command::RemoteLoader { source } => remote_contracts::loader_path(&source),
+        Command::RemoteLoader { source } => {
+            remote_contracts::loader_path(&source_path(source.as_deref())?)
+        }
         Command::RemoteArtifacts { out_dir } => remote_contracts::artifacts(&out_dir),
-        Command::RemoteConsumer { browser, source } => remote_contracts::consumer(browser, &source),
+        Command::RemoteConsumer { browser, source } => {
+            remote_contracts::consumer(browser, &source_path(source.as_deref())?)
+        }
         Command::RemoteDeclarations {
             out_dir,
             check,
             capture_source,
         } => remote_contracts::declarations(&out_dir, check, capture_source.as_deref()),
-        Command::RemoteMilestone { source } => remote_contracts::milestone(&source),
-        Command::RemoteCodecOracle { source } => remote_contracts::codec_oracle(&source),
+        Command::RemoteMilestone { source } => {
+            remote_contracts::milestone(&source_path(source.as_deref())?)
+        }
+        Command::RemoteCodecOracle { source } => {
+            remote_contracts::codec_oracle(&source_path(source.as_deref())?)
+        }
         Command::RemoteGatewayOracle {
             source,
             source_regressions,
-        } => remote_contracts::gateway_oracle(&source, source_regressions),
-        Command::RemoteBrowserPath { source } => remote_contracts::browser_path(&source),
-        Command::RemoteRegistryOracle { source } => remote_contracts::registry_oracle(&source),
+        } => remote_contracts::gateway_oracle(&source_path(source.as_deref())?, source_regressions),
+        Command::RemoteBrowserPath { source } => {
+            remote_contracts::browser_path(&source_path(source.as_deref())?)
+        }
+        Command::RemoteRegistryOracle { source } => {
+            remote_contracts::registry_oracle(&source_path(source.as_deref())?)
+        }
         Command::RemoteContracts {
             capture_source,
             check,
         } => remote_contracts::run(capture_source.as_deref(), check),
         Command::ConfigCatalog { source, check } => {
-            xtask::config_catalog::run(Path::new("."), &source, check)
+            xtask::config_catalog::run(Path::new("."), &source_path(source.as_deref())?, check)
         }
         Command::CordisCatalog { source, check } => {
-            xtask::cordis_catalog::run(Path::new("."), &source, check)
+            xtask::cordis_catalog::run(Path::new("."), &source_path(source.as_deref())?, check)
         }
-        Command::ClientCatalog { source, check } => {
-            xtask::cordis_catalog::run_client_catalog(Path::new("."), &source, check)
-        }
+        Command::ClientCatalog { source, check } => xtask::cordis_catalog::run_client_catalog(
+            Path::new("."),
+            &source_path(source.as_deref())?,
+            check,
+        ),
         Command::CordisInspectCatalog { source, check } => {
-            xtask::cordis_catalog::run_inspect_catalog(Path::new("."), &source, check)
+            xtask::cordis_catalog::run_inspect_catalog(
+                Path::new("."),
+                &source_path(source.as_deref())?,
+                check,
+            )
         }
         Command::Docs => docs(),
-        Command::Inventory { source } => inventory(&source),
+        Command::Inventory { source } => inventory(&source_path(source.as_deref())?),
         Command::MacosDeploymentTarget {
             executables,
             platform_tag,
@@ -574,7 +456,7 @@ fn main() -> anyhow::Result<()> {
             });
             xtask::session_fixture_layout::run(&root, rewrite)
         }
-        Command::Parity { source, scope } => parity(&source, scope),
+        Command::Parity { source, scope } => parity(&source_path(source.as_deref())?, scope),
         Command::WebBuild => web_assembled::build(),
         Command::BuildClient => client_build::build(),
         Command::CheckClient { clippy, fix } => client_build::check(clippy, fix),
@@ -582,29 +464,51 @@ fn main() -> anyhow::Result<()> {
         Command::DocGraphs { source, check } => {
             if !xtask::doc_graphs::run(
                 &Path::new(env!("CARGO_MANIFEST_DIR")).join(".."),
-                &source,
+                &source_path(source.as_deref())?,
                 check,
             )? {
                 std::process::exit(1);
             }
             Ok(())
         }
-        Command::WebAssembled { source, export } => web_assembled::run(&source, export),
-        Command::WebWorkspaces { source } => web_workspaces::run(&source),
-        Command::WebSettings { source } => web_settings::run(&source),
-        Command::WebModelsSettings { source } => web_settings::run_models(&source),
-        Command::WebPluginSettings { source } => web_settings::run_plugins(&source),
-        Command::WebOnboarding { source } => web_settings::run_onboarding(&source),
-        Command::WebModelSelection { source } => web_settings::run_model_selection(&source),
-        Command::WebStartup { source } => web_settings::run_startup(&source),
-        Command::WebComposer { source } => web_settings::run_composer(&source),
-        Command::WebScrollbars { source } => web_settings::run_scrollbars(&source),
-        Command::WebNavigation { source } => web_settings::run_navigation(&source),
-        Command::WebDetails { source } => web_settings::run_details(&source),
-        Command::WebHmr { source } => web_settings::run_hmr(&source),
-        Command::WebSmoke { source, live } => web_settings::run_smoke(&source, live),
+        Command::WebAssembled { source, export } => {
+            web_assembled::run(&source_path(source.as_deref())?, export)
+        }
+        Command::WebWorkspaces { source } => web_workspaces::run(&source_path(source.as_deref())?),
+        Command::WebSettings { source } => web_settings::run(&source_path(source.as_deref())?),
+        Command::WebModelsSettings { source } => {
+            web_settings::run_models(&source_path(source.as_deref())?)
+        }
+        Command::WebPluginSettings { source } => {
+            web_settings::run_plugins(&source_path(source.as_deref())?)
+        }
+        Command::WebOnboarding { source } => {
+            web_settings::run_onboarding(&source_path(source.as_deref())?)
+        }
+        Command::WebModelSelection { source } => {
+            web_settings::run_model_selection(&source_path(source.as_deref())?)
+        }
+        Command::WebStartup { source } => {
+            web_settings::run_startup(&source_path(source.as_deref())?)
+        }
+        Command::WebComposer { source } => {
+            web_settings::run_composer(&source_path(source.as_deref())?)
+        }
+        Command::WebScrollbars { source } => {
+            web_settings::run_scrollbars(&source_path(source.as_deref())?)
+        }
+        Command::WebNavigation { source } => {
+            web_settings::run_navigation(&source_path(source.as_deref())?)
+        }
+        Command::WebDetails { source } => {
+            web_settings::run_details(&source_path(source.as_deref())?)
+        }
+        Command::WebHmr { source } => web_settings::run_hmr(&source_path(source.as_deref())?),
+        Command::WebSmoke { source, live } => {
+            web_settings::run_smoke(&source_path(source.as_deref())?, live)
+        }
         Command::WebKeyless { source, scenario } => {
-            web_settings::run_keyless(&source, scenario.as_deref())
+            web_settings::run_keyless(&source_path(source.as_deref())?, scenario.as_deref())
         }
         Command::HostAssets { release } => {
             subprocess_postinstall::run(&cargo_metadata()?, true)?;
@@ -620,21 +524,29 @@ fn main() -> anyhow::Result<()> {
             subprocess_postinstall::run(&cargo_metadata()?, check)
         }
         Command::WebAssembledSnapshots { source, suite } => {
-            web_assembled_snapshots::run(&source, suite.as_deref())
+            web_assembled_snapshots::run(&source_path(source.as_deref())?, suite.as_deref())
         }
         Command::TypertHostArtifacts { check } => typert_host_artifacts::run(check),
-        Command::TypertCorpus { source, filter } => typert_corpus::run(&source, filter.as_deref()),
+        Command::TypertCorpus { source, filter } => {
+            typert_corpus::run(&source_path(source.as_deref())?, filter.as_deref())
+        }
         Command::RemoteBuiltSmoke => remote_built_smoke(),
-        Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
+        Command::ClientTestRuntimeBuiltSmoke { source } => {
+            client_test_runtime_built_smoke(&source_path(source.as_deref())?)
+        }
         Command::PersistenceCatalog { source, check } => {
-            xtask::persistence_catalog::run(Path::new("."), &source, check)
+            xtask::persistence_catalog::run(Path::new("."), &source_path(source.as_deref())?, check)
         }
         Command::ToolCatalog { source, check } => {
-            verify_source(&source)?;
+            verify_source(&source_path(source.as_deref())?)?;
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?
-                .block_on(xtask::tool_catalog::run(Path::new("."), &source, check))
+                .block_on(xtask::tool_catalog::run(
+                    Path::new("."),
+                    &source_path(source.as_deref())?,
+                    check,
+                ))
         }
         Command::WebFrontend => web_frontend(),
         Command::WasmPackage {
@@ -645,6 +557,10 @@ fn main() -> anyhow::Result<()> {
             watch,
         } => wasm_package(&package, &artifact, &module_id, &out_dir, watch),
     }
+}
+
+fn source_path(source: Option<&Path>) -> anyhow::Result<PathBuf> {
+    seekdeep_source_oracle::source_location(Path::new("."), source)
 }
 
 const WEB_FRONTEND_ENTRY: &str = r"/** Generated mount binding for the compiled Rust/WASM Web shell. */
@@ -5142,19 +5058,21 @@ fn inventory(source: &Path) -> anyhow::Result<()> {
         .into_iter()
         .map(|surface| (surface.source.clone(), surface))
         .collect::<BTreeMap<_, _>>();
-    manifest.surfaces = source_files(source)?
-        .into_iter()
-        .map(|path| {
-            previous.get(&path).cloned().unwrap_or_else(|| Surface {
-                kind: classify(&path),
-                source: path,
-                status: Status::Pending,
-                targets: Vec::new(),
-                evidence: Vec::new(),
-                note: None,
+    manifest.surfaces =
+        seekdeep_source_oracle::SourceOracle::open_with_root(Path::new("."), Some(source))?
+            .files()?
+            .into_iter()
+            .map(|path| {
+                previous.get(&path).cloned().unwrap_or_else(|| Surface {
+                    kind: classify(&path),
+                    source: path,
+                    status: Status::Pending,
+                    targets: Vec::new(),
+                    evidence: Vec::new(),
+                    note: None,
+                })
             })
-        })
-        .collect();
+            .collect();
     let output = serde_json::to_vec_pretty(&manifest)?;
     std::fs::write("porting/parity.json", output)?;
     println!(
@@ -5167,7 +5085,9 @@ fn inventory(source: &Path) -> anyhow::Result<()> {
 fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
     verify_source(source)?;
     let manifest = read_manifest()?;
-    let expected = source_files(source)?;
+    let expected =
+        seekdeep_source_oracle::SourceOracle::open_with_root(Path::new("."), Some(source))?
+            .files()?;
     let actual = manifest
         .surfaces
         .iter()
@@ -5328,13 +5248,12 @@ fn verify_source(source: &Path) -> anyhow::Result<()> {
         source.display()
     );
     let manifest = read_manifest()?;
-    let head = git_output(source, &["rev-parse", "HEAD"])?;
+    let revision = seekdeep_source_oracle::SourceRevision::read(Path::new("."))?;
     anyhow::ensure!(
-        head.trim() == manifest.source_commit,
-        "source HEAD drifted: expected {}, got {}",
-        manifest.source_commit,
-        head.trim()
+        revision.as_str() == manifest.source_commit,
+        "parity manifest and SOURCE_SNAPSHOT name different source revisions"
     );
+    seekdeep_source_oracle::SourceOracle::open_with_root(Path::new("."), Some(source))?;
     Ok(())
 }
 

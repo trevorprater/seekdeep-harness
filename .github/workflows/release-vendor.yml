@@ -80,6 +80,8 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - uses: ./.github/actions/setup-source-oracle
+
       - name: Verify release version
         env:
           RELEASE_PUBLISH: ${{ inputs.publish }}

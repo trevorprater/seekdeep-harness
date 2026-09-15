@@ -75,23 +75,7 @@ async fn append_and_cold_read_match_a_fresh_source_run() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || std::path::PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        Into::into,
-    );
-    let snapshot = std::fs::read_to_string(repository.join("SOURCE_SNAPSHOT")).unwrap();
-    let pinned = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .unwrap();
-    let head = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&source)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap();
-    assert!(head.status.success());
-    assert_eq!(String::from_utf8_lossy(&head.stdout).trim(), pinned);
+    let source = seekdeep_source_oracle::source_root(&repository).unwrap();
     let temporary = tempfile::tempdir().unwrap();
     let probe_path = temporary.path().join("oracle.spec.ts");
     let result_path = temporary.path().join("source.json");

@@ -330,9 +330,11 @@ fn node(script: &str, arguments: &[String], input: &JsonValue) -> JsonValue {
 }
 
 fn source_request(request: &PiExecutionRequest) -> JsonValue {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../deepseek-harness")
-        .join("packages/llm/llm-pi-ai/node_modules/@earendil-works/pi-ai");
+    let root = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+    .join("packages/llm/llm-pi-ai/node_modules/@earendil-works/pi-ai");
     let input = JsonValue::object([
         ("model", JsonValue::from_serialize(&request.model).unwrap()),
         (

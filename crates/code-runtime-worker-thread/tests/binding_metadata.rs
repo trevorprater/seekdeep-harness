@@ -161,28 +161,10 @@ fn cases() -> Vec<Scenario> {
 }
 
 fn source_root() -> PathBuf {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let pin = std::fs::read_to_string(root.join("SOURCE_SNAPSHOT")).unwrap();
-    let source = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("repository="))
-        .unwrap();
-    let commit = pin
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .unwrap();
-    let head = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(source)
-        .output()
-        .unwrap();
-    assert!(head.status.success());
-    assert_eq!(String::from_utf8(head.stdout).unwrap().trim(), commit);
-    source.into()
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
 }
 
 fn source(cases: &[Scenario]) -> Vec<Observation> {

@@ -23547,10 +23547,16 @@
       "status": "verified",
       "targets": [
         ".github/workflows/ci.yml",
-        "crates/repository-tools/tests/ci_workflow_contract.rs"
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        ".github/actions/setup-source-oracle/action.yml",
+        "crates/repository-tools/tests/ci_source_oracle.rs",
+        "crates/source-oracle/src/lib.rs",
+        "crates/source-oracle/tests/checkout.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-repository-tools --all-features --test ci_workflow_contract (11 passed; hosted Linux/Windows defaults, explicit runner overrides, and Rust/WASM setup before the four primary job inventories)"
+        "cargo test -p seekdeep-repository-tools --all-features --test ci_workflow_contract (11 passed; hosted Linux/Windows defaults, explicit runner overrides, and Rust/WASM setup before the four primary job inventories)",
+        "ci_source_oracle: 3 passed, including all 13 source-dependent job inventories and execution of the actual action scripts against malformed pins and a relocated Unicode path; a fresh source clone completed the action's frozen install and Host build",
+        "205 scoped native and WASM tests passed against the relocated pinned checkout while the original source path was inaccessible; unrelated CI coverage, packaging, and Windows failures remain recorded in the verification checkpoint"
       ],
       "note": "Hosted ubuntu-24.04 and windows-latest defaults remain overridable; the explicit self-hosted failover switches and pool labels remain supported. The browser jobs install the Rust/WASM target, matching binding generator, and locked browser dependencies before their gates."
     },
@@ -23559,10 +23565,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        ".github/workflows/docs-pages.yml"
+        ".github/workflows/docs-pages.yml",
+        ".github/actions/setup-source-oracle/action.yml",
+        "crates/repository-tools/tests/ci_source_oracle.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "ci_source_oracle passes: both main and master pushes cover the Rust projector and build inputs; Rust/WASM tooling and pinned browser dependencies precede installation, and the pinned source action precedes doc-sync",
+        "The actual source action scripts reject missing, shortened, and duplicated commit pins and export a native absolute path for a checkout containing spaces and Unicode"
       ]
     },
     {
@@ -23582,11 +23591,14 @@
       "status": "verified",
       "targets": [
         ".github/workflows/e2e.yml",
-        "crates/repository-tools/tests/ci_workflow_contract.rs"
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        ".github/actions/setup-source-oracle/action.yml",
+        "crates/repository-tools/tests/ci_source_oracle.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
-        "2026-09-15: ci_workflow_contract passed 9 checks, including unconditional Rust/WASM and pinned browser build prerequisites before the real-API build; the prior CI rerun passed credential preflight and exposed the missing wasm-bindgen tool now installed by this workflow"
+        "2026-09-15: ci_workflow_contract passed 9 checks, including unconditional Rust/WASM and pinned browser build prerequisites before the real-API build; the prior CI rerun passed credential preflight and exposed the missing wasm-bindgen tool now installed by this workflow",
+        "ci_source_oracle passes: the pinned source checkout, normal dependency installation, and original Host build run before the target build"
       ]
     },
     {
@@ -23678,11 +23690,14 @@
       "status": "verified",
       "targets": [
         ".github/workflows/release-vendor.yml",
-        "crates/repository-tools/tests/ci_workflow_contract.rs"
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        ".github/actions/setup-source-oracle/action.yml",
+        "crates/repository-tools/tests/ci_source_oracle.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
-        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (10 passed): vendor Host packaging installs the matching wasm-bindgen CLI and wasm32 target before its build step; missing setup reproduced in CI run 34937404834."
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (10 passed): vendor Host packaging installs the matching wasm-bindgen CLI and wasm32 target before its build step; missing setup reproduced in CI run 34937404834.",
+        "ci_source_oracle passes: vendor packaging prepares the same pinned source checkout and executable specifications before the Host build"
       ]
     },
     {
@@ -23691,11 +23706,14 @@
       "status": "verified",
       "targets": [
         ".github/workflows/release.yml",
-        "crates/repository-tools/tests/ci_workflow_contract.rs"
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        ".github/actions/setup-source-oracle/action.yml",
+        "crates/repository-tools/tests/ci_source_oracle.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
-        "2026-09-15: ci_workflow_contract passed the release dependency and step-order check: full source checkout at SOURCE_SNAPSHOT, cargo xtask parity --source .parity-oracle --scope all before every pack step, and publication dependent on successful packing"
+        "2026-09-15: ci_workflow_contract passed the release dependency and step-order check: full source checkout at SOURCE_SNAPSHOT, cargo xtask parity --source .parity-oracle --scope all before every pack step, and publication dependent on successful packing",
+        "ci_source_oracle passes: release packing uses the shared source action, including the frozen source dependency install and Host build, before building target artifacts"
       ]
     },
     {
@@ -38126,7 +38144,10 @@
         "xtask/src/remote_contracts/declarations/public.rs",
         "xtask/src/remote_contracts/declarations/consumer.rs",
         "crates/repository-tools/src/source_oracle.rs",
-        "crates/repository-tools/tests/type_equiv_oracle.rs"
+        "crates/repository-tools/tests/type_equiv_oracle.rs",
+        "crates/source-oracle/src/lib.rs",
+        "crates/source-oracle/tests/checkout.rs",
+        "crates/repository-tools/tests/ci_source_oracle.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
@@ -38157,9 +38178,11 @@
         "pnpm doc-sync: all 28 checks passed; pinned source-object checks preserve declaration and JSDoc comparison, all 986 translation pairs pass, and all 426 archived artifacts retain their seals",
         "pnpm docs:runtime:check: 26 Node source comparisons and 7 real Chromium scenarios passed, including disposal of sidebar listeners/timers and VitePress hydration with both local images",
         "pnpm lint passed for the complete native workspace, the Host-side WASM boundary crates, and all 46 Rust Client packages; 4 root-command regressions passed with real compiler failures and fixes",
-        "cargo xtask web-smoke: 4 keyless source cases passed through the built npm launcher and native Host"
+        "cargo xtask web-smoke: 4 keyless source cases passed through the built npm launcher and native Host",
+        "205 scoped native and WASM tests passed with SEEKDEEP_PARITY_SOURCE selecting a fresh pinned source checkout while the recorded machine-local path was inaccessible; the actual source action completed a normal frozen dependency install and Host build",
+        "The source reader ignores checkout-specific Git environment exported by hooks; restoring inherited GIT_DIR handling makes the actual type-equivalence CLI regression fail, and clearing it restores the passing result"
       ],
-      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The full workspace run at 09c3cfc3689c4627364a05f36d745cef5168335c passed 5757 tests with 26 ignored; later lifecycle and package/documentation changes have their own scoped evidence and still require a fresh final workspace run. The public build, lint, canonical declarations, strict consumers, frozen dependency install, all 28 documentation gates, documentation browser runtime, and 4 keyless CLI smoke cases pass. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. Native CLI platform packages, built-bin and coverage-exempt-heavy routing, and portable source-oracle/toolchain setup in CI also remain open. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The full workspace run at 09c3cfc3689c4627364a05f36d745cef5168335c passed 5757 tests with 26 ignored; later lifecycle and package/documentation changes have scoped evidence and still require a fresh final workspace run. The public build, lint, canonical declarations, strict consumers, frozen dependency install, documentation gates, documentation browser runtime, and keyless CLI smoke cases have passing checkpoints. The shared source resolver and CI setup pass relocated-source checks; platform CI verification remains required. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. Native CLI platform packages, built-bin and coverage-exempt-heavy routing, and the Windows gate runner, documentation command, and platform lint failures remain open. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
     },
     {
       "source": "packages/AGENTS.md",

@@ -79,14 +79,9 @@ pub fn pin_oracle_source_links(
 /// # Errors
 /// Rejects absent or malformed snapshot metadata.
 pub fn oracle_revision(repository_root: &Path) -> anyhow::Result<String> {
-    let snapshot = std::fs::read_to_string(repository_root.join("SOURCE_SNAPSHOT"))?;
-    let revision = snapshot
-        .lines()
-        .find_map(|line| line.strip_prefix("commit="))
-        .ok_or_else(|| anyhow::anyhow!("SOURCE_SNAPSHOT has no commit."))?;
-    anyhow::ensure!(
-        revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
-        "SOURCE_SNAPSHOT commit must be a full Git object ID."
-    );
-    Ok(revision.to_owned())
+    Ok(
+        seekdeep_source_oracle::SourceRevision::read(repository_root)?
+            .as_str()
+            .to_owned(),
+    )
 }

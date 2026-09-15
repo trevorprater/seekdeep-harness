@@ -2,7 +2,6 @@
 
 use std::{
     io::Write as _,
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -11,12 +10,11 @@ use seekdeep_lossless_json::JsonValue;
 use serde_json::Value;
 
 fn source_outputs(inputs: &[String]) -> Vec<Value> {
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE")
-        .map_or_else(
-            || PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-            PathBuf::from,
-        )
-        .join("packages/client/runtime/src/client/sessions/failure-display.ts");
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+    .join("packages/client/runtime/src/client/sessions/failure-display.ts");
     let script = r"
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';

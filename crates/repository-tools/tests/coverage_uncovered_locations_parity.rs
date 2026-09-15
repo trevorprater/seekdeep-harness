@@ -9,7 +9,12 @@ use seekdeep_repository_tools::coverage_uncovered_locations::UncoveredLocationsR
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-const SOURCE: &str = "/Users/trevor/ws/deepseek-harness";
+fn source_root() -> std::path::PathBuf {
+    seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap()
+}
 
 fn location(line: i64, column: i64, end_line: i64, end_column: Value) -> Value {
     let mut location = json!({"start":{"line":line,"column":column},"end":{"line":end_line}});
@@ -39,12 +44,12 @@ process.stdout.write(JSON.stringify(lines));
     let module = if adapter {
         root.join("scripts/coverage-uncovered-locations.cjs")
     } else {
-        std::path::Path::new(SOURCE).join("scripts/coverage-uncovered-locations.cjs")
+        source_root().join("scripts/coverage-uncovered-locations.cjs")
     };
     let mut child = Command::new("node")
         .args(["-e", script])
         .arg(module)
-        .env("NODE_PATH", format!("{SOURCE}/node_modules"))
+        .env("NODE_PATH", source_root().join("node_modules"))
         .env(
             "SEEKDEEP_COVERAGE_REPORT_BIN",
             env!("CARGO_BIN_EXE_coverage-uncovered-locations"),
@@ -216,7 +221,7 @@ process.stdout.write('Istanbul execute and reporter reuse passed\n');
         command
             .args(["-e", program])
             .arg(&adapter)
-            .env("NODE_PATH", format!("{SOURCE}/node_modules"))
+            .env("NODE_PATH", source_root().join("node_modules"))
             .env_remove("SEEKDEEP_COVERAGE_REPORT_BIN")
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_TARGET");

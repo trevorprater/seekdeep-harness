@@ -55,10 +55,10 @@ fn defaults_and_caller_configuration_keep_their_vitest_precedence() {
 fn fixture() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
-    let source = std::env::var_os("SEEKDEEP_PARITY_SOURCE").map_or_else(
-        || PathBuf::from("/Users/trevor/ws/deepseek-harness"),
-        PathBuf::from,
-    );
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .unwrap();
     for name in ["vitest", "@vitest/coverage-v8", "istanbul-lib-report"] {
         let destination = root.join("node_modules").join(name);
         std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
