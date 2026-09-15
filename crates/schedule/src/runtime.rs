@@ -9,12 +9,9 @@ use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent};
 use seekdeep_cordis::Context;
 use seekdeep_core::session::AppendOptions;
-use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
 use serde_json::json;
-use tokio::{
-    sync::Notify,
-    task::{AbortHandle, JoinHandle},
-};
+use tokio::task::{AbortHandle, JoinHandle};
 
 use crate::{
     domain::{
@@ -132,7 +129,7 @@ pub fn due_decision(folded: &FoldedSchedules, now: i64) -> Result<DueDecision, S
 
 struct RuntimeInner {
     state: Mutex<RuntimeState>,
-    stop: Notify,
+    stop: AbortSignal,
     disposed: tokio::sync::OnceCell<()>,
 }
 
@@ -245,7 +242,7 @@ impl ScheduleRuntime {
             agent,
             inner: Arc::new(RuntimeInner {
                 state: Mutex::new(RuntimeState::default()),
-                stop: Notify::new(),
+                stop: AbortSignal::default(),
                 disposed: tokio::sync::OnceCell::new(),
             }),
             clock,
@@ -328,7 +325,7 @@ impl ScheduleRuntime {
                     }
                     (state.run.take(), state.idle_wait.take())
                 };
-                self.inner.stop.notify_waiters();
+                self.inner.stop.abort();
                 if let Some(run) = run {
                     let _ = run.await;
                 }
@@ -416,7 +413,7 @@ impl ScheduleRuntime {
     fn wait_for_idle(self: &Arc<Self>) {
         {
             let state = self.inner.state.lock();
-            if state.idle_wait.is_some() {
+            if state.stopping || state.idle_wait.is_some() {
                 return;
             }
         }
@@ -433,11 +430,15 @@ impl ScheduleRuntime {
                 return;
             }
         };
+        let mut state = self.inner.state.lock();
+        if state.stopping || state.idle_wait.is_some() {
+            return;
+        }
         let this = self.clone();
         let handle = tokio::spawn(async move {
             let idle_result = tokio::select! {
                 result = idle => Some(result),
-                () = this.inner.stop.notified() => None,
+                () = this.inner.stop.cancelled() => None,
             };
             {
                 let mut state = this.inner.state.lock();
@@ -455,7 +456,7 @@ impl ScheduleRuntime {
             }
             this.request_drive();
         });
-        self.inner.state.lock().idle_wait = Some(handle);
+        state.idle_wait = Some(handle);
     }
 
     async fn drive_once(self: &Arc<Self>) -> anyhow::Result<()> {

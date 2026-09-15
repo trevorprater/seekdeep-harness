@@ -78,11 +78,13 @@ struct Controls {
     flush_count: AtomicUsize,
     flush_outcomes: Mutex<VecDeque<bool>>,
     on_busy: Mutex<Option<Callback>>,
+    on_when_idle: Mutex<Option<Callback>>,
     on_reserve: Mutex<Option<Callback>>,
     on_followup: Mutex<Option<Callback>>,
     idle_error: Mutex<Option<String>>,
     maintenance_error: Mutex<Option<String>>,
     idle: tokio::sync::Notify,
+    idle_wait_alive: Arc<AtomicUsize>,
     followed: Mutex<Vec<UserMessage>>,
     order: Mutex<Vec<&'static str>>,
 }
@@ -97,11 +99,13 @@ impl Controls {
             flush_count: AtomicUsize::new(0),
             flush_outcomes: Mutex::new(VecDeque::new()),
             on_busy: Mutex::new(None),
+            on_when_idle: Mutex::new(None),
             on_reserve: Mutex::new(None),
             on_followup: Mutex::new(None),
             idle_error: Mutex::new(None),
             maintenance_error: Mutex::new(None),
             idle: tokio::sync::Notify::new(),
+            idle_wait_alive: Arc::new(AtomicUsize::new(0)),
             followed: Mutex::new(Vec::new()),
             order: Mutex::new(Vec::new()),
         })
@@ -111,6 +115,14 @@ impl Controls {
 struct Controller {
     id: SessionId,
     controls: Arc<Controls>,
+}
+
+struct IdleWaitLease(Arc<AtomicUsize>);
+
+impl Drop for IdleWaitLease {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 impl std::fmt::Debug for Controller {
@@ -150,8 +162,14 @@ impl AgentController for Controller {
     fn when_idle(&self) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
         self.controls.when_idle_count.fetch_add(1, Ordering::AcqRel);
         self.controls.order.lock().push("whenIdle");
+        self.controls.idle_wait_alive.fetch_add(1, Ordering::AcqRel);
+        let lease = IdleWaitLease(self.controls.idle_wait_alive.clone());
+        if let Some(callback) = self.controls.on_when_idle.lock().clone() {
+            callback();
+        }
         let controls = self.controls.clone();
         Box::pin(async move {
+            let _lease = lease;
             controls.idle.notified().await;
             controls
                 .idle_error
@@ -648,6 +666,45 @@ async fn rejected_preflight_keeps_due_record_pending_and_dispose_stops_idle_wait
     advance(&future.clock, 60_000).await;
     assert!(future.controls.followed.lock().is_empty());
     future.dispose().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn disposal_during_idle_admission_releases_the_unpolled_waiter() {
+    let test = Harness::new();
+    test.append_after("schedule-1", 1, BASE - 2_000, "busy at disposal");
+    test.controls.can_reserve.store(false, Ordering::Release);
+    let runtime = test.runtime();
+    let weak = Arc::downgrade(&runtime);
+    let pending_disposal = Arc::new(Mutex::new(None));
+    let save_disposal = pending_disposal.clone();
+    let disposing_runtime = weak.clone();
+    *test.controls.on_when_idle.lock() = Some(Arc::new(move || {
+        let runtime = disposing_runtime.upgrade().expect("live runtime");
+        let mut disposal: futures::future::BoxFuture<'static, ()> =
+            Box::pin(async move { runtime.dispose().await });
+        let mut context = std::task::Context::from_waker(futures::task::noop_waker_ref());
+        assert!(disposal.as_mut().poll(&mut context).is_pending());
+        *save_disposal.lock() = Some(disposal);
+    }));
+    runtime.start();
+    settle().await;
+    let disposal = pending_disposal.lock().take().expect("disposal started");
+    tokio::time::timeout(Duration::from_secs(1), disposal)
+        .await
+        .expect("disposal must finish while the agent remains busy");
+    assert_eq!(test.controls.when_idle_count.load(Ordering::Acquire), 1);
+    let retained = test.controls.idle_wait_alive.load(Ordering::Acquire);
+    // Release a defective runtime too, so the regression leaves no pending agent future.
+    test.controls.idle.notify_waiters();
+    settle().await;
+    assert_eq!(
+        retained, 0,
+        "disposed runtime retained an unowned idle wait"
+    );
+    assert!(test.controls.followed.lock().is_empty());
+    drop(runtime);
+    assert!(weak.upgrade().is_none());
+    test.dispose().await;
 }
 
 #[tokio::test(start_paused = true)]
