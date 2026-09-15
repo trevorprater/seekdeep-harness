@@ -21,6 +21,8 @@ pub fn prepare_site(
     revision: &str,
     edit_branch: &str,
 ) -> anyhow::Result<()> {
+    let normalized_root = dunce::canonicalize(root)?;
+    let root = normalized_root.as_path();
     let base = std::env::var("DOCS_BASE").unwrap_or_else(|_| "/".to_owned());
     let configuration = site_configuration(root, manifest, &base)?;
     let sources = docs_source_files(root, manifest)?;

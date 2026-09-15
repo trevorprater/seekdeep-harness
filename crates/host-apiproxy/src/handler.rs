@@ -13,7 +13,7 @@ use seekdeep_client_connection::{
 };
 use seekdeep_core::session::JsonValue;
 use seekdeep_llm::AbortSignal;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value, json};
 use url::form_urlencoded;
 use uuid::Uuid;
@@ -397,6 +397,18 @@ pub(crate) fn response_json(
     let result = match response.result {
         RpcResult::Success { value } => RpcResult::Success {
             value: value.as_ref().map(JsonValue::from_serialize).transpose()?,
+        },
+        RpcResult::Failure { error } => RpcResult::Failure { error },
+    };
+    Ok(RpcResponse::new(response.rpc_id, result))
+}
+
+pub(crate) fn decode_response<T: DeserializeOwned>(
+    response: RpcResponse<JsonValue>,
+) -> anyhow::Result<RpcResponse<T>> {
+    let result = match response.result {
+        RpcResult::Success { value } => RpcResult::Success {
+            value: value.as_ref().map(JsonValue::deserialize).transpose()?,
         },
         RpcResult::Failure { error } => RpcResult::Failure { error },
     };

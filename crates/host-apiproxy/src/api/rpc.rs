@@ -28,6 +28,7 @@ impl<T> RpcRequest<T> {
 
 /// Narrow domain response: the carrier restores the `server-response` type.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: serde::de::DeserializeOwned"))]
 pub struct RpcResponse<T = Value> {
     /// Echoed request correlation identifier.
     #[serde(rename = "rpcId")]
@@ -105,6 +106,7 @@ impl<T> ServerRequest<T> {
 
 /// Response sent by the Client to a Host-initiated request.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: serde::de::DeserializeOwned"))]
 pub struct ClientResponse<T = Value> {
     /// Must be `client-response` on the wire.
     #[serde(rename = "type")]

@@ -374,6 +374,28 @@ fn wire_result_distinguishes_absence_null_and_failure() {
     );
 }
 
+#[test]
+fn wire_result_serializes_and_decodes_complete_json_payloads() {
+    use seekdeep_lossless_json::JsonValue;
+
+    let value = JsonValue::parse(
+        r#"{"\ud800":"\udfff","literal":"\\ud800","pair":"😀","nested":[{"text":"\ud800"}]}"#
+            .to_owned(),
+    )
+    .unwrap();
+    let response = ServerResponse::new(
+        RpcId::new("lossless"),
+        RpcResult::Success { value: Some(value) },
+    );
+    let encoded = serde_json::to_string(&response).unwrap();
+    let decoded: ServerResponse<JsonValue> = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(decoded, response);
+    let failure = serde_json::from_str::<RpcResult<u64>>(
+        r#"{"ok":false,"value":"\ud800","error":{"code":"internal","message":"failure","details":{}}}"#,
+    ).unwrap();
+    assert!(matches!(failure, RpcResult::Failure { .. }));
+}
+
 #[derive(Default)]
 struct RecordingTransport {
     requests: Mutex<Vec<HttpRequest>>,

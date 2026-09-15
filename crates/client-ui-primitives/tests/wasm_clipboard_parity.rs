@@ -179,7 +179,7 @@ fn property(value: &JsValue, key: &str) -> JsValue {
 }
 
 async fn accepted(text: &str) -> bool {
-    JsFuture::from(write_clipboard(text.to_owned()))
+    JsFuture::from(write_clipboard(text.into()))
         .await
         .expect("clipboard helper settles")
         .as_bool()
@@ -197,6 +197,25 @@ async fn async_clipboard_acceptance_and_refusal_are_exact() {
     installClipboard("async-reject");
     assert!(!accepted("payload").await);
     assert_eq!(clipboardCalls().length(), 1);
+}
+
+#[wasm_bindgen_test(async)]
+async fn clipboard_paths_preserve_lone_surrogates() {
+    let text = js_sys::JSON::parse(r#""a\ud800😀\udfff""#).unwrap();
+    for mode in ["async-ok", "exec-ok"] {
+        installClipboard(mode);
+        let accepted = JsFuture::from(write_clipboard(text.clone().unchecked_into()))
+            .await
+            .unwrap();
+        assert_eq!(accepted.as_bool(), Some(true));
+        let actual = if mode == "async-ok" {
+            Array::from(&clipboardCalls().get(0)).get(1)
+        } else {
+            clipboardSelected()
+        };
+        assert!(Object::is(&actual, &text), "{mode} changed code units");
+        assert_eq!(clipboardChildren(), 0);
+    }
 }
 
 #[wasm_bindgen_test(async)]

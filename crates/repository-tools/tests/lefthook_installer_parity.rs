@@ -26,6 +26,8 @@ impl Fixture {
         let main = container.path().join("main");
         let linked = container.path().join("linked");
         let mut environment = std::env::vars_os().collect::<BTreeMap<_, _>>();
+        environment.remove(std::ffi::OsStr::new("CI"));
+        environment.remove(std::ffi::OsStr::new("GITHUB_ACTIONS"));
         environment.insert(
             "GIT_CONFIG_GLOBAL".into(),
             container.path().join("global.gitconfig").into_os_string(),
@@ -136,7 +138,11 @@ impl Fixture {
 
     fn options(&self, root: &Path) -> LefthookInstallOptions {
         LefthookInstallOptions {
-            lefthook: root.join("node_modules/.bin/lefthook"),
+            lefthook: root.join("node_modules/.bin").join(if cfg!(windows) {
+                "lefthook.cmd"
+            } else {
+                "lefthook"
+            }),
             pairing_driver: PathBuf::from(env!("CARGO_BIN_EXE_merge-translation-pairing")),
             environment: self.environment.clone(),
             lock_timing: InstallerLockTiming {
@@ -206,6 +212,23 @@ rm -f "$running"
 "#,
             Some(0o755),
         );
+        #[cfg(windows)]
+        {
+            let git_exec = self.git(root, &["--exec-path"]);
+            let shell = Path::new(&git_exec)
+                .ancestors()
+                .flat_map(|directory| {
+                    [
+                        directory.join("usr/bin/sh.exe"),
+                        directory.join("bin/sh.exe"),
+                    ]
+                })
+                .find(|path| path.is_file())
+                .expect("Git for Windows supplies sh.exe");
+            self.write(&root.join("node_modules/.bin/lefthook.cmd"), &format!(
+                "@echo off\r\nset \"seekdeep_fixture_script=%~dp0lefthook\"\r\n\"{}\" \"%seekdeep_fixture_script:\\=/%\" %*\r\n", shell.display(),
+            ), None);
+        }
     }
 }
 

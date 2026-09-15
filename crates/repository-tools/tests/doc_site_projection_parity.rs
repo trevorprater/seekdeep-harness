@@ -289,7 +289,7 @@ fn projection_frontmatter_and_repository_chrome_match_the_source() {
 #[test]
 fn projection_owns_local_images_and_refuses_collisions_and_escaping_images() {
     let (directory, mut manifest) = fixture();
-    let root = directory.path().canonicalize().unwrap();
+    let root = dunce::canonicalize(directory.path()).unwrap();
     std::fs::write(
         root.join("docs/a.md"),
         "# A\n\n![one](../packages/logo.svg#view) ![two](<../packages/图 image.png>)\n",
@@ -393,7 +393,7 @@ fn canonical_publication_manifest_preserves_source_routes_and_navigation() {
         .replace("const sections:", "export const sections:");
     let module = directory.path().join("manifest.mts");
     std::fs::write(&module, source).unwrap();
-    let script = "const m=await import(process.argv[1]);console.log(JSON.stringify({pages:m.docsPages,sections:m.sections}));";
+    let script = "const {pathToFileURL}=await import('node:url');const m=await import(pathToFileURL(process.argv[1]).href);console.log(JSON.stringify({pages:m.docsPages,sections:m.sections}));";
     let result = Command::new("node")
         .args(["--input-type=module", "-e", script])
         .arg(&module)

@@ -1,6 +1,6 @@
 //! Real built application and Host over a durable recorded Session.
 
-pub(super) const DRIVER: &str = r"import { createRequire } from 'node:module';
+pub(super) const DRIVER: &str = r#"import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { readFile } from 'node:fs/promises';
@@ -53,6 +53,15 @@ try {
   if (!search.items.some(row => row.sessionId === sessionId)) throw new Error('Host content search did not find the recorded session: ' + JSON.stringify(search));
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1280, height: 900 } });
+  if (mode === 'read') {
+    await page.addInitScript(() => {
+      globalThis.readCopyRequests = [];
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { async writeText(text) { globalThis.readCopyRequests.push(text); } },
+      });
+    });
+  }
   page.setDefaultTimeout(30000);
   const failures = [];
   let rejectPage;
@@ -79,6 +88,33 @@ try {
       await page.screenshot({ path: join(output, 'conversation.png'), fullPage: true });
       await page.reload();
       await page.getByText('FIRST_DONE', { exact: true }).waitFor();
+      let readCard;
+      if (mode === 'read') {
+        const expected = JSON.parse(await readFile(join(home, 'read-expected.json'), 'utf8'));
+        for (const phase of ['loaded', 'reloaded']) {
+          if (phase === 'reloaded') {
+            await page.reload();
+            await page.getByText('FIRST_DONE', { exact: true }).waitFor();
+          }
+          const row = page.locator('[data-tool="read"]').filter({ hasText: 'nav-a.md' }).first();
+          await row.waitFor();
+          const disclosure = row.locator('[role="button"][aria-expanded]').first();
+          if (await disclosure.getAttribute('aria-expanded') === 'false') await disclosure.press('Enter');
+          const card = row.locator('[data-read]').first();
+          await card.waitFor();
+          const toggle = card.getByRole('button', { name: '展开其余 12 行', exact: true });
+          if (await toggle.count()) await toggle.click();
+          await card.locator('.seekdeep-primitive-read-block-content > span').first().waitFor();
+          const actual = await card.locator('.seekdeep-primitive-read-block-content').allTextContents();
+          if (JSON.stringify(actual) !== JSON.stringify(expected.lines.map(line => line.text))) throw new Error('read DOM changed UTF-16 code units: ' + JSON.stringify(actual));
+          await card.getByRole('button', { name: '复制', exact: true }).click();
+          await card.getByRole('button', { name: '复制成功', exact: true }).waitFor();
+          const copied = await page.evaluate(() => globalThis.readCopyRequests.at(-1));
+          if (copied !== expected.raw) throw new Error('read copy request changed UTF-16 code units');
+          await page.screenshot({ path: join(output, `read-${phase}.png`), fullPage: true });
+        }
+        readCard = { exactDomCodeUnits: true, exactCopyCodeUnits: true, highlighted: true, jsonlReplay: true, lineCount: expected.lines.length };
+      }
       let exported;
       if (mode === 'export') {
         exported = [];
@@ -130,7 +166,7 @@ try {
         await page.getByText('Session log download requested.', { exact: true }).waitFor();
       }
       if (failures.length) throw new Error(failures.join('\n'));
-      console.log(JSON.stringify({ browser: browser.version(), workspace: true, persistedHistory: true, renderedConversation: true, reload: true, search: 'first-search', sessionId, ...(exported ? { exported } : {}) }));
+      console.log(JSON.stringify({ browser: browser.version(), workspace: true, persistedHistory: true, renderedConversation: true, reload: true, search: 'first-search', sessionId, ...(exported ? { exported } : {}), ...(readCard ? { readCard } : {}) }));
     })(), pageFailure]);
   } catch (error) {
     await page.screenshot({ path: join(output, 'failure.png'), fullPage: true });
@@ -142,4 +178,4 @@ try {
   await browser?.close();
   if (server && server.exitCode === null) { const exited = once(server, 'exit'); server.kill('SIGINT'); await exited; }
 }
-";
+"#;

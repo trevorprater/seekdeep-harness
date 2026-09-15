@@ -8,10 +8,12 @@ use std::sync::Arc;
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
+use seekdeep_core::session::JsonValue;
 use seekdeep_host_directory_picker::{
     DIRECTORY_PICKER, DirectoryPickerCapability, DirectoryPickerFailure, DirectoryPickerService,
 };
 use seekdeep_llm::{AbortSignal, ModelId, ProviderId, ReasoningEffortId};
+use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use uuid::Uuid;
@@ -201,6 +203,7 @@ impl std::fmt::Debug for ApiProxyDefaults {
 }
 
 /// API Proxy runtime with the Host domain composed over the remaining domains.
+#[derive(Clone)]
 pub struct ApiProxyService {
     defaults: ApiProxyDefaults,
     directory_picker: Arc<DirectoryPickerService>,
@@ -351,13 +354,13 @@ impl ApiProxyService {
         Ok(service)
     }
 
-    async fn host_unary(
+    async fn host_unary<T: DeserializeOwned>(
         &self,
         method: RpcMethod,
         request: RpcRequest<Value>,
         signal: AbortSignal,
-    ) -> anyhow::Result<RpcResponse<Value>> {
-        match method {
+    ) -> anyhow::Result<RpcResponse<T>> {
+        let response = match method {
             RpcMethod::HostDescribe => Ok(self.describe(request)),
             RpcMethod::HostPickDirectory => self.pick_directory(request, signal).await,
             RpcMethod::HostListDirectory => self.list_directory(request, signal).await,
@@ -374,8 +377,13 @@ impl ApiProxyService {
             {
                 self.workspace_unary(method, request).await
             }
-            _ => self.domains.unary(method, request, signal).await,
-        }
+            _ => {
+                return crate::handler::decode_response(
+                    self.domains.unary_json(method, request, signal).await?,
+                );
+            }
+        }?;
+        crate::handler::decode_response(crate::handler::response_json(response)?)
     }
 
     async fn workspace_unary(
@@ -696,13 +704,17 @@ impl ApiProxyRuntime for ApiProxyService {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
-        let service = Arc::new(Self {
-            defaults: self.defaults.clone(),
-            directory_picker: self.directory_picker.clone(),
-            attached_session_count: self.attached_session_count.clone(),
-            workspace: self.workspace.clone(),
-            domains: self.domains.clone(),
-        });
+        let service = Arc::new(self.clone());
+        async move { service.host_unary(method, request, signal).await }.boxed()
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        let service = Arc::new(self.clone());
         async move { service.host_unary(method, request, signal).await }.boxed()
     }
 

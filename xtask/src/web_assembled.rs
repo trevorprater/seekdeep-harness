@@ -13,7 +13,7 @@ use seekdeep_session_persistence_jsonl::{
     zstd::compress_zstd_frame,
 };
 
-pub(super) fn run(source: &Path, export: bool) -> anyhow::Result<()> {
+pub(super) fn run(source: &Path, export: bool, read_utf16: bool) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;
     let temporary = tempfile::tempdir()?;
@@ -25,7 +25,8 @@ pub(super) fn run(source: &Path, export: bool) -> anyhow::Result<()> {
         "- id: session-query-sqlite\n  config:\n    path: ':memory:'\n    openAt: first-search\n",
     )?;
     let id = SessionId::new("web-assembled-seed");
-    let raw = tokio::runtime::Runtime::new()?.block_on(seed(source, &home, &workspace, &id))?;
+    let raw = tokio::runtime::Runtime::new()?
+        .block_on(seed(source, &home, &workspace, &id, read_utf16))?;
     let output = metadata.target_directory.join("xtask/web-assembled");
     std::fs::create_dir_all(&output)?;
     std::fs::write(output.join("expected-session.jsonl"), raw)?;
@@ -39,7 +40,13 @@ pub(super) fn run(source: &Path, export: bool) -> anyhow::Result<()> {
         .arg(&workspace)
         .arg(&output)
         .arg(id.as_str())
-        .arg(if export { "export" } else { "history" })
+        .arg(if export {
+            "export"
+        } else if read_utf16 {
+            "read"
+        } else {
+            "history"
+        })
         .arg(log_path(
             &home.join("sessions"),
             Some(&workspace.to_string_lossy()),
@@ -57,6 +64,7 @@ async fn seed(
     home: &Path,
     workspace: &Path,
     id: &SessionId,
+    read_utf16: bool,
 ) -> anyhow::Result<String> {
     let fixture = std::fs::read_to_string(
         source.join("apps/web/tests/snapshots/navigation-panes/seed.jsonl"),
@@ -76,6 +84,11 @@ async fn seed(
             .is_some_and(|event| event.event_type == "turn/end"),
         "assembled Web seed must contain a closed recorded turn"
     );
+    let fixture = if read_utf16 {
+        super::web_assembled_read::seed(&fixture, home, workspace).await?
+    } else {
+        fixture
+    };
     let context = seekdeep_cordis::Context::new();
     let persistence = JsonlSessionPersistence::new(
         SessionStore::install(&context)?,

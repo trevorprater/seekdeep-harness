@@ -7,7 +7,9 @@ use wasm_bindgen::{JsCast as _, JsValue};
 use crate::{
     DiffCardModel, ReadCardModel, SearchCard, SearchCardModel, TerminalCardModel, ToolCallBlock,
     ToolCallHead, ToolErrorInfo, ToolRowState, ToolRowVariant, WebCardModel,
-    browser::{object, required_bool, required_json_string, required_property, required_string},
+    browser::{
+        json_text, object, required_bool, required_json_string, required_property, required_string,
+    },
 };
 
 #[derive(Clone)]
@@ -190,21 +192,18 @@ pub(crate) fn read_card_props(model: &ReadCardModel) -> Result<Object, JsValue> 
         lines.push(
             object(&[
                 ("number", wire_u64_number(line.number)),
-                ("text", JsValue::from_str(&line.text)),
+                ("text", json_text(&line.text)),
             ])?
             .as_ref(),
         );
     }
     object(&[
-        ("label", JsValue::from_str(&model.label)),
+        ("label", json_text(&model.label)),
         ("lines", lines.into()),
         ("totalLines", wire_u64_number(model.total_lines)),
         (
             "lang",
-            model
-                .lang
-                .as_deref()
-                .map_or(JsValue::UNDEFINED, JsValue::from_str),
+            model.lang.as_ref().map_or(JsValue::UNDEFINED, json_text),
         ),
     ])
 }

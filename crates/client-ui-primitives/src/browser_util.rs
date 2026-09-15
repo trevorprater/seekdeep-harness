@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, JsString, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 /// Pointer transit grace shared by hover-dismissed popups.
@@ -40,15 +40,19 @@ pub fn copied_feedback_ms() -> u32 {
 /// Writes exact text through the async Clipboard API or the textarea fallback.
 #[wasm_bindgen(js_name = writeClipboard)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn write_clipboard(text: String) -> Promise {
-    begin_clipboard_write(&text)
+pub fn write_clipboard(text: JsString) -> Promise {
+    begin_clipboard_write_value(text.as_ref())
 }
 
 pub(crate) fn begin_clipboard_write(text: &str) -> Promise {
+    begin_clipboard_write_value(&JsValue::from_str(text))
+}
+
+fn begin_clipboard_write_value(text: &JsValue) -> Promise {
     clipboard_write_attempt(text).unwrap_or_else(|_| Promise::resolve(&JsValue::FALSE))
 }
 
-fn clipboard_write_attempt(text: &str) -> Result<Promise, JsValue> {
+fn clipboard_write_attempt(text: &JsValue) -> Result<Promise, JsValue> {
     let global = js_sys::global();
     let navigator = Reflect::get(&global, &JsValue::from_str("navigator"))?;
     let clipboard = Reflect::get(&navigator, &JsValue::from_str("clipboard"))?;
@@ -58,7 +62,7 @@ fn clipboard_write_attempt(text: &str) -> Result<Promise, JsValue> {
             let Ok(write_text) = write_text.dyn_into::<Function>() else {
                 return Ok(Promise::resolve(&JsValue::FALSE));
             };
-            let Ok(pending) = write_text.call1(&clipboard, &JsValue::from_str(text)) else {
+            let Ok(pending) = write_text.call1(&clipboard, text) else {
                 return Ok(Promise::resolve(&JsValue::FALSE));
             };
             let accepted = Closure::wrap(Box::new(move |_value: JsValue| JsValue::TRUE)
@@ -85,11 +89,7 @@ fn clipboard_write_attempt(text: &str) -> Result<Promise, JsValue> {
         return Ok(Promise::resolve(&JsValue::FALSE));
     };
     let textarea = call_method(&document, "createElement", &[JsValue::from_str("textarea")])?;
-    Reflect::set(
-        &textarea,
-        &JsValue::from_str("value"),
-        &JsValue::from_str(text),
-    )?;
+    Reflect::set(&textarea, &JsValue::from_str("value"), text)?;
     call_method(
         &textarea,
         "setAttribute",
@@ -203,7 +203,7 @@ pub fn use_copy_feedback(text: String) -> Result<JsValue, JsValue> {
         if copied_flag {
             return Ok(());
         }
-        let pending = write_clipboard(callback_text.clone());
+        let pending = write_clipboard(callback_text.as_str().into());
         let setter = callback_setter.clone();
         let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
             if accepted.as_bool() != Some(true) {

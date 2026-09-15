@@ -8,12 +8,15 @@ use std::{
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::AgentRegistry;
+use seekdeep_client_connection::{HttpMethod, HttpRequest};
 use seekdeep_cordis::Context;
-use seekdeep_core::session_store::SessionStore;
+use seekdeep_core::{session::JsonValue, session_store::SessionStore};
 use seekdeep_host_apiproxy::{
-    ApiDownlinkStream, ApiProxyDefaults, ApiProxyRuntime, ApiProxyService, ClientResponse,
-    ModelSelection, PathOpenerInternals, RpcError, RpcId, RpcMethod, RpcReceipt, RpcRequest,
-    RpcResponse, RpcResult,
+    ApiDownlinkStream, ApiProxyDefaults, ApiProxyHandler, ApiProxyRuntime, ApiProxyService,
+    ClientResponse, ConfigurationApiProxyOptions, ConfigurationApiProxyRuntime,
+    InteractionApiProxyRuntime, ModelSelection, PathOpenerInternals, PresetApiProxyOptions,
+    PresetApiProxyRuntime, RpcError, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
+    RpcResult,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -30,6 +33,7 @@ use serde_json::{Map, Value, json};
 #[derive(Debug, Default)]
 struct RemainingDomains {
     calls: Mutex<Vec<RpcMethod>>,
+    json_reply: Option<JsonValue>,
 }
 
 impl ApiProxyRuntime for RemainingDomains {
@@ -40,6 +44,10 @@ impl ApiProxyRuntime for RemainingDomains {
         _signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
         self.calls.lock().unwrap().push(method);
+        if self.json_reply.is_some() {
+            return async { anyhow::bail!("scalar dispatch cannot carry this history reply") }
+                .boxed();
+        }
         async move {
             Ok(RpcResponse::new(
                 request.rpc_id,
@@ -49,6 +57,26 @@ impl ApiProxyRuntime for RemainingDomains {
             ))
         }
         .boxed()
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        if let Some(value) = self.json_reply.clone() {
+            self.calls.lock().unwrap().push(method);
+            return async move {
+                Ok(RpcResponse::new(
+                    request.rpc_id,
+                    RpcResult::Success { value: Some(value) },
+                ))
+            }
+            .boxed();
+        }
+        let response = self.unary(method, request, signal);
+        async move { Ok(JsonValue::from_serialize(&response.await?)?.deserialize()?) }.boxed()
     }
 
     fn respond(
@@ -178,6 +206,75 @@ fn error(result: RpcResult<Value>) -> RpcError {
         RpcResult::Failure { error } => error,
         other @ RpcResult::Success { .. } => panic!("expected failure, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn composed_host_layers_forward_lossless_history_to_the_http_carrier() {
+    let context = Context::new();
+    LlmRuntime::install(&context).unwrap();
+    install_user_questions(&context).unwrap();
+    Arc::new(AgentRegistry::new(context.clone()))
+        .provide(&context)
+        .unwrap();
+    let expected = JsonValue::parse(r#"{"events":[{"event":{"type":"tool/result","seq":1,"time":1,"data":{"text":"\ud800","literal":"\\ud800"}}}],"hasMore":false}"#.to_owned()).unwrap();
+    let domain = Arc::new(RemainingDomains {
+        calls: Mutex::new(Vec::new()),
+        json_reply: Some(expected.clone()),
+    });
+    let configuration = ConfigurationApiProxyRuntime::from_context(
+        &context,
+        ConfigurationApiProxyOptions::default(),
+        domain.clone(),
+    )
+    .unwrap();
+    let interactions =
+        InteractionApiProxyRuntime::from_context(&context, configuration.clone()).unwrap();
+    let defaults = defaults();
+    let presets = PresetApiProxyRuntime::from_context(
+        &context,
+        PresetApiProxyOptions {
+            default_model_selection: defaults.default_model_selection.clone(),
+            save_default_model_selection: None,
+            open_path: None,
+            can_open_path: None,
+            native_path_opener: PathOpenerInternals::default(),
+        },
+        interactions.clone(),
+    );
+    let service = ApiProxyService::new(
+        defaults,
+        native_picker(|_| async { Ok(None) }.boxed()),
+        Arc::new(|| 0),
+        presets.clone(),
+    );
+    let layers: [(&str, Arc<dyn ApiProxyRuntime>); 5] = [
+        ("domain", domain),
+        ("configuration", configuration),
+        ("interactions", interactions),
+        ("presets", presets),
+        ("host", service),
+    ];
+    for (name, runtime) in layers {
+        let mut request = HttpRequest::new(HttpMethod::Post, "/api/session.history");
+        request
+            .headers
+            .insert("content-type".to_owned(), "application/json".to_owned());
+        request.body = serde_json::to_vec(&json!({
+            "type":"client-request", "rpcId":name, "method":"session.history",
+            "payload":{"sessionId":"history"},
+        }))
+        .unwrap();
+        let response = ApiProxyHandler::new(runtime).fetch(request).await;
+        assert_eq!(
+            response.status,
+            200,
+            "{name}: {}",
+            String::from_utf8_lossy(&response.body)
+        );
+        let response = JsonValue::parse(String::from_utf8(response.body).unwrap()).unwrap();
+        assert_eq!(response["result"]["value"], expected, "{name}");
+    }
+    context.root_fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]

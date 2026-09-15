@@ -48215,7 +48215,8 @@
         "pinned source ReadBlock/highlight suite: 22 passed",
         "five grouped live WASM component tests pin highlighted/plain rows, stable token memoization, per-run keys, banner and count chrome, exact head/tail/default/one-line caps, expand accessibility, full-window copy, refusal, empty guard, lazy re-highlight, and class merging",
         "real optimized ESM package smoke initializes the generated index and React server-renders compiled ReadBlock with the source-compatible default plus exact five-row fractional-cap coercion",
-        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings",
+        "Compiled WASM read, highlighting, and clipboard suites pass 19 tests, including lone-surrogate display and both clipboard paths; rebuilt Chromium verifies exact highlighted read DOM and copy data before and after reload"
       ]
     },
     {
@@ -52755,15 +52756,18 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/models/read-card-model.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/client-ui-tool/src/cards.rs",
-        "crates/client-ui-tool/tests/model_parity.rs"
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
       ],
       "evidence": [
         "pinned source read-card suite passed in the 94-assertion model/card selection",
-        "Rust parity preserves result-only authority, detached line data, replacement titles, workspace-relative labels, optional language, and malformed-wire fallback"
-      ]
+        "Rust parity preserves result-only authority, detached line data, replacement titles, workspace-relative labels, optional language, and malformed-wire fallback",
+        "Native read-card and compiled WASM row regressions preserve lone UTF-16 units in labels, line text, and language props"
+      ],
+      "note": "Read labels, lines, and language preserve UTF-16 through compiled WASM props. Read line numbers and totals still use u64 instead of the full source number range."
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/search-card-model.ts",
@@ -58229,7 +58233,7 @@
     {
       "source": "packages/core/session/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/core/src/lib.rs",
         "crates/core/src/session.rs",
@@ -58239,7 +58243,8 @@
       "evidence": [
         "cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings",
         "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented"
-      ]
+      ],
+      "note": "The source rejects reentrant appends throughout session/event publication. Rust clears its admission flag before invoking observers and currently allows a nested append, which can reorder later observers."
     },
     {
       "source": "packages/core/session/src/invariant.ts",
@@ -58475,7 +58480,7 @@
     {
       "source": "packages/core/session/tests/session.spec.ts",
       "kind": "test",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/core/src/session.rs",
         "crates/core/src/session_store.rs"
@@ -58484,7 +58489,8 @@
         "pinned-source Vitest: six Session parity suites 196/196",
         "cargo test -p seekdeep-core --all-features",
         "cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "The source test contains a reentrant observer append without publishing it. The native committed_event_observers_can_append_the_next_ordered_event test asserts the opposite behavior and needs a source-backed replacement."
     },
     {
       "source": "packages/core/session/tests/surface.spec.ts",
@@ -58778,15 +58784,17 @@
     {
       "source": "packages/core/tools/src/presentation.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/tools/src/presentation.rs"
       ],
       "evidence": [
         "manual source-to-Rust wire-vocabulary audit",
         "cargo test -p seekdeep-tools --all-features",
-        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings",
+        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay"
+      ],
+      "note": "Read presentation strings preserve every UTF-16 code unit. Read line numbers and counts still use u64 where the source permits larger JavaScript integers."
     },
     {
       "source": "packages/core/tools/src/py-types.ts",
@@ -62676,13 +62684,14 @@
     {
       "source": "packages/fs/tool-fs/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/tool-fs/src/index.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "Read configuration still uses u64 fields; the source accepts finite positive integer caps above that range."
     },
     {
       "source": "packages/fs/tool-fs/src/invariant.ts",
@@ -62713,12 +62722,15 @@
       "kind": "production-code",
       "status": "pending",
       "targets": [
-        "crates/tool-fs/src/read_render.rs"
+        "crates/tool-fs/src/read_render.rs",
+        "crates/tool-fs/tests/read_render_oracle.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-tool-fs --all-features: 41 tests, including 3807 source comparisons",
+        "cargo xtask web-assembled --read-utf16: real read output, persisted history, search, exact DOM and copy code units, Shiki highlighting, and browser reload passed"
       ],
-      "note": "Line truncation drops an unpaired UTF-16 code unit at the limit; the source preserves it. Lossless read rendering remains unverified."
+      "note": "Exact UTF-16 truncation, byte accounting, metadata, and the assembled read path are verified. Replayed line numbers and offsets above the u64 range remain unsupported."
     },
     {
       "source": "packages/fs/tool-fs/src/read-target.ts",
@@ -62735,14 +62747,15 @@
     {
       "source": "packages/fs/tool-fs/src/read.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/tool-fs/src/read.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
+        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay"
       ],
-      "note": "READ_LIMIT, STREAM_MIN_SIZE, ReadToolCaps, ReadArgsRaw/ReadInput, and parseReadArgs are ported; the applyReadTool definition (schemas, execute, presentResult/presentCall) remains"
+      "note": "Streaming, rendering, and replay preserve UTF-16 code units. Positive integer offsets above u64::MAX still saturate instead of retaining the source number."
     },
     {
       "source": "packages/fs/tool-fs/src/sandbox.ts",
@@ -62860,12 +62873,13 @@
       "kind": "test",
       "status": "verified",
       "targets": [
-        "crates/tool-fs/src/read_render.rs"
+        "crates/tool-fs/src/read_render.rs",
+        "crates/tool-fs/tests/read_render_oracle.rs"
       ],
       "evidence": [
         "Rust tests pin numbered windows, bounds, byte caps, long-line truncation, language mapping, envelopes, and pagination footer",
-        "cargo test -p seekdeep-tool-fs --all-features: 26 passed",
-        "cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
+        "The unmodified pinned source read-render.spec.ts passed all 28 tests; the Rust differential matches 3807 window, metadata, language, and presentation cases"
       ]
     },
     {
@@ -72846,13 +72860,15 @@
         "crates/session-query-sqlite/src/lib.rs",
         "crates/session-query-sqlite/tests/engine_parity.rs",
         "crates/session-query-sqlite/tests/reconciliation_parity.rs",
-        "crates/session-query-sqlite/tests/search_contract_parity.rs"
+        "crates/session-query-sqlite/tests/search_contract_parity.rs",
+        "crates/session-query-sqlite/tests/plugin_parity.rs"
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: sqlite.spec.ts passed 60/60",
         "Rust engine owns startup/first-search/never readiness, serialized reconciliation, stable optional-persistence observation, persistent and TEMP live generations, literal FTS5 ranking, scoped cursors, cancellation, close fencing, and native Cordis service lifecycle",
-        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed",
-        "cargo clippy --locked --offline -p seekdeep-session-query-sqlite --all-targets --all-features -- -D warnings"
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 34 passed",
+        "cargo clippy --locked --offline -p seekdeep-session-query-sqlite --all-targets --all-features -- -D warnings",
+        "Live and persisted search index a read result containing lone UTF-16 units without changing its canonical event; rebuilt Chromium session search succeeds on the same persisted read"
       ]
     },
     {

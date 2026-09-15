@@ -176,7 +176,7 @@ pub struct ReadFileLine {
     /// One-based file line number.
     pub number: u64,
     /// Line text without its trailing newline.
-    pub text: String,
+    pub text: CodeJsonString,
 }
 
 /// Generic completed-call card.
@@ -286,9 +286,9 @@ pub enum SearchResultView {
 pub struct ReadResultView {
     /// Replacement title.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub title: Option<CodeJsonString>,
     /// Model-facing path.
-    pub path: String,
+    pub path: CodeJsonString,
     /// One-based first requested line.
     pub offset: u64,
     /// Returned line window.
@@ -297,7 +297,7 @@ pub struct ReadResultView {
     pub total_lines: u64,
     /// Syntax-highlighting hint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
+    pub lang: Option<CodeJsonString>,
     /// Generic-client fallback content.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<Vec<ContentBlock>>,
@@ -495,6 +495,7 @@ mod tests {
         for raw in [
             r#"{"card":"generic","content":[{"type":"text","text":"\ud800"}]}"#,
             r#"{"card":"read","path":"a","offset":1,"lines":[],"totalLines":0,"content":[{"type":"text","text":"\udfff"}]}"#,
+            r#"{"card":"read","title":"\ud800","path":"\udfff.rs","offset":1,"lines":[{"number":1,"text":"\ud800"}],"totalLines":1,"lang":"\udfff"}"#,
         ] {
             let view: ToolResultView = serde_json::from_str(raw).expect("lossless result view");
             let encoded = CodeJsonValue::from_serialize(&view).expect("encode result view");
@@ -624,15 +625,15 @@ mod tests {
                 total: 2,
             })),
             ToolResultView::Read(ReadResultView {
-                title: Some("Read src/lib.rs".to_owned()),
-                path: "src/lib.rs".to_owned(),
+                title: Some("Read src/lib.rs".into()),
+                path: "src/lib.rs".into(),
                 offset: 2,
                 lines: vec![ReadFileLine {
                     number: 2,
-                    text: "fn main() {}".to_owned(),
+                    text: "fn main() {}".into(),
                 }],
                 total_lines: 3,
-                lang: Some("rs".to_owned()),
+                lang: Some("rs".into()),
                 content: Some(content),
             }),
             ToolResultView::Web(WebResultView::Search(WebSearchResultView {

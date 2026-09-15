@@ -13,7 +13,8 @@ use seekdeep_typert_generator::{
 /// Returns compiler, configuration, manifest, graph completeness, or I/O failures.
 pub fn run(root: &Path, source: &Path, check: bool) -> anyhow::Result<bool> {
     let output = std::fs::canonicalize(root)?;
-    let source = std::fs::canonicalize(source)?;
+    // Compiler source filenames use ordinary Windows paths, without verbatim prefixes.
+    let source = source.to_path_buf();
     let repo_root = output.clone();
     let docs = run_with_stack(move || -> anyhow::Result<_> {
         let projection = project_cordis_catalog(

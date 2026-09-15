@@ -28,8 +28,11 @@ pub struct ProjectionReport {
 /// # Errors
 /// Propagates missing-file and filesystem inspection failures.
 pub fn publishable_image(path: &Path, repo_root: &Path) -> anyhow::Result<Option<PathBuf>> {
-    let real = std::fs::canonicalize(path)?;
-    Ok((real.starts_with(repo_root) && std::fs::metadata(&real)?.is_file()).then_some(real))
+    let real = dunce::canonicalize(path)?;
+    Ok(
+        (real.starts_with(dunce::simplified(repo_root)) && std::fs::metadata(&real)?.is_file())
+            .then_some(real),
+    )
 }
 
 /// Lists canonical sources and publishable referenced images in source order.

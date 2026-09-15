@@ -2,7 +2,10 @@
 
 use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
-use crate::{ToolCallBlock, relativize_to_cwd};
+use crate::{
+    ToolCallBlock,
+    model::{json_string, relativize_json_to_cwd},
+};
 
 /// Chat-row line cap shared by diff and read summaries.
 pub const CHAT_CARD_MAX_LINES: usize = 8;
@@ -75,20 +78,20 @@ pub struct ReadLine {
     /// One-based source line number.
     pub number: u64,
     /// Line text.
-    pub text: String,
+    pub text: JsonString,
 }
 
 /// Read card model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadCardModel {
     /// Replacement title or relative path.
-    pub label: String,
+    pub label: JsonString,
     /// Detached line rows.
     pub lines: Vec<ReadLine>,
     /// Complete file line count.
     pub total_lines: u64,
     /// Optional syntax language.
-    pub lang: Option<String>,
+    pub lang: Option<JsonString>,
 }
 
 /// Derives a settled result-side read card.
@@ -98,7 +101,7 @@ pub fn read_card_model(block: &ToolCallBlock, cwd: Option<&str>) -> Option<ReadC
         return None;
     }
     let view = card(block.result_view(), "read")?;
-    let path = view.get_value("path")?.as_str()?;
+    let path = json_string(view.get_value("path")?)?;
     let lines = view
         .get_value("lines")?
         .as_array()?
@@ -109,21 +112,18 @@ pub fn read_card_model(block: &ToolCallBlock, cwd: Option<&str>) -> Option<ReadC
             }
             Some(ReadLine {
                 number: line.get_value("number")?.as_u64()?,
-                text: line.get_value("text")?.as_str()?.to_owned(),
+                text: json_string(line.get_value("text")?)?,
             })
         })
         .collect::<Option<Vec<_>>>()?;
     Some(ReadCardModel {
         label: view
             .get_value("title")
-            .and_then(Value::as_str)
-            .map_or_else(|| relativize_to_cwd(path, cwd), ToOwned::to_owned),
+            .and_then(json_string)
+            .unwrap_or_else(|| relativize_json_to_cwd(&path, cwd)),
         lines,
         total_lines: view.get_value("totalLines")?.as_u64()?,
-        lang: view
-            .get_value("lang")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned),
+        lang: view.get_value("lang").and_then(json_string),
     })
 }
 

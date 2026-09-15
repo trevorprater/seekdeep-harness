@@ -74,7 +74,7 @@ fn render_code_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
     let highlight_code = trimmed.clone();
     let highlight_lang = lang.clone();
     let highlight = Closure::wrap(Box::new(move || {
-        highlight_to_html(highlight_code.clone(), highlight_lang.clone())
+        highlight_to_html(highlight_code.as_str().into(), highlight_lang.clone())
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     let highlight_dependencies = Array::new();
     highlight_dependencies.push(&JsValue::from_str(&trimmed));
@@ -109,7 +109,7 @@ fn render_code_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
                     .unwrap_or_else(|| copy_trimmed.clone())
             }
         };
-        let pending = write_clipboard(text);
+        let pending = write_clipboard(text.as_str().into());
         let setter = copy_setter.clone();
         let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
             if accepted.as_bool() != Some(true) {

@@ -45,6 +45,6 @@ async fn fsync_directory(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
-async fn fsync_directory(_path: &Path) -> std::io::Result<()> {
-    Ok(())
+fn fsync_directory(_path: &Path) -> std::future::Ready<std::io::Result<()>> {
+    std::future::ready(Ok(()))
 }

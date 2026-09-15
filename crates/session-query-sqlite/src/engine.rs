@@ -34,7 +34,6 @@ use seekdeep_session_query::{
     },
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sha2::{Digest as _, Sha256};
 
 use crate::{
@@ -918,8 +917,16 @@ fn observe_session(
     header: SessionHeader,
     events: &[SessionEvent],
 ) -> anyhow::Result<ObservedSession> {
+    #[derive(Serialize)]
+    struct Fingerprint<'a> {
+        header: &'a SessionHeader,
+        events: &'a [SessionEvent],
+    }
     let documents = build_session_event_search_documents(&header.id, events)?;
-    let encoded = serde_json::to_vec(&json!({"header": &header, "events": events}))?;
+    let encoded = serde_json::to_vec(&Fingerprint {
+        header: &header,
+        events,
+    })?;
     let fingerprint = URL_SAFE_NO_PAD.encode(Sha256::digest(encoded));
     Ok(ObservedSession {
         header,

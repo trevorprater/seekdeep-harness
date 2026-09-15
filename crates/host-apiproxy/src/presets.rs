@@ -29,7 +29,7 @@ use seekdeep_api_remotes::{
 use seekdeep_attachment::{ATTACHMENTS, AttachmentError, ImageAttachmentRef, SaveImageAttachment};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
-use seekdeep_core::session::JsonRef;
+use seekdeep_core::session::{JsonRef, JsonValue};
 use seekdeep_llm::{
     AbortSignal, ContentBlock, LLM, LlmCallConfig, Message, MessageSource, ModelId, ProviderId,
     ReasoningEffortId, UserMessage, content_has_image,
@@ -38,6 +38,7 @@ use seekdeep_skill::{SKILLS, SkillLookupOptions, SkillViewOptions, is_user_invoc
 use seekdeep_subagent::{
     SUBAGENTS, SubagentError, SubagentFollowupOptions, SubagentInterruptAuthority,
 };
+use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -105,6 +106,7 @@ impl std::fmt::Debug for PresetApiProxyOptions {
 }
 
 /// Agent-preset decorator over the remaining API Proxy domains.
+#[derive(Clone)]
 pub struct PresetApiProxyRuntime {
     context: Context,
     options: PresetApiProxyOptions,
@@ -328,13 +330,13 @@ impl PresetApiProxyRuntime {
         })
     }
 
-    async fn preset_unary(
+    async fn preset_unary<T: DeserializeOwned>(
         &self,
         method: RpcMethod,
         request: RpcRequest<Value>,
         signal: AbortSignal,
-    ) -> anyhow::Result<RpcResponse<Value>> {
-        match method {
+    ) -> anyhow::Result<RpcResponse<T>> {
+        let response = match method {
             RpcMethod::AgentPresetList => self.list(request).await,
             RpcMethod::AgentPresetSelect => self.select(request).await,
             RpcMethod::AgentPresetRead => self.read(request).await,
@@ -358,8 +360,13 @@ impl PresetApiProxyRuntime {
             | RpcMethod::GoalResume
             | RpcMethod::GoalComplete
             | RpcMethod::GoalClear => self.mutate_goal(method, request).await,
-            _ => self.domains.unary(method, request, signal).await,
-        }
+            _ => {
+                return crate::handler::decode_response(
+                    self.domains.unary_json(method, request, signal).await?,
+                );
+            }
+        }?;
+        crate::handler::decode_response(crate::handler::response_json(response)?)
     }
 
     async fn list(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
@@ -1831,15 +1838,17 @@ impl ApiProxyRuntime for PresetApiProxyRuntime {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
-        let runtime = Arc::new(Self {
-            context: self.context.clone(),
-            options: self.options.clone(),
-            resolve_agent: self.resolve_agent.clone(),
-            switches: self.switches.clone(),
-            selections: self.selections.clone(),
-            image_admissions: self.image_admissions.clone(),
-            domains: self.domains.clone(),
-        });
+        let runtime = Arc::new(self.clone());
+        async move { runtime.preset_unary(method, request, signal).await }.boxed()
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        let runtime = Arc::new(self.clone());
         async move { runtime.preset_unary(method, request, signal).await }.boxed()
     }
 

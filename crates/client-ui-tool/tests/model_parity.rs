@@ -140,7 +140,37 @@ fn read_card_is_result_only_detached_and_uses_replacement_or_relative_label() {
     assert_eq!(model.label, "src/lib.rs");
     assert_eq!(model.lines[0].number, 1);
     assert_eq!(model.total_lines, 10);
-    assert_eq!(model.lang.as_deref(), Some("rust"));
+    assert_eq!(
+        model.lang.as_ref().and_then(JsonString::as_str),
+        Some("rust")
+    );
+}
+
+#[test]
+fn read_card_preserves_utf16_lines_and_relative_labels() {
+    let view = JsonValue::parse(r#"{"card":"read","path":"/work/\ud800.rs","lines":[{"number":1,"text":"\udfff"}],"totalLines":1,"lang":"\ud800"}"#.to_owned()).unwrap();
+    let block = ToolCallBlock::Settled {
+        call_id: "read".to_owned(),
+        call: None,
+        call_view: None,
+        result_view: Some(view),
+        content: Vec::new(),
+        is_error: false,
+        error: None,
+    };
+    let model = read_card_model(&block, Some("/work")).expect("lossless read card");
+    assert_eq!(
+        JsonValue::from_serialize(&model.lines[0].text).unwrap(),
+        JsonValue::from(JsonString::from_utf16(&[0xdfff]))
+    );
+    assert_eq!(
+        JsonValue::from_serialize(&model.label).unwrap(),
+        JsonValue::parse(r#""\ud800.rs""#.to_owned()).unwrap()
+    );
+    assert_eq!(
+        JsonValue::from_serialize(&model.lang).unwrap(),
+        JsonValue::from(JsonString::from_utf16(&[0xd800]))
+    );
 }
 
 #[test]

@@ -13,6 +13,7 @@ use std::{
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
+use seekdeep_core::session::JsonValue;
 use seekdeep_credentials::{CREDENTIALS, CredentialRef, credential_ref};
 use seekdeep_llm::{
     AbortSignal, LLM, LlmConfigurableProvider, LlmDiscoveredModel, LlmModelDiscoveryRequest,
@@ -89,6 +90,7 @@ impl std::fmt::Debug for ConfigurationApiProxyOptions {
 /// Services are resolved from Cordis for every operation rather than captured
 /// at construction. A generation swap therefore cannot leave this gateway
 /// calling a disposed settings, credentials, or LLM registration.
+#[derive(Clone)]
 pub struct ConfigurationApiProxyRuntime {
     context: Context,
     options: ConfigurationApiProxyOptions,
@@ -127,13 +129,13 @@ impl ConfigurationApiProxyRuntime {
         }))
     }
 
-    async fn configuration_unary(
+    async fn configuration_unary<T: DeserializeOwned>(
         &self,
         method: RpcMethod,
         request: RpcRequest<Value>,
         signal: AbortSignal,
-    ) -> anyhow::Result<RpcResponse<Value>> {
-        match method {
+    ) -> anyhow::Result<RpcResponse<T>> {
+        let response = match method {
             RpcMethod::SettingsDescribe => self.settings_describe(request),
             RpcMethod::SettingsOpenDocument => self.settings_open_document(request, signal).await,
             RpcMethod::SettingsUpdate => self.settings_update(request).await,
@@ -145,8 +147,13 @@ impl ConfigurationApiProxyRuntime {
             RpcMethod::LlmProviders => self.llm_providers(request),
             RpcMethod::LlmModels => self.llm_models(request).await,
             RpcMethod::LlmDiscoverModels => self.llm_discover_models(request, signal).await,
-            _ => self.domains.unary(method, request, signal).await,
-        }
+            _ => {
+                return crate::handler::decode_response(
+                    self.domains.unary_json(method, request, signal).await?,
+                );
+            }
+        }?;
+        crate::handler::decode_response(crate::handler::response_json(response)?)
     }
 
     fn settings_describe(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
@@ -625,11 +632,17 @@ impl ApiProxyRuntime for ConfigurationApiProxyRuntime {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
-        let runtime = Arc::new(Self {
-            context: self.context.clone(),
-            options: self.options.clone(),
-            domains: self.domains.clone(),
-        });
+        let runtime = Arc::new(self.clone());
+        async move { runtime.configuration_unary(method, request, signal).await }.boxed()
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        let runtime = Arc::new(self.clone());
         async move { runtime.configuration_unary(method, request, signal).await }.boxed()
     }
 

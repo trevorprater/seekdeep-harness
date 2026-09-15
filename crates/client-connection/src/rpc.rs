@@ -21,8 +21,13 @@ use seekdeep_cordis::{Context, fiber::EffectHandle};
 #[cfg(not(target_arch = "wasm32"))]
 use seekdeep_host_webserver::{WebHandler, WebHandlerFuture, WebRoute, WebRouteKind, WebServer};
 use seekdeep_identity::RpcId;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{Map, Value, json};
+use seekdeep_lossless_json::{JsonRef, JsonValue};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned, ser::SerializeMap as _,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use serde_json::json;
+use serde_json::{Map, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use uuid::Uuid;
 
@@ -73,41 +78,51 @@ impl<T: Serialize> Serialize for RpcResult<T> {
     where
         S: Serializer,
     {
-        let value = match self {
-            Self::Success { value: Some(value) } => {
-                json!({ "ok": true, "value": value })
-            }
-            Self::Success { value: None } => json!({ "ok": true }),
-            Self::Failure { error } => json!({ "ok": false, "error": error }),
+        let count = if matches!(self, Self::Success { value: None }) {
+            1
+        } else {
+            2
         };
-        value.serialize(serializer)
+        let mut object = serializer.serialize_map(Some(count))?;
+        match self {
+            Self::Success { value: Some(value) } => {
+                object.serialize_entry("ok", &true)?;
+                object.serialize_entry("value", value)?;
+            }
+            Self::Success { value: None } => object.serialize_entry("ok", &true)?,
+            Self::Failure { error } => {
+                object.serialize_entry("ok", &false)?;
+                object.serialize_entry("error", error)?;
+            }
+        }
+        object.end()
     }
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for RpcResult<T> {
+impl<'de, T: DeserializeOwned> Deserialize<'de> for RpcResult<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let mut value = Value::deserialize(deserializer)?;
-        let object = value
-            .as_object_mut()
-            .ok_or_else(|| serde::de::Error::custom("RPC result must be an object"))?;
-        match object.remove("ok") {
-            Some(Value::Bool(true)) => {
+        let object = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if !object.is_object() {
+            return Err(serde::de::Error::custom("RPC result must be an object"));
+        }
+        match object.get("ok").and_then(JsonRef::as_bool) {
+            Some(true) => {
                 let value = object
-                    .remove("value")
-                    .map(T::deserialize)
+                    .get("value")
+                    .map(JsonRef::deserialize::<T>)
                     .transpose()
                     .map_err(serde::de::Error::custom)?;
                 Ok(Self::Success { value })
             }
-            Some(Value::Bool(false)) => {
+            Some(false) => {
                 let error = object
-                    .remove("error")
+                    .get("error")
                     .ok_or_else(|| serde::de::Error::missing_field("error"))?;
                 Ok(Self::Failure {
-                    error: serde_json::from_value(error).map_err(serde::de::Error::custom)?,
+                    error: error.deserialize().map_err(serde::de::Error::custom)?,
                 })
             }
             _ => Err(serde::de::Error::custom(
@@ -153,6 +168,7 @@ impl ClientRequest {
 
 /// Response to a [`ClientRequest`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(bound(deserialize = "T: DeserializeOwned"))]
 pub struct ServerResponse<T = Value> {
     /// Must be `server-response` on the wire.
     #[serde(rename = "type")]

@@ -224,7 +224,7 @@ fn render_diff(react: &JsValue, props: &JsValue) -> Result<JsValue, JsValue> {
         if copied {
             return Ok(());
         }
-        let pending = write_clipboard(copy_text.clone());
+        let pending = write_clipboard(copy_text.as_str().into());
         let setter = copy_setter.clone();
         let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
             if accepted.as_bool() != Some(true) {
@@ -371,7 +371,7 @@ fn render_search(react: &JsValue, props: &JsValue) -> Result<JsValue, JsValue> {
         if copied {
             return Ok(());
         }
-        let pending = write_clipboard(copy_text.clone());
+        let pending = write_clipboard(copy_text.as_str().into());
         let setter = copy_setter.clone();
         let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
             if accepted.as_bool() != Some(true) {
@@ -662,7 +662,7 @@ fn render_terminal(react: &JsValue, props: &JsValue) -> Result<JsValue, JsValue>
             if copied {
                 return Ok(());
             }
-            let pending = write_clipboard(copy_text.clone());
+            let pending = write_clipboard(copy_text.as_str().into());
             let setter = copy_setter.clone();
             let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
                 if accepted.as_bool() != Some(true) {

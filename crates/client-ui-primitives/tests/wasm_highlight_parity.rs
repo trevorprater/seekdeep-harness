@@ -98,7 +98,7 @@ fn boot_aliases_unknown_values_and_deferred_warmup_match_source_policy() {
         "json",
         "jsonc",
     ] {
-        let html = highlight_to_html("const x = 1".to_owned(), Some(alias.to_owned())).unwrap();
+        let html = highlight_to_html("const x = 1".into(), Some(alias.to_owned())).unwrap();
         assert!(
             html.as_string()
                 .unwrap()
@@ -107,7 +107,7 @@ fn boot_aliases_unknown_values_and_deferred_warmup_match_source_policy() {
     }
     for unknown in [None, Some("cobol"), Some("constructor"), Some("__proto__")] {
         assert!(
-            highlight_to_html("x".to_owned(), unknown.map(str::to_owned))
+            highlight_to_html("x".into(), unknown.map(str::to_owned))
                 .unwrap()
                 .is_undefined()
         );
@@ -137,9 +137,8 @@ fn deferred_warmup_surfaces_backend_failures() {
 #[wasm_bindgen_test]
 fn line_tokens_preserve_text_styles_and_trailing_terminator_contract() {
     setup();
-    let lines = Array::from(
-        &highlight_lines("const a = 1\n// c".to_owned(), Some("ts".to_owned())).unwrap(),
-    );
+    let lines =
+        Array::from(&highlight_lines("const a = 1\n// c".into(), Some("ts".to_owned())).unwrap());
     assert_eq!(lines.length(), 2);
     let first = Array::from(&lines.get(0));
     assert_eq!(
@@ -153,16 +152,44 @@ fn line_tokens_preserve_text_styles_and_trailing_terminator_contract() {
             .contains("var(--shiki-")
     );
 
-    let terminated =
-        Array::from(&highlight_lines("a\n".to_owned(), Some("ts".to_owned())).unwrap());
+    let terminated = Array::from(&highlight_lines("a\n".into(), Some("ts".to_owned())).unwrap());
     assert_eq!(terminated.length(), 1);
-    let blank = Array::from(&highlight_lines("a\n\n".to_owned(), Some("ts".to_owned())).unwrap());
+    let blank = Array::from(&highlight_lines("a\n\n".into(), Some("ts".to_owned())).unwrap());
     assert_eq!(blank.length(), 2);
     assert_eq!(Array::from(&blank.get(1)).length(), 0);
 
     highlightSetMalformed(true);
-    let error = highlight_lines("x".to_owned(), Some("ts".to_owned())).unwrap_err();
+    let error = highlight_lines("x".into(), Some("ts".to_owned())).unwrap_err();
     assert!(format!("{error:?}").contains("color"));
+}
+
+#[wasm_bindgen_test]
+fn highlighting_preserves_lone_surrogates_at_the_backend_boundary() {
+    setup();
+    let code = js_sys::JSON::parse(r#""a\ud800😀\udfff""#).unwrap();
+    let html = highlight_to_html(code.clone().unchecked_into(), Some("ts".to_owned())).unwrap();
+    assert!(js_sys::Object::is(
+        &Array::from(&highlightCalls("html").get(0)).get(0),
+        &code
+    ));
+    assert!(
+        js_sys::JSON::stringify(&html)
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .contains(r"\ud800")
+    );
+    let lines = Array::from(
+        &highlight_lines(code.clone().unchecked_into(), Some("ts".to_owned())).unwrap(),
+    );
+    assert!(js_sys::Object::is(
+        &Array::from(&highlightCalls("tokens").get(0)).get(0),
+        &code
+    ));
+    assert!(js_sys::Object::is(
+        &property(&Array::from(&lines.get(0)).get(0), "text"),
+        &code
+    ));
 }
 
 #[wasm_bindgen_test(async)]
@@ -185,12 +212,12 @@ async fn lazy_grammars_request_once_publish_load_count_and_notify_subscribers() 
     ];
     for alias in aliases {
         assert!(
-            highlight_to_html("x".to_owned(), Some(alias.to_owned()))
+            highlight_to_html("x".into(), Some(alias.to_owned()))
                 .unwrap()
                 .is_undefined()
         );
         assert!(
-            highlight_to_html("x".to_owned(), Some(alias.to_owned()))
+            highlight_to_html("x".into(), Some(alias.to_owned()))
                 .unwrap()
                 .is_undefined()
         );
@@ -202,7 +229,7 @@ async fn lazy_grammars_request_once_publish_load_count_and_notify_subscribers() 
     assert_eq!(notifications.get(), 23);
     for alias in aliases {
         assert!(
-            highlight_to_html("x".to_owned(), Some(alias.to_owned()))
+            highlight_to_html("x".into(), Some(alias.to_owned()))
                 .unwrap()
                 .as_string()
                 .unwrap()
@@ -253,7 +280,7 @@ async fn subscriber_iteration_matches_live_javascript_set_semantics() {
     let dispose_first = subscribe_grammar_loaded(first).unwrap();
     *second_disposer.borrow_mut() = Some(subscribe_grammar_loaded(second).unwrap());
     assert!(
-        highlight_to_html("x".to_owned(), Some("py".to_owned()))
+        highlight_to_html("x".into(), Some("py".to_owned()))
             .unwrap()
             .is_undefined()
     );

@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, collections::BTreeSet};
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, JsString, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 const BOOT_GRAMMARS: &[&str] = &["typescript", "shellscript", "json"];
@@ -83,7 +83,7 @@ pub fn configure_client_ui_primitive_highlight(backend: JsValue) -> Result<(), J
 /// Returns configuration or tokenizer failures.
 #[wasm_bindgen(js_name = highlightToHtml)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn highlight_to_html(code: String, lang: Option<String>) -> Result<JsValue, JsValue> {
+pub fn highlight_to_html(code: JsString, lang: Option<String>) -> Result<JsValue, JsValue> {
     let Some(resolved) = resolve_language(lang.as_deref()) else {
         return Ok(JsValue::UNDEFINED);
     };
@@ -94,7 +94,7 @@ pub fn highlight_to_html(code: String, lang: Option<String>) -> Result<JsValue, 
         call_method(
             &state.backend,
             "codeToHtml",
-            &[JsValue::from_str(&code), JsValue::from_str(resolved)],
+            &[code.into(), JsValue::from_str(resolved)],
         )
     })
 }
@@ -106,7 +106,7 @@ pub fn highlight_to_html(code: String, lang: Option<String>) -> Result<JsValue, 
 /// Returns configuration, tokenizer, or malformed-token failures.
 #[wasm_bindgen(js_name = highlightLines)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn highlight_lines(code: String, lang: Option<String>) -> Result<JsValue, JsValue> {
+pub fn highlight_lines(code: JsString, lang: Option<String>) -> Result<JsValue, JsValue> {
     let Some(resolved) = resolve_language(lang.as_deref()) else {
         return Ok(JsValue::UNDEFINED);
     };
@@ -117,7 +117,7 @@ pub fn highlight_lines(code: String, lang: Option<String>) -> Result<JsValue, Js
         call_method(
             &state.backend,
             "codeToTokens",
-            &[JsValue::from_str(&code), JsValue::from_str(resolved)],
+            &[code.into(), JsValue::from_str(resolved)],
         )
     })?;
     let tokens = required_array(&token_result, "tokens", "codeToTokens result")?;
@@ -131,11 +131,16 @@ pub fn highlight_lines(code: String, lang: Option<String>) -> Result<JsValue, Js
     for line in retained.iter() {
         let runs = Array::new();
         for token in Array::from(&line).iter() {
-            let content = required_string(&token, "content", "highlight token")?;
+            let content = required_property(&token, "content", "highlight token")?;
+            if !content.is_string() {
+                return Err(
+                    js_sys::TypeError::new("highlight token content must be a string").into(),
+                );
+            }
             let color = required_string(&token, "color", "highlight token")?;
             runs.push(
                 &object(&[
-                    ("text", JsValue::from_str(&content)),
+                    ("text", content),
                     (
                         "style",
                         object(&[("color", JsValue::from_str(&color))])?.into(),

@@ -24,10 +24,10 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let root = args
-        .root
-        .unwrap_or_else(|| compiled_repository_root().to_path_buf())
-        .canonicalize()?;
+    let root = dunce::canonicalize(
+        args.root
+            .unwrap_or_else(|| compiled_repository_root().to_path_buf()),
+    )?;
     let manifest_path = args
         .manifest
         .unwrap_or_else(|| root.join("website/docs.json"));

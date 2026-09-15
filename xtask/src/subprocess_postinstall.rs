@@ -1,11 +1,13 @@
 //! Reproducible Node-only installer binding containing compiled Rust behavior.
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     process::Command,
 };
 
 use base64::Engine as _;
+use serde::Deserialize;
 
 const PACKAGE: &str = "seekdeep-subprocess-postinstall";
 const ARTIFACT: &str = "seekdeep_subprocess_postinstall";
@@ -15,10 +17,6 @@ pub(super) fn run(metadata: &super::CargoMetadata, check: bool) -> anyhow::Resul
     let target = metadata
         .target_directory
         .join("xtask/subprocess-postinstall");
-    let mut flags = vec![format!(
-        "--remap-path-prefix={}=/seekdeep",
-        metadata.workspace_root.display()
-    )];
     let cargo_home = std::env::var_os("CARGO_HOME")
         .map(PathBuf::from)
         .or_else(|| {
@@ -26,12 +24,7 @@ pub(super) fn run(metadata: &super::CargoMetadata, check: bool) -> anyhow::Resul
                 .or_else(|| std::env::var_os("USERPROFILE"))
                 .map(|home| PathBuf::from(home).join(".cargo"))
         });
-    if let Some(cargo_home) = cargo_home {
-        flags.push(format!(
-            "--remap-path-prefix={}=/cargo",
-            cargo_home.display()
-        ));
-    }
+    let flags = source_remappings(&metadata.workspace_root, cargo_home.as_deref())?;
     let mut command = Command::new("cargo");
     command
         .current_dir(&metadata.workspace_root)
@@ -100,6 +93,175 @@ pub(super) fn run(metadata: &super::CargoMetadata, check: bool) -> anyhow::Resul
     Ok(())
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+struct PackageId(String);
+
+#[derive(Deserialize)]
+struct DependencyMetadata {
+    packages: Vec<DependencyPackage>,
+    resolve: DependencyResolution,
+}
+
+#[derive(Deserialize)]
+struct DependencyPackage {
+    id: PackageId,
+    name: String,
+    manifest_path: PathBuf,
+    targets: Vec<DependencyTarget>,
+}
+
+#[derive(Deserialize)]
+struct DependencyTarget {
+    kind: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct DependencyResolution {
+    nodes: Vec<DependencyNode>,
+}
+
+#[derive(Deserialize)]
+struct DependencyNode {
+    id: PackageId,
+    deps: Vec<DependencyEdge>,
+}
+
+#[derive(Deserialize)]
+struct DependencyEdge {
+    pkg: PackageId,
+    dep_kinds: Vec<DependencyKind>,
+}
+
+#[derive(Deserialize)]
+struct DependencyKind {
+    kind: Option<String>,
+}
+
+fn runtime_packages(metadata: &DependencyMetadata) -> anyhow::Result<Vec<&DependencyPackage>> {
+    let root = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == PACKAGE)
+        .ok_or_else(|| anyhow::anyhow!("postinstall package is absent from Cargo metadata"))?;
+    let packages: BTreeMap<_, _> = metadata
+        .packages
+        .iter()
+        .map(|package| (&package.id, package))
+        .collect();
+    let nodes: BTreeMap<_, _> = metadata
+        .resolve
+        .nodes
+        .iter()
+        .map(|node| (&node.id, node))
+        .collect();
+    let mut pending = vec![root.id.clone()];
+    let mut visited = BTreeSet::new();
+    let mut runtime = Vec::new();
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id.clone()) {
+            continue;
+        }
+        let package = packages
+            .get(&id)
+            .ok_or_else(|| anyhow::anyhow!("Cargo metadata omitted a dependency package"))?;
+        if package
+            .targets
+            .iter()
+            .any(|target| target.kind.iter().any(|kind| kind == "proc-macro"))
+        {
+            continue;
+        }
+        runtime.push(*package);
+        let node = nodes
+            .get(&id)
+            .ok_or_else(|| anyhow::anyhow!("Cargo metadata omitted a dependency resolution"))?;
+        for edge in &node.deps {
+            let mut normal = false;
+            for kind in &edge.dep_kinds {
+                match kind.kind.as_deref() {
+                    None => normal = true,
+                    Some("build" | "dev") => {}
+                    Some(kind) => anyhow::bail!("unsupported Cargo dependency kind: {kind}"),
+                }
+            }
+            if normal {
+                pending.push(edge.pkg.clone());
+            }
+        }
+    }
+    Ok(runtime)
+}
+
+fn file_remapping(file: &Path, root: &Path, virtual_root: &str) -> anyhow::Result<String> {
+    let relative = file.strip_prefix(root)?;
+    let virtual_file = format!(
+        "{virtual_root}/{}",
+        relative.to_string_lossy().replace('\\', "/")
+    );
+    Ok(format!(
+        "--remap-path-prefix={}={virtual_file}",
+        file.display()
+    ))
+}
+
+fn source_remappings(workspace: &Path, cargo_home: Option<&Path>) -> anyhow::Result<Vec<String>> {
+    let mut roots = vec![(workspace, "/seekdeep")];
+    if let Some(cargo_home) = cargo_home {
+        roots.push((cargo_home, "/cargo"));
+    }
+    let mut flags: Vec<_> = roots
+        .iter()
+        .map(|(root, target)| format!("--remap-path-prefix={}={target}", root.display()))
+        .collect();
+    let output = Command::new("cargo")
+        .current_dir(workspace)
+        .args([
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--filter-platform",
+            "wasm32-unknown-unknown",
+        ])
+        .output()?;
+    anyhow::ensure!(
+        output.status.success(),
+        "postinstall dependency metadata failed"
+    );
+    let metadata: DependencyMetadata = serde_json::from_slice(&output.stdout)?;
+    let mut files = BTreeSet::new();
+    for package in runtime_packages(&metadata)? {
+        let directory = package
+            .manifest_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Cargo manifest has no parent"))?;
+        for entry in walkdir::WalkDir::new(directory).sort_by_file_name() {
+            let entry = entry?;
+            if entry.file_type().is_file()
+                && entry.path().extension().is_some_and(|ext| ext == "rs")
+            {
+                files.insert(entry.into_path());
+            }
+        }
+    }
+    // rustc remaps prefixes textually; a directory remap retains Windows suffix separators.
+    for file in files {
+        let (root, target) = roots
+            .iter()
+            .rev()
+            .find(|(root, _)| file.starts_with(root))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "postinstall dependency is outside remapped source roots: {}",
+                    file.display()
+                )
+            })?;
+        flags.push(file_remapping(&file, root, target)?);
+    }
+    Ok(flags)
+}
+
 fn embed(bindings: &str, wasm: &[u8]) -> anyhow::Result<String> {
     const READ: &str = "const wasmBytes = require('fs').readFileSync(wasmPath);";
     anyhow::ensure!(
@@ -129,4 +291,78 @@ fn embed(bindings: &str, wasm: &[u8]) -> anyhow::Result<String> {
          {bindings}\n\
          exports.ensureNodePtySpawnHelpers(import.meta.resolve('node-pty'), process.platform, process.arch);\n"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_dependency_walk_excludes_development_build_and_proc_macro_graphs() {
+        let metadata: DependencyMetadata = serde_json::from_value(serde_json::json!({
+            "packages": [
+                {"id":"root","name":PACKAGE,"manifest_path":"root/Cargo.toml","targets":[{"kind":["cdylib","rlib"]}]},
+                {"id":"library","name":"library","manifest_path":"library/Cargo.toml","targets":[{"kind":["lib"]}]},
+                {"id":"macro","name":"macro","manifest_path":"macro/Cargo.toml","targets":[{"kind":["proc-macro"]}]}
+            ],
+            "resolve":{"nodes":[
+                {"id":"root","deps":[
+                    {"pkg":"library","dep_kinds":[{"kind":null}]},
+                    {"pkg":"macro","dep_kinds":[{"kind":null}]},
+                    {"pkg":"unused-dev","dep_kinds":[{"kind":"dev"}]},
+                    {"pkg":"unused-build","dep_kinds":[{"kind":"build"}]}
+                ]},
+                {"id":"library","deps":[]}
+            ]}
+        })).unwrap();
+        let names = runtime_packages(&metadata)
+            .unwrap()
+            .into_iter()
+            .map(|package| package.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, [PACKAGE, "library"]);
+    }
+
+    #[test]
+    fn full_filename_remapping_normalizes_compiled_windows_style_suffixes() {
+        let temporary = tempfile::tempdir().unwrap();
+        let cargo = temporary.path().join("cargo");
+        let source = cargo.join(r"registry\src\fixture\src").join("externref.rs");
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, "fn main() { print!(\"{}\", file!()); }\n").unwrap();
+        let binary = temporary
+            .path()
+            .join(format!("remap-probe{}", std::env::consts::EXE_SUFFIX));
+        let prefix = format!("--remap-path-prefix={}=/cargo", cargo.display());
+        let full = file_remapping(&source, &cargo, "/cargo").unwrap();
+        for exact in [false, true] {
+            let mut command = Command::new("rustc");
+            command
+                .args(["--edition=2024", "--crate-name", "remap_probe"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary)
+                .arg(&prefix);
+            if exact {
+                command.arg(&full);
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let output = Command::new(&binary).output().unwrap();
+            assert!(output.status.success());
+            let filename = String::from_utf8(output.stdout).unwrap();
+            if exact {
+                assert_eq!(filename, "/cargo/registry/src/fixture/src/externref.rs");
+            } else {
+                assert!(
+                    filename.contains('\\'),
+                    "directory remaps retain suffix separators"
+                );
+            }
+        }
+    }
 }

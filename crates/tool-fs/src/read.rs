@@ -6,6 +6,7 @@ use futures::TryStreamExt as _;
 use seekdeep_cordis::Context;
 use seekdeep_fs::{FS, FsObservation};
 use seekdeep_llm::ContentBlock;
+use seekdeep_lossless_json::{JsonString, JsonValue};
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, FileLocation, GenericCallView, ReadFileLine,
@@ -15,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::read_render::{
-    FileReadOutcome, FileTextLine, ReadWindow, build_window, format_read_output, lang_from_path,
-    read_meta_from_meta,
+    FileReadOutcome, FileTextLine, ReadWindow, ReadWindowBuilder, format_read_output,
+    lang_from_path, read_meta_from_meta,
 };
 use crate::read_target::{emit_fs_observed, resolve_regular_read_target};
 
@@ -114,21 +115,19 @@ pub struct ReadOutcome {
 }
 
 /// Extracts the body between the read envelope's `<content>` fences.
-fn extract_read_body(text: &str) -> Option<&str> {
+fn extract_read_body(text: &JsonString) -> Option<JsonString> {
     use std::sync::OnceLock;
-    static READ_BODY: OnceLock<regex::Regex> = OnceLock::new();
+    static READ_BODY: OnceLock<regress::Regex> = OnceLock::new();
     let read_body = READ_BODY.get_or_init(|| {
-        regex::Regex::new(
-            r"^<path>[^
-]*</path>
-<type>file</type>
-<content>
-([\s\S]*)
-</content>$",
+        regress::Regex::with_flags(
+            r"^<path>[^\n]*</path>\n<type>file</type>\n<content>\n([\s\S]*)\n</content>$",
+            "u",
         )
         .expect("read body envelope regex is constant")
     });
-    read_body.captures(text)?.get(1).map(|m| m.as_str())
+    let units = text.utf16_units();
+    let body = read_body.find_from_utf16(units, 0).next()?.group(1)?;
+    Some(JsonString::from_utf16(&units[body]))
 }
 
 /// Registers the `read` tool and its system-prompt guidance.
@@ -198,19 +197,20 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                         total_lines: value.total_lines,
                         truncated_by_bytes: truncated_by_bytes.then_some(true),
                     },
-                )
-                .into(),
+                ),
             }])
         }),
     )
-    .presentation_meta(Arc::new(move |_args: &ReadArgsRaw, value: &ReadOutcome| {
-        Ok(serde_json::to_value(crate::read_render::FsReadMeta {
-            path: value.path.clone(),
-            offset: value.offset,
-            lines: value.lines.clone(),
-            total_lines: value.total_lines,
-            lang: lang_from_path(&value.path).map(str::to_owned),
-        })?)
+    .presentation_meta_lossless(Arc::new(move |_args: &ReadArgsRaw, value: &ReadOutcome| {
+        Ok(JsonValue::from_serialize(
+            &crate::read_render::FsReadMeta {
+                path: value.path.clone().into(),
+                offset: value.offset,
+                lines: value.lines.clone(),
+                total_lines: value.total_lines,
+                lang: lang_from_path(&value.path).map(JsonString::from),
+            },
+        )?)
     }));
 
     let definition = define_tool(
@@ -234,24 +234,24 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                         .ok_or_else(|| anyhow::anyhow!("tool-fs requires fs"))?
                         .filesystem();
                     let signal = execution.signal();
-                    let chunks = if info.size.is_none()
+                    let request = ReadWindow {
+                        offset: input.offset,
+                        limit: usize::try_from(input.limit).unwrap_or(usize::MAX),
+                        max_line_length: caps.max_line_length,
+                        max_bytes: caps.max_bytes,
+                    };
+                    let mut builder = ReadWindowBuilder::new(&request);
+                    if info.size.is_none()
                         || info.size.is_some_and(|size| size >= caps.stream_min_size)
                     {
-                        let stream = filesystem.stream_text(&target, Some(&signal)).await?;
-                        stream.try_collect::<Vec<String>>().await?
+                        let mut stream = filesystem.stream_text(&target, Some(&signal)).await?;
+                        while let Some(chunk) = stream.try_next().await? {
+                            builder.push_str(&chunk);
+                        }
                     } else {
-                        vec![filesystem.read_text(&target, Some(&signal)).await?]
-                    };
-                    let window = build_window(
-                        chunks,
-                        &ReadWindow {
-                            offset: input.offset,
-                            limit: usize::try_from(input.limit).unwrap_or(usize::MAX),
-                            max_line_length: caps.max_line_length,
-                            max_bytes: caps.max_bytes,
-                        },
-                        &target.display_path,
-                    )?;
+                        builder.push_str(&filesystem.read_text(&target, Some(&signal)).await?);
+                    }
+                    let window = builder.finish(&target.display_path)?;
                     let outcome = ReadOutcome {
                         path: target.display_path.clone(),
                         offset: input.offset,
@@ -303,7 +303,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                 let meta = read_meta_from_meta(result.meta.as_ref()?)?;
                 let only = (result.content.len() == 1).then(|| &result.content[0]);
                 let text = match only {
-                    Some(ContentBlock::Text { text }) => text.as_str(),
+                    Some(ContentBlock::Text { text }) => Some(text),
                     _ => None,
                 }?;
                 let body = extract_read_body(text)?;
@@ -321,9 +321,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                         .collect(),
                     total_lines: meta.total_lines,
                     lang: meta.lang,
-                    content: Some(vec![ContentBlock::Text {
-                        text: body.into(),
-                    }]),
+                    content: Some(vec![ContentBlock::Text { text: body }]),
                 }))
             },
         )),
@@ -343,7 +341,10 @@ mod tests {
         // multi-line body has to round-trip here.
         let envelope =
             "<path>/f.txt</path>\n<type>file</type>\n<content>\n1\talpha\n2\tbeta\n</content>";
-        assert_eq!(extract_read_body(envelope), Some("1\talpha\n2\tbeta"));
+        assert_eq!(
+            extract_read_body(&envelope.into()),
+            Some("1\talpha\n2\tbeta".into())
+        );
     }
 
     fn raw(file_path: &str, offset: Option<f64>, limit: Option<f64>) -> ReadArgsRaw {

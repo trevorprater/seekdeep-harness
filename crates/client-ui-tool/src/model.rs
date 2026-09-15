@@ -227,7 +227,7 @@ fn argument_string(arguments: &JsonValue, keys: &[&str]) -> Option<JsonString> {
     })
 }
 
-fn relativize_json_to_cwd(text: &JsonString, cwd: Option<&str>) -> JsonString {
+pub(crate) fn relativize_json_to_cwd(text: &JsonString, cwd: Option<&str>) -> JsonString {
     let Some(cwd) = cwd.filter(|cwd| !cwd.is_empty()) else {
         return text.clone();
     };

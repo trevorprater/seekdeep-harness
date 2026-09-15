@@ -2,10 +2,10 @@
 //! line-numbered window and a model-facing envelope.
 
 use seekdeep_fs::{FsError, FsErrorCode};
-use seekdeep_lossless_json::{JsonRef, JsonValue};
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonValue};
 use serde::{Deserialize, Serialize};
 
-/// Default maximum characters returned for a single line.
+/// Default maximum UTF-16 code units returned for a single line.
 pub const READ_MAX_LINE_LENGTH: usize = 2000;
 
 /// Default maximum bytes returned for selected file lines.
@@ -19,7 +19,7 @@ pub struct ReadWindow {
     pub offset: u64,
     /// Maximum number of lines to return.
     pub limit: usize,
-    /// Maximum characters returned for a single line.
+    /// Maximum UTF-16 code units returned for a single line.
     pub max_line_length: usize,
     /// Maximum bytes of selected output.
     pub max_bytes: usize,
@@ -32,7 +32,7 @@ pub struct FileTextLine {
     /// 1-based line number in the file.
     pub number: u64,
     /// Line text without its trailing newline.
-    pub text: String,
+    pub text: JsonString,
 }
 
 /// The windowed result a build produces from a file's decoded text.
@@ -70,43 +70,21 @@ struct WindowAccumulator {
     truncated_by_bytes: bool,
 }
 
-/// The source measures line length in UTF-16 code units (`line.length`); a truncated
-/// line keeps the longest prefix of whole characters within that many units.
-fn truncate_line(line: &str, max_line_length: usize) -> String {
-    if utf16_units(line) > max_line_length {
-        format!(
-            "{}... (line truncated to {max_line_length} chars)",
-            utf16_prefix(line, max_line_length)
-        )
+fn truncate_line(line: &[u16], max_line_length: usize) -> JsonString {
+    if line.len() > max_line_length {
+        let mut text = JsonString::from_utf16(&line[..max_line_length]);
+        text.push_str(&format!("... (line truncated to {max_line_length} chars)"));
+        text
     } else {
-        line.to_owned()
+        JsonString::from_utf16(line)
     }
 }
 
-fn utf16_units(text: &str) -> usize {
-    text.chars().map(char::len_utf16).sum()
+fn line_byte_size(line: &JsonString, current_line_count: usize) -> usize {
+    line.len_utf8() + usize::from(current_line_count > 0)
 }
 
-/// The longest prefix of whole characters whose UTF-16 length stays within `units`.
-fn utf16_prefix(text: &str, units: usize) -> &str {
-    let mut used = 0;
-    let mut end = 0;
-    for (index, character) in text.char_indices() {
-        let width = character.len_utf16();
-        if used + width > units {
-            break;
-        }
-        used += width;
-        end = index + character.len_utf8();
-    }
-    &text[..end]
-}
-
-fn line_byte_size(line: &str, current_line_count: usize) -> usize {
-    line.len() + usize::from(current_line_count > 0)
-}
-
-fn consume_line(acc: &mut WindowAccumulator, raw_line: &str, request: &ReadWindow) {
+fn consume_line(acc: &mut WindowAccumulator, raw_line: &[u16], request: &ReadWindow) {
     acc.total_lines += 1;
     if acc.truncated_by_bytes
         || acc.total_lines < request.offset
@@ -127,10 +105,6 @@ fn consume_line(acc: &mut WindowAccumulator, raw_line: &str, request: &ReadWindo
     });
 }
 
-fn strip_carriage_return(line: &str) -> &str {
-    line.strip_suffix('\r').unwrap_or(line)
-}
-
 fn finish(
     acc: WindowAccumulator,
     request: &ReadWindow,
@@ -142,7 +116,7 @@ fn finish(
     {
         return Err(FsError::new(
             format!(
-                "offset {} is out of range for {:?} ({} lines)",
+                "offset {} is out of range for \"{}\" ({} lines)",
                 request.offset, display_path, acc.total_lines
             ),
             FsErrorCode::FsNotFound,
@@ -163,49 +137,67 @@ fn finish(
 ///
 /// Returns an out-of-range offset failure.
 pub fn build_window(
-    chunks: impl IntoIterator<Item = String>,
+    chunks: impl IntoIterator<Item = impl Into<JsonString>>,
     request: &ReadWindow,
     display_path: &str,
 ) -> anyhow::Result<WindowResult> {
-    let mut acc = WindowAccumulator::default();
-    // One whole character past the cap (two UTF-16 units at most) is enough for the
-    // truncation to notice an overlong line without ever splitting a surrogate pair.
-    let line_buffer_cap = request.max_line_length + 2;
-    let mut line_buffer = String::new();
-
+    let mut builder = ReadWindowBuilder::new(request);
     for chunk in chunks {
-        let mut start = 0;
-        while let Some(relative) = chunk[start..].find('\n') {
-            let newline = start + relative;
-            append_to_line_buffer(&mut line_buffer, &chunk[start..newline], line_buffer_cap);
-            let raw = strip_carriage_return(&line_buffer).to_owned();
-            consume_line(&mut acc, &raw, request);
-            line_buffer.clear();
-            start = newline + 1;
-        }
-        append_to_line_buffer(&mut line_buffer, &chunk[start..], line_buffer_cap);
+        builder.push_units(chunk.into().utf16_units().iter().copied());
     }
-    if !line_buffer.is_empty() {
-        let raw = strip_carriage_return(&line_buffer).to_owned();
-        consume_line(&mut acc, &raw, request);
-    }
-    finish(acc, request, display_path)
+    builder.finish(display_path)
 }
 
-/// Keeps at most `cap` UTF-16 code units of a line in memory: enough to render the
-/// line's cap and its truncation notice, never a split character. Measuring bytes here
-/// would cut non-ASCII lines short of the cap before truncation ever saw them.
-fn append_to_line_buffer(buffer: &mut String, segment: &str, cap: usize) {
-    let used = utf16_units(buffer);
-    if used >= cap {
-        return;
+pub(crate) struct ReadWindowBuilder<'a> {
+    request: &'a ReadWindow,
+    accumulator: WindowAccumulator,
+    line_buffer: Vec<u16>,
+}
+
+impl<'a> ReadWindowBuilder<'a> {
+    pub(crate) fn new(request: &'a ReadWindow) -> Self {
+        Self {
+            request,
+            accumulator: WindowAccumulator::default(),
+            line_buffer: Vec::new(),
+        }
     }
-    buffer.push_str(utf16_prefix(segment, cap - used));
+
+    pub(crate) fn push_str(&mut self, chunk: &str) {
+        self.push_units(chunk.encode_utf16());
+    }
+
+    fn push_units(&mut self, units: impl IntoIterator<Item = u16>) {
+        // One unit beyond the cap proves overflow, including at a surrogate boundary.
+        let cap = self.request.max_line_length.saturating_add(1);
+        for unit in units {
+            if unit == u16::from(b'\n') {
+                self.flush_line();
+            } else if self.line_buffer.len() < cap {
+                self.line_buffer.push(unit);
+            }
+        }
+    }
+
+    fn flush_line(&mut self) {
+        if self.line_buffer.last() == Some(&u16::from(b'\r')) {
+            self.line_buffer.pop();
+        }
+        consume_line(&mut self.accumulator, &self.line_buffer, self.request);
+        self.line_buffer.clear();
+    }
+
+    pub(crate) fn finish(mut self, display_path: &str) -> anyhow::Result<WindowResult> {
+        if !self.line_buffer.is_empty() {
+            self.flush_line();
+        }
+        finish(self.accumulator, self.request, display_path)
+    }
 }
 
 /// Formats a read outcome as one OpenCode-style line-numbered text block body.
 #[must_use]
-pub fn format_read_output(display_path: &str, outcome: &FileReadOutcome) -> String {
+pub fn format_read_output(display_path: &str, outcome: &FileReadOutcome) -> JsonString {
     let end_line = outcome
         .lines
         .last()
@@ -226,18 +218,22 @@ pub fn format_read_output(display_path: &str, outcome: &FileReadOutcome) -> Stri
     } else {
         format!("(End of file - total {} lines)", outcome.total_lines)
     };
-    let body = if outcome.lines.is_empty() {
-        footer
-    } else {
-        let numbered = outcome
-            .lines
-            .iter()
-            .map(|line| format!("{}: {}", line.number, line.text))
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!("{numbered}\n\n{footer}")
-    };
-    format!("<path>{display_path}</path>\n<type>file</type>\n<content>\n{body}\n</content>")
+    let mut rendered = JsonString::from(format!(
+        "<path>{display_path}</path>\n<type>file</type>\n<content>\n"
+    ));
+    for (index, line) in outcome.lines.iter().enumerate() {
+        if index > 0 {
+            rendered.push_str("\n");
+        }
+        rendered.push_str(&format!("{}: ", line.number));
+        rendered.push_utf16(line.text.utf16_units());
+    }
+    if !outcome.lines.is_empty() {
+        rendered.push_str("\n\n");
+    }
+    rendered.push_str(&footer);
+    rendered.push_str("\n</content>");
+    rendered
 }
 
 /// Lowercased file-extension to syntax-highlighting language hint.
@@ -249,7 +245,7 @@ pub fn lang_from_path(path: &str) -> Option<&'static str> {
         return None;
     }
     let ext = &base[dot + 1..];
-    let ext_lower = ext.to_ascii_lowercase();
+    let ext_lower = ext.to_lowercase();
     let hint = match ext_lower.as_str() {
         "ts" | "mts" | "cts" => "ts",
         "tsx" => "tsx",
@@ -290,7 +286,7 @@ pub fn lang_from_path(path: &str) -> Option<&'static str> {
 #[serde(rename_all = "camelCase")]
 pub struct FsReadMeta {
     /// The read file's model-facing path.
-    pub path: String,
+    pub path: JsonString,
     /// The 1-based first line the window requested.
     pub offset: u64,
     /// The returned window's lines.
@@ -299,7 +295,7 @@ pub struct FsReadMeta {
     pub total_lines: u64,
     /// Syntax-highlighting language hint, or omitted for plain text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
+    pub lang: Option<JsonString>,
 }
 
 /// Narrows opaque live or replayed result metadata to a structured read window.
@@ -314,7 +310,7 @@ pub fn read_meta_from_meta(meta: &JsonValue) -> Option<FsReadMeta> {
     let lines = meta.get("lines")?.array_items()?;
     let lang = meta
         .get("lang")
-        .map(JsonRef::deserialize::<String>)
+        .map(JsonRef::deserialize::<JsonString>)
         .transpose()
         .ok()?;
     let mut previous = offset - 1;
@@ -349,7 +345,7 @@ fn json_line_number(value: JsonRef<'_>) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn line_caps_count_utf16_units_and_keep_whole_characters() {
+    fn line_caps_count_utf16_units_and_preserve_a_split_surrogate() {
         let window = super::ReadWindow {
             offset: 1,
             limit: 10,
@@ -368,7 +364,7 @@ mod tests {
         let exact = "\u{e9}".repeat(1000);
         let result = super::build_window(vec![exact.clone()], &window, "exact.txt").unwrap();
         assert_eq!(result.lines[0].text, exact);
-        // A surrogate pair costs two units and is never split.
+        // Two-unit characters fill an even cap exactly.
         let emoji = "\u{1F600}".repeat(600);
         let result = super::build_window(vec![emoji], &window, "emoji.txt").unwrap();
         assert_eq!(
@@ -380,10 +376,10 @@ mod tests {
         );
         let mixed = format!("{}\u{1F600}", "a".repeat(999));
         let result = super::build_window(vec![mixed], &window, "mixed.txt").unwrap();
-        assert_eq!(
-            result.lines[0].text,
-            format!("{}... (line truncated to 1000 chars)", "a".repeat(999))
-        );
+        let mut expected = JsonString::from("a".repeat(999));
+        expected.push_utf16(&[0xd83d]);
+        expected.push_str("... (line truncated to 1000 chars)");
+        assert_eq!(result.lines[0].text, expected);
     }
 
     use super::*;
@@ -399,7 +395,7 @@ mod tests {
             read.lines,
             vec![FileTextLine {
                 number: 1,
-                text: "after".to_owned()
+                text: "after".into()
             }]
         );
     }
@@ -428,7 +424,7 @@ mod tests {
                 .iter()
                 .map(|line| (line.number, line.text.as_str()))
                 .collect::<Vec<_>>(),
-            [(2, "two"), (3, "three")]
+            [(2, Some("two")), (3, Some("three"))]
         );
     }
 
@@ -503,7 +499,7 @@ mod tests {
             offset: 1,
             lines: vec![FileTextLine {
                 number: 1,
-                text: "hello".to_owned(),
+                text: "hello".into(),
             }],
             total_lines: 1,
             truncated_by_bytes: None,
@@ -520,5 +516,46 @@ mod tests {
         assert_eq!(lang_from_path("a/b.tsx"), Some("tsx"));
         assert_eq!(lang_from_path(".gitignore"), None);
         assert_eq!(lang_from_path("noext"), None);
+    }
+
+    #[test]
+    fn incremental_window_retains_only_the_capped_line_prefix() {
+        let request = window(1, 1);
+        let mut builder = ReadWindowBuilder::new(&request);
+        let chunk = "x".repeat(8192);
+        for _ in 0..2048 {
+            builder.push_str(&chunk);
+            assert_eq!(builder.line_buffer.len(), request.max_line_length + 1);
+            assert!(builder.accumulator.lines.is_empty());
+        }
+        builder.push_str("\nsecond\nthird");
+        let result = builder.finish("large.txt").unwrap();
+        assert_eq!(result.total_lines, 3);
+        assert_eq!(result.lines.len(), 1);
+        assert_eq!(
+            result.lines[0].text,
+            format!("{}... (line truncated to 2000 chars)", "x".repeat(2000))
+        );
+    }
+
+    #[test]
+    fn carriage_return_is_stripped_after_capping_the_line_buffer() {
+        let request = ReadWindow {
+            max_line_length: 3,
+            ..window(1, 10)
+        };
+        for chunks in [vec!["abc\rdef\n"], vec!["abc", "\r", "def", "\n"]] {
+            let result = build_window(chunks, &request, "cr.txt").unwrap();
+            assert_eq!(result.lines[0].text, "abc");
+        }
+    }
+
+    #[test]
+    fn metadata_keeps_arbitrary_utf16_strings() {
+        let meta = JsonValue::parse(
+            r#"{"path":"\ud800.rs","offset":1,"lines":[{"number":1,"text":"\udfff"}],"totalLines":1,"lang":"\ud800"}"#.to_owned(),
+        ).unwrap();
+        let read = read_meta_from_meta(&meta).unwrap();
+        assert_eq!(JsonValue::from_serialize(&read).unwrap(), meta);
     }
 }

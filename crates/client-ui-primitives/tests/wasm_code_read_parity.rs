@@ -157,6 +157,7 @@ export function blockDescendantKinds(tree, kind) { return (tree.children ?? []).
 export function blockFindClass(tree, className) { return all(tree, node => String(node.props?.className ?? '').split(/\s+/).includes(className))[0] }
 export function blockFindButton(tree, label) { return all(tree, node => node.kind === 'button' && text(node) === label)[0] }
 export function blockText(tree) { return text(tree) }
+export function blockTextJson(tree) { return JSON.stringify(text(tree)) }
 export function blockClick(node) { node.props?.onClick?.() }
 export function blockHtml(tree) { return all(tree, node => node.props?.dangerouslySetInnerHTML)[0]?.props?.dangerouslySetInnerHTML?.__html }
 export function blockSetClipboardMode(mode) {
@@ -186,6 +187,7 @@ extern "C" {
     fn blockFindClass(tree: &JsValue, class_name: &str) -> JsValue;
     fn blockFindButton(tree: &JsValue, label: &str) -> JsValue;
     fn blockText(tree: &JsValue) -> String;
+    fn blockTextJson(tree: &JsValue) -> String;
     fn blockClick(node: &JsValue);
     fn blockHtml(tree: &JsValue) -> JsValue;
     fn blockSetClipboardMode(mode: &str);
@@ -240,6 +242,34 @@ fn read_rows(tree: &JsValue) -> Vec<JsValue> {
 
 async fn tick() {
     JsFuture::from(blockTick()).await.unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn read_preserves_utf16_in_plain_highlighted_and_copied_text() {
+    for lang in [JsValue::UNDEFINED, JsValue::from_str("ts")] {
+        let (_code, read) = setup();
+        let text = js_sys::JSON::parse(r#""const \ud800😀\\udfff\udfff""#).unwrap();
+        let line = props(&[("number", JsValue::from_f64(1.0)), ("text", text.clone())]);
+        let input = props(&[
+            ("lines", Array::of1(line.as_ref()).into()),
+            ("totalLines", JsValue::from_f64(1.0)),
+            ("lang", lang),
+        ]);
+        let tree = render(&read, &input);
+        let content = blockFindClass(&tree, "seekdeep-primitive-read-block-content");
+        let expected = js_sys::JSON::stringify(&text).unwrap().as_string().unwrap();
+        assert_eq!(blockTextJson(&content), expected);
+        blockClick(&blockFindButton(&tree, "复制"));
+        tick().await;
+        assert_eq!(
+            js_sys::JSON::stringify(&blockClipboardCalls().get(0))
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            expected
+        );
+        blockUnmount();
+    }
 }
 
 #[wasm_bindgen_test(async)]

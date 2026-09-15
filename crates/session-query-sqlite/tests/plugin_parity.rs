@@ -1,7 +1,7 @@
 //! Real Cordis load, service, persistence, and disposal integration.
 
 use seekdeep_core::{
-    session::{AppendOptions, SessionId, SurfaceOp},
+    session::{AppendOptions, JsonValue, SessionId, SurfaceOp},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
@@ -113,6 +113,86 @@ async fn plugin_mounts_real_persistence_searches_and_withdraws_cleanly() {
         "plugin-path"
     );
     persistence.dispose().await.expect("dispose persistence");
+}
+
+#[tokio::test]
+async fn live_and_persisted_search_accept_lossless_read_results() {
+    let temporary = tempfile::tempdir().unwrap();
+    let context = seekdeep_cordis::Context::new();
+    let sessions = SessionStore::install(&context).unwrap();
+    let persistence = install_persistence(
+        &context,
+        SqliteConfig::new(temporary.path().join("canonical.db")),
+    )
+    .unwrap();
+    persistence.await_settled().await.unwrap();
+    let owner = seekdeep_cordis::Fiber::active_child("lossless search owner");
+    let session = sessions
+        .create(
+            &context.with_fiber(owner.clone()),
+            Some(SessionId::new("lossless-read")),
+            CreateSessionOptions::default(),
+        )
+        .unwrap();
+    let data = JsonValue::parse(r#"{"turn":1,"step":1,"message":{"id":"read-message","role":"user","source":{"kind":"tool","callId":"read-call"},"content":[{"type":"tool-result","toolCallId":"read-call","content":[{"type":"text","text":"read result needle \ud800 tail"}]}]},"meta":{"line":"\ud800"}}"#.to_owned()).unwrap();
+    let event = session
+        .append_json(
+            "tool/result",
+            data.clone(),
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    sessions.flush(&session).await.unwrap();
+    let query = install_query(
+        &context,
+        SqliteSessionQueryConfig {
+            path: temporary
+                .path()
+                .join("derived.db")
+                .to_string_lossy()
+                .into_owned(),
+            open_at: OpenAt::FirstSearch,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    query.await_settled().await.unwrap();
+    let service = context.get(SESSION_QUERY).unwrap();
+    for live in [true, false] {
+        if !live {
+            owner.dispose().await.unwrap();
+        }
+        let page = service
+            .search_sessions(search("needle"), None)
+            .await
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].record.header.id, *session.id());
+        assert_eq!(page.items[0].record.live, live);
+        assert!(page.items[0].record.persisted);
+        assert!(page.items[0].best_match.snippet.contains("needle � tail"));
+    }
+    let restored = context
+        .get(SESSION_PERSISTENCE)
+        .unwrap()
+        .persistence()
+        .load(session.id())
+        .await
+        .unwrap();
+    assert_eq!(
+        restored
+            .events
+            .iter()
+            .find(|candidate| candidate.seq == event.seq)
+            .unwrap()
+            .data,
+        data
+    );
+    query.dispose().await.unwrap();
+    persistence.dispose().await.unwrap();
 }
 
 #[tokio::test]

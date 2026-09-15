@@ -17,7 +17,7 @@ use parking_lot::Mutex;
 use seekdeep_agent::AGENTS;
 use seekdeep_client_connection::{HttpResponse, RpcResult};
 use seekdeep_cordis::{Context, EventOptions, fiber::EffectHandle};
-use seekdeep_core::session::SessionId;
+use seekdeep_core::session::{JsonValue, SessionId};
 use seekdeep_llm::{AbortSignal, CallId};
 use seekdeep_user_approval::{
     APPROVAL, ApprovalAnswer, ApprovalNext, ApprovalOutcome, ApprovalRequest, ApprovalRequestId,
@@ -152,6 +152,15 @@ impl ApiProxyRuntime for InteractionApiProxyRuntime {
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
         self.domains.unary(method, request, signal)
+    }
+
+    fn unary_json(
+        &self,
+        method: RpcMethod,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> BoxFuture<'static, anyhow::Result<RpcResponse<JsonValue>>> {
+        self.domains.unary_json(method, request, signal)
     }
 
     fn respond(

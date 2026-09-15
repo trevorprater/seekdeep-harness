@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, JsString, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::{
@@ -81,18 +81,16 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
     let class_name = optional_string(props, "className")?;
     let raw_lines = lines.clone();
     let raw_factory = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
-        Ok(JsValue::from_str(
-            &raw_lines
-                .iter()
-                .map(|line| required_string(&line, "text", "ReadBlock line"))
-                .collect::<Result<Vec<_>, _>>()?
-                .join("\n"),
-        ))
+        let texts = Array::new();
+        for line in raw_lines.iter() {
+            texts.push(required_string(&line, "text", "ReadBlock line")?.as_ref());
+        }
+        Ok(texts.join("\n").into())
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     let raw_dependencies = Array::of1(lines.as_ref());
     let raw = use_memo(react, &raw_factory.into_js_value(), &raw_dependencies)?
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new("ReadBlock raw memo must be a string"))?;
+        .dyn_into::<JsString>()
+        .map_err(|_| js_sys::TypeError::new("ReadBlock raw memo must be a string"))?;
     let loaded = required_function(react, "useSyncExternalStore", "React")?.call3(
         react,
         modules.subscribe.as_ref(),
@@ -100,16 +98,16 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
         modules.snapshot.as_ref(),
     )?;
     let highlight_raw = raw.clone();
-    let highlight_lang = lang.clone();
+    let highlight_lang = lang.as_ref().and_then(|value| value.as_string());
     let highlight_factory = Closure::wrap(Box::new(move || {
         highlight_lines(highlight_raw.clone(), highlight_lang.clone())
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     let highlight_dependencies = Array::new();
-    highlight_dependencies.push(&JsValue::from_str(&raw));
+    highlight_dependencies.push(raw.as_ref());
     highlight_dependencies.push(
         &lang
-            .as_deref()
-            .map_or(JsValue::UNDEFINED, JsValue::from_str),
+            .as_ref()
+            .map_or(JsValue::UNDEFINED, |value| value.clone().into()),
     );
     highlight_dependencies.push(&loaded);
     let highlighted = use_memo(
@@ -156,7 +154,7 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
     }) as Box<dyn FnMut() -> Result<(), JsValue>>);
     let copy_dependencies = Array::new();
     copy_dependencies.push(&JsValue::from_bool(copied));
-    copy_dependencies.push(&JsValue::from_str(&raw));
+    copy_dependencies.push(raw.as_ref());
     let on_copy = use_callback(react, &on_copy.into_js_value(), &copy_dependencies)?;
     let toggle_setter = set_expanded;
     let toggle = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
@@ -240,7 +238,9 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
         react,
         &JsValue::from_str("span"),
         Some(&class_props("seekdeep-primitive-read-block-lang")?),
-        &[JsValue::from_str(lang.as_deref().unwrap_or_default())],
+        &[lang
+            .as_ref()
+            .map_or_else(|| JsValue::from_str(""), |value| value.clone().into())],
     )?);
     if lines.length() > 0 {
         action_children.push(create_element(
@@ -270,7 +270,9 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
                 react,
                 &JsValue::from_str("div"),
                 Some(&class_props("seekdeep-primitive-read-block-label")?),
-                &[JsValue::from_str(label.as_deref().unwrap_or_default())],
+                &[label
+                    .as_ref()
+                    .map_or_else(|| JsValue::from_str(""), |value| value.clone().into())],
             )?,
             create_element(
                 react,
@@ -286,15 +288,15 @@ fn render_read_block(modules: &BrowserModules, props: &JsValue) -> Result<JsValu
         Some(&class_props("seekdeep-primitive-read-block-body")?),
         &body_children,
     )?;
-    let mut classes = vec!["seekdeep-primitive-read-block-block".to_owned()];
-    if let Some(class_name) = class_name.filter(|class_name| !class_name.is_empty()) {
-        classes.push(class_name);
+    let classes = Array::of1(&JsValue::from_str("seekdeep-primitive-read-block-block"));
+    if let Some(class_name) = class_name.filter(|class_name| class_name.length() > 0) {
+        classes.push(class_name.as_ref());
     }
     create_element(
         react,
         &JsValue::from_str("div"),
         Some(&object(&[
-            ("className", JsValue::from_str(&classes.join(" "))),
+            ("className", classes.join(" ").into()),
             ("data-read", JsValue::from_str("")),
         ])?),
         &[banner, body],
@@ -311,7 +313,7 @@ fn render_rows(react: &JsValue, pairs: &Array) -> Result<Vec<JsValue>, JsValue> 
             let text = required_string(&line, "text", "ReadBlock line")?;
             let spans = pair.get(1);
             let content = if spans.is_undefined() {
-                vec![JsValue::from_str(&text)]
+                vec![text.into()]
             } else {
                 Array::from(&spans)
                     .iter()
@@ -329,7 +331,7 @@ fn render_rows(react: &JsValue, pairs: &Array) -> Result<Vec<JsValue>, JsValue> 
                                 ("key", JsValue::from_f64(f64::from(index))),
                                 ("style", style),
                             ])?),
-                            &[JsValue::from_str(&text)],
+                            &[text.into()],
                         )
                     })
                     .collect::<Result<Vec<_>, JsValue>>()?
@@ -458,15 +460,15 @@ fn optional_number(value: &JsValue, key: &str) -> Result<Option<f64>, JsValue> {
     }
 }
 
-fn optional_string(value: &JsValue, key: &str) -> Result<Option<String>, JsValue> {
+fn optional_string(value: &JsValue, key: &str) -> Result<Option<JsString>, JsValue> {
     let property = Reflect::get(value, &JsValue::from_str(key))?;
     if property.is_null() || property.is_undefined() {
         Ok(None)
     } else {
         property
-            .as_string()
+            .dyn_into::<JsString>()
             .map(Some)
-            .ok_or_else(|| js_sys::TypeError::new(&format!("{key} must be a string")).into())
+            .map_err(|_| js_sys::TypeError::new(&format!("{key} must be a string")).into())
     }
 }
 
@@ -476,10 +478,10 @@ fn required_number(value: &JsValue, key: &str, owner: &str) -> Result<f64, JsVal
         .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a number")).into())
 }
 
-fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
+fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<JsString, JsValue> {
     required_property(value, key, owner)?
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
+        .dyn_into::<JsString>()
+        .map_err(|_| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
 }
 
 fn required_function(value: &JsValue, key: &str, owner: &str) -> Result<Function, JsValue> {

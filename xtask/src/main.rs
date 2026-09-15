@@ -23,6 +23,7 @@ mod typert_corpus;
 mod typert_host_artifacts;
 mod web_assembled;
 mod web_assembled_driver;
+mod web_assembled_read;
 mod web_assembled_snapshots;
 mod web_composer_driver;
 mod web_details_driver;
@@ -192,6 +193,9 @@ enum Command {
         /// Verify the Header download against the exact persisted Session text.
         #[arg(long)]
         export: bool,
+        /// Verify a real UTF-16-capped read through persisted history, rendering, and copy.
+        #[arg(long, conflicts_with = "export")]
+        read_utf16: bool,
     },
     /// Verify browser Loader ownership of the real Remote dependency graph.
     RemoteLoader {
@@ -476,9 +480,11 @@ fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Command::WebAssembled { source, export } => {
-            web_assembled::run(&source_path(source.as_deref())?, export)
-        }
+        Command::WebAssembled {
+            source,
+            export,
+            read_utf16,
+        } => web_assembled::run(&source_path(source.as_deref())?, export, read_utf16),
         Command::WebWorkspaces { source } => web_workspaces::run(&source_path(source.as_deref())?),
         Command::WebSettings { source } => web_settings::run(&source_path(source.as_deref())?),
         Command::WebModelsSettings { source } => {

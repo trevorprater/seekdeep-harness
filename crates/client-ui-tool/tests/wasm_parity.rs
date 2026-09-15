@@ -351,6 +351,47 @@ fn configure() -> JsValue {
 }
 
 #[wasm_bindgen_test]
+fn read_rows_pass_exact_utf16_to_the_read_primitive() {
+    let bench = configure();
+    let block = settled(
+        Some("read"),
+        r#"{"file_path":"/workspace/\ud800.rs"}"#,
+        "raw",
+        false,
+        "",
+        r#"{"card":"read","path":"/workspace/\ud800.rs","lines":[{"number":1,"text":"\udfff"}],"totalLines":1,"lang":"\ud800"}"#,
+        None,
+    );
+    let props = makeGenericProps(&bench, &block, &JsValue::from_str("/workspace"));
+    let component = read_row_component().unwrap();
+    let collapsed = toolRender(&bench, &component, &props);
+    toolClick(&toolFind(&collapsed, "data-expandable", &JsValue::TRUE));
+    let expanded = toolRender(&bench, &component, &props);
+    let read = toolFind(&expanded, "data-read", &JsValue::TRUE);
+    assert!(!read.is_undefined());
+    let label = toolProp(&read, "label");
+    assert_eq!(
+        JSON::stringify(&label).unwrap().as_string().unwrap(),
+        r#""\ud800.rs""#
+    );
+    let lines = Array::from(&toolProp(&read, "lines"));
+    assert_eq!(
+        JSON::stringify(&property(&lines.get(0), "text"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#""\udfff""#
+    );
+    assert_eq!(
+        JSON::stringify(&toolProp(&read, "lang"))
+            .unwrap()
+            .as_string()
+            .unwrap(),
+        r#""\ud800""#
+    );
+}
+
+#[wasm_bindgen_test]
 #[allow(clippy::too_many_lines)] // One renderer ledger covers the complete built-in branch matrix.
 fn compiled_rows_cover_state_cards_copy_and_specialized_summaries() {
     let bench = configure();
