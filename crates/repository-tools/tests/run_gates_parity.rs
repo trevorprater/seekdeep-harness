@@ -59,19 +59,19 @@ fn result(gate: Gate, status: GateResultStatus) -> GateResult {
 #[test]
 fn every_mode_constructs_a_valid_nonempty_graph() {
     for (mode, expected) in [
-        (GateMode::CiPrimary, 52),
-        (GateMode::CiLinuxPrimary, 53),
-        (GateMode::CiStatic, 35),
+        (GateMode::CiPrimary, 47),
+        (GateMode::CiLinuxPrimary, 48),
+        (GateMode::CiStatic, 34),
         (GateMode::CiLintContractsReady, 2),
         (GateMode::CiCoverage, 2),
         (GateMode::CiSnapshot, 2),
         (GateMode::CiArtifacts, 5),
         (GateMode::CiConsumers, 10),
         (GateMode::CiWindowsBlocking, 2),
-        (GateMode::CiWindowsComplete, 44),
-        (GateMode::CiWindowsObservational, 42),
-        (GateMode::NodeCompat, 5),
-        (GateMode::CheckAll, 46),
+        (GateMode::CiWindowsComplete, 43),
+        (GateMode::CiWindowsObservational, 41),
+        (GateMode::NodeCompat, 1),
+        (GateMode::CheckAll, 45),
         (GateMode::DocSync, 28),
     ] {
         let gates = gates_for_mode(mode, &environment()).unwrap();
@@ -347,17 +347,23 @@ fn doc_sync_and_node_compat_keep_standalone_entrypoints() {
             .display_command,
         "pnpm run doc-typecheck"
     );
-    let node = gates_for_mode(GateMode::NodeCompat, &environment()).unwrap();
-    let jsdom = node
-        .iter()
-        .find(|gate| gate.id == "vitest-jsdom-smoke")
-        .unwrap();
-    assert_eq!(jsdom.label, "Vitest jsdom smoke");
-    assert!(
-        jsdom
-            .args
-            .contains(&OsString::from("scripts/vitest-environment.compat.spec.ts"))
-    );
+    for node_major in [22, 24, 26] {
+        let mut environment = environment();
+        environment.node_major = node_major;
+        let node = gates_for_mode(GateMode::NodeCompat, &environment).unwrap();
+        assert_eq!(node[0].id, "typecheck");
+        assert_eq!(node[0].display_command, "pnpm run typecheck");
+        assert!(node[0].needs.is_empty());
+        if node_major == 22 {
+            assert_eq!(node.len(), 3);
+            assert_eq!(node[1].display_command, "pnpm run build");
+            assert_eq!(node[1].needs, ["typecheck"]);
+            assert_eq!(node[2].display_command, "pnpm run build:web");
+            assert_eq!(node[2].needs, ["build"]);
+        } else {
+            assert_eq!(node.len(), 1);
+        }
+    }
 }
 
 #[test]

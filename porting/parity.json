@@ -23706,10 +23706,12 @@
       "kind": "repository-metadata",
       "status": "verified",
       "targets": [
-        ".gitignore"
+        ".gitignore",
+        "crates/repository-tools/tests/run_oxlint_parity.rs"
       ],
       "evidence": [
-        "generated Rust/WASM Client package lib directories are ignored uniformly; release/build commands regenerate them"
+        "generated Rust/WASM Client package lib directories are ignored uniformly; release/build commands regenerate them",
+        "cargo test -p seekdeep-repository-tools --test run_oxlint_parity: real Oxlint discovery excludes installed dependencies at both root and nested node_modules while retaining source syntax failures"
       ],
       "note": "one wildcard covers Client Runtime, locale, and future Rust/WASM packages"
     },
@@ -38059,7 +38061,10 @@
       "kind": "configuration",
       "status": "pending",
       "targets": [
-        "package.json"
+        "package.json",
+        "xtask/src/client_build.rs",
+        "xtask/src/node_runtime.rs",
+        "xtask/tests/root_validation_commands.rs"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
@@ -38076,9 +38081,15 @@
         "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy",
         "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy",
         "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints",
-        "test:issue-management delegates to the verified seekdeep-issue-policy crate"
+        "test:issue-management delegates to the verified seekdeep-issue-policy crate",
+        "cargo test -p xtask --test root_validation_commands: real native and WASM compiler failures propagate through root typecheck/lint, including all test targets, features, Client recipes, Node runtime, Landlock entry, and docs runtime; Clippy fixes browser code in a dirty fixture",
+        "cargo test -p xtask --bin xtask node_runtime::tests: Host staging prefers the installed ripgrep package, copies its bytes beside the Host, and retains the PATH fallback",
+        "npm run typecheck and npm run lint pass with native workspace and production WASM checks; cargo xtask check-client derives its 46 unique Rust packages from the Client build recipes",
+        "npm run build completes the native Host, runtime assets, 48 Client artifacts, npm launcher, and Vite frontend",
+        "verify-package-invariants passes for 166 companions and verify-runtime-closure passes for 78 workspace packages; verify-built-package-invariants reports 135 missing lib/invariant.js modules and 31 Loader initialization failures in plain Node",
+        "pnpm run doc-sync: Cordis, Client, tool, config, persistence catalogs and documentation build pass; missing Host declarations, retired site-test paths, and documentation consistency checks still block the aggregate. Its exported-API check is covered by the passing final full-workspace Clippy run."
       ],
-      "note": "Root package metadata preserves source command names while compiled Rust owns the repository demos, Issue policy, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior. Remaining build, lint, catalog, and documentation scripts still invoke the removed TypeScript source layout or unavailable tsx/Vite tooling. The 2026-09-10 doc-sync run passed 14 gates and failed 14; lint failed in build:lib:host. Complete the Rust command wiring and documentation projection before claiming these aggregate commands pass."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. Installation prepares the pinned Node runtime dependencies, and Host staging uses the workspace packaged ripgrep with a PATH fallback. Host npm compatibility artifacts and aggregate gate execution remain incomplete: 135 invariant companions lack lib/invariant.js after the build, 31 existing companions are blocked by the Loader initialization in plain Node, and built-bin and documentation-site gates still name retired TypeScript tests. Host declarations, documentation links and package paths, README policy, type equivalence, and translation pairing also block doc-sync. Complete the Host exports, Rust aggregate command wiring, and documentation consistency checks before claiming root package parity."
     },
     {
       "source": "packages/AGENTS.md",
@@ -74323,7 +74334,8 @@
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run --config vitest.e2e.config.ts packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts (3 passed)",
         "Rust assembled Loader differential: FULL, FEEDBACK_ONLY, and DISABLED modes through the native OTLP collector (3 passed)",
-        "the Rust e2e pins real Bash tool events, deployment redaction versus canonical JSONL, feedback-bounded prefixes, private suffix exclusion, and the stable disabled warning"
+        "the Rust e2e pins real Bash tool events, deployment redaction versus canonical JSONL, feedback-bounded prefixes, private suffix exclusion, and the stable disabled warning",
+        "The real FULL-mode export fixture passes 60 consecutive runs after the coordinator joins in-flight final-record handoffs before backend shutdown; redacted OTLP and unchanged canonical JSONL assertions remain enabled."
       ]
     },
     {
@@ -74400,12 +74412,18 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/session-telemetry/src/coordinator.rs"
+        "crates/session-telemetry/src/coordinator.rs",
+        "crates/session-telemetry/tests/telemetry_parity.rs",
+        "crates/session-telemetry-otel/tests/loader_composition_e2e.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-session-telemetry --all-features",
-        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-session-telemetry --all-features: 20 tests pass, including a controlled cross-thread retirement/redaction race that fails without the shutdown handoff barrier",
+        "Shutdown closes capture admission, joins every admitted redaction and handoff, contains final-record policy failures, and drains the backend only after those records are handed over",
+        "cargo test -p seekdeep-session-telemetry-otel --all-features: 16 tests pass; the real FULL-mode Loader/agent/Bash/persistence/OTLP export fixture passes 60 consecutive reruns with its final shutdown record and canonical log assertions intact"
+      ],
+      "note": "An admitted capture retains its backend handoff even after the session leaves the live set. Closing capture waits for those handoffs before final markers and backend shutdown."
     },
     {
       "source": "packages/session/session-telemetry/src/index.ts",
@@ -89188,14 +89206,20 @@
         "crates/cordis/src/wasm/browser_services.rs",
         "crates/cordis/tests/context_service_boundary_audit.rs",
         "crates/cordis/tests/fixtures/browser_context_reflect_service.mjs",
-        "crates/cordis/tests/reflect_oracle.rs"
+        "crates/cordis/tests/reflect_oracle.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/src/wasm.rs",
+        "crates/plan-mode/tests/projection_parity.rs"
       ],
       "evidence": [
         "2026-09-11: actual package emission, public declarations and 13 invariant-host cases passed.",
         "Pinned-source gateway 170 cases and compiled gateway 196 cases passed.",
-        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified."
+        "Fresh full Rust Host and Chromium149 remote-loader exited0: Cordis/Loader/Modules,24 Remote descriptors withdrawing to0, source maps, bundled Store notifications/immutability/unsubscribe, cancellation, scoped/root Goal events and stale references verified.",
+        "cargo test -p seekdeep-cordis --all-features: 61 native tests pass, including a live pinned-source comparison of provider disposal, held dependent cleanup, and independent isolation scopes",
+        "Provider-disposal negative control: removing the dependent wait fails the pending-disposal assertion; restoring it passes. The plan projection service-removal assertions pass without a separate registry wait (7 projection tests).",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner WASM_BINDGEN_TEST_ONLY_NODE=1 cargo test -p seekdeep-cordis --target wasm32-unknown-unknown --test wasm_browser_face_parity --all-features: 3 live WASM Context, service, event, and disposal cases pass in Node"
       ],
-      "note": "Native, compiled WASM, public package and assembled real Host/browser verification passed. Approved native Serial disposal default is preserved."
+      "note": "Native provider disposal waits for affected plugins in the same isolation scope before returning. The approved native Serial disposal default is preserved."
     },
     {
       "source": "vendor/cordis/src/registry.ts",
@@ -89595,7 +89619,8 @@
         "2026-09-11: 66 focused HMR/Loader tests across 16 executables passed with zero failures or timeouts.",
         "All six actual Node/native lifecycle traces exactly match pinned source, including sibling admission, UID progression, provider visibility, registration rollback, body failures, disabled state and asynchronous disposal order.",
         "Programmatic reload and duplicate Include-ID ownership/disposal tests passed; full structural entry paths and batched Node lifecycle admission are verified.",
-        "Native/WASM strict Clippy, formatting, whitespace, release WASM build and packaged runtime loading passed. Runtime SHA256 fd66569cf33f0b7b033ef8a866b225dc869a857740cd4c684ca9075cec862935."
+        "Native/WASM strict Clippy, formatting, whitespace, release WASM build and packaged runtime loading passed. Runtime SHA256 fd66569cf33f0b7b033ef8a866b225dc869a857740cd4c684ca9075cec862935.",
+        "cargo test -p seekdeep-hmr --all-features --test host_hmr_parity: 2 tests pass; the config-error fixture passes 30 consecutive reruns using 80 ms polling to separate consecutive edits beyond the pinned Chokidar 4.0.3 change-event coalescing window."
       ],
       "note": "Source/native HMR lifecycle and real Node ownership are verified. Assembled Host/workspace gates remain separate. Generic JavaScript observer argument and ctx.get bridge limitations are outside this HMR lifecycle proof."
     },

@@ -654,6 +654,43 @@ async fn build_recipe(
     }
 }
 
+pub(super) fn check(clippy: bool, fix: bool) -> anyhow::Result<()> {
+    let workspace = CargoWorkspace::read()?;
+    let plugins = discover_plugin_dirs(&workspace.workspace_root)?;
+    let recipes = discover_recipes(&workspace, &plugins)?;
+    anyhow::ensure!(
+        !recipes.is_empty(),
+        "check-client: no Rust Client build recipes found"
+    );
+    let packages = recipes
+        .iter()
+        .map(|recipe| &recipe.package)
+        .collect::<BTreeSet<_>>();
+    let mut command = std::process::Command::new("cargo");
+    command
+        .current_dir(&workspace.workspace_root)
+        .arg(if clippy { "clippy" } else { "check" })
+        .args([
+            "--lib",
+            "--all-features",
+            "--target",
+            "wasm32-unknown-unknown",
+        ]);
+    for package in &packages {
+        command.args(["--package", package.as_str()]);
+    }
+    if fix {
+        command.args(["--fix", "--allow-dirty", "--allow-staged"]);
+    }
+    if clippy {
+        command.args(["--", "-D", "warnings"]);
+    }
+    let status = command.status()?;
+    anyhow::ensure!(status.success(), "Rust Client check failed ({status})");
+    println!("checked {} Rust Client packages for wasm32", packages.len());
+    Ok(())
+}
+
 pub(super) fn build() -> anyhow::Result<()> {
     let workspace = CargoWorkspace::read()?;
     let plugins = discover_plugin_dirs(&workspace.workspace_root)?;

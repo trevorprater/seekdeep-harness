@@ -48,6 +48,15 @@ struct Args {
 enum Command {
     /// Build every declared Client plugin with the Rust build pipeline.
     BuildClient,
+    /// Check the Rust libraries selected by the Client build for the browser target.
+    CheckClient {
+        /// Run Clippy with warnings denied.
+        #[arg(long)]
+        clippy: bool,
+        /// Apply Clippy's suggested fixes, including in a dirty checkout.
+        #[arg(long, requires = "clippy")]
+        fix: bool,
+    },
     /// Rebuild Client plugins when their dependency inputs change.
     DevWeb {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -411,6 +420,7 @@ fn main() -> anyhow::Result<()> {
         Command::Parity { source, scope } => parity(&source, scope),
         Command::WebBuild => web_assembled::build(),
         Command::BuildClient => client_build::build(),
+        Command::CheckClient { clippy, fix } => client_build::check(clippy, fix),
         Command::DevWeb { args } => client_build::dev(&args),
         Command::DocGraphs { source, check } => {
             if !xtask::doc_graphs::run(

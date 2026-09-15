@@ -350,7 +350,6 @@ fn empty_store_identity_is_rejected() {
     assert!(error.to_string().contains("no valid store identity"));
 }
 
-
 #[test]
 fn rejects_a_malformed_committed_closing_row() {
     // The final row is a committed turn/end whose payload cannot be parsed. Reading the corruption

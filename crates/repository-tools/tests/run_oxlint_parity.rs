@@ -1,4 +1,6 @@
-//! Worker-bound validation plus single- and two-pass process fixtures.
+//! Worker bounds, process retries, and repository lint discovery.
+
+use std::{path::Path, process::Command};
 
 use seekdeep_repository_tools::run_oxlint::{
     OxlintCompletion, OxlintInvocation, resolve_oxlint_invocation, run_oxlint,
@@ -71,6 +73,67 @@ fn failed_first_fix_discards_that_status_and_runs_exactly_one_retry() {
         OxlintCompletion::Exit(0)
     );
     assert_eq!(read_count(&root), 2);
+}
+
+#[test]
+fn repository_ignore_excludes_installed_dependencies_from_lint_discovery() {
+    let root = tempfile::tempdir().unwrap();
+    for directory in [
+        "src",
+        "node_modules/dependency",
+        "packages/nested/node_modules/dependency",
+    ] {
+        std::fs::create_dir_all(root.path().join(directory)).unwrap();
+    }
+    let git = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(git.status.success(), "{git:?}");
+    std::fs::write(
+        root.path().join(".gitignore"),
+        include_str!("../../../.gitignore"),
+    )
+    .unwrap();
+    let entry = root.path().join("src/entry.ts");
+    std::fs::write(&entry, "export const value = 1;\n").unwrap();
+    for dependency in [
+        "node_modules/dependency/broken.ts",
+        "packages/nested/node_modules/dependency/broken.ts",
+    ] {
+        std::fs::write(root.path().join(dependency), "export const broken = ;\n").unwrap();
+    }
+    let executable =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../node_modules/oxlint/bin/oxlint");
+    let run = |args: &[&str]| {
+        Command::new("node")
+            .arg(&executable)
+            .args(args)
+            .current_dir(root.path())
+            .output()
+            .unwrap()
+    };
+    let discovered = run(&[".", "--debug", "files"]);
+    assert!(discovered.status.success(), "{discovered:?}");
+    let files = String::from_utf8(discovered.stdout)
+        .unwrap()
+        .replace('\\', "/");
+    assert!(files.contains("src/entry.ts"), "{files}");
+    assert!(!files.contains("node_modules"), "{files}");
+    let valid = run(&["."]);
+    assert!(valid.status.success(), "{valid:?}");
+
+    std::fs::write(&entry, "export const value = ;\n").unwrap();
+    let invalid = run(&["."]);
+    assert!(!invalid.status.success(), "{invalid:?}");
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&invalid.stdout),
+        String::from_utf8_lossy(&invalid.stderr)
+    )
+    .replace('\\', "/");
+    assert!(diagnostic.contains("src/entry.ts"), "{diagnostic}");
 }
 
 fn fake_oxlint(body: &str) -> TempDir {

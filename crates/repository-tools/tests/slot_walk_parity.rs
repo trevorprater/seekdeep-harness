@@ -39,7 +39,7 @@ fn reads_slot_declarations_with_literals_member_texts_and_dedented_docs() {
         seat.js_doc,
         "/**\n* A seat for demos.\n*\n* Second paragraph.\n*/"
     );
-    assert_eq!(seat.source, "packages/client/demo/src/slots.ts:16");
+    assert_eq!(seat.source, "packages/client/demo/src/slots.ts:18");
     assert_eq!(seat.package, "@deepseek-ai/dsh-client-demo");
     let keyed = &declarations[1];
     assert_eq!(keyed.key_props.as_deref(), Some("{ a: 1; b: 2 }"));

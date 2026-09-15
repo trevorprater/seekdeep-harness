@@ -744,7 +744,6 @@ async fn plugin_rejects_invalid_limits_at_construction() {
     );
 }
 
-
 #[tokio::test]
 async fn decodes_a_gzip_encoded_response_body() {
     // gzip("compressed body"), embedded so the test needs no compressor dependency.

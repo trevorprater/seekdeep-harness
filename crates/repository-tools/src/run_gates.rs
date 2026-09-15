@@ -504,10 +504,8 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
 
 /// Gates that exercise the port on a specific Node release.
 ///
-/// The source's Node-compatibility suites were TypeScript specs that booted the JavaScript
-/// harness; the port's behavior lives in the Rust crates, so the mode checks the aggregate
-/// typecheck, which resolves the two empty solutions, and adds the builds on the primary Node
-/// release.
+/// Every supported Node release runs the root command's native and browser Rust checks.
+/// The primary Node release also builds the runtime and Web artifacts.
 fn node_compat_gates(environment: &GateEnvironment) -> Vec<Gate> {
     let mut gates = vec![pnpm_script(environment, "typecheck", "typecheck")];
     if environment.node_major != 22 {

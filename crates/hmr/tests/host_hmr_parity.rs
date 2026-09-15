@@ -162,7 +162,11 @@ async fn config_files_refresh_before_module_classification_and_failures_are_cont
             root: vec![temporary.path().to_path_buf()],
             debounce: 20,
             ignored: Vec::new(),
-            ..Config::default()
+            // Distinct polls keep consecutive edits outside Chokidar's 50 ms change window.
+            watcher_options: serde_json::Map::from_iter([
+                ("usePolling".to_owned(), serde_json::json!(true)),
+                ("interval".to_owned(), serde_json::json!(80)),
+            ]),
         },
         Arc::new(|| Box::pin(async { Ok(()) })),
     )?;

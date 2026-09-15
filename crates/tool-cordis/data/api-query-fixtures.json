@@ -166,7 +166,7 @@
       },
       {
         "key": "clientModules",
-        "description": "The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap.",
+        "description": "The web plugin table service: incremental `seekdeep.client` scan + wire composition + bundle route + index tap.",
         "methods": [
           {
             "signature": "graph(): WebBootGraph"
@@ -1826,7 +1826,7 @@
       "mode": "service",
       "service": {
         "key": "clientModules",
-        "description": "The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).",
+        "description": "The web plugin table service: incremental `seekdeep.client` scan + wire composition + bundle route + index tap. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).",
         "access": {
           "optional": {
             "expression": "ctx.get(\"clientModules\")",

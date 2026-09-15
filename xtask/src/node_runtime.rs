@@ -31,21 +31,15 @@ pub(super) fn stage(metadata: &super::CargoMetadata, profile: &str) -> anyhow::R
     Ok(metadata.target_directory.join(profile))
 }
 
-/// Copies the ripgrep found on this machine's PATH to `target/<profile>/rg`, the location a
-/// release Host requires (a debug Host falls back to PATH itself).
+/// Copies the workspace's packaged ripgrep, or a PATH fallback, beside the Host executable.
 fn stage_ripgrep(metadata: &super::CargoMetadata, profile: &str) -> anyhow::Result<PathBuf> {
     let name = if cfg!(windows) { "rg.exe" } else { RIPGREP };
-    let source = std::env::var_os("PATH")
-        .into_iter()
-        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-        .map(|directory| directory.join(name))
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "ripgrep is not installed on PATH; the Host's glob and grep tools need it beside the executable (for example `brew install ripgrep`)"
-            )
-        })?;
-    let source = source.canonicalize()?;
+    let source = ripgrep_source(
+        &metadata.workspace_root,
+        name,
+        std::env::var_os("PATH").as_deref(),
+    )?
+    .canonicalize()?;
     let directory = metadata.target_directory.join(profile);
     std::fs::create_dir_all(&directory)?;
     let output = directory.join(name);
@@ -53,6 +47,43 @@ fn stage_ripgrep(metadata: &super::CargoMetadata, profile: &str) -> anyhow::Resu
     copy_executable(&source, &staging)?;
     std::fs::rename(&staging, &output)?;
     Ok(output)
+}
+
+fn ripgrep_source(
+    root: &Path,
+    name: &str,
+    search_path: Option<&std::ffi::OsStr>,
+) -> anyhow::Result<PathBuf> {
+    if let Some(packaged) = packaged_ripgrep(root) {
+        return Ok(packaged);
+    }
+    search_path
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .map(|directory| directory.join(name))
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "ripgrep is missing; install workspace dependencies with `pnpm install` or install ripgrep on PATH"
+            )
+        })
+}
+
+fn packaged_ripgrep(root: &Path) -> Option<PathBuf> {
+    // The package's public export resolves its platform dependency across npm and pnpm layouts.
+    let output = Command::new("node")
+        .args([
+            "-e",
+            "const { createRequire } = require('node:module'); process.stdout.write(createRequire(process.argv[1])('@vscode/ripgrep').rgPath)",
+        ])
+        .arg(root.join("packages/fs/tool-fs-search/package.json"))
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = PathBuf::from(String::from_utf8(output.stdout).ok()?);
+    path.is_file().then_some(path)
 }
 
 fn copy_executable(source: &Path, destination: &Path) -> anyhow::Result<()> {
@@ -125,4 +156,60 @@ fn stage_node_runtime(metadata: &super::CargoMetadata, profile: &str) -> anyhow:
         output.display()
     );
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packaged_ripgrep_needs_no_system_install_and_precedes_the_path_fallback() {
+        let root = tempfile::tempdir().unwrap();
+        let name = if cfg!(windows) { "rg.exe" } else { RIPGREP };
+        let package = root
+            .path()
+            .join("packages/fs/tool-fs-search/node_modules/@vscode/ripgrep");
+        let packaged = root.path().join("platform-package/bin").join(name);
+        let path_directory = root.path().join("bin");
+        std::fs::create_dir_all(packaged.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(package.join("package.json"), r#"{"main":"index.cjs"}"#).unwrap();
+        std::fs::write(
+            package.join("index.cjs"),
+            format!(
+                "exports.rgPath = {};\n",
+                serde_json::to_string(&packaged).unwrap()
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(&path_directory).unwrap();
+        let fallback = path_directory.join(name);
+        std::fs::write(&packaged, b"packaged ripgrep").unwrap();
+        std::fs::write(&fallback, b"PATH ripgrep").unwrap();
+        let search_path = std::env::join_paths([path_directory]).unwrap();
+        assert_eq!(ripgrep_source(root.path(), name, None).unwrap(), packaged);
+        assert_eq!(
+            ripgrep_source(root.path(), name, Some(&search_path)).unwrap(),
+            packaged
+        );
+        let metadata = super::super::CargoMetadata {
+            packages: Vec::new(),
+            target_directory: root.path().join("target"),
+            workspace_root: root.path().to_owned(),
+        };
+        let staged = stage_ripgrep(&metadata, "debug").unwrap();
+        assert_eq!(staged, root.path().join("target/debug").join(name));
+        assert_eq!(std::fs::read(staged).unwrap(), b"packaged ripgrep");
+        std::fs::remove_file(&packaged).unwrap();
+        assert_eq!(
+            ripgrep_source(root.path(), name, Some(&search_path)).unwrap(),
+            fallback
+        );
+        assert!(
+            ripgrep_source(root.path(), name, None)
+                .unwrap_err()
+                .to_string()
+                .contains("pnpm install")
+        );
+    }
 }

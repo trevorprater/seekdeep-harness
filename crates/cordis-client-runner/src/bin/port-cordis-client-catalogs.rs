@@ -1,4 +1,4 @@
-//! Regenerates Client Cordis catalogs from the pinned source checkout.
+//! Regenerates Cordis catalogs and query fixtures from the pinned source checkout.
 
 use std::{
     path::{Path, PathBuf},
@@ -125,6 +125,9 @@ fn target_identity(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
         .replace("DSH objects", "SeekDeep Harness objects")
         .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
         .replace("dsh-", "seekdeep-")
+        .replace("dsh.client", "seekdeep.client")
+        .replace("project-dsh", "project-seekdeep")
+        .replace("user-dsh", "user-seekdeep")
         .replace("DshEnvironment", "SeekdeepEnvironment")
         .replace("DSH_", "SEEKDEEP_")
         .into_bytes())
@@ -175,7 +178,10 @@ fn write_ui_catalogs(target: &Path, source: &Path) -> anyhow::Result<()> {
         styles.push_str(&scope_css_classes(&css, prefix));
         styles.push('\n');
     }
-    write_text(&output.join("styles.css"), styles.as_bytes())
+    write_text(
+        &output.join("styles.css"),
+        &target_identity(styles.as_bytes())?,
+    )
 }
 
 fn run_tsx(source: &Path, program: &str) -> anyhow::Result<Vec<u8>> {
@@ -243,12 +249,14 @@ mod tests {
     #[test]
     fn host_catalog_identity_matches_the_target_public_surface() {
         let source = b"@deepseek-ai/dsh-scope dsh-tools DSH_ENV_PREFIX \
-            __DSH_BOOT__ DshEnvironmentKey DSH Node.js process DSH objects";
+            __DSH_BOOT__ DshEnvironmentKey DSH Node.js process DSH objects \
+            dsh.client project-dsh user-dsh DEEPSEEK_API_KEY deepseek-chat";
         assert_eq!(
             String::from_utf8(target_identity(source).unwrap()).unwrap(),
             "@seekdeep-ai/seekdeep-scope seekdeep-tools SEEKDEEP_ENV_PREFIX \
             __SEEKDEEP_BOOT__ SeekdeepEnvironmentKey SeekDeep Harness Host process \
-            SeekDeep Harness objects"
+            SeekDeep Harness objects seekdeep.client project-seekdeep user-seekdeep \
+            DEEPSEEK_API_KEY deepseek-chat"
         );
     }
 
