@@ -3,7 +3,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -14,8 +14,7 @@ use std::{
 use indexmap::IndexMap;
 use seekdeep_repository_tools::run_gates::{
     ConcurrencyDefault, Gate, GateEnvironment, GateMode, GateResult, GateResultStatus,
-    assign_cargo_serial_group, default_concurrency, format_gate_result_reason, gates_for_mode,
-    run_gate, run_gates, validate_gate_graph,
+    assign_cargo_serial_group, default_concurrency, gates_for_mode, run_gates, validate_gate_graph,
 };
 
 fn environment() -> GateEnvironment {
@@ -472,6 +471,9 @@ fn linux_primary_adds_compare_only_web_gate_after_built_invariants() {
 #[cfg(unix)]
 #[test]
 fn process_signal_and_spawn_failures_keep_independent_outcome_facts() {
+    use seekdeep_repository_tools::run_gates::{format_gate_result_reason, run_gate};
+    use std::path::Path;
+
     let mut terminated = gate("terminated", &[]);
     terminated.command = PathBuf::from("/bin/sh");
     terminated.args = vec![OsString::from("-c"), OsString::from("kill -TERM $$")];

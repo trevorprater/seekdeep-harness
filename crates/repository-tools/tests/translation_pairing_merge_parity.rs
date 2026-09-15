@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Output},
 };
 
@@ -642,10 +642,12 @@ fn commit_mixed_pairs(
     fixture.git(&["commit", "--quiet", "-m", message]);
 }
 
-fn driver_script() -> PathBuf {
+#[cfg(unix)]
+fn driver_script() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/merge-translation-pairing-driver.sh")
 }
 
+#[cfg(unix)]
 fn shell_quote(path: &Path) -> String {
     format!("\"{}\"", path.to_string_lossy().replace('"', "\\\""))
 }

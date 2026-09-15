@@ -2,7 +2,7 @@
 
 use std::{
     collections::BTreeMap,
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     process::{Command, Output},
@@ -828,7 +828,7 @@ fn unsupported_git_is_rejected_before_repository_mutation() {
     let mut options = fixture.options(&fixture.main);
     let inherited_path = options
         .environment
-        .get(OsStr::new("PATH"))
+        .get(std::ffi::OsStr::new("PATH"))
         .cloned()
         .unwrap_or_default();
     options.environment.insert(

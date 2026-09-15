@@ -883,7 +883,7 @@ fn inspect_owned_hooks_directory(path: &Path) -> anyhow::Result<Option<OwnedHook
         if entry.file_name() == OsStr::new(OWNERSHIP_MARKER) {
             continue;
         }
-        let metadata = fs::symlink_metadata(entry.path())?;
+        let metadata = file_facts(&entry.path())?;
         if !metadata.is_file() || metadata.file_type().is_symlink() || link_count(&metadata) != 1 {
             anyhow::bail!(
                 "refusing to overwrite non-regular or multiply linked hook entry {}",
@@ -1033,13 +1033,13 @@ fn create_lock_file(
         options.mode(0o600);
     }
     let mut file = options.open(path)?;
-    let identity = file_identity(&file.metadata()?).map_err(std::io::Error::other)?;
+    let identity = file_identity(&opened_file_facts(&file)?).map_err(std::io::Error::other)?;
     if !write_delay.is_zero() {
         std::thread::sleep(write_delay);
     }
     file.write_all(record.as_bytes())?;
     drop(file);
-    let published = fs::symlink_metadata(path)?;
+    let published = file_facts(path)?;
     if !published.is_file()
         || published.file_type().is_symlink()
         || file_identity(&published).map_err(std::io::Error::other)? != identity
@@ -1556,8 +1556,22 @@ fn environment_delay(
     Ok(Duration::from_millis(value.parse()?))
 }
 
-fn symlink_metadata_if_present(path: &Path) -> anyhow::Result<Option<Metadata>> {
-    match fs::symlink_metadata(path) {
+struct FileFacts {
+    metadata: Metadata,
+    identity: FileIdentity,
+    links: u64,
+}
+
+impl std::ops::Deref for FileFacts {
+    type Target = Metadata;
+
+    fn deref(&self) -> &Self::Target {
+        &self.metadata
+    }
+}
+
+fn symlink_metadata_if_present(path: &Path) -> anyhow::Result<Option<FileFacts>> {
+    match file_facts(path) {
         Ok(metadata) => Ok(Some(metadata)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.into()),
@@ -1565,47 +1579,76 @@ fn symlink_metadata_if_present(path: &Path) -> anyhow::Result<Option<Metadata>> 
 }
 
 #[cfg(unix)]
-fn file_identity(metadata: &Metadata) -> anyhow::Result<FileIdentity> {
+fn unix_file_facts(metadata: Metadata) -> FileFacts {
     use std::os::unix::fs::MetadataExt as _;
 
     let identity = FileIdentity {
         device: metadata.dev(),
         inode: metadata.ino(),
     };
-    if identity.inode == 0 {
-        anyhow::bail!("file metadata has no stable inode");
+    let links = metadata.nlink();
+    FileFacts {
+        metadata,
+        identity,
+        links,
     }
-    Ok(identity)
-}
-
-#[cfg(windows)]
-fn file_identity(metadata: &Metadata) -> anyhow::Result<FileIdentity> {
-    use std::os::windows::fs::MetadataExt as _;
-
-    Ok(FileIdentity {
-        device: u64::from(
-            metadata
-                .volume_serial_number()
-                .ok_or_else(|| anyhow::anyhow!("file metadata has no volume serial number"))?,
-        ),
-        inode: metadata
-            .file_index()
-            .ok_or_else(|| anyhow::anyhow!("file metadata has no file index"))?,
-    })
 }
 
 #[cfg(unix)]
-fn link_count(metadata: &Metadata) -> u64 {
-    use std::os::unix::fs::MetadataExt as _;
+fn file_facts(path: &Path) -> std::io::Result<FileFacts> {
+    fs::symlink_metadata(path).map(unix_file_facts)
+}
 
-    metadata.nlink()
+#[cfg(unix)]
+fn opened_file_facts(file: &fs::File) -> std::io::Result<FileFacts> {
+    file.metadata().map(unix_file_facts)
+}
+
+#[cfg_attr(
+    windows,
+    allow(
+        clippy::unnecessary_wraps,
+        reason = "the shared interface can reject missing Unix inodes"
+    )
+)]
+fn file_identity(metadata: &FileFacts) -> anyhow::Result<FileIdentity> {
+    #[cfg(unix)]
+    if metadata.identity.inode == 0 {
+        anyhow::bail!("file metadata has no stable inode");
+    }
+    Ok(metadata.identity)
 }
 
 #[cfg(windows)]
-fn link_count(metadata: &Metadata) -> u64 {
-    use std::os::windows::fs::MetadataExt as _;
+fn file_facts(path: &Path) -> std::io::Result<FileFacts> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES,
+    };
 
-    metadata.number_of_links().map_or(0, u64::from)
+    let file = OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    opened_file_facts(&file)
+}
+
+#[cfg(windows)]
+fn opened_file_facts(file: &fs::File) -> std::io::Result<FileFacts> {
+    let metadata = file.metadata()?;
+    let information = winapi_util::file::information(file)?;
+    Ok(FileFacts {
+        metadata,
+        identity: FileIdentity {
+            device: information.volume_serial_number(),
+            inode: information.file_index(),
+        },
+        links: information.number_of_links(),
+    })
+}
+
+fn link_count(metadata: &FileFacts) -> u64 {
+    metadata.links
 }
 
 fn create_private_directory(path: &Path) -> anyhow::Result<()> {
@@ -1631,6 +1674,13 @@ fn write_new_private_file(path: &Path, content: &[u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg_attr(
+    windows,
+    allow(
+        clippy::unnecessary_wraps,
+        reason = "the shared interface propagates Unix permission failures"
+    )
+)]
 fn set_private_file_permissions(path: &Path) -> anyhow::Result<()> {
     #[cfg(unix)]
     {

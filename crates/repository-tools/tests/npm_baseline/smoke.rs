@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use seekdeep_repository_tools::npm_baseline::{
-    InstalledWebProbe, installed_artifact_environment, npm_client_environment, probe_installed_web,
+    installed_artifact_environment, npm_client_environment,
 };
 
 #[test]
@@ -52,6 +52,8 @@ fn installed_environment_excludes_workspace_injection_and_uses_isolated_homes() 
 #[test]
 fn native_pty_probe_requires_readiness_clean_shutdown_and_reaps_timed_out_children() {
     use nix::{errno::Errno, sys::signal::kill, unistd::Pid};
+    use seekdeep_repository_tools::npm_baseline::{InstalledWebProbe, probe_installed_web};
+    use std::time::Duration;
     for (behavior, expected) in [
         ("ready", None),
         ("early", Some("did not reach its ready URL")),

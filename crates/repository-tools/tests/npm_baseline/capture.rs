@@ -2,7 +2,6 @@ use seekdeep_repository_tools::{
     npm_baseline::{BaselineRunner, SystemBaselineRunner},
     release_process::ReleaseRunOptions,
 };
-use serde_json::Value;
 
 use super::support::source_call;
 
@@ -45,6 +44,7 @@ fn capture_matches_source_raw_byte_cap_before_decoding_and_nonzero_exit_status()
 #[test]
 fn capture_terminates_and_reaps_overflowing_children_before_later_side_effects_like_source() {
     use nix::{errno::Errno, sys::signal::kill, unistd::Pid};
+    use serde_json::Value;
     for writes in [
         "fs.writeSync(1,Buffer.alloc(17*1024*1024,120));",
         "fs.writeSync(2,Buffer.alloc(17*1024*1024,120));",
