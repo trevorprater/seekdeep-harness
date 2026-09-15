@@ -18,11 +18,18 @@ use seekdeep_agent_presets::{AGENT_PRESETS, AgentPresetRegistry};
 use seekdeep_app_boot::BootPrepare;
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
 use seekdeep_commands::{COMMANDS, CommandDescriptor, CommandInputDescriptor};
-use seekdeep_core::session::SessionId;
+use seekdeep_core::{
+    session::{AppendOptions, SessionId},
+    session_store::{CreateSessionOptions, SESSIONS},
+};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, ModelId, ProviderId};
 use seekdeep_permission_presets::PERMISSION_PRESETS;
 use seekdeep_sandbox::{SandboxMode, canonical_path, writable_roots};
 use seekdeep_sandbox_policy::{SANDBOX_POLICY, SandboxPolicyRequest};
+use seekdeep_session_projection::{
+    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
+};
+use seekdeep_session_projection_cache::SESSION_PROJECTION_CACHE;
 use seekdeep_skill::{SKILLS, SkillLookupOptions, SkillViewOptions};
 use seekdeep_system_prompt::{AssembleContext, SYSTEM_PROMPT};
 use seekdeep_tools::{TOOLS, ToolExecutionInput, ToolExecutionResult};
@@ -208,6 +215,73 @@ fn content_texts(content: &[ContentBlock]) -> Vec<String> {
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+#[tokio::test]
+async fn shipped_projection_cache_checkpoints_survive_profile_shutdown_and_reopen()
+-> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let scaffold = launch_web_scaffold(temporary.path(), &[]).await?;
+    let register = |context: &seekdeep_cordis::Context| -> anyhow::Result<()> {
+        context
+            .get(SESSION_PROJECTIONS)
+            .expect("shipped projections")
+            .register(
+                context,
+                ProjectionDefinition::new_json(
+                    "scaffold-test/checkpoint",
+                    1,
+                    || Ok(json!(null).into()),
+                    |_, event| {
+                        Ok(if event.event_type == "scaffold-test/checkpoint" {
+                            ProjectionTransition::Changed(event.data.clone())
+                        } else {
+                            ProjectionTransition::Unchanged
+                        })
+                    },
+                    |state| Ok(state.clone()),
+                ),
+            )?;
+        Ok(())
+    };
+    register(scaffold.context())?;
+    let sessions = scaffold.context().get(SESSIONS).expect("shipped sessions");
+    let live = sessions.create(
+        scaffold.context(),
+        Some(SessionId::new("durable-projection-checkpoint")),
+        CreateSessionOptions::default(),
+    )?;
+    let event = live.append(
+        "scaffold-test/checkpoint",
+        json!({"value":"retained after reopen"}),
+        AppendOptions {
+            ignorable: true,
+            ..AppendOptions::default()
+        },
+    )?;
+    let cache = scaffold
+        .context()
+        .get(SESSION_PROJECTION_CACHE)
+        .expect("shipped cache");
+    cache.write(&live).await?;
+    let expected = cache
+        .cached_snapshot(live.header())
+        .expect("written checkpoint");
+    assert_eq!(expected.as_of_seq, i64::try_from(event.seq)?);
+    assert_eq!(expected.values["scaffold-test/checkpoint"], event.data);
+    scaffold.close().await?;
+
+    let reopened = launch_web_scaffold(temporary.path(), &[]).await?;
+    register(reopened.context())?;
+    let cache = reopened
+        .context()
+        .get(SESSION_PROJECTION_CACHE)
+        .expect("reopened cache");
+    let restored = cache
+        .cached_snapshot(live.header())
+        .expect("persisted checkpoint");
+    assert_eq!(restored, expected);
+    reopened.close().await
 }
 
 #[tokio::test]

@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use futures::{FutureExt as _, future::BoxFuture};
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, EventOptions, EventReply};
 use seekdeep_core::{
     session::{AppendOptions, JsonValue, Session, SessionEvent, SessionHeader, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
@@ -24,7 +24,7 @@ use seekdeep_session_persistence::{
     SessionPersistenceService, SessionPersistenceSnapshot,
 };
 use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SessionProjectionRegistry,
+    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS, SessionProjectionRegistry,
 };
 use seekdeep_session_projection_cache::{
     CheckpointIdentity, CheckpointRecord, Config, SESSION_PROJECTION_CACHE, SessionProjectionCache,
@@ -804,6 +804,131 @@ async fn detach_writes_and_a_failed_mandatory_write_self_heals() -> anyhow::Resu
         json!({"marks": ["y"]})
     );
     harness.dispose().await
+}
+
+#[tokio::test(start_paused = true)]
+async fn failed_detach_checkpoint_releases_the_session_before_its_timer_expires()
+-> anyhow::Result<()> {
+    let harness = Harness::new(
+        Arc::new(MemoryPool::default()),
+        Arc::new(FakePersistence::default()),
+        default_config(),
+        Some(1),
+    )
+    .await?;
+    let owner = seekdeep_cordis::Fiber::active_child("failed checkpoint owner");
+    let owner_context = harness.context.with_fiber(owner.clone());
+    let detached = harness.sessions.create(
+        &owner_context,
+        Some(SessionId::new("failed-detach")),
+        CreateSessionOptions::default(),
+    )?;
+    mark(&detached, &["pending"]);
+    let weak_session = Arc::downgrade(&detached);
+    harness
+        .context
+        .get(SESSION_PROJECTIONS)
+        .expect("projection registry")
+        .register(
+            &harness.context,
+            ProjectionDefinition::new_json(
+                "cache-test/failing-init",
+                1,
+                || anyhow::bail!("injected checkpoint failure"),
+                |_, _| Ok(ProjectionTransition::Unchanged),
+                |state| Ok(state.clone()),
+            ),
+        )?;
+    assert!(harness.cache.write(&detached).await.is_err());
+    owner.dispose().await?;
+    drop((detached, owner_context, owner));
+    settle().await;
+    assert!(
+        weak_session.upgrade().is_none(),
+        "the failed detach checkpoint left its session retained by the interval task"
+    );
+    harness.dispose().await
+}
+
+#[tokio::test]
+async fn overlapping_checkpoint_writes_commit_in_capture_order_and_drain_on_disposal()
+-> anyhow::Result<()> {
+    let harness = Harness::new(
+        Arc::new(MemoryPool::default()),
+        Arc::new(FakePersistence::default()),
+        Config {
+            write_every_events: 1,
+            ..default_config()
+        },
+        Some(1),
+    )
+    .await?;
+    let flushes = Arc::new(AtomicUsize::new(0));
+    let release_first = Arc::new(tokio::sync::Semaphore::new(0));
+    let observed_flushes = flushes.clone();
+    let observed_release = release_first.clone();
+    harness.context.events().on(
+        &harness.context,
+        "session/flush",
+        move |_, _| {
+            let first = observed_flushes.fetch_add(1, Ordering::AcqRel) == 0;
+            let release = observed_release.clone();
+            Box::pin(async move {
+                if first {
+                    release.acquire().await?.forget();
+                }
+                Ok(EventReply::Undefined)
+            })
+        },
+        EventOptions::default(),
+    )?;
+    let live = session(&harness, "ordered");
+    mark(&live, &["older"]);
+    settle().await;
+    assert_eq!(flushes.load(Ordering::Acquire), 1);
+    let latest = mark(&live, &["newer"]);
+    settle().await;
+    let flushes_before_release = flushes.load(Ordering::Acquire);
+    let early_record = row(&harness.pool, live.id());
+
+    let dispose = harness.cache_fiber.dispose();
+    tokio::pin!(dispose);
+    let disposal_waited = futures::poll!(dispose.as_mut()).is_pending();
+    release_first.add_permits(1);
+    dispose.await?;
+
+    assert_eq!(
+        flushes_before_release, 1,
+        "the newer cut overtook the held write"
+    );
+    assert!(
+        early_record.is_none(),
+        "a later cut committed before the first write"
+    );
+    assert!(
+        disposal_waited,
+        "cache disposal did not await admitted writes"
+    );
+    let record = row(&harness.pool, live.id()).expect("drained checkpoint");
+    assert_eq!(record.seq, i64::try_from(latest.seq)?);
+    assert_eq!(record.val, json!({"marks": ["newer"]}));
+    harness.context.fiber().dispose().await?;
+    let reopened = Harness::new(
+        harness.pool.clone(),
+        Arc::new(FakePersistence::default()),
+        default_config(),
+        Some(1),
+    )
+    .await?;
+    assert_eq!(
+        reopened
+            .cache
+            .cached_snapshot(live.header())
+            .expect("cached snapshot")
+            .as_of_seq,
+        record.seq
+    );
+    reopened.dispose().await
 }
 
 #[tokio::test]

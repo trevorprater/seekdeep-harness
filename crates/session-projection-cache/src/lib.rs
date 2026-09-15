@@ -1,7 +1,11 @@
 //! Persisted projection cache: durable per-session checkpoints served through
 //! the cold-read ladder (cached row + persistence tail + registry restore).
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
@@ -127,6 +131,26 @@ struct PreparedWrite {
     flush_live_log: bool,
 }
 
+struct PendingWrite {
+    session: Arc<Session>,
+    prepared: PreparedWrite,
+    trigger: Option<&'static str>,
+    done: tokio::sync::oneshot::Sender<anyhow::Result<()>>,
+}
+
+#[derive(Default)]
+struct WriteQueue {
+    pending: VecDeque<PendingWrite>,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+
+#[derive(Default)]
+struct WriteState {
+    closed: bool,
+    dirty: HashMap<usize, DirtyState>,
+    queues: HashMap<SessionId, WriteQueue>,
+}
+
 /// Projects a header onto the identity fields a record is bound to.
 #[must_use]
 pub fn identity_of(header: &SessionHeader) -> CheckpointIdentity {
@@ -147,7 +171,7 @@ pub struct SessionProjectionCache {
     projections: Arc<SessionProjectionRegistry>,
     persistence: Arc<dyn SessionPersistence>,
     sessions: Arc<SessionStore>,
-    dirty: Mutex<HashMap<usize, DirtyState>>,
+    writes: Arc<Mutex<WriteState>>,
 }
 
 impl std::fmt::Debug for SessionProjectionCache {
@@ -198,17 +222,15 @@ impl SessionProjectionCache {
             projections,
             persistence,
             sessions,
-            dirty: Mutex::new(HashMap::new()),
+            writes: Arc::new(Mutex::new(WriteState::default())),
         });
         service.install_write_path(context)?;
-        let weak = Arc::downgrade(&service);
-        context.own(EffectHandle::synchronous(
-            "sessionProjectionCache.timers",
-            move || {
-                if let Some(service) = weak.upgrade() {
-                    service.clear_dirty();
-                }
-                Ok(())
+        let writes = service.writes.clone();
+        context.own(EffectHandle::new(
+            "sessionProjectionCache.writes",
+            move || -> DisposeFuture {
+                let writes = writes.clone();
+                Box::pin(async move { Self::close_writes(&writes).await })
             },
         ))?;
         context.provide(SESSION_PROJECTION_CACHE, service.clone())?;
@@ -235,37 +257,92 @@ impl SessionProjectionCache {
 
     /// Durably checkpoints one live session now.
     ///
+    /// Writes for the same session commit in capture order. Plugin disposal
+    /// drains admitted writes before closing the storage domain.
+    ///
     /// # Errors
     ///
     /// Returns checkpoint, flush, or durable-write failures.
     pub async fn write(&self, session: &Arc<Session>) -> anyhow::Result<()> {
-        let prepared = self.prepare_write(session)?;
-        self.commit_write(session, prepared).await
+        self.enqueue_write(session, None)?
+            .await
+            .map_err(|_| anyhow::anyhow!("session projection cache write worker stopped"))?
     }
 
-    fn prepare_write(&self, session: &Arc<Session>) -> anyhow::Result<PreparedWrite> {
+    async fn commit_write(
+        table: &KvTable,
+        sessions: &SessionStore,
+        session: &Arc<Session>,
+        prepared: PreparedWrite,
+    ) -> anyhow::Result<()> {
+        if prepared.flush_live_log {
+            sessions.flush(session).await?;
+        }
+        Self::put_record(table, session.id(), prepared.identity, prepared.rows).await
+    }
+
+    fn enqueue_write(
+        &self,
+        session: &Arc<Session>,
+        trigger: Option<&'static str>,
+    ) -> anyhow::Result<tokio::sync::oneshot::Receiver<anyhow::Result<()>>> {
+        let mut writes = self.writes.lock();
+        anyhow::ensure!(!writes.closed, "session projection cache is disposed");
         let rows = self.projections.checkpoint(session)?;
-        self.mark_clean(session);
-        Ok(PreparedWrite {
+        if let Some(state) = writes.dirty.get_mut(&session_key(session)) {
+            state.pending = 0;
+            if let Some(timer) = state.timer.take() {
+                timer.abort();
+            }
+        }
+        let prepared = PreparedWrite {
             identity: identity_of(session.header()),
             rows,
             flush_live_log: self
                 .sessions
                 .get(session.id())
                 .is_some_and(|live| Arc::ptr_eq(&live, session)),
-        })
-    }
-
-    async fn commit_write(
-        &self,
-        session: &Arc<Session>,
-        prepared: PreparedWrite,
-    ) -> anyhow::Result<()> {
-        if prepared.flush_live_log {
-            self.sessions.flush(session).await?;
+        };
+        let (done, completion) = tokio::sync::oneshot::channel();
+        let queue = writes.queues.entry(session.id().clone()).or_default();
+        queue.pending.push_back(PendingWrite {
+            session: session.clone(),
+            prepared,
+            trigger,
+            done,
+        });
+        if queue.task.is_none() {
+            let writes = self.writes.clone();
+            let table = self.table.clone();
+            let sessions = self.sessions.clone();
+            let id = session.id().clone();
+            queue.task = Some(tokio::spawn(async move {
+                loop {
+                    let pending = {
+                        let mut writes = writes.lock();
+                        let pending = writes
+                            .queues
+                            .get_mut(&id)
+                            .and_then(|queue| queue.pending.pop_front());
+                        if pending.is_none() {
+                            writes.queues.remove(&id);
+                        }
+                        pending
+                    };
+                    let Some(pending) = pending else { return };
+                    let result =
+                        Self::commit_write(&table, &sessions, &pending.session, pending.prepared)
+                            .await;
+                    if let Some(trigger) = pending.trigger
+                        && let Err(error) = &result
+                    {
+                        tracing::warn!(session = %id, %error, %trigger, "session projection cache write failed (cache stays stale)");
+                    }
+                    let _ = pending.done.send(result);
+                }
+            }));
         }
-        self.put(session.id(), prepared.identity, prepared.rows)
-            .await
+        Ok(completion)
     }
 
     /// Cold-reads one persisted session's projections with zero full-log load.
@@ -374,14 +451,17 @@ impl SessionProjectionCache {
         let key = session_key(session);
         let interval = self.config.write_interval_ms;
         let every = self.config.write_every_events;
-        let mut dirty = self.dirty.lock();
-        let state = dirty.entry(key).or_insert_with(|| DirtyState {
+        let mut writes = self.writes.lock();
+        if writes.closed {
+            return;
+        }
+        let state = writes.dirty.entry(key).or_insert_with(|| DirtyState {
             pending: 0,
             timer: None,
         });
         state.pending += 1;
         if state.pending >= every {
-            drop(dirty);
+            drop(writes);
             self.start_soft_write(session, "count threshold");
             return;
         }
@@ -400,30 +480,24 @@ impl SessionProjectionCache {
 
     fn on_disposed(self: &Arc<Self>, session: &Arc<Session>) {
         self.start_soft_write(session, "detach");
-        self.dirty.lock().remove(&session_key(session));
+        if let Some(state) = self.writes.lock().dirty.remove(&session_key(session))
+            && let Some(timer) = state.timer
+        {
+            timer.abort();
+        }
     }
 
     fn start_soft_write(self: &Arc<Self>, session: &Arc<Session>, trigger: &'static str) {
-        let prepared = match self.prepare_write(session) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
-                return;
-            }
-        };
-        let cache = self.clone();
-        let session = session.clone();
-        tokio::spawn(async move {
-            if let Err(error) = cache.commit_write(&session, prepared).await {
-                tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
-            }
-        });
+        if let Err(error) = self.enqueue_write(session, Some(trigger)) {
+            tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
+        }
     }
 
     fn timer_fired(self: &Arc<Self>, session: &Arc<Session>) {
         let should_flush = self
-            .dirty
+            .writes
             .lock()
+            .dirty
             .get_mut(&session_key(session))
             .is_some_and(|state| state.timer.take().is_some());
         if should_flush {
@@ -431,23 +505,37 @@ impl SessionProjectionCache {
         }
     }
 
-    fn mark_clean(&self, session: &Arc<Session>) {
-        let mut dirty = self.dirty.lock();
-        if let Some(state) = dirty.get_mut(&session_key(session)) {
-            state.pending = 0;
-            if let Some(timer) = state.timer.take() {
-                timer.abort();
+    async fn close_writes(writes: &Mutex<WriteState>) -> anyhow::Result<()> {
+        let tasks = {
+            let mut writes = writes.lock();
+            writes.closed = true;
+            let mut tasks = Vec::new();
+            for state in std::mem::take(&mut writes.dirty).into_values() {
+                if let Some(timer) = state.timer {
+                    timer.abort();
+                    tasks.push(timer);
+                }
+            }
+            tasks.extend(
+                writes
+                    .queues
+                    .values_mut()
+                    .filter_map(|queue| queue.task.take()),
+            );
+            tasks
+        };
+        let mut failure = None;
+        for task in tasks {
+            if let Err(error) = task.await
+                && !error.is_cancelled()
+            {
+                failure.get_or_insert(error);
             }
         }
-    }
-
-    fn clear_dirty(&self) {
-        let dirty = std::mem::take(&mut *self.dirty.lock());
-        for state in dirty.into_values() {
-            if let Some(timer) = state.timer {
-                timer.abort();
-            }
+        if let Some(error) = failure {
+            return Err(error.into());
         }
+        Ok(())
     }
 
     async fn put(
@@ -456,8 +544,17 @@ impl SessionProjectionCache {
         identity: CheckpointIdentity,
         rows: ProjectionCheckpoint,
     ) -> anyhow::Result<()> {
+        Self::put_record(&self.table, id, identity, rows).await
+    }
+
+    async fn put_record(
+        table: &KvTable,
+        id: &SessionId,
+        identity: CheckpointIdentity,
+        rows: ProjectionCheckpoint,
+    ) -> anyhow::Result<()> {
         let record = CheckpointRecord { identity, rows };
-        self.table
+        table
             .put(id.as_str().to_owned(), JsonValue::from_serialize(&record)?)
             .await
     }
