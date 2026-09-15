@@ -23546,11 +23546,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        ".github/workflows/ci.yml"
+        ".github/workflows/ci.yml",
+        "crates/repository-tools/tests/ci_workflow_contract.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "cargo test -p seekdeep-repository-tools --all-features --test ci_workflow_contract (11 passed; hosted Linux/Windows defaults, explicit runner overrides, and Rust/WASM setup before the four primary job inventories)"
+      ],
+      "note": "Hosted ubuntu-24.04 and windows-latest defaults remain overridable; the explicit self-hosted failover switches and pool labels remain supported. The browser jobs install the Rust/WASM target, matching binding generator, and locked browser dependencies before their gates."
     },
     {
       "source": ".github/workflows/docs-pages.yml",
@@ -23675,10 +23677,12 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        ".github/workflows/release-vendor.yml"
+        ".github/workflows/release-vendor.yml",
+        "crates/repository-tools/tests/ci_workflow_contract.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (10 passed): vendor Host packaging installs the matching wasm-bindgen CLI and wasm32 target before its build step; missing setup reproduced in CI run 34937404834."
       ]
     },
     {
@@ -24997,7 +25001,25 @@
     {
       "source": "apps/web/tests/hmr-live.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_hmr_driver.rs",
+        "xtask/src/client_build.rs",
+        "xtask/src/main.rs",
+        "crates/client-loader/src/wasm.rs",
+        "crates/client-loader/tests/wasm_loader_parity.rs",
+        "crates/client-runtime/src/wasm_service.rs",
+        "crates/client-runtime/src/wasm_slots.rs",
+        "crates/client-runtime/src/wasm_conversation_registry.rs",
+        "crates/client-runtime/tests/wasm_runtime_owner_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-hmr: the real pnpm run dev:web watcher rebuilds an edited Rust-owned conversation locale, and the built npm launcher serves the Rust Web Host to Chromium. The unchanged pinned browser assertions pass within their 30-second update deadline (16.486 seconds observed), preserve window identity, and report no page or console errors. The rebuilt event and new JS/WASM fetch complete; the source and every emitted conversation sidecar are restored byte for byte.",
+        "cargo test -p seekdeep-client-loader --target wasm32-unknown-unknown --test wasm_loader_parity (3 passed): real compiled Cordis registry teardown and entry.refresh replace the fiber; the new test fails on the previous entry shape.",
+        "cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_runtime_owner_parity --test wasm_slots_service_parity --test wasm_conversation_registry_parity (9 passed): tracked service registrations are owned by the calling plugin, disappear on disposal, and can be replaced without disturbing the runtime owner; the regression fails on the previous root-bound faces.",
+        "cargo clippy -p seekdeep-client-loader -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets -- -D warnings (passed)"
+      ],
+      "note": "The Rust port edits the include_str!-owned locale JSON instead of TypeScript, allows initial compilation separately, and preserves the source's browser assertions and 30-second delivery deadline. The development watcher uses a consistent Cargo package set to preserve shared feature unification. SEEKDEEP_EXECUTABLE supplies the built native binary for this launcher test; native npm distribution remains tracked by the pending root package surface."
     },
     {
       "source": "apps/web/tests/image-display.snapshot.ts",
@@ -25331,18 +25353,33 @@
     {
       "source": "apps/web/tests/pwsh-terminal.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "xtask/src/web_settings.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs",
+        "apps/web/tests/pwsh-terminal.overlay.yml"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless --scenario pwsh-terminal (usable PowerShell 7.6.6): both pinned source browser cases pass through the compiled Rust Web Host and real Chromium, with the terminal-card golden exact, exit code 1 parsed out of the stderr body, a closed fixture inventory, and zero model calls",
+        "cargo test -p seekdeep --all-features --test shipped_cli_contracts compiled_catalog_resolves_local_shell_overlays -- --exact (passed): production profile catalog resolves the compiled local Bash and PowerShell executors"
+      ],
+      "note": "The pinned source overlay duplicates the existing tool-pwsh id and its own EntryGroup.update rejects it. The port enables that existing row instead; the source browser assertions and golden are unchanged."
     },
     {
       "source": "apps/web/tests/pwsh-terminal.overlay.yml",
       "kind": "test",
       "status": "verified",
       "targets": [
-        "apps/web/tests/pwsh-terminal.overlay.yml"
+        "apps/web/tests/pwsh-terminal.overlay.yml",
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/src/profile_boot.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "cargo xtask web-keyless --scenario pwsh-terminal: the overlay activates the compiled pwsh-local executor and existing tool-pwsh row; both pinned source browser assertions and the terminal-card golden pass"
+      ],
+      "note": "The source overlay inserts tool-pwsh even though the base already owns that id; its own loader rejects the resulting duplicate. The port uses an id-targeted enable patch while preserving the loader's duplicate-id rejection."
     },
     {
       "source": "apps/web/tests/question-composer.e2e.ts",
@@ -25556,7 +25593,17 @@
     {
       "source": "apps/web/tests/smoke-real.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "xtask/src/web_smoke_driver.rs",
+        "xtask/src/web_settings.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-smoke (4 passed through the built npm launcher and real Rust Host: default loopback bind, workspace/runtime context, partial transport retry, and run_code provider-wire collapse)",
+        "Local loopback-provider diagnostic executes the eight source browser cases against the real Rust Host and Rust/WASM bundles; all eight pass, including title projection, Bash execution, resize/reset, theme, reload, and no page errors."
+      ],
+      "note": "Real DeepSeek browser verification remains pending explicit approval for its outgoing fixture payload and destination. The adapter preserves the source assertions and deadlines while translating the launcher/product identity, choosing the main code-mode request separately from asynchronous max_tokens=64 title requests, and acknowledging the fresh-install testing notice through its Continue button. Local mock-provider results do not verify the real-model row."
     },
     {
       "source": "apps/web/tests/snapshots/access-confirmation/ui.expected.md",
@@ -27016,7 +27063,8 @@
         "apps/seekdeep/examples/keyless_web_host.rs"
       ],
       "evidence": [
-        "cargo xtask web-keyless: all four pinned source describes run unchanged in Chromium, each booting its own keyless Rust Host from its beforeAll through the scaffold shims (three replay the steering fixture at the source's 100ms pace, the fourth replays the steer-all override-only fixture); the strict steer of one queued row with the mid-steer and settled goldens and the durable claimed interjection, Cmd+Enter steering without a Queue row, the swapped busy behavior queuing Cmd+Enter when Enter steers, and the empty-draft Cmd+Enter flushing two queued messages with their goldens are verified from the Host session listing; replay fully consumed per Host and zero live model calls audited"
+        "cargo xtask web-keyless: all four pinned source describes run unchanged in Chromium, each booting its own keyless Rust Host from its beforeAll through the scaffold shims (three replay the steering fixture at the source's 100ms pace, the fourth replays the steer-all override-only fixture); the strict steer of one queued row with the mid-steer and settled goldens and the durable claimed interjection, Cmd+Enter steering without a Queue row, the swapped busy behavior queuing Cmd+Enter when Enter steers, and the empty-draft Cmd+Enter flushing two queued messages with their goldens are verified from the Host session listing; replay fully consumed per Host and zero live model calls audited",
+        "2026-09-15: cargo xtask web-keyless --scenario steering passed all six source cases in four isolated describes, including exact mid-steer and settled golden comparisons; zero live model calls. This supersedes the old checkpoint mismatch claim; output filenames based only on the golden basename had allowed steer-all artifacts to overwrite steering artifacts."
       ]
     },
     {
@@ -38071,7 +38119,8 @@
         "package.json",
         "xtask/src/client_build.rs",
         "xtask/src/node_runtime.rs",
-        "xtask/tests/root_validation_commands.rs"
+        "xtask/tests/root_validation_commands.rs",
+        "porting/VERIFICATION_CHECKPOINT_2026-09-15.json"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
@@ -38094,9 +38143,9 @@
         "npm run typecheck and npm run lint pass with native workspace and production WASM checks; cargo xtask check-client derives its 46 unique Rust packages from the Client build recipes",
         "npm run build completes the native Host, runtime assets, 48 Client artifacts, npm launcher, and Vite frontend",
         "verify-package-invariants passes for 166 companions and verify-runtime-closure passes for 78 workspace packages; verify-built-package-invariants reports 135 missing lib/invariant.js modules and 31 Loader initialization failures in plain Node",
-        "pnpm run doc-sync: Cordis, Client, tool, config, persistence catalogs and documentation build pass; missing Host declarations, retired site-test paths, and documentation consistency checks still block the aggregate. Its exported-API check is covered by the passing final full-workspace Clippy run."
+        "pnpm run doc-sync (2026-09-15): 21 checks passed, including the Rust documentation-site suites and website build; 7 failed for documentation TypeScript compilation, Markdown links, package paths, README model experience, type equivalence, translation pairing, and README limitations."
       ],
-      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. Installation prepares the pinned Node runtime dependencies, and Host staging uses the workspace packaged ripgrep with a PATH fallback. Host npm compatibility artifacts and aggregate gate execution remain incomplete: 135 invariant companions lack lib/invariant.js after the build, 31 existing companions are blocked by the Loader initialization in plain Node, and built-bin and documentation-site gates still name retired TypeScript tests. Host declarations, documentation links and package paths, README policy, type equivalence, and translation pairing also block doc-sync. Complete the Host exports, Rust aggregate command wiring, and documentation consistency checks before claiming root package parity."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. The 2026-09-15 full workspace run passed 5757 tests with 26 ignored; public build and lint passed. Installation prepares the pinned Node runtime dependencies, and Host staging uses the packaged ripgrep with a PATH fallback. Host npm compatibility artifacts remain incomplete: 135 invariant companions lack lib/invariant.js and 31 existing companions fail Loader initialization in plain Node. The built-bin and coverage-exempt-heavy gates still name retired TypeScript tests. Documentation declarations, links, package paths, README policy, type equivalence, and translation pairing also block doc-sync. See porting/VERIFICATION_CHECKPOINT_2026-09-15.json; root package parity is not complete."
     },
     {
       "source": "packages/AGENTS.md",
@@ -41284,12 +41333,16 @@
       "status": "verified",
       "targets": [
         "crates/client-runtime/src/conversation_registry.rs",
-        "crates/client-runtime/src/wasm_conversation_registry.rs"
+        "crates/client-runtime/src/wasm_conversation_registry.rs",
+        "crates/client-runtime/src/wasm_service.rs",
+        "crates/client-runtime/tests/wasm_runtime_owner_parity.rs"
       ],
       "evidence": [
         "pinned source conversation registry suite: 7 passed",
         "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)",
+        "cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_runtime_owner_parity --test wasm_slots_service_parity --test wasm_conversation_registry_parity (9 passed; compiled Cordis caller tracing, unload/re-register across two plugin generations, and root-service survival)",
+        "cargo xtask web-hmr (real development watcher and Chromium update the locale in 16.486 seconds with the same page identity and no page or console errors)"
       ],
       "note": "the shared Rust registry retains uniquely keyed Definitions in stable registration order, publishes reference-stable arrays, invalidates synchronously, attaches exact-pointer idempotent disposal, and exposes caller-effect-owned WASM faces"
     },
@@ -41301,12 +41354,16 @@
         "crates/client-runtime/src/conversation_registry.rs",
         "crates/client-runtime/src/wasm_conversation_registry.rs",
         "crates/client-runtime/tests/conversation_registry_parity.rs",
-        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs"
+        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs",
+        "crates/client-runtime/src/wasm_service.rs",
+        "crates/client-runtime/tests/wasm_runtime_owner_parity.rs"
       ],
       "evidence": [
         "pnpm exec vitest run packages/client/runtime/tests/conversation-registry.client.spec.ts --reporter=dot (pinned source: 7 passed)",
         "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)",
+        "cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_runtime_owner_parity --test wasm_slots_service_parity --test wasm_conversation_registry_parity (9 passed; compiled Cordis caller tracing, unload/re-register across two plugin generations, and root-service survival)",
+        "cargo xtask web-hmr (real development watcher and Chromium update the locale in 16.486 seconds with the same page identity and no page or console errors)"
       ],
       "note": "Rust and WASM preserve unique kind ownership, target/buildViewNode paired presence, one targeted fallback, fallback invalidation, stable payload identity, caller-fiber disposal, and microtask-coalesced resident rebuild coordination"
     },
@@ -41318,12 +41375,16 @@
         "crates/client-runtime/src/conversation_registry.rs",
         "crates/client-runtime/src/wasm_conversation_registry.rs",
         "crates/client-runtime/tests/conversation_registry_parity.rs",
-        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs"
+        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs",
+        "crates/client-runtime/src/wasm_service.rs",
+        "crates/client-runtime/tests/wasm_runtime_owner_parity.rs"
       ],
       "evidence": [
         "pinned source conversation registry suite: 7 passed",
         "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)",
+        "cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_runtime_owner_parity --test wasm_slots_service_parity --test wasm_conversation_registry_parity (9 passed; compiled Cordis caller tracing, unload/re-register across two plugin generations, and root-service survival)",
+        "cargo xtask web-hmr (real development watcher and Chromium update the locale in 16.486 seconds with the same page identity and no page or console errors)"
       ],
       "note": "per-target view builders are unique, registration-ordered, synchronously observable, exactly disposed, and caller-effect owned through the WASM Service face"
     },
@@ -41755,13 +41816,17 @@
         "crates/client-runtime/src/slots.rs",
         "crates/client-runtime/src/wasm_slots.rs",
         "crates/client-runtime/tests/slots_service_parity.rs",
-        "crates/client-runtime/tests/wasm_slots_service_parity.rs"
+        "crates/client-runtime/tests/wasm_slots_service_parity.rs",
+        "crates/client-runtime/src/wasm_service.rs",
+        "crates/client-runtime/tests/wasm_runtime_owner_parity.rs"
       ],
       "evidence": [
         "pnpm exec vitest run packages/client/runtime/tests/slots-service.client.spec.ts --reporter=dot (pinned source: 35 passed)",
         "cargo test -p seekdeep-client-runtime --all-features (11 native Slot Service cases)",
         "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_slots_service_parity-*.wasm (3 passed)",
-        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_runtime_owner_parity --test wasm_slots_service_parity --test wasm_conversation_registry_parity (9 passed; compiled Cordis caller tracing, unload/re-register across two plugin generations, and root-service survival)",
+        "cargo xtask web-hmr (real development watcher and Chromium update the locale in 16.486 seconds with the same page identity and no page or console errors)"
       ],
       "note": "the React-free Rust runtime wraps the portable ledger with caller-owned Cordis effects, registrant stamping, declaration-lifetime injection and transactional reverse rollback, delayed failure containment, boot-once renderer and locale installation, root-only boot guards, a live Host face, shared and exclusive Store handle axes, per-Session Store caching and persistence pruning, recursive collapse cleanup, and synchronous slots/changed publication; the WASM Service face passes each register/inject/install through the actual caller Context effect"
     },
@@ -71731,11 +71796,13 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/schedule/src/runtime.rs"
+        "crates/schedule/src/runtime.rs",
+        "crates/schedule/tests/runtime_parity.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-schedule --all-features",
-        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-schedule --all-features (43 passed): disposal during idle-wait admission drops the unpolled future before returning; the regression fails on the previous runtime because a late waiter retains the disposed runtime. Persistent cancellation preserves the source stop promise for late first polls."
       ]
     },
     {
@@ -71852,7 +71919,8 @@
       "evidence": [
         "pnpm exec vitest run packages/schedule/schedule/tests/runtime.spec.ts packages/schedule/schedule/tests/plugin.spec.ts packages/schedule/schedule/tests/jsonl-restart.spec.ts --reporter=dot (30 passed)",
         "cargo test -p seekdeep-schedule --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-schedule --all-features (43 passed): disposal during idle-wait admission drops the unpolled future before returning; the regression fails on the previous runtime because a late waiter retains the disposed runtime. Persistent cancellation preserves the source stop promise for late first polls."
       ],
       "note": "injected-clock and message-factory differential covers segmented waits, wall-clock movement, admission ordering, one-shot priority, fixed-rate batching, refold/reclock, persistence and append faults, async idle/maintenance rejection, liveness loss, and quiescent teardown"
     },
@@ -87882,27 +87950,25 @@
       ],
       "evidence": [
         "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
-        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test run_gates_parity --all-features (12 grouped Rust tests cover all 14 source graph counts, invalid graph preflight, dependency skipping, worker bounds, Cargo resource serialization, target command/env renames, consumer and Windows ordering, and real signal/spawn outcomes)",
-        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-repository-tools --all-features --test run_gates_parity (14 passed, including mode graph membership, process outcomes, Cargo serialization, and the Rust documentation-site gate)",
+        "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)"
       ]
     },
     {
       "source": "scripts/run-gates.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/repository-tools/src/run_gates.rs",
         "crates/repository-tools/src/bin/run-gates.rs",
         "package.json"
       ],
       "evidence": [
-        "pinned source graph inspection and Rust fixtures match all 14 mode cardinalities: ci-primary 52, ci-linux-primary 53, ci-static 35, ci-lint-contracts-ready 2, ci-coverage 2, ci-snapshot 2, ci-artifacts 5, ci-consumers 10, ci-windows-blocking 2, ci-windows-complete 44, ci-windows-observational 42, node-compat 5, check-all 46, doc-sync 28",
         "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
-        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test run_gates_parity --all-features (12 passed)",
-        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
-        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+        "cargo test -p seekdeep-repository-tools --all-features --test run_gates_parity (14 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)"
       ],
-      "note": "All product-owned DSH gate, coverage, snapshot, example, and Oxlint environment identities are renamed to SEEKDEEP. The source DAG and shell-free process behavior are preserved; the Rust target additionally detects direct and transitive Cargo-backed package scripts and serializes them through a cargo-target resource group so independent gates remain parallel without sharing Cargo target locks."
+      "note": "The Rust scheduler implements graph validation, bounded concurrency, failure propagation, process outcomes, and Cargo resource serialization. The documentation-site gate now runs the Rust suites. The built-bin-smoke and coverage-exempt-heavy leaves still invoke removed TypeScript tests and must be connected to their compiled Rust counterparts before this command is fully verified."
     },
     {
       "source": "scripts/run-oxlint.spec.ts",
@@ -88022,9 +88088,10 @@
         "the direct scenario passes with a nonexistent --python path, proving it uses native protocol handling without the SDK adapter",
         "the exact uv-managed editable-SDK workflow command passes all five scenarios",
         "installed-SDK cancellation during blocked initialization sends shutdown and reaps the runtime before exit for owner-only and foreground-group interrupts on macOS Python 3.10/3.14 and Linux x64/arm64 Python 3.10",
-        "workflow tests require native smoke entry paths, baseline-image compilation, installed-runtime lookup, and unchanged publication authorization"
+        "workflow tests require native smoke entry paths, baseline-image compilation, installed-runtime lookup, and unchanged publication authorization",
+        "The installed editable-SDK interruption example passes both owner-only and process-group interruption locally after separating the negative process-group operand with --, avoiding option parsing of the group ID by the Linux kill utility."
       ],
-      "note": "Rust owns model selection, scenario policy, process lifetime, JSON formatting, and snapshot validation; the Python adapter only exercises the installed public SDK API. The independent keyless SDK test job remains a separate CI assembly gap."
+      "note": "Rust owns model selection, scenario policy, process lifetime, JSON formatting, and snapshot validation; the Python adapter only exercises the installed public SDK API. The independent keyless SDK test job remains a separate CI assembly gap. The Linux CI rerun for the corrected signal-probe invocation remains to be observed."
     },
     {
       "source": "scripts/snapshots/python-sdk-single-exe/advanced/result.json",

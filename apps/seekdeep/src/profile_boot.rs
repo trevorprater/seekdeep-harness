@@ -568,6 +568,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-attachment-local",
             seekdeep_attachment_local::plugin(),
         ),
+        ("seekdeep-bash-local", seekdeep_bash_local::plugin()),
         ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
         ("seekdeep-headless", seekdeep_headless::plugin()),
         (
@@ -786,6 +787,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ),
         ("seekdeep-persona", seekdeep_persona::plugin()),
         ("seekdeep-plan-mode", seekdeep_plan_mode::plugin()),
+        ("seekdeep-pwsh-local", seekdeep_pwsh_local::plugin()),
         ("seekdeep-pwsh-sandbox", seekdeep_pwsh_sandbox::plugin()),
         (
             "seekdeep-repeat-tool-reminder",

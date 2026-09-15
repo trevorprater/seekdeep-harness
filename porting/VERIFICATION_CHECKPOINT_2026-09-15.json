@@ -1,0 +1,104 @@
+{
+  "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+  "verified_at": "2026-09-15T09:52:42Z",
+  "completion": "incomplete",
+  "checks": {
+    "cargo_fmt_all_check": "passed",
+    "cargo_clippy_workspace_all_targets_all_features_deny_warnings": "passed",
+    "cargo_test_workspace_all_features": {
+      "status": "passed",
+      "passed": 5757,
+      "failed": 0,
+      "ignored": 26,
+      "seconds": 3212.5
+    },
+    "pnpm_build": "passed: native Host, runtime assets, Rust/WASM public Client packages, declarations, and Vite frontend",
+    "pnpm_lint": "passed",
+    "wasm_loader_and_runtime_clippy": "passed for both packages, all targets, with warnings denied",
+    "wasm_loader_regressions": "3 passed, including entry ownership and refresh after disposal",
+    "wasm_registry_regressions": "9 passed, including actual Cordis caller ownership and replacement after disposal",
+    "web_hmr": {
+      "status": "passed",
+      "source_case": "hot-reloads a real client-plugin source edit without refreshing the page",
+      "launcher": "built npm CLI entry with SEEKDEEP_EXECUTABLE selecting the compiled native Host",
+      "watch_command": "pnpm run dev:web",
+      "source_edit_deadline_ms": 30000,
+      "edit_to_visible_ms": 16486,
+      "page_identity": "49a1fd33-7206-4030-b483-cde1b539ae33",
+      "page_errors": [],
+      "source_and_bundle_sidecars_restored": true
+    },
+    "web_pwsh_terminal": "2 pinned source cases passed with an actual PowerShell executable and parsed terminal exit pill",
+    "web_steering": {
+      "status": "passed",
+      "command": "cargo xtask web-keyless --scenario steering",
+      "source_cases": 6,
+      "isolated_source_describes": 4,
+      "live_model_calls": 0,
+      "comparison": "Exact source golden bytes, allowing only the product identity rename",
+      "saved_outputs": "Four distinct actual-output files were compared again with their respective steering and steer-all source goldens. Their filenames include the full source-relative golden path.",
+      "coverage": [
+        "mid-steer and settled snapshots with the durable claimed interjection",
+        "Cmd+Enter steering without a Queue row",
+        "Cmd+Enter queuing when Enter is configured to steer",
+        "empty-draft Cmd+Enter flushing two queued messages",
+        "both fixture inventories"
+      ],
+      "supersedes": "The old steering mismatch report compared a saved output that the later steer-all case overwrote under the same basename. The assertions compare the correct source golden before saving the next case. The fresh run passes all assertions and retains all four outputs separately."
+    },
+    "source_smoke_keyless": "4 CLI cases passed through the built npm launcher and native Host",
+    "source_smoke_local_provider": {
+      "status": "8 browser cases passed with a local loopback provider fixture",
+      "live_provider_evidence": false,
+      "coverage": "cold start, first conversation, title and sidebar, trajectory, Bash, details, layout persistence, theme, and history recovery"
+    },
+    "sdk_interrupt_probe": {
+      "local": "passed for owner-only SIGINT and foreground-process-group SIGINT",
+      "linux_ci": "pending rerun of the corrected kill -INT -- <negative-pgid> invocation"
+    },
+    "ci_workflow_contract": "11 passed",
+    "doc_site_and_gate_regressions": "38 passed across CI routing, site configuration, fragment checking, site projection, and gate construction",
+    "cargo_xtask_parity_all": "failed: 6 pending, 0 ported but unverified, 3 withdrawn",
+    "pnpm_doc_sync": {
+      "status": "failed",
+      "passed": 21,
+      "failed": 7,
+      "skipped": 0,
+      "failing_checks": [
+        "documentation TypeScript compilation",
+        "Markdown links",
+        "package paths",
+        "package README model experience",
+        "type equivalence",
+        "translation pairing",
+        "package README limitations"
+      ]
+    }
+  },
+  "manifest": {
+    "total": 7420,
+    "verified": 7411,
+    "ported": 0,
+    "pending": 6,
+    "failed": 0,
+    "withdrawn": 3,
+    "strict_verified_percent": 99.87870619946092,
+    "verified_plus_ported_percent": 99.87870619946092,
+    "pending_sources": [
+      "apps/web/tests/smoke-real.e2e.ts",
+      "examples/headless-agent/tests/fixtures/e2b/e2b/bin.ts",
+      "examples/headless-agent/tests/fixtures/e2b/e2b/fixture-lsp.mjs",
+      "package.json",
+      "packages/e2b/e2b/tests/composition.e2e.ts",
+      "scripts/run-gates.ts"
+    ]
+  },
+  "remaining_work": [
+    "Verify the real-provider browser smoke and record the PR GIF after the requested payload approval.",
+    "Implement the native E2B SDK factory and verify the real E2B composition and fixture paths after sandbox authorization.",
+    "Produce and test the public Host npm exports and native CLI platform packages.",
+    "Complete native aggregate-test and coverage routing, and audit the three withdrawn tooling configurations.",
+    "Repair the seven documentation checks without weakening their assertions.",
+    "Finish the PR-finding audit and repair the confirmed open lifecycle and deterministic-input cases."
+  ]
+}

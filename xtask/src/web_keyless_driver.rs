@@ -7,14 +7,14 @@
 
 pub(super) const DRIVER: &str = r#"import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { spawn, execFile, execFileSync } from 'node:child_process';
+import { spawn, spawnSync, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { mkdirSync, existsSync } from 'node:fs';
 import { access, mkdir, mkdtemp, realpath, rm, readFile, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, basename, dirname } from 'node:path';
+import { join, basename, dirname, relative } from 'node:path';
 const [source, host, world, output] = process.argv.slice(2), require = createRequire(join(source, 'apps/web/package.json'));
 const { chromium } = require('playwright'), { expect: playwrightExpect } = require('playwright/test'), ts = require('typescript');
 // The source suites run under vitest, whose `expect.poll` honours `interval`; Playwright's poll
@@ -329,7 +329,9 @@ const productIdentity = text => text
   .replaceAll('only dsh web injects window.__DSH_BOOT__', 'only seekdeep web injects window.__SEEKDEEP_BOOT__');
 const goldenTools = scenario => ({
   compareOrRefreshGolden: async (path, actual, mode) => {
-    assert.equal(mode, 'replay'); await writeFile(join(output, scenario + '-' + basename(path) + '.actual'), actual + '\n');
+    assert.equal(mode, 'replay');
+    const artifact = scenario + '--' + relative(source, path).replaceAll(/[\\/]/g, '__') + '.actual';
+    await writeFile(join(output, artifact), actual + '\n');
     const expected = await readFile(path, 'utf8');
     if (actual + '\n' !== expected) assert.equal(actual + '\n', productIdentity(expected), 'golden ' + basename(path));
   },
@@ -712,6 +714,26 @@ async function describeScenario(name, options) {
   }
 }
 const SCENARIOS = {
+  async 'pwsh-terminal'() {
+    const pwsh = process.env.SEEKDEEP_KEYLESS_PWSH;
+    assert(pwsh, 'the Rust PowerShell resolver must supply the probe executable');
+    const probe = spawnSync(pwsh, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$true'], { encoding: 'utf8', timeout: 10000 });
+    if (probe.status !== 0) {
+      const message = 'pwsh-terminal requires usable PowerShell: ' + pwsh + ' (' + (probe.error?.code ?? probe.status) + ')';
+      if (filter) throw new Error(message);
+      console.log('keyless: skipped ' + message);
+      return;
+    }
+    await describeScenario('pwsh-terminal', {
+      describes: 1, cases: 2, constants: ['PROMPT', 'SEED_ID'],
+      goldens: [['TERMINAL_EXPECTED', 'terminal-card']],
+      values: {
+        SEED: join(TESTS, 'snapshots/pwsh-terminal/seed.jsonl'),
+        OVERLAY: join(process.cwd(), 'apps/web/tests/pwsh-terminal.overlay.yml'),
+        seedSession: (scaffold, fixture, id) => scaffold.server.seedSession(id, fixture),
+      },
+    });
+  },
   async 'skill-tool-row'() {
     await seededScenario('skill-tool-row', { cases: 2, constants: ['SEED_ID', 'PROMPT'], seedFile: join(source, 'examples/acp-agent/tests/snapshots/skill-load/session.jsonl'), ready: page => page.locator('[data-tool="skill"]').waitFor({ timeout: 15000 }) });
   },

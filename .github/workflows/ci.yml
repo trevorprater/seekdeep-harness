@@ -36,6 +36,10 @@ permissions:
 
 env:
   PRIMARY_NODE_VERSION: '24'
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   SEEKDEEP_TELEMETRY_DISABLED: '1'
@@ -45,13 +49,13 @@ jobs:
   # TODO(hosted-serial-ci): Re-enable the three hosted serial reference jobs before release.
   # The self-hosted standby remains active on every master push.
 
-  # Three enterprise jobs isolate coverage, static analysis, and the
+  # Three jobs isolate coverage, static analysis, and the
   # build-backed consumer tail. The consumer job owns the only Linux build so
   # all three jobs enter runner allocation independently.
   #
   # FAILOVER (Linux): each Linux enterprise job resolves its pool through the
-  # SEEKDEEP_CI_FAILOVER_LINUX repository variable. Unset (normal), the expressions
-  # pick the hosted enterprise pools below. Setting the variable to
+  # SEEKDEEP_CI_FAILOVER_LINUX repository variable. Normal runs use standard hosted
+  # machines, or the label in SEEKDEEP_CI_HOSTED_LINUX_RUNNER. Setting the failover variable to
   # 'selfhosted' (repo Settings → Actions → Variables; writer-manageable
   # repository state — not PR-editable, no merge required) retargets all
   # three onto the in-house
@@ -66,10 +70,10 @@ jobs:
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'seekdeep-ubuntu-24-04-16core' }}
+          || vars.SEEKDEEP_CI_HOSTED_LINUX_RUNNER || 'ubuntu-24.04' }}
     name: node 24 / static
     env:
-      SEEKDEEP_GATE_CONCURRENCY: '8'
+      SEEKDEEP_GATE_CONCURRENCY: '1'
     steps:
       # Fetch complete history so the archive gate can read the trusted PR base from a reused shallow checkout.
       - uses: actions/checkout@v6
@@ -84,6 +88,20 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: primary-rust-wasm
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
 
       - name: Configure pnpm store path
         id: pnpm-store
@@ -118,15 +136,11 @@ jobs:
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'seekdeep-ubuntu-24-04-16core' }}
+          || vars.SEEKDEEP_CI_HOSTED_LINUX_RUNNER || 'ubuntu-24.04' }}
     name: node 24 / coverage
     env:
-      # The hosted 16-core runner uses six coverage workers. The failover pool
-      # shares one 64-core VM across six always-on runner instances, so each
-      # instance may use eight while keeping the worst case at 8 × 6 = 48
-      # workers; process-bound suites remain isolated in forks.
-      SEEKDEEP_COVERAGE_MAX_WORKERS: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '6' }}
-      SEEKDEEP_GATE_CONCURRENCY: '3'
+      SEEKDEEP_COVERAGE_MAX_WORKERS: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '2' }}
+      SEEKDEEP_GATE_CONCURRENCY: '1'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -139,6 +153,20 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: primary-rust-wasm
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
 
       - name: Configure pnpm store path
         id: pnpm-store
@@ -181,14 +209,13 @@ jobs:
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
-          || 'seekdeep-ubuntu-24-04-16core' }}
+          || vars.SEEKDEEP_CI_HOSTED_LINUX_RUNNER || 'ubuntu-24.04' }}
     name: node 24 / snapshots and artifacts
     env:
-      SEEKDEEP_GATE_CONCURRENCY: '8'
-      SEEKDEEP_OXLINT_THREADS: '8'
-      SEEKDEEP_PUBLINT_CONCURRENCY: '8'
-      # Failover halves snapshot concurrency for the shared 64-core VM.
-      SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '32' }}
+      SEEKDEEP_GATE_CONCURRENCY: '1'
+      SEEKDEEP_OXLINT_THREADS: '2'
+      SEEKDEEP_PUBLINT_CONCURRENCY: '2'
+      SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '2' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -201,6 +228,20 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: primary-rust-wasm
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
 
       - name: Configure pnpm store path
         id: pnpm-store
@@ -526,13 +567,13 @@ jobs:
       ${{ vars.SEEKDEEP_CI_FAILOVER_WINDOWS == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "seekdeep-win-ci", "windows"]')
-          || 'seekdeep-windows-2025-16core' }}
+          || vars.SEEKDEEP_CI_HOSTED_WINDOWS_RUNNER || 'windows-latest' }}
     name: windows node 24 / native complete
     timeout-minutes: 60
     env:
       SEEKDEEP_COVERAGE_MAX_WORKERS: '2'
-      SEEKDEEP_GATE_CONCURRENCY: '2'
-      SEEKDEEP_PUBLINT_CONCURRENCY: '8'
+      SEEKDEEP_GATE_CONCURRENCY: '1'
+      SEEKDEEP_PUBLINT_CONCURRENCY: '2'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -545,6 +586,15 @@ jobs:
           /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
 
       - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-native-rust-wasm
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
       - uses: pnpm/action-setup@v4
         with:
@@ -569,6 +619,14 @@ jobs:
       - name: Install (immutable)
         shell: pwsh
         run: pnpm install --frozen-lockfile
+
+      - name: Install pinned browser build dependencies
+        shell: pwsh
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: pnpm --filter @seekdeep-ai/seekdeep-web-frontend exec playwright install chromium
 
       - name: Run complete native Windows gate inventory
         shell: pwsh

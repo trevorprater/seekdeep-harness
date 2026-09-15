@@ -11,6 +11,7 @@ use seekdeep_client_ui_slots::{
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 
+use crate::wasm_service::{caller_face, caller_method};
 use crate::{
     ClientRootRenderer, ClientSlotError, ClientSlotRegistry, RuntimeDisposer, RuntimeLocaleFace,
     RuntimeSlotPayload, RuntimeStandardFace, RuntimeStoreDeclaration, SlotEffectBatch,
@@ -373,11 +374,13 @@ impl BrowserState {
 
 #[allow(clippy::too_many_lines)]
 fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, JsValue> {
-    let face = Object::new();
+    let face = caller_face(caller, "slots")?;
     let register_state = state.clone();
-    let register_caller = caller.clone();
     let register = Closure::wrap(Box::new(
-        move |options: JsValue, component: JsValue| -> Result<JsValue, JsValue> {
+        move |register_caller: JsValue,
+              options: JsValue,
+              component: JsValue|
+              -> Result<JsValue, JsValue> {
             let state = register_state.clone();
             let caller = register_caller.clone();
             let installer = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
@@ -397,13 +400,19 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
             )
         },
     )
-        as Box<dyn Fn(JsValue, JsValue) -> Result<JsValue, JsValue>>);
-    set(&face, "register", &register.into_js_value())?;
+        as Box<dyn Fn(JsValue, JsValue, JsValue) -> Result<JsValue, JsValue>>);
+    set(
+        &face,
+        "register",
+        &caller_method(&register.into_js_value())?,
+    )?;
 
     let inject_state = state.clone();
-    let inject_caller = caller.clone();
     let inject = Closure::wrap(Box::new(
-        move |key: String, callback: Function| -> Result<JsValue, JsValue> {
+        move |inject_caller: JsValue,
+              key: String,
+              callback: Function|
+              -> Result<JsValue, JsValue> {
             let state = inject_state.clone();
             let caller = inject_caller.clone();
             let controller_label = key.clone();
@@ -462,35 +471,44 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
             )
         },
     )
-        as Box<dyn Fn(String, Function) -> Result<JsValue, JsValue>>);
-    set(&face, "inject", &inject.into_js_value())?;
+        as Box<dyn Fn(JsValue, String, Function) -> Result<JsValue, JsValue>>);
+    set(&face, "inject", &caller_method(&inject.into_js_value())?)?;
 
     let install_state = state.clone();
-    let install_caller = caller.clone();
-    let install = Closure::wrap(Box::new(move |renderer: JsValue| -> Result<(), JsValue> {
-        let renderer: Rc<dyn ClientRootRenderer<BrowserEntry, JsValue, JsValue, JsValue, JsValue>> =
-            Rc::new(BrowserRenderer {
+    let install = Closure::wrap(Box::new(
+        move |install_caller: JsValue, renderer: JsValue| -> Result<(), JsValue> {
+            let renderer: Rc<
+                dyn ClientRootRenderer<BrowserEntry, JsValue, JsValue, JsValue, JsValue>,
+            > = Rc::new(BrowserRenderer {
                 renderer,
                 state: Rc::downgrade(&install_state),
             });
-        let disposer = install_state
-            .registry
-            .install_renderer(renderer)
-            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-        own_runtime_disposer(&install_caller, "slots.install()", disposer)
-    }) as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
-    set(&face, "install", &install.into_js_value())?;
+            let disposer = install_state
+                .registry
+                .install_renderer(renderer)
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            own_runtime_disposer(&install_caller, "slots.install()", disposer)
+        },
+    )
+        as Box<dyn FnMut(JsValue, JsValue) -> Result<(), JsValue>>);
+    set(&face, "install", &caller_method(&install.into_js_value())?)?;
 
     let locale_state = state.clone();
-    let locale_caller = caller.clone();
-    let install_locale = Closure::wrap(Box::new(move |locale: JsValue| -> Result<(), JsValue> {
-        let disposer = locale_state
-            .registry
-            .install_locale(Rc::new(JsLocaleFace(locale)))
-            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-        own_runtime_disposer(&locale_caller, "slots.installLocale()", disposer)
-    }) as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
-    set(&face, "installLocale", &install_locale.into_js_value())?;
+    let install_locale = Closure::wrap(Box::new(
+        move |locale_caller: JsValue, locale: JsValue| -> Result<(), JsValue> {
+            let disposer = locale_state
+                .registry
+                .install_locale(Rc::new(JsLocaleFace(locale)))
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            own_runtime_disposer(&locale_caller, "slots.installLocale()", disposer)
+        },
+    )
+        as Box<dyn FnMut(JsValue, JsValue) -> Result<(), JsValue>>);
+    set(
+        &face,
+        "installLocale",
+        &caller_method(&install_locale.into_js_value())?,
+    )?;
 
     let render_state = state.clone();
     let render_slot = Closure::wrap(Box::new(move |key: String, owner: JsValue| {

@@ -14,6 +14,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use tokio::process::Command;
 
+pub(super) const BUILD_PACKAGES_ENV: &str = "SEEKDEEP_WASM_BUILD_PACKAGES";
+
 pub(super) fn inline_store_dependency(root: &Path, bundle: &str) -> anyhow::Result<String> {
     use std::io::Write as _;
     let dependencies = root.join("support/browser-dependencies/node_modules");
@@ -614,10 +616,17 @@ enum BuildResult {
     Interrupted(i32),
 }
 
+#[derive(Clone, Copy)]
+enum BuildMode<'a> {
+    Release,
+    Development(&'a str),
+}
+
 async fn build_recipe(
     executable: &Path,
     root: &Path,
     recipe: &BuildRecipe,
+    mode: BuildMode<'_>,
     shutdown: &mut std::pin::Pin<&mut impl std::future::Future<Output = i32>>,
 ) -> anyhow::Result<BuildResult> {
     let mut command = Command::new(executable);
@@ -626,6 +635,15 @@ async fn build_recipe(
         .current_dir(root)
         .stdin(Stdio::null())
         .kill_on_drop(true);
+    if let BuildMode::Development(packages) = mode {
+        // Development rebuilds must fit the live HMR feedback loop; release packaging
+        // retains the workspace's whole-program optimization and single codegen unit.
+        command
+            .env(BUILD_PACKAGES_ENV, packages)
+            .env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "1")
+            .env("CARGO_PROFILE_RELEASE_LTO", "false")
+            .env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16");
+    }
     #[cfg(unix)]
     command.process_group(0);
     let mut child = command
@@ -710,6 +728,7 @@ pub(super) fn build() -> anyhow::Result<()> {
                     &executable,
                     &workspace.workspace_root,
                     recipe,
+                    BuildMode::Release,
                     &mut shutdown,
                 )
                 .await?;
@@ -799,12 +818,29 @@ async fn watch(
         }
     }
     let mut state = BuildState::new(roots)?;
+    // Every recipe uses one Cargo package set so shared crates retain the same feature
+    // unification between builds; changing the edited package must not rebuild its unchanged
+    // dependencies under another recipe's feature set.
+    let packages = serde_json::to_string(
+        &recipes
+            .iter()
+            .map(|recipe| &recipe.package)
+            .collect::<BTreeSet<_>>(),
+    )?;
     let mut announced = false;
     let mut shutdown = std::pin::pin!(shutdown_signal());
     loop {
         while let Some(index) = state.pending.pop_first() {
             let recipe = &recipes[index];
-            let status = match build_recipe(executable, root, recipe, &mut shutdown).await? {
+            let status = match build_recipe(
+                executable,
+                root,
+                recipe,
+                BuildMode::Development(&packages),
+                &mut shutdown,
+            )
+            .await?
+            {
                 BuildResult::Exited(status) => status,
                 BuildResult::Interrupted(signal) => return Ok(signal),
             };

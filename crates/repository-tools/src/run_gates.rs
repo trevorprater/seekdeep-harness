@@ -956,19 +956,30 @@ fn doc_sync_leaf_gates(environment: &GateEnvironment, options: DocSyncOptions) -
     for &(id, script, label) in DOC_SYNC_SCRIPTS {
         gates.push(labeled_script(environment, id, script, label));
     }
-    gates.push(pnpm_exec(
-        environment,
-        "docs-site-projection",
-        &[
-            "vitest",
-            "run",
-            "scripts/project-doc-site.spec.ts",
-            "scripts/verify-doc-site-fragments.spec.ts",
-        ],
-        Some("documentation site checks"),
-        &[],
-        IndexMap::new(),
-    ));
+    let site_tests = [
+        "test",
+        "--locked",
+        "-p",
+        "seekdeep-repository-tools",
+        "--all-features",
+        "--test",
+        "doc_site_projection_parity",
+        "--test",
+        "doc_site_configuration_parity",
+        "--test",
+        "doc_site_fragments_parity",
+    ];
+    gates.push(Gate {
+        id: "docs-site-projection".to_owned(),
+        label: "documentation site checks".to_owned(),
+        display_command: format!("cargo {}", site_tests.join(" ")),
+        command: PathBuf::from("cargo"),
+        args: site_tests.into_iter().map(OsString::from).collect(),
+        needs: Vec::new(),
+        environment: IndexMap::new(),
+        allow_failure: false,
+        serial_group: Some("cargo-target".to_owned()),
+    });
     gates.push(labeled_script(
         environment,
         "docs-site-build",

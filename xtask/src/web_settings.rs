@@ -1,6 +1,6 @@
 //! Source settings scenarios through the production Web profile and durable settings service.
 
-use std::{path::Path, process::Command};
+use std::{collections::BTreeMap, path::Path, process::Command};
 
 pub(super) fn run(source: &Path) -> anyhow::Result<()> {
     run_case(source, "web-settings", super::web_settings_driver::DRIVER)
@@ -66,10 +66,33 @@ pub(super) fn run_details(source: &Path) -> anyhow::Result<()> {
     run_case(source, "web-details", super::web_details_driver::DRIVER)
 }
 
+pub(super) fn run_hmr(source: &Path) -> anyhow::Result<()> {
+    run_case(source, "web-hmr", super::web_hmr_driver::DRIVER)
+}
+
+pub(super) fn run_smoke(source: &Path, live: bool) -> anyhow::Result<()> {
+    run_case_with(
+        source,
+        "web-smoke",
+        super::web_smoke_driver::DRIVER,
+        &[("SEEKDEEP_WEB_SMOKE_LIVE", if live { "1" } else { "0" })],
+    )
+}
+
 pub(super) fn run_keyless(source: &Path, scenario: Option<&str>) -> anyhow::Result<()> {
-    let environment = scenario
+    let pwsh = seekdeep_pwsh_local::resolve_pwsh_path(
+        None,
+        &std::env::vars().collect::<BTreeMap<_, _>>(),
+        if cfg!(windows) {
+            seekdeep_pwsh_local::PwshPlatform::Windows
+        } else {
+            seekdeep_pwsh_local::PwshPlatform::Other
+        },
+    );
+    let mut environment = scenario
         .map(|scenario| vec![("SEEKDEEP_KEYLESS_SCENARIO", scenario)])
         .unwrap_or_default();
+    environment.push(("SEEKDEEP_KEYLESS_PWSH", &pwsh));
     run_case_with(
         source,
         "web-keyless",

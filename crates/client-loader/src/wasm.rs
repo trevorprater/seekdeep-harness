@@ -2,12 +2,16 @@
 
 use std::{cell::Cell, sync::Arc};
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, Object, Promise, Reflect, Symbol, WeakMap};
 use parking_lot::Mutex;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use crate::NAME;
+
+thread_local! {
+    static ENTRY_IMPORTERS: WeakMap = WeakMap::new();
+}
 
 #[derive(Clone)]
 struct EntryRecord {
@@ -63,12 +67,14 @@ impl WasmClientLoader {
         };
         future_to_promise(async move {
             let name = required_string(&options, "name")?;
-            let face = entry_face(&id, &name, &options)?;
+            let face = entry_face(&id, &name, &options, &context, internal.clone())?;
             entries.lock().push(EntryRecord {
                 id: id.clone(),
                 face: face.clone().into(),
             });
             let internal = internal.lock().clone();
+            let context = Reflect::get(&face, &JsValue::from_str("ctx"))?;
+            let options = Reflect::get(&face, &JsValue::from_str("options"))?;
             let result = start_entry(&context, &internal, &face, &options, &name).await;
             match result {
                 Ok(()) => Ok(JsValue::from_str(&id)),
@@ -164,6 +170,27 @@ impl WasmClientLoader {
 #[wasm_bindgen(js_name = clientLoaderPlugin)]
 pub fn client_loader_plugin() -> Result<JsValue, JsValue> {
     let apply = Closure::wrap(Box::new(move |context: JsValue| -> Result<(), JsValue> {
+        let attach_entry = Closure::wrap(Box::new(move |fiber: JsValue| {
+            let parent = Reflect::get(&fiber, &JsValue::from_str("parent"))?;
+            let entry = Reflect::get(&parent, &Symbol::for_("cordis.entry"))?;
+            if entry.is_truthy() && !Reflect::get(&fiber, &JsValue::from_str("entry"))?.is_truthy()
+            {
+                Reflect::set(&fiber, &JsValue::from_str("entry"), &entry)?;
+            }
+            Ok(JsValue::UNDEFINED)
+        })
+            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
+        let options = Object::new();
+        set(&options, "global", &JsValue::TRUE)?;
+        call_method(
+            &context,
+            "on",
+            &[
+                JsValue::from_str("internal/plugin"),
+                attach_entry.into_js_value(),
+                options.into(),
+            ],
+        )?;
         let loader: JsValue = WasmClientLoader::new(context.clone()).into();
         call_method(&context, "provide", &[JsValue::from_str(NAME), loader])?;
         Ok(())
@@ -293,7 +320,13 @@ fn entry_id(
     Ok(id)
 }
 
-fn entry_face(id: &str, name: &str, source: &JsValue) -> Result<Object, JsValue> {
+fn entry_face(
+    id: &str,
+    name: &str,
+    source: &JsValue,
+    context: &JsValue,
+    internal: Arc<Mutex<JsValue>>,
+) -> Result<Object, JsValue> {
     let options = Object::new();
     set(&options, "id", &JsValue::from_str(id))?;
     set(&options, "name", &JsValue::from_str(name))?;
@@ -306,7 +339,39 @@ fn entry_face(id: &str, name: &str, source: &JsValue) -> Result<Object, JsValue>
     let face = Object::new();
     set(&face, "options", &options.into())?;
     set(&face, "fiber", &JsValue::UNDEFINED)?;
+    let metadata = Object::new();
+    Reflect::set(&metadata, &Symbol::for_("cordis.entry"), &face)?;
+    let context = call_method(context, "extend", &[metadata.into()])?;
+    set(&face, "ctx", &context)?;
+    let importer =
+        Closure::wrap(Box::new(move || internal.lock().clone()) as Box<dyn Fn() -> JsValue>)
+            .into_js_value();
+    ENTRY_IMPORTERS.with(|importers| importers.set(&face, &importer));
+    let refresh =
+        Closure::wrap(Box::new(refresh_entry) as Box<dyn Fn(JsValue) -> Promise>).into_js_value();
+    let refresh = Function::new_with_args("invoke", "return function() { return invoke(this); }")
+        .call1(&JsValue::UNDEFINED, &refresh)?;
+    set(&face, "refresh", &refresh)?;
     Ok(face)
+}
+
+fn refresh_entry(entry: JsValue) -> Promise {
+    future_to_promise(async move {
+        if Reflect::get(&entry, &JsValue::from_str("fiber"))?.is_truthy() {
+            return Ok(JsValue::UNDEFINED);
+        }
+        let face = entry.unchecked_ref::<Object>();
+        let context = Reflect::get(face, &JsValue::from_str("ctx"))?;
+        let options = Reflect::get(face, &JsValue::from_str("options"))?;
+        let name = required_string(&options, "name")?;
+        let importer = ENTRY_IMPORTERS.with(|importers| importers.get(face));
+        let internal = importer
+            .dyn_into::<Function>()
+            .map_err(|_| js_sys::TypeError::new("loader entry has no module importer"))?
+            .call0(&JsValue::UNDEFINED)?;
+        start_entry(&context, &internal, face, &options, &name).await?;
+        Ok(JsValue::UNDEFINED)
+    })
 }
 
 fn inject_names(value: &JsValue) -> Result<Vec<String>, JsValue> {

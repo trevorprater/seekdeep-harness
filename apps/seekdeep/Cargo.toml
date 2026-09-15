@@ -23,6 +23,7 @@ seekdeep-app-boot = { path = "../../crates/app-boot" }
 seekdeep-api-gateway = { path = "../../crates/api-gateway" }
 seekdeep-api-remotes = { path = "../../crates/api-remotes" }
 seekdeep-attachment-local = { path = "../../crates/attachment-local" }
+seekdeep-bash-local = { path = "../../crates/bash-local" }
 seekdeep-bash-sandbox = { path = "../../crates/bash-sandbox" }
 seekdeep-client-connection = { path = "../../crates/client-connection" }
 seekdeep-client-hmr = { path = "../../crates/client-hmr" }
@@ -97,6 +98,7 @@ seekdeep-mcp-client = { path = "../../crates/mcp-client" }
 seekdeep-permission-presets = { path = "../../crates/permission-presets" }
 seekdeep-persona = { path = "../../crates/persona" }
 seekdeep-plan-mode = { path = "../../crates/plan-mode" }
+seekdeep-pwsh-local = { path = "../../crates/pwsh-local" }
 seekdeep-pwsh-sandbox = { path = "../../crates/pwsh-sandbox" }
 seekdeep-repeat-tool-reminder = { path = "../../crates/repeat-tool-reminder" }
 seekdeep-sandbox-local = { path = "../../crates/sandbox-local" }

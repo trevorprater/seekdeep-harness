@@ -5,6 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 
+use crate::wasm_service::{caller_face, caller_method};
 use crate::{
     ConversationEventRegistry, ConversationNodeDefinition, ConversationViewDefinition,
     ConversationViewRegistry, RuntimeDisposer,
@@ -100,15 +101,14 @@ impl WasmConversationEventRegistry {
     #[wasm_bindgen(js_name = faceFor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn face_for(&self, caller: JsValue) -> Result<JsValue, JsValue> {
-        let face = Object::new();
+        let face = caller_face(&caller, "conversationEvents")?;
         let registry = self.registry.clone();
-        let register_caller = caller.clone();
-        let register = Closure::wrap(Box::new(move |definition: JsValue| {
+        let register = Closure::wrap(Box::new(move |caller: JsValue, definition: JsValue| {
             let definition = event_definition(definition)?;
             let key = definition.kind.clone();
             let registry = registry.clone();
             own_effect(
-                &register_caller,
+                &caller,
                 &format!("conversationEvents.register({key:?})"),
                 move || {
                     registry
@@ -117,16 +117,19 @@ impl WasmConversationEventRegistry {
                 },
             )
         })
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
-        set(&face, "register", &register.into_js_value())?;
+            as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
+        set(
+            &face,
+            "register",
+            &caller_method(&register.into_js_value())?,
+        )?;
         let registry = self.registry.clone();
-        let fallback_caller = caller;
-        let fallback = Closure::wrap(Box::new(move |definition: JsValue| {
+        let fallback = Closure::wrap(Box::new(move |caller: JsValue, definition: JsValue| {
             let definition = event_definition(definition)?;
             let key = definition.kind.clone();
             let registry = registry.clone();
             own_effect(
-                &fallback_caller,
+                &caller,
                 &format!("conversationEvents.registerFallback({key:?})"),
                 move || {
                     registry
@@ -135,8 +138,12 @@ impl WasmConversationEventRegistry {
                 },
             )
         })
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
-        set(&face, "registerFallback", &fallback.into_js_value())?;
+            as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
+        set(
+            &face,
+            "registerFallback",
+            &caller_method(&fallback.into_js_value())?,
+        )?;
         Ok(face.into())
     }
 }
@@ -216,9 +223,9 @@ impl WasmConversationViewRegistry {
     #[wasm_bindgen(js_name = faceFor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn face_for(&self, caller: JsValue) -> Result<JsValue, JsValue> {
-        let face = Object::new();
+        let face = caller_face(&caller, "conversationViews")?;
         let registry = self.registry.clone();
-        let register = Closure::wrap(Box::new(move |definition: JsValue| {
+        let register = Closure::wrap(Box::new(move |caller: JsValue, definition: JsValue| {
             let definition = view_definition(definition)?;
             let key = definition.target.clone();
             let registry = registry.clone();
@@ -232,8 +239,12 @@ impl WasmConversationViewRegistry {
                 },
             )
         })
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
-        set(&face, "register", &register.into_js_value())?;
+            as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
+        set(
+            &face,
+            "register",
+            &caller_method(&register.into_js_value())?,
+        )?;
         Ok(face.into())
     }
 }

@@ -57,6 +57,8 @@ mod wasm_public_api;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm_scope;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+mod wasm_service;
+#[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm_session;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm_session_manager;

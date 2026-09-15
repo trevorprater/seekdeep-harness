@@ -91,6 +91,35 @@ fn every_mode_constructs_a_valid_nonempty_graph() {
 }
 
 #[test]
+fn documentation_site_gate_runs_all_ported_suites_and_owns_the_cargo_target() {
+    let gates = gates_for_mode(GateMode::DocSync, &environment()).unwrap();
+    let gate = gates
+        .iter()
+        .find(|gate| gate.id == "docs-site-projection")
+        .unwrap();
+    assert_eq!(gate.command, PathBuf::from("cargo"));
+    assert_eq!(
+        gate.args,
+        [
+            "test",
+            "--locked",
+            "-p",
+            "seekdeep-repository-tools",
+            "--all-features",
+            "--test",
+            "doc_site_projection_parity",
+            "--test",
+            "doc_site_configuration_parity",
+            "--test",
+            "doc_site_fragments_parity",
+        ]
+        .map(OsString::from)
+    );
+    assert_eq!(gate.serial_group.as_deref(), Some("cargo-target"));
+    assert!(!gate.allow_failure);
+}
+
+#[test]
 fn graph_validation_rejects_empty_duplicates_unknown_dependencies_and_cycles() {
     assert!(
         validate_gate_graph(&[])

@@ -54,6 +54,19 @@ export function loaderEntries(loader) { return loader.entries() }
 export function loaderEntryState(loader, id) { return loader.resolve(id).fiber.state }
 export function loaderGet(root, name) { return root.get(name) }
 export function loaderField(value, name) { return value?.[name] }
+export async function loaderRefreshProvider(loader) {
+  const entry = loader.resolve('provider')
+  if (entry.ctx?.registry === undefined) throw new Error('entry must expose its owning registry')
+  const original = entry.fiber
+  await entry.refresh()
+  if (entry.fiber !== original) throw new Error('refresh must retain an existing fiber')
+  entry.ctx.registry.delete(original.runtime.callback)
+  while (original.inertia !== undefined) await original.inertia
+  delete entry.fiber
+  await entry.refresh()
+  await entry.fiber.await()
+  if (entry.fiber === original) throw new Error('refresh must materialize a new fiber after HMR teardown')
+}
 "#)]
 extern "C" {
     fn loaderContextWrapper() -> JsValue;
@@ -69,6 +82,33 @@ extern "C" {
     fn loaderEntryState(loader: &JsValue, id: &str) -> u8;
     fn loaderGet(root: &JsValue, name: &str) -> JsValue;
     fn loaderField(value: &JsValue, name: &str) -> JsValue;
+    fn loaderRefreshProvider(loader: &JsValue) -> Promise;
+}
+
+#[wasm_bindgen_test(async)]
+async fn entries_refresh_through_the_compiled_registry_after_hmr_teardown() {
+    configure_context_wrapper(loaderContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    JsFuture::from(loaderInstall(&root, &client_loader_plugin().unwrap()))
+        .await
+        .unwrap();
+    let loader = loaderService(&root);
+    loaderSetInternal(&loader, &loaderModules());
+    JsFuture::from(loaderCreate(&loader, "provider", "provider"))
+        .await
+        .unwrap();
+    JsFuture::from(loaderRefreshProvider(&loader))
+        .await
+        .unwrap();
+    assert_eq!(loaderEntryState(&loader, "provider"), 2);
+    assert_eq!(
+        loaderField(&loaderGet(&root, "dep"), "value").as_f64(),
+        Some(41.0)
+    );
+    JsFuture::from(loaderRemove(&loader, "provider"))
+        .await
+        .unwrap();
+    assert!(loaderGet(&root, "dep").is_undefined());
 }
 
 #[wasm_bindgen_test(async)]

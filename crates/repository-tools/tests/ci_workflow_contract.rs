@@ -97,7 +97,8 @@ fn keeps_a_required_wine_windows_job_a_non_blocking_native_windows_job_with_fail
     assert!(!native_pool.contains("SEEKDEEP_CI_FAILOVER_LINUX"));
     assert!(native_pool.contains("self-hosted"));
     assert!(native_pool.contains("seekdeep-win-ci"));
-    assert!(native_pool.contains("seekdeep-windows-2025-16core"));
+    assert!(native_pool.contains("SEEKDEEP_CI_HOSTED_WINDOWS_RUNNER"));
+    assert!(native_pool.contains("'windows-latest'"));
     assert_eq!(windows_native["name"], "windows node 24 / native complete");
     assert_eq!(windows_native["if"], "github.event_name == 'pull_request'");
     assert!(run_steps(windows_native).contains(&"pnpm run check:ci:windows-complete"));
@@ -142,6 +143,52 @@ fn keeps_a_required_wine_windows_job_a_non_blocking_native_windows_job_with_fail
             "{name} runs-on must not use the Windows failover switch"
         );
         assert!(pool.contains("vm-backup"));
+        if name != "all-checks-passed" {
+            assert!(pool.contains("SEEKDEEP_CI_HOSTED_LINUX_RUNNER"));
+            assert!(pool.contains("'ubuntu-24.04'"));
+        }
+    }
+}
+
+#[test]
+fn primary_jobs_install_rust_wasm_dependencies_before_their_gate_inventory() {
+    let ci = ci();
+    for name in [
+        "node-24",
+        "node-24-coverage",
+        "node-24-consumers",
+        "windows-native",
+    ] {
+        let steps = job(&ci, name)["steps"].as_array().unwrap();
+        let gates = steps
+            .iter()
+            .position(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.starts_with("pnpm run check:ci:"))
+            })
+            .expect("primary gate inventory");
+        let setup = &steps[..gates];
+        assert!(
+            setup.iter().any(|step| {
+                step["uses"]
+                    .as_str()
+                    .is_some_and(|action| action.starts_with("dtolnay/rust-toolchain@"))
+                    && step["with"]["targets"] == "wasm32-unknown-unknown"
+            }),
+            "{name} must install the WASM target"
+        );
+        for required in [
+            "cargo install --locked wasm-bindgen-cli --version 0.2.127",
+            "pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false",
+        ] {
+            assert!(
+                setup
+                    .iter()
+                    .any(|step| step["run"] == required && step["if"].is_null()),
+                "{name} missing {required}"
+            );
+        }
     }
 }
 
@@ -279,6 +326,31 @@ fn release_publication_requires_complete_parity_against_the_pinned_source_checko
             .unwrap()
             .contains("always()")
     );
+}
+
+#[test]
+fn vendor_pack_installs_the_binding_generator_before_building_host_packages() {
+    let vendor = workflow(include_str!(
+        "../../../.github/workflows/release-vendor.yml"
+    ));
+    let steps = job(&vendor, "pack")["steps"].as_array().unwrap();
+    let build = steps
+        .iter()
+        .position(|step| step["run"] == "pnpm run build:lib:host")
+        .expect("Host build step");
+    let setup = &steps[..build];
+    assert!(setup.iter().any(|step| {
+        step["uses"]
+            .as_str()
+            .is_some_and(|action| action.starts_with("dtolnay/rust-toolchain@"))
+            && step["with"]["targets"] == "wasm32-unknown-unknown"
+    }));
+    let bindings = setup
+        .iter()
+        .find(|step| step["run"] == "cargo install --locked wasm-bindgen-cli --version 0.2.127")
+        .expect("matching wasm-bindgen CLI before the Host build");
+    assert!(bindings["if"].is_null());
+    assert!(bindings["continue-on-error"].is_null());
 }
 
 #[test]

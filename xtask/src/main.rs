@@ -25,6 +25,7 @@ mod web_assembled_driver;
 mod web_assembled_snapshots;
 mod web_composer_driver;
 mod web_details_driver;
+mod web_hmr_driver;
 mod web_keyless_driver;
 mod web_model_selection_driver;
 mod web_models_settings_driver;
@@ -34,6 +35,7 @@ mod web_plugin_settings_driver;
 mod web_scrollbars_driver;
 mod web_settings;
 mod web_settings_driver;
+mod web_smoke_driver;
 mod web_startup_driver;
 mod web_workspaces;
 mod web_workspaces_driver;
@@ -133,6 +135,19 @@ enum Command {
     WebDetails {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
+    },
+    /// Verify a live Rust Client rebuild updates Chromium without refreshing the page.
+    WebHmr {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Run the source CLI smoke cases and, with a credential, the real-model browser flow.
+    WebSmoke {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Include real provider, Bash, title, geometry, and reload assertions.
+        #[arg(long)]
+        live: bool,
     },
     /// Run pinned keyless source browser suites unchanged against the real Rust Host.
     WebKeyless {
@@ -444,6 +459,8 @@ fn main() -> anyhow::Result<()> {
         Command::WebScrollbars { source } => web_settings::run_scrollbars(&source),
         Command::WebNavigation { source } => web_settings::run_navigation(&source),
         Command::WebDetails { source } => web_settings::run_details(&source),
+        Command::WebHmr { source } => web_settings::run_hmr(&source),
+        Command::WebSmoke { source, live } => web_settings::run_smoke(&source, live),
         Command::WebKeyless { source, scenario } => {
             web_settings::run_keyless(&source, scenario.as_deref())
         }
@@ -921,20 +938,27 @@ fn wasm_package_once(
     out_dir: &Path,
 ) -> anyhow::Result<()> {
     let metadata = cargo_metadata()?;
-    let status = ProcessCommand::new("cargo")
+    let packages: std::collections::BTreeSet<String> =
+        match std::env::var(client_build::BUILD_PACKAGES_ENV) {
+            Ok(packages) => serde_json::from_str(&packages)?,
+            Err(std::env::VarError::NotPresent) => [package.to_owned()].into_iter().collect(),
+            Err(error) => return Err(error.into()),
+        };
+    anyhow::ensure!(
+        packages.contains(package),
+        "Client build package set must include {package}"
+    );
+    let mut command = ProcessCommand::new("cargo");
+    command
         .env("CARGO_BUILD_JOBS", "2")
         .env("CARGO_INCREMENTAL", "0")
         .env("CARGO_PROFILE_RELEASE_DEBUG", "line-tables-only")
         .env("CARGO_PROFILE_RELEASE_STRIP", "none")
-        .args([
-            "build",
-            "-p",
-            package,
-            "--target",
-            "wasm32-unknown-unknown",
-            "--release",
-        ])
-        .status()?;
+        .args(["build", "--target", "wasm32-unknown-unknown", "--release"]);
+    for package in packages {
+        command.args(["-p", &package]);
+    }
+    let status = command.status()?;
     anyhow::ensure!(
         status.success(),
         "Rust/WASM release build failed for {package}"
@@ -1945,7 +1969,7 @@ export default plugin;
 fn client_loader_esm_declarations() -> &'static str {
     r"import type { Context, Disposable, PluginObject } from '@seekdeep-ai/cordis';
 export interface EntryOptions { id?: string; name: string; config?: unknown; group?: boolean | null; disabled?: boolean | null; inject?: readonly string[] | Record<string, unknown> | null }
-export interface Entry { options: Required<Pick<EntryOptions, 'id' | 'name'>> & EntryOptions; fiber?: { state: number; inject: Record<string, unknown>; await(): Promise<void>; dispose(): Promise<void> } }
+export interface Entry { options: Required<Pick<EntryOptions, 'id' | 'name'>> & EntryOptions; ctx: Context; fiber?: { state: number; inject: Record<string, unknown>; await(): Promise<void>; dispose(): Promise<void> }; refresh(): Promise<void> }
 export declare class Loader {
   constructor(context: Context);
   internal: { import(name: string, parentUrl?: string, attributes?: object): Promise<unknown> };

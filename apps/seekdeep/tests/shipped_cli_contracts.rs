@@ -330,6 +330,21 @@ fn memory_examples_keep_pins_generic_fields_and_compiled_plugin_resolution() -> 
 }
 
 #[test]
+fn compiled_catalog_resolves_local_shell_overlays() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let cwd = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&cwd)?;
+    let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
+    for name in ["bash-local", "pwsh-local"] {
+        catalog.preflight_yaml(&format!(
+            "- {{ id: {name}, name: '@seekdeep-ai/seekdeep-{name}' }}\n"
+        ))?;
+    }
+    Ok(())
+}
+
+#[test]
 fn compiled_catalog_resolves_adaptive_picker_children_and_badge_surface() -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
     let cwd = temporary.path().join("workspace");
