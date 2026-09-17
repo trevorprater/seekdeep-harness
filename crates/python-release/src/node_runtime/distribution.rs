@@ -28,32 +28,72 @@ pub trait DistributionFetcher {
 }
 
 /// Build-time HTTPS transfer through the platform curl executable.
+///
+/// nodejs.org occasionally resets a TLS handshake from the manylinux build container, so a
+/// transfer is attempted a few times with a growing pause before it is reported as failed; each
+/// attempt truncates and rewrites the destination, so a retry never appends to a partial body.
 pub struct CurlFetcher;
+
+/// Transfers attempted before an official download is reported as failed.
+const DOWNLOAD_ATTEMPTS: usize = 4;
 
 impl DistributionFetcher for CurlFetcher {
     fn download(&self, url: &str, destination: &Path) -> anyhow::Result<()> {
-        let output = Command::new("curl")
-            .args([
-                "--disable",
-                "--fail",
-                "--location",
-                "--silent",
-                "--show-error",
-                "--proto",
-                "=https",
-                "--proto-redir",
-                "=https",
-                "--output",
-            ])
-            .arg(destination)
-            .arg(url)
-            .output()?;
-        anyhow::ensure!(
-            output.status.success(),
-            "official Node download failed for {url}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        Ok(())
+        with_retries(
+            DOWNLOAD_ATTEMPTS,
+            |attempt| std::thread::sleep(retry_pause(attempt)),
+            || {
+                let output = Command::new("curl")
+                    .args([
+                        "--disable",
+                        "--fail",
+                        "--location",
+                        "--silent",
+                        "--show-error",
+                        "--proto",
+                        "=https",
+                        "--proto-redir",
+                        "=https",
+                        "--output",
+                    ])
+                    .arg(destination)
+                    .arg(url)
+                    .output()?;
+                anyhow::ensure!(
+                    output.status.success(),
+                    "official Node download failed for {url}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                Ok(())
+            },
+        )
+    }
+}
+
+/// Pause before retrying after the given failed attempt: two seconds per failure so far.
+fn retry_pause(failed_attempts: usize) -> std::time::Duration {
+    std::time::Duration::from_secs(2 * failed_attempts as u64)
+}
+
+/// Runs `transfer` up to `attempts` times, calling `pause` with the number of failures so far
+/// before each retry, and returns the last failure once every attempt is spent.
+fn with_retries(
+    attempts: usize,
+    mut pause: impl FnMut(usize),
+    mut transfer: impl FnMut() -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let mut failed = 0;
+    loop {
+        match transfer() {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                failed += 1;
+                if failed >= attempts {
+                    return Err(error.context(format!("after {failed} attempts")));
+                }
+                pause(failed);
+            }
+        }
     }
 }
 
@@ -385,4 +425,49 @@ fn extract(
         "official Node archive license is empty"
     );
     Ok(directory)
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::{DOWNLOAD_ATTEMPTS, retry_pause, with_retries};
+
+    #[test]
+    fn retries_until_a_transfer_succeeds_and_pauses_between_attempts() {
+        let mut pauses = Vec::new();
+        let mut calls = 0;
+        let result = with_retries(
+            DOWNLOAD_ATTEMPTS,
+            |failed| pauses.push(failed),
+            || {
+                calls += 1;
+                anyhow::ensure!(calls == 3, "transient failure {calls}");
+                Ok(())
+            },
+        );
+        result.unwrap();
+        assert_eq!(calls, 3);
+        assert_eq!(pauses, vec![1, 2]);
+    }
+
+    #[test]
+    fn reports_the_last_failure_once_every_attempt_is_spent() {
+        let mut calls = 0;
+        let error = with_retries(
+            DOWNLOAD_ATTEMPTS,
+            |_| {},
+            || {
+                calls += 1;
+                anyhow::bail!("reset {calls}")
+            },
+        )
+        .unwrap_err();
+        assert_eq!(calls, DOWNLOAD_ATTEMPTS);
+        assert_eq!(format!("{error:#}"), "after 4 attempts: reset 4");
+    }
+
+    #[test]
+    fn pauses_grow_with_the_failure_count() {
+        assert_eq!(retry_pause(1).as_secs(), 2);
+        assert_eq!(retry_pause(3).as_secs(), 6);
+    }
 }
