@@ -87007,7 +87007,8 @@
         "Green and restarted reports are silent; malformed state and unknown operations fail.",
         "Actual installed Istanbul report factory and report-tree execution delegate to the compiled native binary.",
         "All five native differential/executable tests passed, including the 1525844-byte report and loader/public-instance-surface checks.",
-        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions."
+        "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions.",
+        "2026-09-17: in the default context the launcher excludes crates/*/tests/fixtures (parity suites that Rust tests run through their own Vitest configurations) and passes --passWithNoTests because the retired TypeScript test tier leaves the root run with no suites; a caller-selected configuration keeps its own precedence (coverage_launcher_parity pins both contexts)"
       ],
       "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
     },
