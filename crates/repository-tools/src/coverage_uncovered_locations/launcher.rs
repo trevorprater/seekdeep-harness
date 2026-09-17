@@ -48,10 +48,19 @@ pub fn coverage_arguments(
         let mut reporter_argument = OsString::from("--coverage.reporter=");
         reporter_argument.push(reporter);
         output.push(reporter_argument);
+        // The suites under `crates/*/tests/fixtures` are parity fixtures that Rust tests run
+        // against the pinned oracle through their own Vitest configurations, so the default
+        // context must not collect them; with the TypeScript test tier retired the run may then
+        // own no suites at all, which is not a failure.
+        output.push(OsString::from(FIXTURE_EXCLUSION));
+        output.push(OsString::from("--passWithNoTests"));
     }
     output.extend_from_slice(arguments);
     output
 }
+
+/// Vitest exclusion for the parity fixtures that Rust tests drive with their own configurations.
+pub const FIXTURE_EXCLUSION: &str = "--exclude=crates/**/tests/fixtures/**";
 
 fn compiled_reporter(repository: &Path) -> anyhow::Result<PathBuf> {
     if let Some(binary) = std::env::var_os("SEEKDEEP_COVERAGE_REPORT_BIN") {

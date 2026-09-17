@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod launcher;
-pub use launcher::{coverage_arguments, run_coverage};
+pub use launcher::{FIXTURE_EXCLUSION, coverage_arguments, run_coverage};
 
 /// State passed through the Istanbul compatibility adapter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]

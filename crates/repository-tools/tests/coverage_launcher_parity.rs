@@ -7,7 +7,9 @@ use std::{
     process::{Command, Output},
 };
 
-use seekdeep_repository_tools::coverage_uncovered_locations::coverage_arguments;
+use seekdeep_repository_tools::coverage_uncovered_locations::{
+    FIXTURE_EXCLUSION, coverage_arguments,
+};
 
 fn strings(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
@@ -29,10 +31,18 @@ fn defaults_and_caller_configuration_keep_their_vitest_precedence() {
             "--coverage.reporter=html"
         ])
     );
-    assert_eq!(&local[5..], incoming);
+    assert_eq!(
+        &local[5..7],
+        strings(&[FIXTURE_EXCLUSION, "--passWithNoTests"])
+    );
+    assert_eq!(&local[7..], incoming);
     let ci = coverage_arguments(root, &reporter, &incoming, true);
     assert!(!ci.contains(&OsString::from("--coverage.reporter=html")));
-    assert_eq!(&ci[4..], incoming);
+    assert_eq!(
+        &ci[4..6],
+        strings(&[FIXTURE_EXCLUSION, "--passWithNoTests"])
+    );
+    assert_eq!(&ci[6..], incoming);
     for incoming in [
         strings(&["--config", "custom.mjs", "--testNamePattern", "with spaces"]),
         strings(&["--root=nested"]),
