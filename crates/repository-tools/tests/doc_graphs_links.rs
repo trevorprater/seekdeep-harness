@@ -91,13 +91,22 @@ fn a_declaration_links_to_the_rust_file_the_parity_manifest_names_or_stays_plain
     let root = tempfile::tempdir().unwrap();
     write_readme(root.path(), "crates/ported");
     let packages = [package("ported", "packages/g/ported")];
-    // Without a manifest the cell keeps the source generator's own form.
+    // Without a manifest, a source file the repository no longer carries stays a plain
+    // reference: the link gate rejects a link to a file that does not exist.
     let plain = matrix(root.path(), &packages);
     assert!(
-        plain.contains(
+        plain.contains("| `packages/g/ported/src/index.ts:1` |"),
+        "{plain}"
+    );
+    // A source file that is still present keeps the source generator's own link.
+    fs::create_dir_all(root.path().join("packages/g/ported/src")).unwrap();
+    fs::write(root.path().join("packages/g/ported/src/index.ts"), "").unwrap();
+    let present = matrix(root.path(), &packages);
+    assert!(
+        present.contains(
             "| [`packages/g/ported/src/index.ts:1`](../packages/g/ported/src/index.ts) |"
         ),
-        "{plain}"
+        "{present}"
     );
 
     fs::create_dir_all(root.path().join("porting")).unwrap();

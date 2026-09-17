@@ -1,6 +1,10 @@
 //! Native relationship graph generation, completeness checks, and freshness gate.
 
-use std::{collections::HashSet, path::Path, sync::LazyLock};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 
 use icu_collator::{Collator, CollatorBorrowed, CollatorPreferences, options::CollatorOptions};
 use icu_locale::Locale;
@@ -148,35 +152,46 @@ impl PackageLinks {
 /// declaration links to that file in the repository the document is written to; a source
 /// file the manifest has not verified stays a plain path instead of a dead link.
 #[derive(Clone, Debug, Default)]
-pub struct DeclarationLinks(IndexMap<String, String>);
+pub struct DeclarationLinks {
+    links: IndexMap<String, String>,
+    repo_root: PathBuf,
+}
 
 impl DeclarationLinks {
     /// Reads `porting/parity.json` under `repo_root`; an absent or unreadable manifest maps
-    /// nothing.
+    /// nothing, and `repo_root` is where source files are looked up before they are linked.
     #[must_use]
     pub fn resolve(repo_root: &Path) -> Self {
-        let Ok(text) = std::fs::read_to_string(repo_root.join("porting/parity.json")) else {
-            return Self::default();
-        };
-        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
-            return Self::default();
-        };
-        let links = manifest["surfaces"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|surface| surface["status"] == "verified")
-            .filter_map(|surface| {
-                let source = surface["source"].as_str()?;
-                let target = surface["targets"].as_array()?.first()?.as_str()?;
-                Some((source.to_owned(), target.to_owned()))
+        let links = std::fs::read_to_string(repo_root.join("porting/parity.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .map(|manifest| {
+                manifest["surfaces"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|surface| surface["status"] == "verified")
+                    .filter_map(|surface| {
+                        let source = surface["source"].as_str()?;
+                        let target = surface["targets"].as_array()?.first()?.as_str()?;
+                        Some((source.to_owned(), target.to_owned()))
+                    })
+                    .collect()
             })
-            .collect();
-        Self(links)
+            .unwrap_or_default();
+        Self {
+            links,
+            repo_root: repo_root.to_owned(),
+        }
     }
 
     fn get(&self, source: &str) -> Option<&str> {
-        self.0.get(source).map(String::as_str)
+        self.links.get(source).map(String::as_str)
+    }
+
+    /// Whether the repository the document is written to still carries `file`.
+    fn source_exists(&self, file: &str) -> bool {
+        self.repo_root.join(file).is_file()
     }
 }
 
@@ -769,7 +784,10 @@ fn declared_in(declarations: &DeclarationLinks, source: &str) -> String {
     let file = source.split(':').next().unwrap_or(source);
     match declarations.get(file) {
         Some(target) => format!("[`{target}`](../{target}) from `{source}`"),
-        None => format!("[`{source}`](../{file})"),
+        None if declarations.source_exists(file) => format!("[`{source}`](../{file})"),
+        // The port has retired the source file and no verified row names its Rust owner yet, so
+        // the declaration stays a plain reference rather than a link the link gate rejects.
+        None => format!("`{source}`"),
     }
 }
 
