@@ -1,4 +1,7 @@
 //! Plugin lifecycle, service registry, scoped contexts, and reversible effects.
+//!
+//! `examples/hello_cordis.rs` mounts providers, an injecting consumer, and
+//! event observers on one root context and prints the lifecycle they produce.
 
 /// Scoped dependency container.
 pub mod context;

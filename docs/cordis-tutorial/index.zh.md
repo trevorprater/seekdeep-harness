@@ -10,6 +10,8 @@ Cordis 是 SeekDeep Harness 底层的插件框架：它是一个小型运行时�
 
 如果你要为 harness 本身编写插件——由 `cordis.yml` 加载、在 Web UI 中驱动，而不是下面这个启动器——请从[第一个 Harness 插件](../user/develop/basic/index.md)开始。
 
+如果你想从 Rust 直接驱动同一套生命周期，面向原生 `seekdeep-cordis` crate 而不是下面这个启动器，请运行 [crates/cordis/examples/hello_cordis.rs](../../crates/cordis/examples/hello_cordis.rs)：它在同一个根上下文上挂载提供方、一个注入依赖的消费方和事件观察者，并打印它们产生的生命周期。
+
 <a id="setup"></a>
 
 ## 准备工作

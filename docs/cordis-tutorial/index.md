@@ -10,6 +10,8 @@ If you want the condensed concept reference instead of a walkthrough, read the [
 
 To write plugins for the harness itself — loaded from a `cordis.yml` and driven from the Web UI rather than the launcher below — start from [your first Harness plugin](../user/develop/basic/index.md).
 
+To drive the same lifecycle from Rust against the native `seekdeep-cordis` crate rather than the launcher below, run [crates/cordis/examples/hello_cordis.rs](../../crates/cordis/examples/hello_cordis.rs): it mounts providers, an injecting consumer, and event observers on one root context and prints the lifecycle they produce.
+
 ## Setup
 
 You need a clone of this repository with dependencies installed; the [development guide](../development.md#setup-tutorial) lists the prerequisites. No API key is needed for this tutorial; every example runs keylessly.
