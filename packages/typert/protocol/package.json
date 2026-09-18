@@ -5,20 +5,16 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./types": {
       "types": "./lib/types/types.d.ts"
     }
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -41,6 +37,8 @@
     "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
     "directory": "packages/typert/protocol"
   },
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts"
+  "types": "lib/types/index.d.ts",
+  "seekdeep": {
+    "compiled": true
+  }
 }

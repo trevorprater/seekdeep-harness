@@ -11,31 +11,21 @@
     "directory": "packages/examples/acp-demo"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
-  "bin": {
-    "seekdeep-acp-demo": "lib/bin.js"
-  },
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./bin": {
-      "types": "./lib/types/bin.d.ts",
-      "default": "./lib/bin.js"
+      "types": "./lib/types/bin.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/bin.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -66,5 +56,8 @@
     "@seekdeep-ai/seekdeep-agent-instructions": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",
     "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
   }
 }

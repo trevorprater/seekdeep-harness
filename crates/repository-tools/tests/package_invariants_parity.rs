@@ -64,6 +64,42 @@ fn valid_rust_owned_companion_conforms() {
 }
 
 #[test]
+fn compiled_companion_publishes_its_declaration_only() {
+    let mut manifest = valid_manifest();
+    manifest["seekdeep"] = serde_json::json!({"compiled": true});
+    manifest["exports"] =
+        serde_json::json!({"./invariant": {"types": "./lib/types/invariant.d.ts"}});
+    manifest["files"] = serde_json::json!(["lib/types/**/*.d.ts"]);
+    let root = fixture(manifest.clone(), "verified", false);
+    assert!(
+        collect_package_invariant_violations(root.path())
+            .unwrap()
+            .is_empty()
+    );
+    let mut runtime = manifest.clone();
+    runtime["exports"]["./invariant"]["default"] = serde_json::json!("./lib/invariant.js");
+    runtime["files"] = serde_json::json!(["lib/invariant.js", "lib/types/**/*.d.ts"]);
+    let root = fixture(runtime, "verified", false);
+    let messages = collect_package_invariant_violations(root.path())
+        .unwrap()
+        .into_iter()
+        .map(|violation| violation.message)
+        .collect::<Vec<_>>();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("must be exactly")),
+        "{messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("must not publish lib/invariant.js")),
+        "{messages:?}"
+    );
+}
+
+#[test]
 fn publication_unverified_and_generated_failures_are_named() {
     let root = fixture(
         serde_json::json!({ "name": "@seekdeep-ai/seekdeep-probe" }),

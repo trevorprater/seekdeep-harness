@@ -11,16 +11,13 @@
     "directory": "packages/client/hmr"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -34,7 +31,8 @@
       "inject": [],
       "platform": "web",
       "immediately": true
-    }
+    },
+    "compiled": true
   },
   "license": "MIT",
   "scripts": {
@@ -57,8 +55,6 @@
     "@seekdeep-ai/cordis": "workspace:^"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

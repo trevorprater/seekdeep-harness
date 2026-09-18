@@ -46,12 +46,14 @@ pub fn inspect_workspace_constraints(root: &Path) -> anyhow::Result<Vec<String>>
         } else {
             format!("{directory}/package.json")
         };
+        let source_entry = root.join(directory).join("src/index.ts").is_file();
         errors.extend(
             package::check(
                 directory,
                 manifest,
                 &root_manifest["version"],
                 &landlock["version"],
+                source_entry,
             )?
             .into_iter()
             .map(|error| format!("{path}: {error}")),

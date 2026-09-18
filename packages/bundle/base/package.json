@@ -11,24 +11,19 @@
     "directory": "packages/bundle/base"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
   ],
@@ -36,7 +31,8 @@
   "seekdeep": {
     "bundle": {
       "patch": "./cordis.patch.yml"
-    }
+    },
+    "compiled": true
   },
   "dependencies": {
     "@seekdeep-ai/cordis-plugin-hmr": "workspace:^",

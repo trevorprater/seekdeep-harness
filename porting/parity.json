@@ -86801,7 +86801,8 @@
       "evidence": [
         "whole-command pinned-source fixtures compare ordered diagnostics and exit status for publication, dependency, export, version, artifact-directory, and hierarchy rules",
         "pnpm run constraints invokes Rust and exposes remaining workspace packaging/layout violations; implementing the checker does not assert the workspace satisfies it",
-        "the expected publication list extends the source rule for the eight WebAssembly-backed client packages (compiled module, bindgen glue, backends, KaTeX assets), which the source has no counterpart for; the workspace passes the gate with those entries published"
+        "the expected publication list extends the source rule for the eight WebAssembly-backed client packages (compiled module, bindgen glue, backends, KaTeX assets), which the source has no counterpart for; the workspace passes the gate with those entries published",
+        "2026-09-18 (DEV-004): manifests marked seekdeep.compiled (crate-replaced packages) follow a declarations-only rule (no main or bin, types-only root and ./invariant exports, files = non-JavaScript extras + lib/types/**/*.d.ts + exported typert remote files); every other package keeps the source's exact rule, and the oracle differential fixtures are unchanged"
       ]
     },
     {

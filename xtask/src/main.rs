@@ -2423,6 +2423,17 @@ fn wasm_web_shell_package(
         out_dir.join("base.css"),
     )?;
     std::fs::write(out_dir.join("index.js"), client_web_esm_wrapper())?;
+    // The shell's invariant companion: the manifest publishes `lib/invariant.js`, and the
+    // source's companion registers package ownership with the invariants service.
+    std::fs::write(
+        out_dir.join("invariant.js"),
+        r"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-web';
+export const name = 'client-web-invariant';
+export const inject = ['invariants'];
+const install = () => {};
+export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
+",
+    )?;
     let type_dir = out_dir.join("types");
     std::fs::create_dir_all(&type_dir)?;
     std::fs::write(type_dir.join("index.d.ts"), client_web_esm_declarations())?;

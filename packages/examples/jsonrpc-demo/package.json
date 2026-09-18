@@ -11,36 +11,24 @@
     "directory": "packages/examples/jsonrpc-demo"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
-  "bin": {
-    "seekdeep-jsonrpc-agent": "lib/bin.js"
-  },
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./bin": {
-      "types": "./lib/types/bin.d.ts",
-      "default": "./lib/bin.js"
+      "types": "./lib/types/bin.d.ts"
     },
     "./packaged-bin": {
-      "types": "./lib/types/packaged-bin.d.ts",
-      "default": "./lib/packaged-bin.js"
+      "types": "./lib/types/packaged-bin.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/bin.js",
-    "lib/packaged-bin.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -54,5 +42,8 @@
   "devDependencies": {
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
   }
 }

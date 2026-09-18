@@ -11,27 +11,20 @@
     "directory": "packages/code-runtime/code-runtime-worker-thread"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./worker": {
-      "types": "./lib/types/worker.d.ts",
-      "default": "./lib/worker.cjs"
+      "types": "./lib/types/worker.d.ts"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/worker.cjs",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -51,5 +44,8 @@
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-timeout": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
   }
 }

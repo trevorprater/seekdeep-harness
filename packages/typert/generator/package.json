@@ -11,28 +11,21 @@
     "directory": "packages/typert/generator"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./tsdown": {
-      "types": "./lib/types/tsdown-plugin.d.ts",
-      "default": "./lib/types/tsdown-plugin.js"
+      "types": "./lib/types/tsdown-plugin.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -50,5 +43,8 @@
     "@seekdeep-ai/seekdeep-typert-registry": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^",
     "zod": "^4.4.3"
+  },
+  "seekdeep": {
+    "compiled": true
   }
 }

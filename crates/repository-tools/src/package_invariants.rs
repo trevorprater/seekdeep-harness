@@ -126,7 +126,34 @@ fn check_manifest(
         .and_then(Value::as_object)
         .and_then(|exports| exports.get("./invariant"))
         .and_then(Value::as_object);
-    if export
+    if manifest["seekdeep"]["compiled"] == true {
+        // The runtime companion of a compiled package is its Rust crate's; the manifest publishes
+        // the companion declaration alone.
+        if export.map(|export| Value::Object(export.clone()))
+            != Some(serde_json::json!({"types": "./lib/types/invariant.d.ts"}))
+        {
+            add(
+                violations,
+                &owner.manifest_path,
+                "exports[\"./invariant\"] must be exactly {\"types\": \"./lib/types/invariant.d.ts\"} for a compiled package",
+            );
+        }
+        if manifest
+            .get("files")
+            .and_then(Value::as_array)
+            .is_some_and(|files| {
+                files
+                    .iter()
+                    .any(|file| file.as_str() == Some("lib/invariant.js"))
+            })
+        {
+            add(
+                violations,
+                &owner.manifest_path,
+                "files must not publish lib/invariant.js for a compiled package",
+            );
+        }
+    } else if export
         .and_then(|export| export.get("types"))
         .and_then(Value::as_str)
         != Some("./lib/types/invariant.d.ts")
@@ -141,14 +168,15 @@ fn check_manifest(
             "exports[\"./invariant\"] must target ./lib/types/invariant.d.ts and ./lib/invariant.js",
         );
     }
-    if !manifest
-        .get("files")
-        .and_then(Value::as_array)
-        .is_some_and(|files| {
-            files
-                .iter()
-                .any(|file| file.as_str() == Some("lib/invariant.js"))
-        })
+    if manifest["seekdeep"]["compiled"] != true
+        && !manifest
+            .get("files")
+            .and_then(Value::as_array)
+            .is_some_and(|files| {
+                files
+                    .iter()
+                    .any(|file| file.as_str() == Some("lib/invariant.js"))
+            })
     {
         add(
             violations,

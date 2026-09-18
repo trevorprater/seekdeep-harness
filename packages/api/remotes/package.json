@@ -11,24 +11,20 @@
     "directory": "packages/api/remotes"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./types": {
-      "types": "./lib/types/types.d.ts",
-      "default": "./lib/types/types.js"
+      "types": "./lib/types/types.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
@@ -40,7 +36,8 @@
       ],
       "platform": "web",
       "immediately": true
-    }
+    },
+    "compiled": true
   },
   "scripts": {
     "bundle": "cargo xtask remote-artifacts",
@@ -48,10 +45,7 @@
   },
   "license": "MIT",
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
-    "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
   "dependencies": {

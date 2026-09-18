@@ -78,3 +78,22 @@ fn undeclared_runtime_chunk_is_not_staged() {
             .contains("chunk.js")
     );
 }
+
+#[test]
+fn compiled_packages_have_no_runtime_companion_to_probe() {
+    let (root, loader) = fixture(
+        "export const name='probe'; export const inject=['invariants']; export const apply=()=>{};\n",
+        "./lib/invariant.js",
+        false,
+    );
+    let compiled = root.path().join("packages/core/compiled");
+    std::fs::create_dir_all(&compiled).unwrap();
+    std::fs::write(
+        compiled.join("package.json"),
+        "{\"name\":\"@seekdeep-ai/seekdeep-compiled\",\"type\":\"module\",\"seekdeep\":{\"compiled\":true},\"files\":[\"lib/types/**/*.d.ts\"],\"exports\":{\"./invariant\":{\"types\":\"./lib/types/invariant.d.ts\"}}}\n",
+    )
+    .unwrap();
+    let report = verify_built_package_invariants(root.path(), Some(&loader)).unwrap();
+    assert_eq!(report.checked, 1);
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+}

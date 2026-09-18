@@ -41,10 +41,16 @@ pub fn verify_built_package_invariants(
             .cmp(relative(root, right).encode_utf16())
     });
     let mut failures = Vec::new();
+    let mut compiled = 0;
     for manifest_path in &manifests {
         let relative_manifest = relative(root, manifest_path);
         let package_dir = manifest_path.parent().unwrap_or(root);
         let manifest = serde_json::from_str::<Value>(&std::fs::read_to_string(manifest_path)?)?;
+        if manifest["seekdeep"]["compiled"] == true {
+            // A compiled package ships no runtime companion to load; its crate owns the invariant.
+            compiled += 1;
+            continue;
+        }
         let Some(package_name) = manifest
             .get("name")
             .and_then(Value::as_str)
@@ -90,7 +96,7 @@ pub fn verify_built_package_invariants(
         }
     }
     Ok(BuiltInvariantReport {
-        checked: manifests.len(),
+        checked: manifests.len() - compiled,
         failures,
     })
 }

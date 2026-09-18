@@ -5,23 +5,16 @@
   "type": "module",
   "exports": {
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./api": {
       "types": "./lib/types/api/index.d.ts"
     },
     "./client": {
       "types": "./lib/types/fetch/client.d.ts"
-    },
-    ".": {
-      "default": "./lib/index.js",
-      "types": "./lib/types/index.d.ts"
     }
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -52,6 +45,7 @@
     "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
     "directory": "packages/host/apiproxy"
   },
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts"
+  "seekdeep": {
+    "compiled": true
+  }
 }

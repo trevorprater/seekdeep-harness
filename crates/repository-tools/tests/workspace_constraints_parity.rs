@@ -246,6 +246,152 @@ fn invalid_manifest_rules_produce_diagnostics() {
     }
 }
 
+/// A first-party package whose implementation is a compiled crate: it publishes its generated
+/// declarations and promises no runtime entry file.
+fn compiled_package(name: &str, directory: &str) -> Value {
+    let mut manifest = package(name, directory);
+    manifest.as_object_mut().unwrap().remove("main");
+    manifest["seekdeep"] = json!({"compiled": true});
+    manifest["exports"] = json!({
+        ".": {"types": "./lib/types/index.d.ts"},
+        "./invariant": {"types": "./lib/types/invariant.d.ts"},
+        "./package.json": "./package.json"
+    });
+    manifest["files"] = json!(["lib/types/**/*.d.ts"]);
+    manifest
+}
+
+#[test]
+fn compiled_packages_publish_declarations_only() {
+    let path = "packages/core/demo/package.json";
+    let valid = compiled_package("@seekdeep-ai/seekdeep-demo", "packages/core/demo");
+    let root = fixture();
+    write(root.path(), path, &valid);
+    assert_eq!(
+        inspect_workspace_constraints(root.path()).unwrap(),
+        Vec::<String>::new()
+    );
+
+    // Neither a root declaration nor `types`: a package whose index declaration is not generated.
+    let mut headless = valid.clone();
+    headless.as_object_mut().unwrap().remove("types");
+    headless["exports"].as_object_mut().unwrap().remove(".");
+    let root = fixture();
+    write(root.path(), path, &headless);
+    assert_eq!(
+        inspect_workspace_constraints(root.path()).unwrap(),
+        Vec::<String>::new()
+    );
+
+    // A bundle keeps its non-JavaScript publication extras, in the source rule's order.
+    let mut bundle = compiled_package("@seekdeep-ai/seekdeep-base", "packages/core/demo");
+    bundle["files"] = json!(["cordis.patch.yml", "lib/types/**/*.d.ts"]);
+    let root = fixture();
+    write(root.path(), path, &bundle);
+    assert_eq!(
+        inspect_workspace_constraints(root.path()).unwrap(),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn compiled_packages_may_not_promise_runtime_entries() {
+    let path = "packages/core/demo/package.json";
+    let valid = compiled_package("@seekdeep-ai/seekdeep-demo", "packages/core/demo");
+    // A compiled package never publishes a name-specific runtime entry.
+    let mut demo = compiled_package(
+        "@seekdeep-ai/seekdeep-sdk-jsonrpc-demo",
+        "packages/core/demo",
+    );
+    demo["files"] = json!(["lib/packaged-bin.js", "lib/types/**/*.d.ts"]);
+    let root = fixture();
+    write(root.path(), path, &demo);
+    let errors = inspect_workspace_constraints(root.path()).unwrap();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("files must be [\"lib/types/**/*.d.ts\"]")),
+        "{errors:?}"
+    );
+
+    for (case, mutate, expected) in [
+        (
+            "main",
+            Box::new(|manifest: &mut Value| manifest["main"] = json!("lib/index.js"))
+                as Box<dyn Fn(&mut Value)>,
+            "must not set \"main\"",
+        ),
+        (
+            "bin",
+            Box::new(|manifest: &mut Value| manifest["bin"] = json!({"demo": "lib/bin.js"})),
+            "must not set \"bin\"",
+        ),
+        (
+            "runtime root",
+            Box::new(|manifest: &mut Value| {
+                manifest["exports"]["."]["default"] = json!("./lib/index.js");
+            }),
+            "exports[\".\"] must be exactly",
+        ),
+        (
+            "runtime companion",
+            Box::new(|manifest: &mut Value| {
+                manifest["exports"]["./invariant"]["default"] = json!("./lib/invariant.js");
+            }),
+            "exports[\"./invariant\"] must be exactly",
+        ),
+        (
+            "types without root export",
+            Box::new(|manifest: &mut Value| {
+                manifest["exports"].as_object_mut().unwrap().remove(".");
+            }),
+            "together or neither",
+        ),
+        (
+            "runtime files",
+            Box::new(|manifest: &mut Value| {
+                manifest["files"] = json!(["lib/index.js", "lib/types/**/*.d.ts"]);
+            }),
+            "files must be",
+        ),
+    ] {
+        let mut manifest = valid.clone();
+        mutate(&mut manifest);
+        let root = fixture();
+        write(root.path(), path, &manifest);
+        let errors = inspect_workspace_constraints(root.path()).unwrap();
+        assert!(
+            errors.iter().any(|error| error.contains(expected)),
+            "{case}: {errors:?}"
+        );
+    }
+
+    // The marker is only meaningful for first-party packages, and a package that keeps a
+    // TypeScript entry point is not compiled.
+    let root = fixture();
+    let mut vendor = package("@seekdeep-ai/cordis", "vendor/cordis");
+    vendor["seekdeep"] = json!({"compiled": true});
+    write(root.path(), "vendor/cordis/package.json", &vendor);
+    let errors = inspect_workspace_constraints(root.path()).unwrap();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("applies only to first-party packages")),
+        "{errors:?}"
+    );
+    let root = fixture();
+    write(root.path(), path, &valid);
+    std::fs::create_dir_all(root.path().join("packages/core/demo/src")).unwrap();
+    std::fs::write(root.path().join("packages/core/demo/src/index.ts"), "").unwrap();
+    let errors = inspect_workspace_constraints(root.path()).unwrap();
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("must not keep a src/index.ts")),
+        "{errors:?}"
+    );
+}
+
 #[test]
 #[ignore = "requires SEEKDEEP_PARITY_SOURCE and the pinned oracle's tsx dependencies"]
 fn source_differential_workspace_constraints() {

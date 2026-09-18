@@ -11,29 +11,21 @@
     "directory": "packages/sandbox/sandbox-windows-acl"
   },
   "type": "module",
-  "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts"
     },
     "./runner": {
-      "types": "./lib/types/runner.d.ts",
-      "default": "./lib/runner.js"
+      "types": "./lib/types/runner.d.ts"
     },
     "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/invariant.js",
-    "lib/runner.js",
-    "lib/types-*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -49,5 +41,8 @@
     "@seekdeep-ai/seekdeep-pwsh-local": "workspace:^",
     "@seekdeep-ai/seekdeep-sandbox-local": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
   }
 }
