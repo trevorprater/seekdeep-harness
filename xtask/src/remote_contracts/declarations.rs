@@ -31,6 +31,7 @@ pub(super) fn run(output_root: &Path, check: bool, source: Option<&Path>) -> any
     }
     let face: FaceModel = serde_json::from_value(model["face"].clone())?;
     let emitter = FaceModelEmitter::new(&face);
+    let mut host_artifacts = 0usize;
     for package in &face.packages {
         let package_path = Path::new(&package.root);
         anyhow::ensure!(
@@ -42,20 +43,30 @@ pub(super) fn run(output_root: &Path, check: bool, source: Option<&Path>) -> any
             "invalid Remote package root: {}",
             package.root
         );
-        let remote = emitter.emit(&package.name)?.remote.ok_or_else(|| {
+        let artifacts = emitter.emit(&package.name)?;
+        let remote = artifacts.remote.ok_or_else(|| {
             anyhow::anyhow!("Remote package has no contribution: {}", package.name)
         })?;
-        let output = output_root.join(package_path).join("lib");
-        for (name, content) in [
+        let manifest: Value = serde_json::from_slice(&std::fs::read(
+            root.join(package_path).join("package.json"),
+        )?)?;
+        let mut files = vec![
             ("typert.remote-client.d.ts", remote.dts),
             ("typert.remote-client.d.ts.map", remote.dts_map),
-        ] {
+        ];
+        if manifest["exports"]["./typert"]["default"] == "./lib/typert.host.js" {
+            files.push(("typert.host.js", artifacts.js));
+            files.push(("typert.host.d.ts", artifacts.dts));
+            host_artifacts += 1;
+        }
+        let output = output_root.join(package_path).join("lib");
+        for (name, content) in files {
             let path = output.join(name);
             let content = super::normalize(&content);
             if check {
                 anyhow::ensure!(
                     std::fs::read_to_string(&path)? == content,
-                    "stale Remote declaration: {}",
+                    "stale Remote artifact: {}",
                     path.display()
                 );
             } else {
@@ -65,7 +76,7 @@ pub(super) fn run(output_root: &Path, check: bool, source: Option<&Path>) -> any
         }
     }
     println!(
-        "published {} generated Remote declaration pairs",
+        "published {} generated Remote declaration pairs and {host_artifacts} Host Typert artifact pairs",
         face.packages.len()
     );
     public::write_all(&root, &output_root, check)?;
@@ -167,6 +178,24 @@ mod tests {
         assert!(content.contains("interface TypertRemoteNamespace$676f616c73"));
         assert!(content.contains("@seekdeep-ai/seekdeep-goal/client"));
         assert!(content.contains("'agent:goals/create'"));
+        let host = std::fs::read_to_string(
+            directory
+                .path()
+                .join("packages/goal/goal/lib/typert.host.js"),
+        )?;
+        assert!(host.contains("import { z } from 'zod'"));
+        assert!(
+            directory
+                .path()
+                .join("packages/goal/goal/lib/typert.host.d.ts")
+                .is_file()
+        );
+        assert!(
+            !directory
+                .path()
+                .join("packages/interaction/commands/lib/typert.host.js")
+                .exists()
+        );
         let map: Value = serde_json::from_slice(&std::fs::read(goal.with_extension("ts.map"))?)?;
         assert_eq!(map["sources"], serde_json::json!(["../src/index.ts"]));
         std::fs::write(&goal, "export {};\n")?;

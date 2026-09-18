@@ -81,6 +81,13 @@ enum Command {
         #[arg(long)]
         release: bool,
     },
+    /// Write the Host packages' JavaScript entries below `--out-dir`, or verify them with `--check`.
+    HostEntries {
+        #[arg(long, default_value = ".")]
+        out_dir: PathBuf,
+        #[arg(long)]
+        check: bool,
+    },
     /// Generate or verify the compiled Rust npm postinstall bootstrap.
     SubprocessPostinstall {
         #[arg(long)]
@@ -524,6 +531,7 @@ fn main() -> anyhow::Result<()> {
         Command::HostAssets { release } => {
             subprocess_postinstall::run(&cargo_metadata()?, true)?;
             remote_contracts::declarations(Path::new("."), false, None)?;
+            host_entries(Path::new("."), false)?;
             let staged = node_runtime::stage(
                 &cargo_metadata()?,
                 if release { "release" } else { "debug" },
@@ -531,6 +539,7 @@ fn main() -> anyhow::Result<()> {
             println!("{}", staged.display());
             Ok(())
         }
+        Command::HostEntries { out_dir, check } => host_entries(&out_dir, check),
         Command::SubprocessPostinstall { check } => {
             subprocess_postinstall::run(&cargo_metadata()?, check)
         }
@@ -5093,6 +5102,17 @@ fn inventory(source: &Path) -> anyhow::Result<()> {
     println!(
         "inventoried {} tracked source surfaces",
         manifest.surfaces.len()
+    );
+    Ok(())
+}
+
+fn host_entries(out_dir: &Path, check: bool) -> anyhow::Result<()> {
+    let report = xtask::host_entries::run(Path::new("."), out_dir, check)?;
+    println!(
+        "{} {} Host package entries across {} packages",
+        if check { "verified" } else { "wrote" },
+        report.file_count(),
+        report.packages.len()
     );
     Ok(())
 }

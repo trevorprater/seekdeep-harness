@@ -12,8 +12,8 @@
       "types": "./lib/types/presentation.d.ts"
     },
     ".": {
-      "default": "./lib/index.js",
-      "types": "./lib/types/index.d.ts"
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
     }
   },
   "files": [

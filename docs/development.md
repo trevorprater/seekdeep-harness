@@ -86,7 +86,7 @@ If a relevant local check consumes built package output, build once first:
 pnpm run build
 ```
 
-`pnpm run hygiene` includes `publint`, which validates package entrypoints against the built `lib/*.js` files, and `verify-node-next-types`, which validates built declarations against a temporary NodeNext consumer. A fresh worktree has no bundled JS or declarations until `pnpm run build` runs; ordinary commits and pushes do not require that build unless their selected checks consume it.
+`pnpm run hygiene` includes `publint`, which validates package entrypoints against the built `lib/*.js` files, and `verify-node-next-types`, which validates built declarations against a temporary NodeNext consumer. A fresh worktree has no bundled JS or declarations until `pnpm run build` runs; ordinary commits and pushes do not require that build unless their selected checks consume it. `pnpm run build` writes the Host packages' JavaScript entries through `cargo xtask host-entries` (invoked by `host-assets`): the invariant companions keep their canonical names, and every other Host entry fails on load because that runtime is compiled into the `seekdeep` binary.
 
 ### Environment variables
 
