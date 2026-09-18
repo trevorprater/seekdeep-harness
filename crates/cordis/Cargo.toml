@@ -8,6 +8,10 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[example]]
+name = "hello_cordis"
+test = true
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
