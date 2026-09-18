@@ -163,6 +163,10 @@ impl crate::session::PreparedSessionPublication for EntryPublication {
 }
 
 impl SessionPublisher for SessionEntry {
+    fn is_publishing(&self) -> bool {
+        self.state.lock().appending
+    }
+
     fn prepare_publish(
         self: Arc<Self>,
         event: &SessionEvent,
@@ -702,7 +706,7 @@ fn fork_error(code: ForkErrorCode, message: String) -> SessionStoreError {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
     use seekdeep_cordis::EventOptions;
     use seekdeep_llm::{ContentBlock, Message, MessageSource};
@@ -756,35 +760,49 @@ mod tests {
     #[tokio::test]
     async fn contains_a_reentrant_observer_append_without_reordering_later_observers() {
         let context = Context::new();
-        let store = SessionStore::install(&context).unwrap();
-        let rejections = Arc::new(Mutex::new(Vec::new()));
-        let heard = Arc::new(Mutex::new(Vec::new()));
-        let rejected = rejections.clone();
+        let time = Arc::new(AtomicU64::new(10_000));
+        let samples = time.clone();
+        let store = SessionStore::install_with_clock(
+            &context,
+            Arc::new(move || samples.fetch_add(1, Ordering::SeqCst)),
+        )
+        .unwrap();
+        let errors = Arc::new(Mutex::new(Vec::new()));
+        let observed_errors = errors.clone();
         context
             .events()
             .on_sync(
                 &context,
                 "session/event",
                 move |_, args| {
-                    let observed = args.get::<Session>(0).unwrap();
-                    let error = observed
-                        .append("todo/write", json!({"todos": []}), AppendOptions::default())
-                        .expect_err("an append inside session/event publication is rejected");
-                    rejected.lock().push(error.to_string());
-                    Err(error.into())
+                    let session = args.get::<Session>(0).unwrap();
+                    let event = args.get::<SessionEvent>(1).unwrap();
+                    if event.event_type == "turn/start"
+                        && let Err(error) = session.append(
+                            "todo/write",
+                            json!({"todos": []}),
+                            AppendOptions::default(),
+                        )
+                    {
+                        observed_errors.lock().push(error.to_string());
+                        return Err(error.into());
+                    }
+                    Ok(EventReply::Undefined)
                 },
                 EventOptions::default(),
             )
             .unwrap();
-        let later = heard.clone();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let observed_events = heard.clone();
         context
             .events()
             .on_sync(
                 &context,
                 "session/event",
                 move |_, args| {
-                    let event = args.get::<SessionEvent>(1).unwrap();
-                    later.lock().push(event.as_ref().clone());
+                    observed_events
+                        .lock()
+                        .push((*args.get::<SessionEvent>(1).unwrap()).clone());
                     Ok(EventReply::Undefined)
                 },
                 EventOptions::default(),
@@ -800,12 +818,20 @@ mod tests {
         let appended = session
             .append("turn/start", json!({"turn": 1}), AppendOptions::default())
             .unwrap();
-        assert_eq!(session.events(), std::slice::from_ref(&appended));
+        assert_eq!(session.events().as_slice(), std::slice::from_ref(&appended));
         assert_eq!(*heard.lock(), [appended]);
         assert_eq!(
-            *rejections.lock(),
+            *errors.lock(),
             ["session append cannot reenter while another append is being published"]
         );
+        assert_eq!(time.load(Ordering::SeqCst), 10_002);
+        session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .unwrap();
+        assert_eq!(session.events().len(), 2);
+        assert_eq!(heard.lock().len(), 2);
+        assert_eq!(time.load(Ordering::SeqCst), 10_003);
+        context.fiber().dispose().await.unwrap();
     }
 
     #[tokio::test]

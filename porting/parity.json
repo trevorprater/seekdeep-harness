@@ -23578,13 +23578,14 @@
     {
       "source": ".github/workflows/e2b-e2e.yml",
       "kind": "configuration",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         ".github/workflows/e2b-e2e.yml"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "The credentialed workflow invokes removed Vitest configuration and test files. It needs the real native E2B composition gate and production sandbox factory before runtime verification."
     },
     {
       "source": ".github/workflows/e2e.yml",
@@ -23666,13 +23667,14 @@
     {
       "source": ".github/workflows/pi-ai-provider-e2e.yml",
       "kind": "configuration",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         ".github/workflows/pi-ai-provider-e2e.yml"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "The provider workflow still invokes the removed Vitest end-to-end configuration. Its complete provider matrix needs equivalent native test routing and execution."
     },
     {
       "source": ".github/workflows/python-release.yml",
@@ -23721,13 +23723,14 @@
     {
       "source": ".github/workflows/sandbox.yml",
       "kind": "configuration",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         ".github/workflows/sandbox.yml"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "The native kernel tests are wired, but later confinement and packed-install steps still invoke removed Vitest files. Those requirements need native replacements and real platform execution."
     },
     {
       "source": ".gitignore",
@@ -58248,7 +58251,7 @@
         "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented",
         "cargo test -p seekdeep-core --all-features: contains_a_reentrant_observer_append_without_reordering_later_observers rejects the nested append with \"session append cannot reenter while another append is being published\" and keeps the later observer ordered"
       ],
-      "note": "Reentrant appends are rejected throughout session/event publication: the admission flag stays set while observers run, so an observer that appends fails with the source message and later observers still see the committed event in order."
+      "note": "Reentrant appends are rejected throughout session/event publication: the admission flag stays set while observers run, so an observer that appends fails with the source message and later observers still see the committed event in order. Source comparisons cover publication reentrancy and deferred disposal (12 cases), plus live-versus-seed admission, validation precedence, and clock consumption (91 cases). Full Session and SessionStore parity remains under audit; focused cases do not establish the entire surface."
     },
     {
       "source": "packages/core/session/src/invariant.ts",
@@ -58487,7 +58490,9 @@
       "status": "verified",
       "targets": [
         "crates/core/src/session.rs",
-        "crates/core/src/session_store.rs"
+        "crates/core/src/session_store.rs",
+        "crates/core/tests/session_publication_oracle.rs",
+        "crates/core/tests/session_admission_oracle.rs"
       ],
       "evidence": [
         "pinned-source Vitest: six Session parity suites 196/196",
@@ -58495,7 +58500,7 @@
         "cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings",
         "cargo test -p seekdeep-core --all-features: contains_a_reentrant_observer_append_without_reordering_later_observers"
       ],
-      "note": "The reentrant observer case is ported as contains_a_reentrant_observer_append_without_reordering_later_observers: the observer append is rejected with the source message, the log keeps only the outer event, and the second observer still hears it."
+      "note": "The reentrant observer case is ported as contains_a_reentrant_observer_append_without_reordering_later_observers: the observer append is rejected with the source message, the log keeps only the outer event, and the second observer still hears it. Native publication and admission regressions compare 103 cases with the unmodified pinned implementation; completing the source suite mapping and remaining Session surface audit is still required."
     },
     {
       "source": "packages/core/session/tests/surface.spec.ts",
@@ -59452,7 +59457,7 @@
     {
       "source": "packages/e2b/e2b/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/e2b/src/lib.rs",
         "crates/e2b/src/types.rs"
@@ -59463,7 +59468,7 @@
         "cargo test --locked --offline -p seekdeep-fs-e2b --all-features (8 passed)",
         "cargo clippy --locked --offline -p seekdeep-e2b -p seekdeep-fs-e2b --all-targets --all-features -- -D warnings"
       ],
-      "note": "the native owner validates key/cwd/finite lifetime before creation, eagerly opens one secure kill-on-timeout sandbox through an injected SDK factory, creates and verifies the shared runtime root, isolates login-shell HOME without ambient randomness, shares one readiness result, fences disposal races, makes one setup rollback kill attempt, accepts already-absent teardown, and owns the object-safe client contracts consumed by adapters"
+      "note": "The native lifecycle and SDK interfaces have fake-factory coverage, but the production composition cannot supply e2bFactory. A production Rust factory and actual sandbox lifecycle verification remain required."
     },
     {
       "source": "packages/e2b/e2b/src/invariant.ts",
@@ -73598,7 +73603,7 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/session-persistence-jsonl/src/backend.rs",
         "crates/session-persistence-jsonl/src/lib.rs"
@@ -73606,7 +73611,7 @@
       "evidence": [
         "cargo test -p seekdeep-session-persistence-jsonl --all-features"
       ],
-      "note": "Core JSONL/Zstandard persistence, live adoption, repair, listing, raw export, revisions, preparation, and teardown are implemented; Windows publication and the remaining filesystem race/fault matrix keep this surface unverified."
+      "note": "The full workspace run exposed a retirement/final-drain race. Deterministic reproductions now cover closure during initialization and shared write failures; fresh backend, assembled-profile, and full-workspace verification of the repair is required."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/invariant.ts",
@@ -73791,14 +73796,15 @@
     {
       "source": "packages/session/session-persistence-sqlite/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/session-persistence-sqlite/src/backend.rs",
         "crates/session-persistence-sqlite/src/lib.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-session-persistence-sqlite --all-features"
-      ]
+      ],
+      "note": "The retirement/final-drain race also reproduces in SQLite. Closure now waits for active flushes, including callers sharing a write failure; complete backend and workspace re-verification is pending."
     },
     {
       "source": "packages/session/session-persistence-sqlite/src/invariant.ts",
@@ -73898,7 +73904,7 @@
     {
       "source": "packages/session/session-persistence/src/coordinator.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/session-persistence/src/preparations.rs",
         "crates/session-persistence/src/write_behind.rs",
@@ -73909,7 +73915,8 @@
         "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features",
         "cargo clippy -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings",
         "retirement races (superseded generations, queued replacement, cold-load cleanup, chain-tail serialization, teardown retry) and abortable retirement-fenced inspect cancellation are deterministically covered in crates/session-persistence-jsonl/src/backend.rs and crates/session-persistence-sqlite/tests/backend_parity.rs"
-      ]
+      ],
+      "note": "Reopened for the reproduced overlap between session retirement and the final persistence drain; the repair must preserve shared flush failures as well as successful quiescence."
     },
     {
       "source": "packages/session/session-persistence/src/index.ts",

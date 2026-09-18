@@ -29,6 +29,30 @@ fn options(api_key: &str, base_url: &str) -> PerplexitySearchProviderOptions {
     }
 }
 
+#[test]
+fn credentials_are_redacted_from_debug_but_preserved_for_requests() {
+    let secret = "test-perplexity-credential-do-not-log";
+    let config = PerplexityConfig {
+        api_key: Some(secret.to_owned()),
+        model: Some("sonar".to_owned()),
+        ..PerplexityConfig::default()
+    };
+    let resolved = options(secret, "https://provider.invalid");
+    for diagnostic in [
+        format!("{config:?}"),
+        format!("{config:#?}"),
+        format!("{resolved:?}"),
+        format!("{resolved:#?}"),
+    ] {
+        assert!(!diagnostic.contains(secret), "Debug exposed an API key");
+        assert!(diagnostic.contains("<redacted>"));
+        assert!(diagnostic.contains("sonar"));
+    }
+    assert_eq!(resolved.api_key, secret);
+    assert_eq!(serde_json::to_value(&config).unwrap()["apiKey"], secret);
+    assert!(format!("{:?}", PerplexityConfig::default()).contains("api_key: None"));
+}
+
 fn request(query: &str) -> WebSearchRequest {
     WebSearchRequest {
         query: query.to_owned(),

@@ -91,14 +91,16 @@ fn a_declaration_links_to_the_rust_file_the_parity_manifest_names_or_stays_plain
     let root = tempfile::tempdir().unwrap();
     write_readme(root.path(), "crates/ported");
     let packages = [package("ported", "packages/g/ported")];
-    // Without a manifest, a source file the repository no longer carries stays a plain
-    // reference: the link gate rejects a link to a file that does not exist.
+    // Without a manifest the repository is a source checkout rather than a port, and the cell
+    // keeps the source generator's own form so the document reproduces the pinned one.
     let plain = matrix(root.path(), &packages);
     assert!(
-        plain.contains("| `packages/g/ported/src/index.ts:1` |"),
+        plain.contains(
+            "| [`packages/g/ported/src/index.ts:1`](../packages/g/ported/src/index.ts) |"
+        ),
         "{plain}"
     );
-    // A source file that is still present keeps the source generator's own link.
+    // A source file that is still present keeps that same link.
     fs::create_dir_all(root.path().join("packages/g/ported/src")).unwrap();
     fs::write(root.path().join("packages/g/ported/src/index.ts"), "").unwrap();
     let present = matrix(root.path(), &packages);
@@ -127,5 +129,25 @@ fn a_declaration_links_to_the_rust_file_the_parity_manifest_names_or_stays_plain
             "| [`crates/ported/src/lib.rs`](../crates/ported/src/lib.rs) from `packages/g/ported/src/index.ts:1` |"
         ),
         "{linked}"
+    );
+
+    // Under a manifest the repository is a port: a declaration whose source file the port has
+    // retired, and which no verified row realizes, stays plain so the link gate has no dead
+    // link to reject.
+    fs::remove_file(root.path().join("packages/g/ported/src/index.ts")).unwrap();
+    fs::write(
+        root.path().join("porting/parity.json"),
+        serde_json::json!({
+            "surfaces": [
+                {"source": "packages/g/ported/src/index.ts", "status": "pending"}
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let retired = matrix(root.path(), &packages);
+    assert!(
+        retired.contains("| `packages/g/ported/src/index.ts:1` |"),
+        "{retired}"
     );
 }

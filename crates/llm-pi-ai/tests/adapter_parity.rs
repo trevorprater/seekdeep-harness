@@ -20,7 +20,7 @@ use seekdeep_llm::{
 use seekdeep_llm_pi_ai::{
     adapter::{
         BoxPiEventStream, PiAiAdapter, PiAiAdapterOptions, PiApiKeyResolver, PiAttachmentResolver,
-        PiExecutionRequest, PiProfileSource, PiProtocolExecutor, PiResolvedAuth,
+        PiExecutionRequest, PiProfileSource, PiProtocolExecutor, PiResolvedAuth, PiStreamOptions,
     },
     catalog::builtin_catalog,
     config::{ResolvedPiProviderProfile, resolve_profiles},
@@ -30,6 +30,74 @@ use seekdeep_llm_pi_ai::{
     stream::PiAssistantEvent,
 };
 use serde_json::json;
+
+#[test]
+fn credential_debug_is_redacted_without_mutating_request_data() {
+    const KEY: &str = "pi-debug-test-api-key";
+    const HEADER: &str = "pi-debug-test-header-token";
+    const ENVIRONMENT: &str = "pi-debug-test-environment-token";
+    const MODEL_HEADER: &str = "pi-debug-test-model-header-token";
+    let auth = PiResolvedAuth {
+        configured: true,
+        api_key: Some(KEY.to_owned()),
+        headers: [("Authorization".to_owned(), Some(HEADER.to_owned()))].into(),
+        environment: [("PROVIDER_SECRET".to_owned(), ENVIRONMENT.to_owned())].into(),
+    };
+    let options = PiStreamOptions {
+        api_key: auth.api_key.clone(),
+        headers: [("Authorization".to_owned(), HEADER.to_owned())].into(),
+        auth_environment: auth.environment.clone(),
+        max_tokens: Some(77),
+        ..PiStreamOptions::default()
+    };
+    let mut provider = profile_map("https://example.test")["deepseek"]
+        .pi_provider
+        .clone();
+    provider.models[0]
+        .extra
+        .insert("headers".to_owned(), json!({"Authorization": MODEL_HEADER}));
+    let execution = PiExecutionRequest {
+        model: provider.models[0].clone(),
+        provider,
+        context: seekdeep_llm_pi_ai::context::PiContext {
+            system_prompt: None,
+            messages: Vec::new(),
+            tools: None,
+        },
+        options,
+    };
+    for rendered in [
+        format!("{auth:?}"),
+        format!("{auth:#?}"),
+        format!("{:?}", execution.options),
+        format!("{:#?}", execution.options),
+        format!("{execution:?}"),
+        format!("{execution:#?}"),
+    ] {
+        for secret in [KEY, HEADER, ENVIRONMENT, MODEL_HEADER] {
+            assert!(
+                !rendered.contains(secret),
+                "Debug leaked {secret}: {rendered}"
+            );
+        }
+        assert!(rendered.contains("<redacted>"));
+    }
+    assert!(format!("{:?}", execution.options).contains("max_tokens: Some(77)"));
+    assert!(format!("{execution:?}").contains("deepseek-v4-flash"));
+    assert_eq!(auth.api_key.as_deref(), Some(KEY));
+    assert_eq!(auth.headers["Authorization"].as_deref(), Some(HEADER));
+    assert_eq!(execution.options.api_key.as_deref(), Some(KEY));
+    assert_eq!(execution.options.headers["Authorization"], HEADER);
+    assert_eq!(
+        execution.options.auth_environment["PROVIDER_SECRET"],
+        ENVIRONMENT
+    );
+    assert_eq!(
+        execution.model.extra["headers"]["Authorization"],
+        MODEL_HEADER
+    );
+    assert!(format!("{:?}", PiResolvedAuth::default()).contains("api_key: None"));
+}
 
 struct BytesBackend;
 

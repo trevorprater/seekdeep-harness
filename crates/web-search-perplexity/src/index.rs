@@ -24,7 +24,7 @@ pub const INJECT: &[&str] = &["web"];
 pub const API_KEY_ENV: &str = "PERPLEXITY_API_KEY";
 
 /// Raw plugin configuration.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PerplexityConfig {
     /// Perplexity API key. Falls back to `$PERPLEXITY_API_KEY`. Empty means unavailable.
@@ -42,6 +42,25 @@ pub struct PerplexityConfig {
     /// Optional recency window sent as `search_recency_filter`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_recency: Option<PerplexityRecency>,
+}
+
+impl std::fmt::Debug for PerplexityConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PerplexityConfig")
+            .field(
+                "api_key",
+                &self
+                    .api_key
+                    .as_deref()
+                    .map(|value| if value.is_empty() { "" } else { "<redacted>" }),
+            )
+            .field("base_url", &self.base_url)
+            .field("model", &self.model)
+            .field("max_tokens", &self.max_tokens)
+            .field("search_recency", &self.search_recency)
+            .finish()
+    }
 }
 
 /// The source-compatible admission schema for the plugin.

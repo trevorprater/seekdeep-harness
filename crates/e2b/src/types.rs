@@ -290,7 +290,7 @@ pub trait E2bSandbox: Send + Sync + 'static {
 }
 
 /// Sandbox creation request.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct E2bCreateOptions {
     /// API key used only by the provider call.
     pub api_key: String,
@@ -300,6 +300,25 @@ pub struct E2bCreateOptions {
     pub secure: bool,
     /// Whether timeout deletes the sandbox.
     pub kill_on_timeout: bool,
+}
+
+impl std::fmt::Debug for E2bCreateOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("E2bCreateOptions")
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "<redacted>"
+                },
+            )
+            .field("timeout_ms", &self.timeout_ms)
+            .field("secure", &self.secure)
+            .field("kill_on_timeout", &self.kill_on_timeout)
+            .finish()
+    }
 }
 
 /// Asynchronous sandbox creation result.

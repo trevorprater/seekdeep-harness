@@ -24,7 +24,7 @@ pub const INJECT: &[&str] = &["web"];
 pub const API_KEY_ENV: &str = "EXA_API_KEY";
 
 /// Raw plugin configuration.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ExaConfig {
     /// Exa API key. Falls back to `$EXA_API_KEY`. Empty means unavailable.
@@ -42,6 +42,25 @@ pub struct ExaConfig {
     /// Highlight sentences requested per result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlights_per_result: Option<f64>,
+}
+
+impl std::fmt::Debug for ExaConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExaConfig")
+            .field(
+                "api_key",
+                &self
+                    .api_key
+                    .as_deref()
+                    .map(|value| if value.is_empty() { "" } else { "<redacted>" }),
+            )
+            .field("base_url", &self.base_url)
+            .field("search_type", &self.search_type)
+            .field("num_results", &self.num_results)
+            .field("highlights_per_result", &self.highlights_per_result)
+            .finish()
+    }
 }
 
 /// The source-compatible admission schema for the plugin.

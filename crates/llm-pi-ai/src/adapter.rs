@@ -30,7 +30,7 @@ pub type BoxPiEventStream =
     Pin<Box<dyn Stream<Item = anyhow::Result<PiAssistantEvent>> + Send + 'static>>;
 
 /// Provider-native authentication resolved once for an immutable call.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct PiResolvedAuth {
     /// Whether the provider's auth method resolved at all.
     pub configured: bool,
@@ -40,6 +40,29 @@ pub struct PiResolvedAuth {
     pub headers: HashMap<String, Option<String>>,
     /// Provider environment facts used to materialize endpoint/auth behavior.
     pub environment: HashMap<String, String>,
+}
+
+impl fmt::Debug for PiResolvedAuth {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PiResolvedAuth")
+            .field("configured", &self.configured)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("headers", &RedactedFields(&self.headers))
+            .field("environment", &RedactedFields(&self.environment))
+            .finish()
+    }
+}
+
+struct RedactedFields<'a, T>(&'a HashMap<String, T>);
+
+impl<T> fmt::Debug for RedactedFields<'_, T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_map()
+            .entries(self.0.keys().map(|name| (name, "<redacted>")))
+            .finish()
+    }
 }
 
 impl PiResolvedAuth {
@@ -57,7 +80,7 @@ impl PiResolvedAuth {
 }
 
 /// Immutable request options handed to one native protocol engine.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct PiStreamOptions {
     /// Harness-resolved API key override.
     pub api_key: Option<String>,
@@ -89,8 +112,33 @@ pub struct PiStreamOptions {
     pub max_retries: u64,
 }
 
+impl fmt::Debug for PiStreamOptions {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PiStreamOptions")
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("reasoning", &self.reasoning)
+            .field("thinking_budgets", &self.thinking_budgets)
+            .field("cache_retention", &self.cache_retention)
+            .field("transport", &self.transport)
+            .field("timeout_ms", &self.timeout_ms)
+            .field(
+                "websocket_connect_timeout_ms",
+                &self.websocket_connect_timeout_ms,
+            )
+            .field("temperature", &self.temperature)
+            .field("max_tokens", &self.max_tokens)
+            .field("session_id", &self.session_id)
+            .field("signal", &self.signal)
+            .field("headers", &RedactedFields(&self.headers))
+            .field("auth_environment", &RedactedFields(&self.auth_environment))
+            .field("max_retries", &self.max_retries)
+            .finish()
+    }
+}
+
 /// Complete native protocol-engine request.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct PiExecutionRequest {
     /// Built provider dispatch and auth metadata.
     pub provider: PiProvider,
@@ -100,6 +148,19 @@ pub struct PiExecutionRequest {
     pub context: PiContext,
     /// Frozen per-call options.
     pub options: PiStreamOptions,
+}
+
+impl fmt::Debug for PiExecutionRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PiExecutionRequest")
+            .field("provider", &self.provider.id)
+            .field("model", &self.model.id)
+            .field("api", &self.model.api)
+            .field("context", &self.context)
+            .field("options", &self.options)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Native protocol implementation boundary replacing pi-ai's JavaScript `Models` collection.

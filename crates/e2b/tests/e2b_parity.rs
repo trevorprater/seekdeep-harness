@@ -12,6 +12,34 @@ use seekdeep_e2b::{
 };
 use seekdeep_llm::AbortSignal;
 
+#[test]
+fn credentials_are_redacted_from_debug_but_preserved_for_requests() {
+    let secret = "test-e2b-credential-do-not-log";
+    let config = E2bConfig {
+        api_key: Some(secret.to_owned()),
+        ..E2bConfig::default()
+    };
+    let request = E2bCreateOptions {
+        api_key: secret.to_owned(),
+        timeout_ms: config.timeout_ms,
+        secure: true,
+        kill_on_timeout: true,
+    };
+    for diagnostic in [
+        format!("{config:?}"),
+        format!("{config:#?}"),
+        format!("{request:?}"),
+        format!("{request:#?}"),
+    ] {
+        assert!(!diagnostic.contains(secret), "Debug exposed an API key");
+        assert!(diagnostic.contains("<redacted>"));
+        assert!(diagnostic.contains("timeout_ms"));
+    }
+    assert_eq!(request.api_key, secret);
+    assert_eq!(serde_json::to_value(&config).unwrap()["apiKey"], secret);
+    assert!(format!("{:?}", E2bConfig::default()).contains("api_key: None"));
+}
+
 #[derive(Default)]
 struct SandboxState {
     directories: Vec<String>,

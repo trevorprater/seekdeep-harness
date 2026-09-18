@@ -131,6 +131,35 @@ type InitFuture = Shared<futures::future::BoxFuture<'static, Result<(), Arc<Stri
 struct LiveSessionState {
     init: InitFuture,
     writes: SessionWriteBehind,
+    // Concurrent flushes share their result; closure waits for every active flush.
+    closed: Arc<AsyncRwLock<bool>>,
+}
+
+impl LiveSessionState {
+    async fn flush_initialized(&self) -> anyhow::Result<()> {
+        let closed = self.closed.read().await;
+        if !*closed {
+            self.writes.flush().await?;
+        }
+        Ok(())
+    }
+
+    async fn finish_retirement(&self) -> anyhow::Result<()> {
+        self.writes.cancel_automatic_wait();
+        if self.init.clone().await.is_ok() {
+            self.flush_initialized().await?;
+        }
+        self.close().await;
+        Ok(())
+    }
+
+    async fn close(&self) {
+        let mut closed = self.closed.write().await;
+        if !*closed {
+            self.writes.close_after_flush().await;
+            *closed = true;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -323,15 +352,13 @@ impl SqliteSessionPersistence {
 
     async fn drain_all(self: &Arc<Self>) -> anyhow::Result<()> {
         let lives = self.live.lock().values().cloned().collect::<Vec<_>>();
-        let controllers = lives
-            .iter()
-            .map(|live| live.writes.clone())
-            .collect::<Vec<_>>();
+        let controllers = lives.clone();
         let mut errors = Vec::new();
         for live in lives {
             live.writes.cancel_automatic_wait();
             if live
                 .init
+                .clone()
                 .await
                 .map_err(|error| anyhow::Error::msg((*error).clone()))
                 .is_err()
@@ -341,7 +368,7 @@ impl SqliteSessionPersistence {
                 // replayed as a second teardown failure.
                 continue;
             }
-            if let Err(error) = live.writes.flush().await {
+            if let Err(error) = live.flush_initialized().await {
                 errors.push(error.to_string());
             }
         }
@@ -367,8 +394,8 @@ impl SqliteSessionPersistence {
                 self.retirements.lock().remove(retirement.session.id());
             }
         }
-        for writes in controllers {
-            writes.close_after_flush().await;
+        for live in controllers {
+            live.close().await;
         }
         if errors.is_empty() {
             Ok(())
@@ -403,6 +430,7 @@ impl SqliteSessionPersistence {
         let live = LiveSessionState {
             init: init.clone(),
             writes,
+            closed: Arc::default(),
         };
         let mut lives = self.live.lock();
         if let Some(existing) = lives.get(&key).cloned() {
@@ -486,6 +514,7 @@ impl SqliteSessionPersistence {
         let live = LiveSessionState {
             init: init.clone(),
             writes,
+            closed: Arc::default(),
         };
         self.live.lock().insert(session_key(session), live.clone());
         tokio::spawn(async move {
@@ -574,9 +603,10 @@ impl SqliteSessionPersistence {
         let live = self.init_for(session)?;
         live.writes.cancel_automatic_wait();
         live.init
+            .clone()
             .await
             .map_err(|error| anyhow::Error::msg((*error).clone()))?;
-        live.writes.flush().await
+        live.flush_initialized().await
     }
 
     async fn flush_existing(&self, session: &Arc<Session>) -> anyhow::Result<()> {
@@ -590,9 +620,10 @@ impl SqliteSessionPersistence {
             })?;
         live.writes.cancel_automatic_wait();
         live.init
+            .clone()
             .await
             .map_err(|error| anyhow::Error::msg((*error).clone()))?;
-        live.writes.flush().await
+        live.flush_initialized().await
     }
 
     fn retire(self: &Arc<Self>, session: Arc<Session>) {
@@ -710,11 +741,7 @@ impl SqliteSessionPersistence {
         let id = session.id();
         let live = self.live.lock().get(&key).cloned();
         if let Some(live) = live {
-            live.writes.cancel_automatic_wait();
-            if live.init.await.is_ok() {
-                live.writes.flush().await?;
-            }
-            live.writes.close_after_flush().await;
+            live.finish_retirement().await?;
         }
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
@@ -1644,6 +1671,117 @@ mod lifecycle_tests {
     use serde_json::json;
 
     use super::*;
+
+    #[tokio::test]
+    async fn concurrent_flush_and_retirement_share_a_write_failure() {
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (entered, observed) = tokio::sync::oneshot::channel();
+        let (release, pending) = tokio::sync::oneshot::channel();
+        let control = Arc::new(Mutex::new(Some((entered, pending))));
+        let writes = SessionWriteBehind::new(
+            Duration::from_secs(60),
+            {
+                let attempts = attempts.clone();
+                move |_| {
+                    attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let control = control.lock().take();
+                    async move {
+                        let Some((entered, pending)) = control else {
+                            anyhow::bail!("unexpected automatic retry");
+                        };
+                        entered.send(()).unwrap();
+                        pending.await.unwrap();
+                        anyhow::bail!("durable write failed");
+                    }
+                }
+            },
+            |error| panic!("unexpected background failure: {error}"),
+        );
+        let session = Session::create_with_clock(
+            &SessionId::new("shared-flush-failure"),
+            None,
+            None,
+            Arc::new(|| 100),
+        )
+        .unwrap();
+        let event = session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .unwrap();
+        writes.enqueue(&event).unwrap();
+        let live = LiveSessionState {
+            init: futures::future::ready(Ok(())).boxed().shared(),
+            writes,
+            closed: Arc::default(),
+        };
+        let mut flush = Box::pin(live.flush_initialized());
+        let mut retirement = Box::pin(live.finish_retirement());
+        assert!(futures::poll!(flush.as_mut()).is_pending());
+        assert!(futures::poll!(retirement.as_mut()).is_pending());
+        observed.await.unwrap();
+        release.send(()).unwrap();
+        let (flushed, retired) = tokio::join!(flush, retirement);
+        live.close().await;
+        assert_eq!(flushed.unwrap_err().to_string(), "durable write failed");
+        assert_eq!(retired.unwrap_err().to_string(), "durable write failed");
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn final_drain_tolerates_retirement_while_initialization_is_pending() {
+        let temporary = tempfile::tempdir().unwrap();
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).unwrap();
+        let backend = SqliteSessionPersistence::build(
+            sessions,
+            SqliteConfig::new(temporary.path().join("sessions.sqlite")),
+        )
+        .unwrap();
+        let session = Session::create_with_clock(
+            &SessionId::new("overlapping-drains"),
+            None,
+            None,
+            Arc::new(|| 100),
+        )
+        .unwrap();
+        let event = session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .unwrap();
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let writes = SessionWriteBehind::new(
+            Duration::from_secs(60),
+            {
+                let recorded = recorded.clone();
+                move |events| {
+                    recorded.lock().extend(events);
+                    async { Ok(()) }
+                }
+            },
+            |error| panic!("unexpected background failure: {error}"),
+        );
+        writes.enqueue(&event).unwrap();
+        let (ready, pending) = tokio::sync::oneshot::channel();
+        backend.live.lock().insert(
+            session_key(&session),
+            LiveSessionState {
+                init: async move { pending.await.map_err(|error| Arc::new(error.to_string())) }
+                    .boxed()
+                    .shared(),
+                writes: writes.clone(),
+                closed: Arc::default(),
+            },
+        );
+        let mut drain = Box::pin(backend.drain_all());
+        assert!(futures::poll!(drain.as_mut()).is_pending());
+        ready.send(()).unwrap();
+        backend.retire_core(&session).await.unwrap();
+        assert!(!backend.live.lock().contains_key(&session_key(&session)));
+        drain
+            .await
+            .expect("a completed retirement satisfies the final drain");
+        assert_eq!(*recorded.lock(), [event]);
+        assert!(writes.flush().await.is_err(), "the actor must be closed");
+        context.fiber().dispose().await.unwrap();
+    }
 
     #[tokio::test]
     async fn backend_disposal_closes_retained_live_controllers() {

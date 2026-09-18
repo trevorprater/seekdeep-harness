@@ -458,7 +458,7 @@ impl SessionApiProxyRuntime {
             ));
         }
         let agent_preset =
-            resolve_session_preset(agent.session().header(), &agent.session().events());
+            resolve_session_preset(agent.session().header(), &agent.session().events_shared());
         let value = serde_json::to_value(SessionCreateValue {
             session_id,
             agent_preset,
@@ -651,7 +651,7 @@ impl SessionApiProxyRuntime {
             .into());
         }
         let existing_preset =
-            resolve_session_preset(agent.session().header(), &agent.session().events());
+            resolve_session_preset(agent.session().header(), &agent.session().events_shared());
         assert_preset_unchanged(agent.id(), requested_preset, existing_preset.as_deref())?;
         if agent.session().header().cwd.as_deref() != Some(cwd) {
             return Err(SessionCwdConflict::new(
@@ -718,7 +718,7 @@ impl SessionApiProxyRuntime {
     }
 
     fn summarize_live(&self, session: &Arc<Session>) -> SessionSummary {
-        let events = session.events();
+        let events = session.events_shared();
         let metadata = fold_list_metadata(&events);
         let agent = self.agents.get(session.id());
         let projections = self
@@ -1103,7 +1103,7 @@ impl SessionApiProxyRuntime {
         if let Some(session) = self.sessions.get(session_id) {
             return Ok(HistorySource {
                 header: session.header().clone(),
-                events: session.events(),
+                events: session.events_shared(),
             });
         }
         let persistence = self.persistence.as_ref().ok_or_else(|| {
@@ -1124,7 +1124,7 @@ impl SessionApiProxyRuntime {
         }
         Ok(HistorySource {
             header: inspected.meta,
-            events: inspected.events,
+            events: Arc::new(inspected.events),
         })
     }
 
@@ -1932,7 +1932,7 @@ fn finish_search(mut authorized: Vec<SessionSearchItem>) -> SessionSearchValue {
 
 struct HistorySource {
     header: SessionHeader,
-    events: Vec<SessionEvent>,
+    events: Arc<Vec<SessionEvent>>,
 }
 
 #[derive(Debug, thiserror::Error)]

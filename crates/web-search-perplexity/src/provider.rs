@@ -44,7 +44,7 @@ pub enum PerplexityRecency {
 }
 
 /// Resolved provider options (the plugin's `apply` supplies env-var and constant defaults).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PerplexitySearchProviderOptions {
     /// Perplexity API key. Empty/absent makes the provider unavailable.
     pub api_key: String,
@@ -56,6 +56,26 @@ pub struct PerplexitySearchProviderOptions {
     pub max_tokens: f64,
     /// Optional recency window sent as `search_recency_filter`.
     pub search_recency: Option<PerplexityRecency>,
+}
+
+impl std::fmt::Debug for PerplexitySearchProviderOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PerplexitySearchProviderOptions")
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "<redacted>"
+                },
+            )
+            .field("base_url", &self.base_url)
+            .field("model", &self.model)
+            .field("max_tokens", &self.max_tokens)
+            .field("search_recency", &self.search_recency)
+            .finish()
+    }
 }
 
 /// Map one structured Perplexity search result to a normalized source; blank fields are omitted.

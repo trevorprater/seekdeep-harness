@@ -423,7 +423,7 @@ impl PresetApiProxyRuntime {
         };
         if agent
             .session()
-            .events()
+            .events_shared()
             .iter()
             .any(|event| event.event_type == "turn/start")
         {
@@ -1640,7 +1640,7 @@ impl PresetApiProxyRuntime {
         let scope = if let Some(agent) = live {
             Some(agent.scope_key())
         } else if let Some(roster) = roster {
-            let preset = resolve_session_preset(session.header(), &session.events());
+            let preset = resolve_session_preset(session.header(), &session.events_shared());
             roster.standing_key_for(preset.as_deref()).await.ok()
         } else {
             None

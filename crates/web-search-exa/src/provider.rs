@@ -41,7 +41,7 @@ pub enum SearchType {
 pub const EXA_DEFAULT_SEARCH_TYPE: SearchType = SearchType::Auto;
 
 /// Resolved provider options (the plugin's `apply` supplies env-var and constant defaults).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ExaSearchProviderOptions {
     /// Exa API key. Empty/absent makes the provider unavailable.
     pub api_key: String,
@@ -53,6 +53,26 @@ pub struct ExaSearchProviderOptions {
     pub num_results: Option<f64>,
     /// Highlight sentences requested per result.
     pub highlights_per_result: f64,
+}
+
+impl std::fmt::Debug for ExaSearchProviderOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ExaSearchProviderOptions")
+            .field(
+                "api_key",
+                &if self.api_key.is_empty() {
+                    ""
+                } else {
+                    "<redacted>"
+                },
+            )
+            .field("base_url", &self.base_url)
+            .field("search_type", &self.search_type)
+            .field("num_results", &self.num_results)
+            .field("highlights_per_result", &self.highlights_per_result)
+            .finish()
+    }
 }
 
 /// Map one Exa result to a normalized source, or `None` when it carries no portable snippet (an

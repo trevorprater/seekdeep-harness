@@ -9,7 +9,7 @@ use std::{
 
 use parking_lot::{Mutex, ReentrantMutex};
 pub use seekdeep_llm::SessionId;
-use seekdeep_llm::{ContentBlock, Message, ModelId, ProviderId};
+use seekdeep_llm::{Message, ModelId, ProviderId};
 use seekdeep_lossless_json::JsonToken;
 pub use seekdeep_lossless_json::{JsonRef, JsonValue};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
@@ -365,9 +365,9 @@ impl SurfaceState {
                 event.event_type
             )));
         };
-        validate_sources(event, &[])?;
         match operation {
             SurfaceOp::Marker(marker) if marker == "append" => {
+                validate_sources(event, &[])?;
                 self.nodes.push(event.seq);
                 Ok(None)
             }
@@ -442,18 +442,6 @@ pub struct Session {
     publisher: Mutex<Option<Weak<dyn SessionPublisher>>>,
 }
 
-/// Keeps an append admitted while its `session/event` observers run, and
-/// releases the admission however publication ends.
-struct AppendAdmission<'a> {
-    inner: &'a Mutex<SessionInner>,
-}
-
-impl Drop for AppendAdmission<'_> {
-    fn drop(&mut self) {
-        self.inner.lock().appending = false;
-    }
-}
-
 impl std::fmt::Debug for Session {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -490,9 +478,7 @@ impl Session {
         header: Option<SessionHeader>,
         clock: SessionClock,
     ) -> Result<Arc<Self>, SessionError> {
-        let header =
-            header.unwrap_or_else(|| SessionHeader::new_with_created_at(id.clone(), clock()));
-        header.validate(id)?;
+        let has_seed = seed.is_some();
         let first_live_seq = u64::try_from(seed.as_ref().map_or(0, Vec::len)).map_err(|_| {
             invalid("session seed length exceeds the supported event sequence range")
         })?;
@@ -505,31 +491,40 @@ impl Session {
             for event in seed {
                 validate_envelope(&event, inner.log.len())?;
                 let mut next_surface = inner.surface.clone();
-                next_surface.apply(&event, &inner.log)?;
+                next_surface.apply(&event, &inner.log).map_err(|error| {
+                    invalid(format!(
+                        "invalid seed event at index {}: {error}",
+                        inner.log.len()
+                    ))
+                })?;
                 Arc::make_mut(&mut inner.log).push(event);
                 inner.surface = next_surface;
             }
-            if inner
+        }
+        let header =
+            header.unwrap_or_else(|| SessionHeader::new_with_created_at(id.clone(), clock()));
+        header.validate(id)?;
+        if has_seed
+            && inner
                 .log
                 .last()
                 .is_none_or(|event| event.event_type != "session/end-seed")
-            {
-                let event = SessionEvent {
-                    event_type: "session/end-seed".to_owned(),
-                    seq: u64::try_from(inner.log.len()).map_err(|_| {
-                        invalid("session log length exceeds the supported event sequence range")
-                    })?,
-                    time: i64::try_from(clock()).unwrap_or(i64::MAX),
-                    data: Value::Object(serde_json::Map::new()).into(),
-                    source_event_seqs: None,
-                    surface_op: None,
-                    ignorable: None,
-                };
-                let mut next_surface = inner.surface.clone();
-                next_surface.apply(&event, &inner.log)?;
-                Arc::make_mut(&mut inner.log).push(event);
-                inner.surface = next_surface;
-            }
+        {
+            let event = SessionEvent {
+                event_type: "session/end-seed".to_owned(),
+                seq: u64::try_from(inner.log.len()).map_err(|_| {
+                    invalid("session log length exceeds the supported event sequence range")
+                })?,
+                time: i64::try_from(clock()).unwrap_or(i64::MAX),
+                data: Value::Object(serde_json::Map::new()).into(),
+                source_event_seqs: None,
+                surface_op: None,
+                ignorable: None,
+            };
+            let mut next_surface = inner.surface.clone();
+            next_surface.apply(&event, &inner.log)?;
+            Arc::make_mut(&mut inner.log).push(event);
+            inner.surface = next_surface;
         }
         Ok(Arc::new(Self {
             header,
@@ -599,11 +594,11 @@ impl Session {
         self.inner.lock().surface.replace_generation
     }
 
-    /// Appends one event after validating its envelope and surface transition.
+    /// Appends one event after validating its JSON payload and surface transition.
     ///
     /// # Errors
     ///
-    /// Returns [`SessionError`] when JSON, envelope, provenance, or surface invariants fail.
+    /// Returns [`SessionError`] for non-JSON data, legacy headers, or invalid surface metadata.
     pub fn append(
         &self,
         event_type: impl Into<String>,
@@ -617,28 +612,43 @@ impl Session {
     ///
     /// # Errors
     ///
-    /// Returns [`SessionError`] when envelope, provenance, or surface invariants fail.
+    /// Returns [`SessionError`] for non-JSON data, legacy headers, or invalid surface metadata.
     pub fn append_json(
         &self,
         event_type: impl Into<String>,
         data: JsonValue,
         options: AppendOptions,
     ) -> Result<SessionEvent, SessionError> {
-        validate_lossless_json(&data)?;
+        let event_type = event_type.into();
+        validate_lossless_json(&data).map_err(|_| {
+            invalid(format!(
+                "session event \"{event_type}\" carries non-JSON-serializable data"
+            ))
+        })?;
+        validate_supported_request_header(
+            &event_type,
+            &data,
+            &format!("session event \"{event_type}\""),
+        )?;
         // A synchronous nested append on this thread remains an invariant
         // violation, while independent executor threads queue in commit order.
         // JavaScript serialized these callers on one event loop; the Rust
         // runtime must not turn harmless task interleaving into a false
         // reentrancy failure while publication temporarily releases `inner`.
         let _append_gate = self.append_gate.lock();
+        let publisher = self.publisher.lock().as_ref().and_then(Weak::upgrade);
         let mut inner = self.inner.lock();
-        if inner.appending {
+        if inner.appending
+            || publisher
+                .as_ref()
+                .is_some_and(|publisher| publisher.is_publishing())
+        {
             return Err(SessionError::ReentrantAppend);
         }
         inner.appending = true;
         let planned = (|| {
             let event = SessionEvent {
-                event_type: event_type.into(),
+                event_type,
                 seq: u64::try_from(inner.log.len()).map_err(|_| {
                     invalid("session log length exceeds the supported event sequence range")
                 })?,
@@ -648,7 +658,6 @@ impl Session {
                 surface_op: options.surface_op,
                 ignorable: options.ignorable.then_some(true),
             };
-            validate_envelope(&event, inner.log.len())?;
             let mut next_surface = inner.surface.clone();
             next_surface.apply(&event, &inner.log)?;
             Ok((event, next_surface))
@@ -660,7 +669,6 @@ impl Session {
                 return Err(error);
             }
         };
-        let publisher = self.publisher.lock().as_ref().and_then(Weak::upgrade);
         drop(inner);
         let publication = match publisher {
             Some(publisher) => match publisher.prepare_publish(&event) {
@@ -675,12 +683,14 @@ impl Session {
         let mut inner = self.inner.lock();
         Arc::make_mut(&mut inner.log).push(event.clone());
         inner.surface = next_surface;
+        inner.appending = false;
         drop(inner);
-        // The append stays admitted while its observers run: a `session/event`
-        // listener that appends reenters this section and is rejected, as in
-        // the source, instead of interleaving a nested event ahead of the
-        // observers that have not yet seen this one.
-        let _admission = AppendAdmission { inner: &self.inner };
+        // The store entry stays marked as publishing while `session/event`
+        // observers run, so a listener that appends is rejected with the
+        // source's reentrancy error instead of interleaving a nested event
+        // ahead of the observers that have not yet seen this one. The entry
+        // clears that mark before a deferred detach fires `session/disposed`,
+        // where the source lets a listener append to the detached session.
         if let Some(publication) = publication {
             publication.publish();
         }
@@ -720,6 +730,8 @@ impl Session {
 }
 
 pub(crate) trait SessionPublisher: Send + Sync {
+    fn is_publishing(&self) -> bool;
+
     fn prepare_publish(
         self: Arc<Self>,
         event: &SessionEvent,
@@ -802,15 +814,14 @@ pub fn fold_surface(events: &[SessionEvent]) -> Result<SurfaceFoldResult, Sessio
 }
 
 fn validate_envelope(event: &SessionEvent, index: usize) -> Result<(), SessionError> {
+    validate_lossless_json(&event.data).map_err(|_| {
+        invalid(format!(
+            "seed event at index {index} is not losslessly JSON-serializable"
+        ))
+    })?;
     if event.event_type == "request/header-delta" {
         return Err(invalid(format!(
             "seed event at index {index} uses unsupported legacy request/header-delta format"
-        )));
-    }
-    if event.seq != u64::try_from(index).unwrap_or(u64::MAX) {
-        return Err(invalid(format!(
-            "seed event at index {index} has seq {} (expected {index}); seed must be contiguous from 0",
-            event.seq
         )));
     }
     if event.seq > MAX_SAFE_INTEGER || event.time.unsigned_abs() > MAX_SAFE_INTEGER {
@@ -823,29 +834,53 @@ fn validate_envelope(event: &SessionEvent, index: usize) -> Result<(), SessionEr
             "seed event at index {index} has an invalid event envelope"
         )));
     }
-    validate_lossless_json(&event.data)?;
     validate_request_header(event, index)?;
     validate_message_event(
         event,
         &format!("seed {} at index {index}", event.event_type),
     )?;
+    validate_supported_request_header(
+        &event.event_type,
+        &event.data,
+        &format!("seed event at index {index}"),
+    )?;
+    if event.seq != u64::try_from(index).unwrap_or(u64::MAX) {
+        return Err(invalid(format!(
+            "seed event at index {index} has seq {} (expected {index}); seed must be contiguous from 0",
+            event.seq
+        )));
+    }
+    Ok(())
+}
+
+fn validate_supported_request_header(
+    event_type: &str,
+    data: &JsonValue,
+    location: &str,
+) -> Result<(), SessionError> {
+    if event_type == "request/header-delta" {
+        return Err(invalid(format!(
+            "{location} uses unsupported legacy request/header-delta format"
+        )));
+    }
+    if event_type == "request/header"
+        && data.is_object()
+        && data
+            .get("reason")
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+            == Some("fallback")
+    {
+        return Err(invalid(format!(
+            "{location} uses unsupported legacy request/header reason \"fallback\""
+        )));
+    }
     Ok(())
 }
 
 fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), SessionError> {
     if event.event_type != "request/header" {
         return Ok(());
-    }
-    if event
-        .data
-        .get("reason")
-        .and_then(|value| value.deserialize::<String>().ok())
-        .as_deref()
-        == Some("fallback")
-    {
-        return Err(invalid(format!(
-            "seed event at index {index} uses unsupported legacy request/header reason \"fallback\""
-        )));
     }
     let header = event
         .data
@@ -1148,57 +1183,68 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     {
         return Err(invalid(format!("{subject} message has invalid content")));
     }
-    let message: Message = message_value
-        .deserialize()
-        .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
-    if message.source().kind.is_empty() {
-        return Err(invalid(format!("{subject} message has invalid source")));
-    }
-    if event.event_type == "assistant/message" {
-        let provider = message
-            .source()
-            .fields
-            .get("provider")
-            .and_then(JsonValue::as_str);
-        let model = message
-            .source()
-            .fields
-            .get("model")
-            .and_then(JsonValue::as_str);
-        if message.source().kind != "model"
-            || provider.is_none_or(str::is_empty)
-            || model.is_none_or(str::is_empty)
-        {
-            return Err(invalid(format!("{subject} message must have model source")));
-        }
+    let source = message_value.get("source").expect("validated source kind");
+    if event.event_type == "assistant/message"
+        && (source
+            .get("kind")
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+            != Some("model")
+            || ["provider", "model"].iter().any(|name| {
+                source
+                    .get(name)
+                    .and_then(JsonRef::to_utf16)
+                    .is_none_or(|value| value.is_empty())
+            }))
+    {
+        return Err(invalid(format!("{subject} message must have model source")));
     }
     if event.event_type == "tool/result" {
-        let source_call_id = message
-            .source()
-            .fields
-            .get("callId")
-            .and_then(JsonValue::as_str)
-            .filter(|value| !value.is_empty());
-        if message.source().kind != "tool" || source_call_id.is_none() {
-            return Err(invalid(format!("{subject} message must have tool source")));
-        }
-        let [
-            ContentBlock::ToolResult {
-                tool_call_id,
-                content: _,
-                is_error: _,
-            },
-        ] = message.content()
-        else {
-            return Err(invalid(format!(
-                "{subject} message must contain one tool-result block"
-            )));
-        };
-        if Some(tool_call_id.as_str()) != source_call_id {
-            return Err(invalid(format!(
-                "{subject} message has mismatched tool call ids"
-            )));
-        }
+        validate_tool_result_message(message_value, source, subject)?;
+    }
+    Ok(())
+}
+
+fn validate_tool_result_message(
+    message: JsonRef<'_>,
+    source: JsonRef<'_>,
+    subject: &str,
+) -> Result<(), SessionError> {
+    let source_call_id = source
+        .get("callId")
+        .and_then(JsonRef::to_utf16)
+        .filter(|value| !value.is_empty());
+    if source
+        .get("kind")
+        .and_then(|value| value.deserialize::<String>().ok())
+        .as_deref()
+        != Some("tool")
+        || source_call_id.is_none()
+    {
+        return Err(invalid(format!("{subject} message must have tool source")));
+    }
+    let content = message
+        .get("content")
+        .and_then(JsonRef::array_items)
+        .expect("validated message content");
+    if content.len() != 1
+        || content[0]
+            .get("type")
+            .and_then(|value| value.deserialize::<String>().ok())
+            .as_deref()
+            != Some("tool-result")
+        || content[0]
+            .get("content")
+            .is_none_or(|value| !value.is_array())
+    {
+        return Err(invalid(format!(
+            "{subject} message must contain one tool-result block"
+        )));
+    }
+    if content[0].get("toolCallId").and_then(JsonRef::to_utf16) != source_call_id {
+        return Err(invalid(format!(
+            "{subject} message has mismatched tool call ids"
+        )));
     }
     Ok(())
 }
@@ -1236,7 +1282,7 @@ pub(crate) fn now_millis() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use seekdeep_llm::MessageSource;
+    use seekdeep_llm::{ContentBlock, MessageSource};
 
     #[test]
     fn a_session_clock_stamps_the_end_seed_event() {
@@ -1393,7 +1439,7 @@ mod tests {
                 )
                 .unwrap_err()
                 .to_string()
-                .contains("negative zero")
+                .contains("carries non-JSON-serializable data")
         );
         for raw in [r#"{"\ud800":-0}"#, r#"{"value":[-0.0]}"#] {
             assert!(
@@ -1405,7 +1451,7 @@ mod tests {
                     )
                     .unwrap_err()
                     .to_string()
-                    .contains("negative zero")
+                    .contains("carries non-JSON-serializable data")
             );
         }
         assert!(
@@ -1417,7 +1463,7 @@ mod tests {
                 )
                 .unwrap_err()
                 .to_string()
-                .contains("non-finite number")
+                .contains("carries non-JSON-serializable data")
         );
     }
 

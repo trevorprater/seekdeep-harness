@@ -151,20 +151,28 @@ impl PackageLinks {
 /// carry. The parity manifest records which Rust file realizes each source file, so a
 /// declaration links to that file in the repository the document is written to; a source
 /// file the manifest has not verified stays a plain path instead of a dead link.
+///
+/// A repository with no manifest is a source checkout rather than a port, and there the
+/// declaration keeps the source generator's own relative link so the written document
+/// reproduces the pinned one byte for byte.
 #[derive(Clone, Debug, Default)]
 pub struct DeclarationLinks {
     links: IndexMap<String, String>,
     repo_root: PathBuf,
+    port_manifest: bool,
 }
 
 impl DeclarationLinks {
-    /// Reads `porting/parity.json` under `repo_root`; an absent or unreadable manifest maps
-    /// nothing, and `repo_root` is where source files are looked up before they are linked.
+    /// Reads `porting/parity.json` under `repo_root`; an absent or unreadable manifest marks the
+    /// repository a source checkout, and `repo_root` is where source files are looked up before
+    /// they are linked.
     #[must_use]
     pub fn resolve(repo_root: &Path) -> Self {
-        let links = std::fs::read_to_string(repo_root.join("porting/parity.json"))
+        let manifest = std::fs::read_to_string(repo_root.join("porting/parity.json"))
             .ok()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        let port_manifest = manifest.is_some();
+        let links = manifest
             .map(|manifest| {
                 manifest["surfaces"]
                     .as_array()
@@ -182,6 +190,7 @@ impl DeclarationLinks {
         Self {
             links,
             repo_root: repo_root.to_owned(),
+            port_manifest,
         }
     }
 
@@ -192,6 +201,11 @@ impl DeclarationLinks {
     /// Whether the repository the document is written to still carries `file`.
     fn source_exists(&self, file: &str) -> bool {
         self.repo_root.join(file).is_file()
+    }
+
+    /// Whether a parity manifest was read, which distinguishes a port from a source checkout.
+    fn is_port(&self) -> bool {
+        self.port_manifest
     }
 }
 
@@ -784,6 +798,9 @@ fn declared_in(declarations: &DeclarationLinks, source: &str) -> String {
     let file = source.split(':').next().unwrap_or(source);
     match declarations.get(file) {
         Some(target) => format!("[`{target}`](../{target}) from `{source}`"),
+        // No manifest means a source checkout, which carries the declaration file itself and
+        // renders the pinned document's own relative link.
+        None if !declarations.is_port() => format!("[`{source}`](../{file})"),
         None if declarations.source_exists(file) => format!("[`{source}`](../{file})"),
         // The port has retired the source file and no verified row names its Rust owner yet, so
         // the declaration stays a plain reference rather than a link the link gate rejects.

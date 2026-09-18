@@ -26,6 +26,8 @@ uuid.workspace = true
 
 [dev-dependencies]
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-source-oracle = { path = "../source-oracle" }
+tempfile.workspace = true
 
 [lints]
 workspace = true

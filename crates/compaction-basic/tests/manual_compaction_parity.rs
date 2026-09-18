@@ -1681,7 +1681,7 @@ async fn loop_keeps_injected_context_pending_and_marker_listener_order_stable() 
 }
 
 #[tokio::test]
-async fn loop_marker_listeners_inject_reentrantly_without_reordering_bracket() {
+async fn loop_marker_order_survives_listeners_attempting_a_reentrant_injection() {
     let harness = LoopHarness::new();
     harness.seed().await;
     let attempts = Arc::new(Mutex::new(Vec::new()));
@@ -1702,14 +1702,16 @@ async fn loop_marker_listeners_inject_reentrantly_without_reordering_bracket() {
                     "compaction/start" | "compaction/summary"
                 ) {
                     observed.lock().push(event.event_type.clone());
-                    agent
-                        .inject(UserMessage::new(
-                            vec![ContentBlock::Text {
-                                text: format!("from {}", event.event_type).into(),
-                            }],
-                            MessageSource::plugin("listener"),
-                        ))
-                        .unwrap();
+                    // The source's listener injects without catching. The splice appends to the
+                    // session while this event is still publishing, so the append rejects the
+                    // reentry and the message never reaches the inbox; the contained observer
+                    // keeps that error away from the compaction that raised the event.
+                    agent.inject(UserMessage::new(
+                        vec![ContentBlock::Text {
+                            text: format!("from {}", event.event_type).into(),
+                        }],
+                        MessageSource::plugin("listener"),
+                    ))?;
                 }
                 Ok(EventReply::Undefined)
             },
@@ -1744,7 +1746,7 @@ async fn loop_marker_listeners_inject_reentrantly_without_reordering_bracket() {
                     == Some("listener")
             })
             .count(),
-        2
+        0
     );
     assert!(derived_text(harness.agent.agent.session())[0].contains("checkpoint"));
     assert_eq!(

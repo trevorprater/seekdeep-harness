@@ -48,7 +48,7 @@ pub fn e2b_control_envs(overrides: &BTreeMap<String, String>) -> BTreeMap<String
 }
 
 /// Shared E2B owner configuration.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct E2bConfig {
     /// API key; omission reads `E2B_API_KEY`.
@@ -57,6 +57,23 @@ pub struct E2bConfig {
     pub cwd: String,
     /// Sandbox lifetime in milliseconds.
     pub timeout_ms: f64,
+}
+
+impl std::fmt::Debug for E2bConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("E2bConfig")
+            .field(
+                "api_key",
+                &self
+                    .api_key
+                    .as_deref()
+                    .map(|value| if value.is_empty() { "" } else { "<redacted>" }),
+            )
+            .field("cwd", &self.cwd)
+            .field("timeout_ms", &self.timeout_ms)
+            .finish()
+    }
 }
 
 impl Default for E2bConfig {
