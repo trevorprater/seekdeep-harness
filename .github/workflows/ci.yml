@@ -575,7 +575,10 @@ jobs:
           && fromJSON('["self-hosted", "seekdeep-win-ci", "windows"]')
           || vars.SEEKDEEP_CI_HOSTED_WINDOWS_RUNNER || 'windows-latest' }}
     name: windows node 24 / native complete
-    timeout-minutes: 60
+    # The complete lane needs more than an hour on windows-latest: setup takes about
+    # eleven minutes, the thirty-two gates that fit before the cut-off took forty-six
+    # (the WebAssembly build alone thirty-five), and eleven gates never ran.
+    timeout-minutes: 150
     env:
       SEEKDEEP_COVERAGE_MAX_WORKERS: '2'
       SEEKDEEP_GATE_CONCURRENCY: '1'
