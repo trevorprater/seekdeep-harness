@@ -9,6 +9,9 @@
     },
     "./types": {
       "types": "./lib/types/types.d.ts"
+    },
+    ".": {
+      "types": "./lib/types/index.d.ts"
     }
   },
   "files": [
@@ -31,6 +34,7 @@
     "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
     "directory": "packages/session/session-projection"
   },
+  "types": "lib/types/index.d.ts",
   "seekdeep": {
     "compiled": true
   }

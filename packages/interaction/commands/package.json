@@ -16,6 +16,9 @@
     "./remote": {
       "types": "./lib/typert.remote-client.d.ts",
       "default": "./lib/typert.remote-client.js"
+    },
+    ".": {
+      "types": "./lib/types/index.d.ts"
     }
   },
   "files": [
@@ -46,6 +49,7 @@
     "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
     "directory": "packages/interaction/commands"
   },
+  "types": "lib/types/index.d.ts",
   "seekdeep": {
     "compiled": true
   }
