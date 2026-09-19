@@ -865,10 +865,11 @@ impl AcpSnapshotSuite {
                 };
                 if *header != expected {
                     anyhow::bail!(
-                        "session {}: request/header #{} diverged from the pinned ({}) header",
+                        "session {}: request/header #{} diverged from the pinned ({}) header at {}",
                         log.id,
                         header_index + 1,
-                        pin.name
+                        pin.name,
+                        first_difference(&expected, header)
                     );
                 }
                 if expected_changes == 0 {
@@ -2629,8 +2630,117 @@ fn truncate_diagnostic(value: &str) -> String {
     }
 }
 
+/// Names the first JSON path where `actual` departs from `expected`, with both values
+/// abbreviated, so a divergence report from CI identifies the field without the whole header.
+fn first_difference(expected: &Value, actual: &Value) -> String {
+    fn walk(expected: &Value, actual: &Value, path: &mut Vec<String>) -> Option<String> {
+        match (expected, actual) {
+            (Value::Object(left), Value::Object(right)) => {
+                for (key, left_value) in left {
+                    path.push(key.clone());
+                    let found = match right.get(key) {
+                        Some(right_value) => walk(left_value, right_value, path),
+                        None => Some(format!(
+                            "{}: expected {}, missing",
+                            path.join("."),
+                            abbreviate(left_value)
+                        )),
+                    };
+                    path.pop();
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+                right
+                    .keys()
+                    .find(|key| !left.contains_key(*key))
+                    .map(|key| {
+                        path.push(key.clone());
+                        let report =
+                            format!("{}: unexpected {}", path.join("."), abbreviate(&right[key]));
+                        path.pop();
+                        report
+                    })
+            }
+            (Value::Array(left), Value::Array(right)) => {
+                for (index, (left_value, right_value)) in left.iter().zip(right).enumerate() {
+                    path.push(index.to_string());
+                    let found = walk(left_value, right_value, path);
+                    path.pop();
+                    if found.is_some() {
+                        return found;
+                    }
+                }
+                (left.len() != right.len()).then(|| {
+                    format!(
+                        "{}: expected {} items, got {}",
+                        path.join("."),
+                        left.len(),
+                        right.len()
+                    )
+                })
+            }
+            _ if expected == actual => None,
+            _ => Some(format!(
+                "{}: expected {}, got {}",
+                path.join("."),
+                abbreviate(expected),
+                abbreviate(actual)
+            )),
+        }
+    }
+    let mut path = vec!["header".to_owned()];
+    walk(expected, actual, &mut path).unwrap_or_else(|| "an unlocated difference".to_owned())
+}
+
+fn abbreviate(value: &Value) -> String {
+    let text = value.to_string();
+    if text.chars().count() > 160 {
+        let cut: String = text.chars().take(160).collect();
+        format!("{cut}…")
+    } else {
+        text
+    }
+}
+
 #[cfg(test)]
 mod mismatch_tests {
+    #[test]
+    fn first_difference_names_the_first_departing_path() {
+        use serde_json::json;
+
+        let expected = json!({"model": "m", "tools": [{"name": "a", "description": "one"}]});
+        assert_eq!(
+            super::first_difference(
+                &expected,
+                &json!({"model": "m", "tools": [{"name": "a", "description": "two"}]})
+            ),
+            "header.tools.0.description: expected \"one\", got \"two\""
+        );
+        assert_eq!(
+            super::first_difference(&expected, &json!({"model": "m", "tools": []})),
+            "header.tools: expected 1 items, got 0"
+        );
+        assert_eq!(
+            super::first_difference(
+                &expected,
+                &json!({"model": "m", "tools": [{"name": "a", "description": "one"}], "extra": 1})
+            ),
+            "header.extra: unexpected 1"
+        );
+        assert_eq!(
+            super::first_difference(
+                &expected,
+                &json!({"tools": [{"name": "a", "description": "one"}]})
+            ),
+            "header.model: expected \"m\", missing"
+        );
+        assert_eq!(
+            super::first_difference(&expected, &expected),
+            "an unlocated difference"
+        );
+    }
+
     use super::snapshot_mismatch;
 
     #[test]

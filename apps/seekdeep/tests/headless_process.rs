@@ -25,7 +25,10 @@ use tokio::{
     task::JoinHandle,
 };
 
-const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
+/// The source gave each e2e test 120 s under its Vitest configuration and its execa child 25 s;
+/// the port's child is a debug build whose boot on a loaded hosted runner exceeded 20 s while
+/// producing no output, so the whole per-test budget applies to the process.
+const PROCESS_TIMEOUT: Duration = Duration::from_secs(120);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
 const TASK: &str = "prove the executable path";
 const ANSWER: &str = "HEADLESS_PROCESS_ROUND_TRIP";
