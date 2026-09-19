@@ -575,7 +575,7 @@ fn node_compat_smokes_name_suites_the_workspace_builds() {
     let smokes = gates_for_mode(GateMode::NodeCompat, &environment)
         .unwrap()
         .into_iter()
-        .filter(|gate| gate.command == PathBuf::from("cargo"))
+        .filter(|gate| gate.command == std::path::Path::new("cargo"))
         .collect::<Vec<_>>();
     assert_eq!(smokes.len(), 4);
     for smoke in smokes {
