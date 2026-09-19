@@ -5,6 +5,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use seekdeep_attachment::ATTACHMENTS;
 use seekdeep_cordis::{Context, Fiber, Plugin, fiber::EffectHandle};
+use seekdeep_lossless_json::JsonNumber;
 use serde::{Deserialize, Serialize};
 
 use crate::edit::apply_edit_tool;
@@ -25,13 +26,13 @@ pub const INJECT: &[&str] = &["tools", "fs", "systemPrompt"];
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
     /// Default and maximum number of lines returned by one read call.
-    pub read_limit: Option<u64>,
+    pub read_limit: Option<JsonNumber>,
     /// Maximum characters returned for a single line before truncation.
-    pub read_max_line_length: Option<u64>,
+    pub read_max_line_length: Option<JsonNumber>,
     /// Maximum bytes returned for the selected lines of one read call.
-    pub read_max_bytes: Option<u64>,
+    pub read_max_bytes: Option<JsonNumber>,
     /// Files at or above this size stream instead of loading whole into memory.
-    pub read_stream_min_size: Option<u64>,
+    pub read_stream_min_size: Option<JsonNumber>,
 }
 
 impl Config {
@@ -41,30 +42,34 @@ impl Config {
     ///
     /// Returns a non-positive cap failure.
     pub fn resolved(&self) -> anyhow::Result<ReadToolCaps> {
-        let read_limit = self.read_limit.unwrap_or(READ_LIMIT);
+        let read_limit = self.read_limit.unwrap_or(JsonNumber::from(READ_LIMIT));
         let read_max_line_length = self
             .read_max_line_length
-            .unwrap_or(u64::try_from(READ_MAX_LINE_LENGTH).unwrap_or(u64::MAX));
+            .unwrap_or(JsonNumber::from(READ_MAX_LINE_LENGTH));
         let read_max_bytes = self
             .read_max_bytes
-            .unwrap_or(u64::try_from(READ_MAX_BYTES).unwrap_or(u64::MAX));
-        let read_stream_min_size = self.read_stream_min_size.unwrap_or(STREAM_MIN_SIZE);
+            .unwrap_or(JsonNumber::from(READ_MAX_BYTES));
+        let read_stream_min_size = self
+            .read_stream_min_size
+            .unwrap_or(JsonNumber::from(STREAM_MIN_SIZE));
         assert_positive_integer("readLimit", read_limit)?;
         assert_positive_integer("readMaxLineLength", read_max_line_length)?;
         assert_positive_integer("readMaxBytes", read_max_bytes)?;
         assert_positive_integer("readStreamMinSize", read_stream_min_size)?;
         Ok(ReadToolCaps {
             limit: read_limit,
-            max_line_length: usize::try_from(read_max_line_length).unwrap_or(usize::MAX),
-            max_bytes: usize::try_from(read_max_bytes).unwrap_or(usize::MAX),
+            max_line_length: read_max_line_length,
+            max_bytes: read_max_bytes,
             stream_min_size: read_stream_min_size,
         })
     }
 }
 
-/// Every read cap is a positive integer, or windowing arithmetic misbehaves silently.
-fn assert_positive_integer(name: &str, value: u64) -> anyhow::Result<()> {
-    if value == 0 {
+/// Every read cap counts lines, chars, or bytes: a positive integer, or windowing
+/// arithmetic misbehaves silently. The source admits any integer the JavaScript
+/// number range holds, so the cap keeps that number instead of narrowing to `u64`.
+fn assert_positive_integer(name: &str, value: JsonNumber) -> anyhow::Result<()> {
+    if !value.is_positive_integer() {
         anyhow::bail!("tool-fs: {name} must be a positive integer");
     }
     Ok(())
@@ -168,16 +173,30 @@ mod tests {
     #[test]
     fn resolved_defaults_and_rejects_zero() {
         let caps = Config::default().resolved().expect("defaults are valid");
-        assert_eq!(caps.limit, READ_LIMIT);
-        assert_eq!(caps.max_line_length, READ_MAX_LINE_LENGTH);
-        assert_eq!(caps.max_bytes, READ_MAX_BYTES);
-        assert_eq!(caps.stream_min_size, STREAM_MIN_SIZE);
+        assert_eq!(caps.limit, JsonNumber::from(READ_LIMIT));
+        assert_eq!(caps.max_line_length, JsonNumber::from(READ_MAX_LINE_LENGTH));
+        assert_eq!(caps.max_bytes, JsonNumber::from(READ_MAX_BYTES));
+        assert_eq!(caps.stream_min_size, JsonNumber::from(STREAM_MIN_SIZE));
 
-        let zero = Config {
-            read_limit: Some(0),
+        for invalid in [0.0, 2.5, f64::NAN, f64::INFINITY] {
+            let config = Config {
+                read_limit: Some(JsonNumber::new(invalid)),
+                ..Config::default()
+            };
+            assert_eq!(
+                config.resolved().expect_err("rejected cap").to_string(),
+                "tool-fs: readLimit must be a positive integer"
+            );
+        }
+        // The source accepts any finite positive integer, including ones past u64.
+        let huge = Config {
+            read_limit: Some(JsonNumber::new(1e300)),
+            read_max_bytes: Some(JsonNumber::new(18_446_744_073_709_551_616.0)),
             ..Config::default()
         };
-        assert!(zero.resolved().is_err());
+        let caps = huge.resolved().expect("huge caps are positive integers");
+        assert_eq!(caps.limit, JsonNumber::new(1e300));
+        assert_eq!(caps.max_bytes.saturating_usize(), usize::MAX);
     }
 
     #[test]
@@ -187,8 +206,11 @@ mod tests {
             "readMaxLineLength": 100,
         }))
         .expect("camelCase fields");
-        assert_eq!(parsed.read_limit, Some(500));
-        assert_eq!(parsed.read_max_line_length, Some(100));
+        assert_eq!(parsed.read_limit, Some(JsonNumber::new(500.0)));
+        assert_eq!(parsed.read_max_line_length, Some(JsonNumber::new(100.0)));
+        let fractional: Config =
+            serde_json::from_value(serde_json::json!({"readMaxBytes": 1.5})).expect("a number");
+        assert_eq!(fractional.read_max_bytes, Some(JsonNumber::new(1.5)));
         assert!(serde_json::from_value::<Config>(serde_json::json!({"bogus": 1})).is_err());
     }
 }

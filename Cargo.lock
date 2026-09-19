@@ -10418,6 +10418,7 @@ dependencies = [
  "seekdeep-fs",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-session-persistence",
  "seekdeep-session-persistence-jsonl",

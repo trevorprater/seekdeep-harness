@@ -54,6 +54,7 @@ pub use schema::{
     ToolArgsError, define_tool, parameter_schema_spec_to_json_schema, validate_args,
     value_schema_spec_to_json_schema,
 };
+pub use seekdeep_lossless_json::JsonNumber;
 pub use testing::{ContentToolFixtureOptions, define_content_tool_fixture};
 pub use ts_types::{ToolSdkSchema, json_schema_to_ts, render_tools_sdk};
 

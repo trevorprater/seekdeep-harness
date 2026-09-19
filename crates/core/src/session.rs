@@ -319,7 +319,7 @@ pub enum SessionError {
     #[error("{0}")]
     InvalidEvent(String),
     /// Another append is inside its acceptance/publication section.
-    #[error("session append cannot reenter while another append is being accepted")]
+    #[error("session append cannot reenter while another append is being published")]
     ReentrantAppend,
 }
 
@@ -440,6 +440,18 @@ pub struct Session {
     inner: Mutex<SessionInner>,
     append_gate: ReentrantMutex<()>,
     publisher: Mutex<Option<Weak<dyn SessionPublisher>>>,
+}
+
+/// Keeps an append admitted while its `session/event` observers run, and
+/// releases the admission however publication ends.
+struct AppendAdmission<'a> {
+    inner: &'a Mutex<SessionInner>,
+}
+
+impl Drop for AppendAdmission<'_> {
+    fn drop(&mut self) {
+        self.inner.lock().appending = false;
+    }
 }
 
 impl std::fmt::Debug for Session {
@@ -663,8 +675,12 @@ impl Session {
         let mut inner = self.inner.lock();
         Arc::make_mut(&mut inner.log).push(event.clone());
         inner.surface = next_surface;
-        inner.appending = false;
         drop(inner);
+        // The append stays admitted while its observers run: a `session/event`
+        // listener that appends reenters this section and is rejected, as in
+        // the source, instead of interleaving a nested event ahead of the
+        // observers that have not yet seen this one.
+        let _admission = AppendAdmission { inner: &self.inner };
         if let Some(publication) = publication {
             publication.publish();
         }

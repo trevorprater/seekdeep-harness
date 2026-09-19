@@ -4,7 +4,7 @@ use std::{path::Path, process::Command};
 
 use seekdeep_cordis::Context;
 use seekdeep_fs::FsError;
-use seekdeep_lossless_json::{JsonString, JsonValue};
+use seekdeep_lossless_json::{JsonNumber, JsonString, JsonValue};
 use seekdeep_source_oracle::SourceOracle;
 use seekdeep_tool_fs::read_render::{
     FileReadOutcome, ReadWindow, build_window, format_read_output, lang_from_path,
@@ -74,8 +74,8 @@ fn windows() -> Vec<WindowCase> {
                         cases.push(WindowCase {
                             chunks: chunks.clone(),
                             request: ReadWindow {
-                                offset,
-                                limit: 3,
+                                offset: JsonNumber::from(offset),
+                                limit: JsonNumber::new(3.0),
                                 max_line_length,
                                 max_bytes,
                             },
@@ -85,6 +85,33 @@ fn windows() -> Vec<WindowCase> {
                 }
             }
         }
+    }
+    // Offsets and limits are JavaScript numbers in the source: integers past
+    // 2^53 and past u64 stay valid, format with JavaScript's shortest digits in
+    // the out-of-range message, and a limit past the file length never caps.
+    let past_u64 = 18_446_744_073_709_551_616.0;
+    let large_number_cases = [
+        ("one\ntwo\nthree\n", 9_007_199_254_740_992.0, 2.0),
+        ("one\ntwo\nthree\n", 9_007_199_254_740_993.0, 2.0),
+        ("one\ntwo\nthree\n", 1_152_921_504_606_846_976.0, 2.0),
+        ("one\ntwo\nthree\n", past_u64, 2.0),
+        ("one\ntwo\nthree\n", 1e300, 2.0),
+        ("", 1e300, 1.0),
+        ("one\ntwo\nthree\n", 1.0, past_u64),
+        ("one\ntwo\nthree", 2.0, 1e300),
+        ("one\ntwo\nthree", 3.0, 9_007_199_254_740_992.0),
+    ];
+    for (text, offset, limit) in large_number_cases {
+        cases.push(WindowCase {
+            chunks: vec![JsonString::from(text)],
+            request: ReadWindow {
+                offset: JsonNumber::new(offset),
+                limit: JsonNumber::new(limit),
+                max_line_length: 2000,
+                max_bytes: 50 * 1024,
+            },
+            path: "large.rs".to_owned(),
+        });
     }
     for (text, offset, limit, size) in [
         ("y".repeat(100) + "\n", 1, 2000, 512),
@@ -102,8 +129,8 @@ fn windows() -> Vec<WindowCase> {
                 .map(JsonString::from_utf16)
                 .collect(),
             request: ReadWindow {
-                offset,
-                limit,
+                offset: JsonNumber::from(offset),
+                limit: JsonNumber::from(limit),
                 max_line_length: 2000,
                 max_bytes: 50 * 1024,
             },
@@ -165,6 +192,17 @@ fn metadata() -> Vec<JsonValue> {
         r#"{"path":"old","path":"new","offset":1e0,"lines":[{"number":1.0,"text":"old","text":"\ud800"}],"totalLines":1e0,"\udfff":"ignored"}"#,
         r#"{"path":"a","offset":2,"lines":[{"number":1,"text":"x"}],"totalLines":2}"#,
         r#"{"path":"a","offset":1,"lines":[{"number":2,"text":"x"},{"number":1,"text":"y"}],"totalLines":2}"#,
+        // Replayed numbers are JavaScript numbers: values past 2^53 and past u64
+        // stay valid, keep the source's formatting, and compare as binary64, so a
+        // line at 2^64 sits at `offset - 1` when the offset is 2^64 too.
+        r#"{"path":"a","offset":1e300,"lines":[],"totalLines":0}"#,
+        r#"{"path":"a","offset":1,"lines":[{"number":1,"text":"x"},{"number":18446744073709551616,"text":"y"}],"totalLines":1e300}"#,
+        r#"{"path":"a","offset":18446744073709551616,"lines":[{"number":18446744073709551616,"text":"x"}],"totalLines":18446744073709551616}"#,
+        r#"{"path":"a","offset":9007199254740992,"lines":[{"number":9007199254740992,"text":"x"},{"number":9007199254740994,"text":"y"}],"totalLines":9007199254740994}"#,
+        r#"{"path":"a","offset":9007199254740993,"lines":[{"number":9007199254740993,"text":"x"}],"totalLines":9007199254740993}"#,
+        r#"{"path":"a","offset":1,"lines":[{"number":1,"text":"x"}],"totalLines":1e400}"#,
+        r#"{"path":"a","offset":1,"lines":[{"number":1,"text":"x"}],"totalLines":-0}"#,
+        r#"{"path":"a","offset":1152921504606846976,"lines":[],"totalLines":1152921504606846977}"#,
     ] {
         cases.push(JsonValue::parse(raw.to_owned()).unwrap());
     }

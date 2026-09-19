@@ -13,7 +13,7 @@ use seekdeep_sandbox::{SandboxExecutionPolicy, sandbox_denial_marker};
 use seekdeep_sandbox_policy::{SANDBOX_POLICY, SandboxPolicyRequest, SandboxPolicyService};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, DiffCallView, FileDiff, FileLocation, GenericCallView,
-    TOOLS, ToolCallKind, ToolCallView, ToolRunContext, define_tool,
+    JsonNumber, TOOLS, ToolCallKind, ToolCallView, ToolRunContext, define_tool,
 };
 use seekdeep_util::utf16::{utf16_len, utf16_prefix};
 use serde::{Deserialize, Serialize};
@@ -901,9 +901,9 @@ fn nonnegative_index(value: f64) -> Option<usize> {
 }
 
 fn present_editor_call(args: &EditorArgs) -> ToolCallView {
-    let location = |line| FileLocation {
+    let location = |line: Option<f64>| FileLocation {
         path: args.path.clone(),
-        line,
+        line: line.map(JsonNumber::new),
     };
     match args.command {
         EditorCommand::View => ToolCallView::Generic(GenericCallView {

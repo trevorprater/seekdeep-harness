@@ -4,7 +4,7 @@ use std::path::Path;
 
 use seekdeep_cordis::Context;
 use seekdeep_llm::{AbortSignal, CallId};
-use seekdeep_lossless_json::{JsonString, JsonValue};
+use seekdeep_lossless_json::{JsonNumber, JsonString, JsonValue};
 use seekdeep_tools::{
     ToolExecutionInput, ToolExecutionResult, ToolPresentationMode, ToolRuntimeConfig,
 };
@@ -47,8 +47,8 @@ async fn seed_with_context(
     seekdeep_tool_fs::apply_read_tool(
         context,
         &seekdeep_tool_fs::Config {
-            read_max_line_length: Some(32),
-            read_stream_min_size: Some(1),
+            read_max_line_length: Some(JsonNumber::new(32.0)),
+            read_stream_min_size: Some(JsonNumber::new(1.0)),
             ..Default::default()
         }
         .resolved()?,

@@ -11,8 +11,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Value, value::RawValue};
 
 mod javascript;
+mod number;
 mod pretty;
 mod string;
+pub use number::JsonNumber;
 pub use string::JsonString;
 
 /// A validated JSON value, including escaped lone UTF-16 surrogates in strings

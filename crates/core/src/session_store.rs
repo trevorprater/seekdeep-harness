@@ -752,26 +752,39 @@ mod tests {
         assert_eq!(disposed.load(Ordering::SeqCst), 1);
     }
 
+    /// Source: `contains a reentrant observer append without reordering later observers`.
     #[tokio::test]
-    async fn committed_event_observers_can_append_the_next_ordered_event() {
+    async fn contains_a_reentrant_observer_append_without_reordering_later_observers() {
         let context = Context::new();
         let store = SessionStore::install(&context).unwrap();
+        let rejections = Arc::new(Mutex::new(Vec::new()));
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let rejected = rejections.clone();
         context
             .events()
             .on_sync(
                 &context,
                 "session/event",
-                |_, args| {
-                    let session = args.get::<Session>(0).unwrap();
+                move |_, args| {
+                    let observed = args.get::<Session>(0).unwrap();
+                    let error = observed
+                        .append("todo/write", json!({"todos": []}), AppendOptions::default())
+                        .expect_err("an append inside session/event publication is rejected");
+                    rejected.lock().push(error.to_string());
+                    Err(error.into())
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let later = heard.clone();
+        context
+            .events()
+            .on_sync(
+                &context,
+                "session/event",
+                move |_, args| {
                     let event = args.get::<SessionEvent>(1).unwrap();
-                    if event.event_type == "outer" {
-                        let nested = session.append(
-                            "nested",
-                            json!({"after": event.seq}),
-                            AppendOptions::default(),
-                        )?;
-                        assert_eq!(nested.seq, event.seq + 1);
-                    }
+                    later.lock().push(event.as_ref().clone());
                     Ok(EventReply::Undefined)
                 },
                 EventOptions::default(),
@@ -784,16 +797,14 @@ mod tests {
                 CreateSessionOptions::default(),
             )
             .unwrap();
-        session
-            .append("outer", json!({}), AppendOptions::default())
+        let appended = session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
             .unwrap();
+        assert_eq!(session.events(), std::slice::from_ref(&appended));
+        assert_eq!(*heard.lock(), [appended]);
         assert_eq!(
-            session
-                .events()
-                .iter()
-                .map(|event| event.event_type.as_str())
-                .collect::<Vec<_>>(),
-            ["outer", "nested"]
+            *rejections.lock(),
+            ["session append cannot reenter while another append is being published"]
         );
     }
 
