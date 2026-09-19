@@ -159,13 +159,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.93.1
         with:
           targets: wasm32-unknown-unknown
+          components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: primary-rust-wasm
+          key: coverage-rust-wasm
 
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install the instrumented coverage runner
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.8.5
 
       - name: Install pinned browser build dependencies
         run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
@@ -597,6 +603,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.93.1
         with:
           targets: wasm32-unknown-unknown
+          components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -604,6 +611,11 @@ jobs:
 
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install the instrumented coverage runner
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.8.5
 
       - uses: pnpm/action-setup@v4
         with:

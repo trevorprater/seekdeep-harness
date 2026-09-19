@@ -10,8 +10,17 @@ use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod lane;
 mod launcher;
-pub use launcher::{FIXTURE_EXCLUSION, coverage_arguments, run_coverage};
+pub use lane::{
+    ADOPTION_REASON, CARGO_LLVM_COV_VERSION, Evaluation, FileCoverage, Host, MANIFEST_PATH,
+    MeasuredSet, Metric, ROSTER_NOTE, ROSTER_PATH, Roster, RosterEntry, evaluate,
+    regenerate_roster, roster_additions, translate_export,
+};
+pub use launcher::{
+    CoverageArguments, coverage_target_dir, instrumented_exclusions, parse_arguments,
+    report_command, run_coverage, test_command,
+};
 
 /// State passed through the Istanbul compatibility adapter.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]

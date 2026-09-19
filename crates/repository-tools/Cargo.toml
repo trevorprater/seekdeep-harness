@@ -34,11 +34,13 @@ parcel_selectors.workspace = true
 percent-encoding.workspace = true
 portable-pty.workspace = true
 regex.workspace = true
+rustc-demangle.workspace = true
 ryu-js.workspace = true
 scraper.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yml.workspace = true
+seekdeep-pwsh-local = { path = "../pwsh-local" }
 seekdeep-typert-generator = { path = "../typert-generator" }
 seekdeep-source-oracle = { path = "../source-oracle" }
 sha1.workspace = true

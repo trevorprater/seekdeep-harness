@@ -38193,7 +38193,7 @@
         "pnpm test:built-bin --maxWorkers 2: all 11 selected native smoke suites passed; pnpm test:coverage-exempt-heavy --maxWorkers 2: all four suites passed, including 157 active pinned Typert cases and 31 native gate-tool cases",
         "The exact source-setup action passed all five steps in a fresh outside-project checkout, including the normal frozen install and complete original Host/Client library build. Source-oracle, repository-tools, repository-runner, and credentials-local passed MSVC Clippy."
       ],
-      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. Public build, lint, documentation, native smoke and heavy-suite checkpoints pass. Final workspace and native Windows verification remain required. Host npm compatibility artifacts remain incomplete: 188 invariant companions lack lib/invariant.js and 31 companions fail plain-Node Loader initialization. Native CLI platform packages, actual native/WASM coverage, and equivalent workflow coverage assertions remain open. Root package parity is not complete."
+      "note": "Root build and validation commands execute compiled Rust across native and WASM targets. Public build, lint, documentation, native smoke and heavy-suite checkpoints pass. The npm compatibility artifacts are declarations-only for compiled packages (DEV-004) and the built-package invariant gate runs against the generated loader under plain Node; test:coverage is the instrumented cargo llvm-cov lane (DEV-005) and the CI workflow contract carries the source's coverage-selection cases. Final verification of the complete Linux workspace lanes and the native Windows lane on a green run remains required before this row is verified; compiled CLI platform packages are post-parity work (porting/POST_PARITY.md)."
     },
     {
       "source": "packages/AGENTS.md",
@@ -86815,16 +86815,20 @@
     {
       "source": "scripts/ci-workflow.spec.ts",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/repository-tools/tests/ci_workflow_contract.rs"
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        "crates/repository-tools/src/coverage_uncovered_locations/lane.rs",
+        "scripts/coverage-roster.json"
       ],
       "evidence": [
         "pnpm exec vitest run scripts/ci-workflow.spec.ts (pinned source: 12 passed)",
-        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract --all-features (16 passed): ten of the twelve source cases ported, verbatim or through the documented Rust replacements (the Rust release crate's GitHub output in place of the PEP 440 shell step, cargo xtask macos-deployment-target in place of the Python checker, the GLIBC proof read from the Rust executable in place of the node-pty rebuild, the optional lifecycle app's client-id guard ahead of the source's verbatim handoff condition)",
-        "cargo clippy -p seekdeep-repository-tools --tests --all-features -- -D warnings"
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract --all-features (19 passed): ten source cases ported verbatim or through the documented Rust replacements (the Rust release crate's GitHub output in place of the PEP 440 shell step, cargo xtask macos-deployment-target in place of the Python checker, the GLIBC proof read from the Rust executable in place of the node-pty rebuild, the optional lifecycle app's client-id guard ahead of the source's verbatim handoff condition)",
+        "The two native Windows coverage-selection cases hold against the instrumented Rust lane (DEV-005): the measured set derived from the parity manifest keeps crates/lsp-stdio/src/{connection,provider,instance}.rs under the bar on every platform and the roster lifts no lsp-stdio file on Windows alone; the lane is one cargo llvm-cov run whose test targets are separate processes on every platform, with no platform-dependent pool switch",
+        "Both coverage lanes install llvm-tools-preview and cargo-llvm-cov 0.8.5 before their gate inventory, and the Linux lane caches its instrumented target directory under its own key",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
       ],
-      "note": "Workflow topology, setup, Python release, wheel builder, GitLab, and issue-lifecycle checks pass. The source's two native Windows coverage-selection cases (supported LSP source stays under instrumented coverage; every project stays process-isolated) have no counterpart until the instrumented Rust coverage lane exists, which the scripts/run-gates.ts row tracks."
+      "note": "Workflow topology, setup, Python release, wheel builder, GitLab, issue-lifecycle, and coverage-selection checks pass; the coverage-selection cases are ported against the instrumented Rust lane's measured set, roster, and command rather than a Vitest configuration (DEV-005)."
     },
     {
       "source": "scripts/clean.spec.ts",
@@ -87007,7 +87011,10 @@
         "crates/repository-tools/tests/coverage_uncovered_locations_parity.rs",
         "crates/repository-tools/src/coverage_uncovered_locations/launcher.rs",
         "crates/repository-tools/src/bin/run-coverage.rs",
-        "crates/repository-tools/tests/coverage_launcher_parity.rs"
+        "crates/repository-tools/tests/coverage_launcher_parity.rs",
+        "crates/repository-tools/src/coverage_uncovered_locations/lane.rs",
+        "scripts/coverage-roster.json",
+        "crates/repository-tools/src/coverage_exempt.rs"
       ],
       "evidence": [
         "Exact source and native console lines for missed statements, functions, branches, empty implicit arms, Infinity ends, ordering, Unicode paths, and outside-root paths.",
@@ -87015,9 +87022,10 @@
         "Actual installed Istanbul report factory and report-tree execution delegate to the compiled native binary.",
         "All five native differential/executable tests passed, including the 1525844-byte report and loader/public-instance-surface checks.",
         "2026-09-11: 43 focused helper tests and strict owned Clippy passed, including actual Istanbul, 60 event relations, eight source graph artifacts, 384 primary declarations and 98 native invariant companions.",
-        "2026-09-17: in the default context the launcher excludes crates/*/tests/fixtures (parity suites that Rust tests run through their own Vitest configurations) and passes --passWithNoTests because the retired TypeScript test tier leaves the root run with no suites; a caller-selected configuration keeps its own precedence (coverage_launcher_parity pins both contexts)"
+        "2026-09-17: in the default context the launcher excludes crates/*/tests/fixtures (parity suites that Rust tests run through their own Vitest configurations) and passes --passWithNoTests because the retired TypeScript test tier leaves the root run with no suites; a caller-selected configuration keeps its own precedence (coverage_launcher_parity pins both contexts)",
+        "2026-09-19: run-coverage is the instrumented Rust lane (DEV-005): cargo llvm-cov over the workspace minus the exempt heavy-suite crates, the LLVM export translated into the reporter's Istanbul shape (instantiations merged by span and declaration, columns rebased), per-file 100% on lines, functions, and regions for the crates realizing packages/*/*/src, Vitest-worded threshold failures, and the scripts/coverage-roster.json exclusion roster with platform and pwsh conditions; cargo test -p seekdeep-repository-tools --test coverage_launcher_parity (7 passed, including a real cargo llvm-cov run over a fixture workspace: uncovered locations, threshold exit 1, roster adoption, green rerun)"
       ],
-      "note": "Rust implementation and focused source/executable checks complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them."
+      "note": "Reporter, launcher, and lane complete. Current-root missing installed metadata, historical source paths or stale content remain explicit input failures; no content rewrite hid them. Branches and WebAssembly code are not measured (DEV-005)."
     },
     {
       "source": "scripts/demo-code-mode.mjs",
@@ -88053,7 +88061,9 @@
         "crates/repository-runner/tests/rebuild.rs",
         "crates/repository-tools/src/native_test_gates.rs",
         "crates/repository-tools/src/bin/run-native-test-gate.rs",
-        "crates/repository-tools/tests/native_test_gates_parity.rs"
+        "crates/repository-tools/tests/native_test_gates_parity.rs",
+        "crates/repository-tools/src/coverage_uncovered_locations/lane.rs",
+        "crates/repository-tools/src/coverage_uncovered_locations/launcher.rs"
       ],
       "evidence": [
         "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
@@ -88061,9 +88071,10 @@
         "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
         "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)",
         "All 14 public aggregate scripts enter the std-only Rust bootstrap. A real Cargo workspace rebuild succeeds while the staged processor executes, preserving arguments, exit code, and cleanup; executing the Cargo output directly makes that regression fail.",
-        "The native suite inventory matches all 11 source smoke entries and all four heavy groups. Real Cargo failures remain gate failures; every compiled smoke and heavy group passed through the public scripts."
+        "The native suite inventory matches all 11 source smoke entries and all four heavy groups. Real Cargo failures remain gate failures; every compiled smoke and heavy group passed through the public scripts.",
+        "2026-09-19: the coverage leaf runs the instrumented Rust lane (crates/repository-tools/src/coverage_uncovered_locations/lane.rs); run_gates_parity keeps the gate's script, worker budget, and exempt-lane environment, and coverage_launcher_parity drives a real cargo llvm-cov run"
       ],
-      "note": "The Rust scheduler is a line-for-line port of the source's mode list, graph validation, bounded concurrency, dependency skipping, process outcomes, per-gate printing, summary, worker defaults, and exit code, and every aggregate keeps the source's gate ids, labels, dependencies, environment, and display commands under the SEEKDEEP_* names. Deliberate divergences: knip is absent from every graph because the knip.json row is withdrawn; the Node compatibility smokes run each source suite's verified compiled replacement through Cargo directly, and the source's vitest-jsdom-smoke is withdrawn with the scripts/vitest-environment.compat.spec.ts row because the port carries no Vitest projects; leaves that ran Vitest files run their compiled suites (test:coverage, test:coverage-exempt-heavy, test:built-bin, and the documentation site suites); Cargo-backed gates share one cargo-target serial group so concurrent gates never contend for the build directory. The instrumented coverage gate measures no Rust code because the withdrawn vitest.config.ts row removed the per-file thresholds with the Vitest projects; the cargo test inventory is the port's coverage."
+      "note": "The Rust scheduler is a line-for-line port of the source's mode list, graph validation, bounded concurrency, dependency skipping, process outcomes, per-gate printing, summary, worker defaults, and exit code, and every aggregate keeps the source's gate ids, labels, dependencies, environment, and display commands under the SEEKDEEP_* names. Deliberate divergences: knip is absent from every graph because the knip.json row is withdrawn; the Node compatibility smokes run each source suite's verified compiled replacement through Cargo directly, and the source's vitest-jsdom-smoke is withdrawn with the scripts/vitest-environment.compat.spec.ts row because the port carries no Vitest projects; leaves that ran Vitest files run their compiled suites (test:coverage, test:coverage-exempt-heavy, test:built-bin, and the documentation site suites); Cargo-backed gates share one cargo-target serial group so concurrent gates never contend for the build directory. The instrumented coverage gate is the cargo llvm-cov lane (DEV-005): per-file 100% lines, functions, and regions on the crates realizing packages/*/*/src, with scripts/coverage-roster.json as the exclusion roster, behind the same test:coverage leaf and worker budget."
     },
     {
       "source": "scripts/run-oxlint.spec.ts",

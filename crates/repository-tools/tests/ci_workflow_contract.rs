@@ -1,10 +1,16 @@
 //! Port of the source `scripts/ci-workflow.spec.ts`: the shape of the CI, E2B, and git-hook
 //! configuration that the runbooks rely on, read from the checked-in YAML.
 //!
-//! The source's two native Windows coverage-selection assertions (supported LSP source stays
-//! under instrumented coverage; every project stays process-isolated) have no counterpart until
-//! the instrumented Rust coverage lane exists; the run-gates parity row tracks that lane.
+//! The source's two native Windows coverage-selection cases hold against the instrumented Rust
+//! lane: its measured set and roster keep LSP source under the bar on every platform, and its one
+//! `cargo llvm-cov` run keeps every test target in its own process.
 
+use seekdeep_repository_tools::{
+    coverage_exempt::INSTRUMENTED_LANE_EXCLUDED_PACKAGES,
+    coverage_uncovered_locations::{
+        CARGO_LLVM_COV_VERSION, MeasuredSet, ROSTER_PATH, Roster, parse_arguments, test_command,
+    },
+};
 use serde_json::Value;
 
 const RUNNER_PRIVATE_PNPM_DESTINATION: &str = "${{ runner.temp }}/setup-pnpm";
@@ -672,4 +678,98 @@ fn issue_lifecycle_uses_explicit_review_handoff_events_without_rerunning_when_a_
             .expect("policy pull_request types")
             .contains(&Value::from("ready_for_review"))
     );
+}
+
+#[test]
+fn coverage_lanes_install_the_instrumentation_toolchain_before_their_gate_inventory() {
+    let ci = ci();
+    for name in ["node-24-coverage", "windows-native"] {
+        let steps = job(&ci, name)["steps"].as_array().unwrap();
+        let gates = steps
+            .iter()
+            .position(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.starts_with("pnpm run check:ci:"))
+            })
+            .expect("gate inventory");
+        let setup = &steps[..gates];
+        let toolchain = setup
+            .iter()
+            .find(|step| {
+                step["uses"]
+                    .as_str()
+                    .is_some_and(|action| action.starts_with("dtolnay/rust-toolchain@"))
+            })
+            .expect("toolchain step");
+        assert_eq!(
+            toolchain["with"]["components"], "llvm-tools-preview",
+            "{name} must install the LLVM tools"
+        );
+        let installer = setup
+            .iter()
+            .find(|step| step["uses"] == "taiki-e/install-action@v2")
+            .unwrap_or_else(|| panic!("{name} must install cargo-llvm-cov"));
+        assert_eq!(
+            installer["with"]["tool"],
+            format!("cargo-llvm-cov@{CARGO_LLVM_COV_VERSION}")
+        );
+        assert!(installer["if"].is_null());
+    }
+    // The instrumented target directory has its own cache key on the Linux lane.
+    let cache = job(&ci, "node-24-coverage")["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|step| step["uses"] == "Swatinem/rust-cache@v2")
+        .expect("rust cache");
+    assert_eq!(cache["with"]["key"], "coverage-rust-wasm");
+}
+
+#[test]
+fn keeps_supported_lsp_source_under_native_windows_coverage() {
+    // The source pinned that its coverage configuration no longer excludes lsp-stdio's
+    // connection, index, and instance modules. The port's measured set holds their crate to the
+    // bar on every platform, and no roster entry lifts an lsp-stdio file on Windows alone.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let measured = MeasuredSet::load(&root).unwrap();
+    for file in [
+        "crates/lsp-stdio/src/connection.rs",
+        "crates/lsp-stdio/src/provider.rs",
+        "crates/lsp-stdio/src/instance.rs",
+    ] {
+        assert!(measured.measures(file), "{file} must stay measured");
+        assert!(root.join(file).is_file(), "{file} must exist");
+    }
+    let roster = Roster::load(&root.join(ROSTER_PATH)).unwrap();
+    for (path, entry) in &roster.files {
+        assert!(
+            !(path.starts_with("crates/lsp-stdio/")
+                && entry.platforms.iter().any(|platform| platform == "windows")),
+            "{path} must not be lifted on Windows alone"
+        );
+    }
+}
+
+#[test]
+fn keeps_every_suite_process_isolated_on_native_windows() {
+    // The source pinned every Vitest project on the forks pool with no win32 threads switch.
+    // The port's instrumented lane is one `cargo llvm-cov` run whose test targets are separate
+    // processes on every platform; its command carries no platform-dependent pool switch.
+    let command = test_command(
+        &parse_arguments(&[]).unwrap(),
+        INSTRUMENTED_LANE_EXCLUDED_PACKAGES,
+    );
+    let text = command
+        .iter()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert!(text.contains(&"--workspace".to_owned()));
+    assert!(text.contains(&"--no-fail-fast".to_owned()));
+    assert!(!text.iter().any(|argument| argument.starts_with("--jobs")
+        || argument == "-j"
+        || argument.contains("test-threads")));
+    for package in INSTRUMENTED_LANE_EXCLUDED_PACKAGES {
+        assert!(text.contains(&(*package).to_owned()));
+    }
 }

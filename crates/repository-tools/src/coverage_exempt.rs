@@ -14,6 +14,13 @@ pub struct CoverageExemptSuite {
     pub exclude: &'static str,
 }
 
+/// Packages whose test targets the instrumented lane leaves to the exempt lane: the crates that
+/// host the roster's compiled heavy suites. Neither realizes a measured source file, so the lane
+/// loses no coverage by excluding the whole package where the source excluded single spec files;
+/// the lane excludes every other unmeasured package for the same reason.
+pub const INSTRUMENTED_LANE_EXCLUDED_PACKAGES: &[&str] =
+    &["seekdeep-change-scope", "seekdeep-repository-tools"];
+
 /// Source-compatible heavy suite roster.
 pub const COVERAGE_EXEMPT_HEAVY_SUITES: &[CoverageExemptSuite] = &[
     CoverageExemptSuite {

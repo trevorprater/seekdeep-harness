@@ -1,7 +1,13 @@
 //! Pinned-source and controlled-roster coverage exemption fixtures.
 
-use seekdeep_repository_tools::coverage_exempt::{
-    COVERAGE_EXEMPT_ENV, COVERAGE_EXEMPT_HEAVY_SUITES, verify_coverage_exempt,
+use std::collections::BTreeSet;
+
+use seekdeep_repository_tools::{
+    coverage_exempt::{
+        COVERAGE_EXEMPT_ENV, COVERAGE_EXEMPT_HEAVY_SUITES, INSTRUMENTED_LANE_EXCLUDED_PACKAGES,
+        verify_coverage_exempt,
+    },
+    native_test_gates::{NativeTestCommand, NativeTestGate, native_suites},
 };
 
 #[test]
@@ -40,5 +46,26 @@ fn empty_membership_fails_closed() {
             .unwrap()
             .iter()
             .any(|violation| violation.contains("selects no specs"))
+    );
+}
+
+#[test]
+fn the_instrumented_lane_excludes_exactly_the_packages_hosting_compiled_heavy_suites() {
+    let mut hosts = BTreeSet::new();
+    for suite in native_suites(NativeTestGate::CoverageExemptHeavy) {
+        if let NativeTestCommand::Cargo(arguments) = &suite.command
+            && arguments.first() == Some(&"test")
+        {
+            let package = arguments
+                .iter()
+                .position(|argument| *argument == "--package")
+                .and_then(|index| arguments.get(index + 1))
+                .expect("compiled heavy suite names its package");
+            hosts.insert(*package);
+        }
+    }
+    assert_eq!(
+        hosts.into_iter().collect::<Vec<_>>(),
+        INSTRUMENTED_LANE_EXCLUDED_PACKAGES
     );
 }
