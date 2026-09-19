@@ -201,6 +201,17 @@ pub fn client_loader_plugin() -> Result<JsValue, JsValue> {
     Ok(plugin.into())
 }
 
+/// Normalizes a module namespace, a `module.exports` object, or a default export to the
+/// plugin it carries, the rule the Loader applies to every entry it starts.
+///
+/// # Errors
+///
+/// Returns property access failures.
+#[wasm_bindgen(js_name = unwrapExports)]
+pub fn unwrap_module_exports(exports: JsValue) -> Result<JsValue, JsValue> {
+    unwrap_exports(exports)
+}
+
 async fn start_entry(
     context: &JsValue,
     internal: &JsValue,

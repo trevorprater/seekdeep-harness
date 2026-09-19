@@ -2029,14 +2029,32 @@ export declare function apply(context: Context): void;
 fn client_loader_esm_wrapper() -> &'static str {
     r"import init, * as wasm from './client.js';
 
-await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
+// Plain Node cannot fetch a file: URL, so it reads the module bytes; browsers stream the URL.
+const wasmUrl = new URL('./client_bg.wasm', import.meta.url);
+const nodeFs = globalThis.process?.getBuiltinModule?.('node:fs');
+await init({ module_or_path: nodeFs ? nodeFs.readFileSync(wasmUrl) : wasmUrl });
 const plugin = wasm.clientLoaderPlugin();
+
+// The default export is the plugin as a constructor, as the source's Loader class was:
+// applying it under a Context mounts the compiled Loader, and its prototype normalizes
+// entry exports through the same Rust rule the Loader applies to every entry it starts.
+function LoaderPlugin(context, config) {
+  return plugin.apply(context, config);
+}
+LoaderPlugin.prototype.unwrapExports = function unwrapExports(exports) {
+  return wasm.unwrapExports(exports);
+};
+Object.defineProperties(LoaderPlugin, {
+  name: { value: plugin.name, configurable: true },
+  inject: { value: Object.freeze([]), configurable: true },
+  apply: { value: plugin.apply, configurable: true },
+});
 
 export const Loader = wasm.WasmClientLoader;
 export const name = plugin.name;
 export const inject = Object.freeze([]);
 export const apply = plugin.apply;
-export default plugin;
+export default LoaderPlugin;
 "
 }
 
@@ -2056,8 +2074,15 @@ export declare class Loader {
 export declare const name: 'loader';
 export declare const inject: readonly [];
 export declare const apply: (context: Context) => void;
-declare const plugin: PluginObject;
-export default plugin;
+/** The Loader plugin as a constructor: applying it under `context` mounts the compiled Loader. */
+declare class LoaderPlugin {
+  constructor(context: Context, config?: unknown);
+  /** Normalizes ESM, CommonJS, and default-export module shapes to the plugin they carry. */
+  unwrapExports(exports: unknown): unknown;
+  static readonly inject: readonly [];
+  static readonly apply: (context: Context) => void;
+}
+export default LoaderPlugin;
 "
 }
 
@@ -6908,8 +6933,11 @@ mod tests {
         let loader = client_loader_esm_wrapper();
         for expected in [
             "wasm.clientLoaderPlugin()",
+            "process?.getBuiltinModule?.('node:fs')",
+            "nodeFs.readFileSync(wasmUrl)",
+            "return wasm.unwrapExports(exports)",
             "export const Loader = wasm.WasmClientLoader",
-            "export default plugin",
+            "export default LoaderPlugin",
         ] {
             assert!(loader.contains(expected), "missing Loader {expected:?}");
         }
