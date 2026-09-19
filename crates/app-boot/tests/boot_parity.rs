@@ -461,6 +461,44 @@ async fn boot_resolves_relative_absolute_and_host_owned_bare_plugins() -> anyhow
 }
 
 #[tokio::test]
+async fn an_exit_requested_while_later_entries_still_mount_ends_the_boot_as_that_exit()
+-> anyhow::Result<()> {
+    let catalog = PluginCatalog::new();
+    catalog.register_named(
+        "exit",
+        Plugin::new("exit", std::iter::empty::<&str>(), |context, _| {
+            Box::pin(async move {
+                // A one-shot surface requests exit from inside its own apply; the host's
+                // shutdown disposes the root while the remaining entries are still mounting.
+                let root = Arc::clone(context.root_fiber());
+                let disposing = Arc::clone(&root);
+                tokio::spawn(async move { disposing.dispose().await });
+                while root.state() == seekdeep_cordis::FiberState::Active {
+                    tokio::task::yield_now().await;
+                }
+                Ok(())
+            })
+        }),
+    )?;
+    catalog.register_named(
+        "late",
+        Plugin::new("late", std::iter::empty::<&str>(), |context, _| {
+            Box::pin(async move {
+                context.own(EffectHandle::new("late", || Box::pin(async { Ok(()) })))?;
+                Ok(())
+            })
+        }),
+    )?;
+    let (_temporary, path) = config("- id: exit\n  name: exit\n- id: late\n  name: late\n");
+    let app = boot("seekdeep-test-bin", &path, &catalog, BootOptions::default()).await?;
+    assert!(app.composition().is_none());
+    let context = app.context().clone();
+    app.dispose().await?;
+    assert!(context.get(LOADER).is_none());
+    Ok(())
+}
+
+#[tokio::test]
 async fn javascript_surface_can_dispose_the_root_during_startup_without_a_half_boot()
 -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;

@@ -273,6 +273,16 @@ async fn dispose_preserving(context: &Context, primary: anyhow::Error) -> anyhow
     }
 }
 
+/// Whether a surface disposed the tree while startup was still in flight.
+///
+/// A fast one-shot's exit request disposes the root before the last entry settles, so the
+/// root's disposers are already running when a later entry fails to apply. That failure
+/// describes an application exiting as asked, not a broken tree, from the moment the root
+/// begins unloading; the source reads the same fact from the fiber leaving its active state.
+fn tree_exited(owner: &Fiber) -> bool {
+    matches!(owner.state(), FiberState::Unloading | FiberState::Disposed)
+}
+
 /// Boots one compiled plugin catalog transactionally from a composed config file.
 ///
 /// # Errors
@@ -297,7 +307,7 @@ pub async fn boot(
         let primary = anyhow::anyhow!("{bin_name}: host preparation failed: {error:#}");
         return Err(dispose_preserving(&context, primary).await);
     }
-    if owner.state() == FiberState::Disposed {
+    if tree_exited(&owner) {
         return Ok(BootedApplication {
             context,
             composition: None,
@@ -310,7 +320,7 @@ pub async fn boot(
     if let Err(error) =
         mount_root_include(&context, absolute_config_path, options.patches.clone()).await
     {
-        if owner.state() == FiberState::Disposed {
+        if tree_exited(&owner) {
             return Ok(BootedApplication {
                 context,
                 composition: None,
@@ -322,7 +332,7 @@ pub async fn boot(
     if let Some(loader) = context.get(LOADER)
         && let Err(error) = loader.wait().await
     {
-        if owner.state() == FiberState::Disposed {
+        if tree_exited(&owner) {
             return Ok(BootedApplication {
                 context,
                 composition: None,
@@ -331,7 +341,7 @@ pub async fn boot(
         let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error:#}");
         return Err(dispose_preserving(&context, primary).await);
     }
-    if matches!(owner.state(), FiberState::Unloading | FiberState::Disposed) {
+    if tree_exited(&owner) {
         return Ok(BootedApplication {
             context,
             composition: None,
