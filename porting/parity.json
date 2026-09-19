@@ -88045,7 +88045,7 @@
     {
       "source": "scripts/run-gates.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/repository-tools/src/run_gates.rs",
         "crates/repository-tools/src/bin/run-gates.rs",
@@ -88058,12 +88058,13 @@
       ],
       "evidence": [
         "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
-        "cargo test -p seekdeep-repository-tools --all-features --test run_gates_parity (14 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features --test run_gates_parity (17 passed: every mode's graph, the Node compatibility smokes on Node 22, 24, and 26, SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK, the lint, Typert consumer, and static-lane contracts, and the consumer graph's order, environment, and dependencies)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
         "cargo test -p seekdeep-repository-tools --all-features --test doc_site_projection_parity --test doc_site_configuration_parity --test doc_site_fragments_parity (13 passed)",
         "All 14 public aggregate scripts enter the std-only Rust bootstrap. A real Cargo workspace rebuild succeeds while the staged processor executes, preserving arguments, exit code, and cleanup; executing the Cargo output directly makes that regression fail.",
         "The native suite inventory matches all 11 source smoke entries and all four heavy groups. Real Cargo failures remain gate failures; every compiled smoke and heavy group passed through the public scripts."
       ],
-      "note": "The Rust scheduler implements graph validation, bounded concurrency, failure propagation, process outcomes, and Cargo resource serialization. Built-bin and coverage-exempt-heavy leaves execute compiled Rust suites. Instrumented coverage and the complete public npm consumer contracts remain unverified."
+      "note": "The Rust scheduler is a line-for-line port of the source's mode list, graph validation, bounded concurrency, dependency skipping, process outcomes, per-gate printing, summary, worker defaults, and exit code, and every aggregate keeps the source's gate ids, labels, dependencies, environment, and display commands under the SEEKDEEP_* names. Deliberate divergences: knip is absent from every graph because the knip.json row is withdrawn; the Node compatibility smokes run each source suite's verified compiled replacement through Cargo directly, and the source's vitest-jsdom-smoke is withdrawn with the scripts/vitest-environment.compat.spec.ts row because the port carries no Vitest projects; leaves that ran Vitest files run their compiled suites (test:coverage, test:coverage-exempt-heavy, test:built-bin, and the documentation site suites); Cargo-backed gates share one cargo-target serial group so concurrent gates never contend for the build directory. The instrumented coverage gate measures no Rust code because the withdrawn vitest.config.ts row removed the per-file thresholds with the Vitest projects; the cargo test inventory is the port's coverage."
     },
     {
       "source": "scripts/run-oxlint.spec.ts",
@@ -89091,14 +89092,8 @@
     {
       "source": "scripts/vitest-environment.compat.spec.ts",
       "kind": "test",
-      "status": "verified",
-      "targets": [
-        "crates/repository-tools/tests/run_gates_parity.rs"
-      ],
-      "evidence": [
-        "pnpm exec vitest run scripts/vitest-environment.compat.spec.ts (pinned source: 1 passed)",
-        "cargo test -p seekdeep-repository-tools --test run_gates_parity (13 passed)"
-      ]
+      "status": "withdrawn",
+      "note": "The source smoke proves Vitest's jsdom environment loads on every advertised Node line. The port carries no Vitest projects (the vitest.config.ts row is withdrawn) and its browser code is Rust that the node-compat graph's typecheck gate checks on every line through cargo xtask check-client, so the node-compat graph omits vitest-jsdom-smoke, and run_gates_parity pins the graph without it."
     },
     {
       "source": "scripts/wine-windows-gates.sh",
