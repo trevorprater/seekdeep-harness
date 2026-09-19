@@ -129,6 +129,25 @@ pub fn effective_permission_preset(events: &[SessionEvent]) -> Option<String> {
 /// One-event knob transition for the projection unit.
 #[must_use]
 pub fn apply_knob_event(state: &KnobState, event: &SessionEvent) -> ProjectionTransition {
+    next_knob_state(state, event).map_or(ProjectionTransition::Unchanged, |next| {
+        ProjectionTransition::changed(next).unwrap_or(ProjectionTransition::Unchanged)
+    })
+}
+
+/// In-place form of [`apply_knob_event`]: assigns the next state only when it
+/// differs and reports whether it did.
+fn apply_knob_event_in_place(state: &mut KnobState, event: &SessionEvent) -> bool {
+    match next_knob_state(state, event) {
+        Some(next) => {
+            *state = next;
+            true
+        }
+        None => false,
+    }
+}
+
+/// The knob state after `event` when it differs from `state`.
+fn next_knob_state(state: &KnobState, event: &SessionEvent) -> Option<KnobState> {
     let next = match event.event_type.as_str() {
         "permission/preset" => KnobState {
             preset: event
@@ -151,23 +170,15 @@ pub fn apply_knob_event(state: &KnobState, event: &SessionEvent) -> ProjectionTr
                 .and_then(|policy| policy.deserialize().ok()),
             ..state.clone()
         },
-        _ => return ProjectionTransition::Unchanged,
+        _ => return None,
     };
-    if next == *state {
-        ProjectionTransition::Unchanged
-    } else {
-        ProjectionTransition::changed(next).unwrap_or(ProjectionTransition::Unchanged)
-    }
+    (next != *state).then_some(next)
 }
 
 fn fold_knobs(events: &[SessionEvent]) -> KnobState {
     let mut state = KnobState::default();
     for event in events {
-        if let ProjectionTransition::Changed(next) = apply_knob_event(&state, event)
-            && let Ok(next) = next.deserialize()
-        {
-            state = next;
-        }
+        apply_knob_event_in_place(&mut state, event);
     }
     state
 }
@@ -452,18 +463,12 @@ impl PermissionPresetService {
         let service = self.clone();
         seekdeep_session_projection::register_when_mounted(
             context,
-            ProjectionDefinition::new(
+            ProjectionDefinition::typed(
                 "permissions",
                 1,
-                || Ok(serde_json::to_value(KnobState::default())?),
-                move |state, event| {
-                    let state: KnobState = serde_json::from_value(state.clone())?;
-                    Ok(apply_knob_event(&state, event))
-                },
-                move |state| {
-                    let state: KnobState = serde_json::from_value(state.clone())?;
-                    Ok(serde_json::to_value(service.select_for(&state))?)
-                },
+                KnobState::default,
+                |state: &mut KnobState, event| Ok(apply_knob_event_in_place(state, event)),
+                move |state: &KnobState| Ok(serde_json::to_value(service.select_for(state))?),
             ),
         )?;
         // Source: `ctx.inject(['commands'], …)` — the slash command is an optional child that

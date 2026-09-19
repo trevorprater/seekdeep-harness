@@ -16,7 +16,7 @@ use seekdeep_commands::{COMMANDS, CommandDefinition, CommandInvocation, CommandR
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, JsonRef, Session, SessionEvent};
 use seekdeep_llm::{ContentBlock, JsonString, MessageSource, UserMessage};
-use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
+use seekdeep_session_projection::ProjectionDefinition;
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, GenericResultView, TOOLS, ToolCallKind,
@@ -473,12 +473,11 @@ impl PlanModeController {
     }
 
     fn projection_definition() -> ProjectionDefinition {
-        ProjectionDefinition::new(
+        ProjectionDefinition::typed(
             "plan",
             1,
-            || Ok(serde_json::to_value(PlanUnitState::default())?),
-            |state: &Value, event: &SessionEvent| {
-                let mut current: PlanUnitState = serde_json::from_value(state.clone())?;
+            PlanUnitState::default,
+            |state: &mut PlanUnitState, event: &SessionEvent| {
                 if event.event_type == "command/run"
                     && event.data.get("name").is_some_and(|name| name == "plan")
                 {
@@ -487,28 +486,27 @@ impl PlanModeController {
                         .get("args")
                         .and_then(|args| args.deserialize::<JsonString>().ok())
                     else {
-                        return Ok(ProjectionTransition::Unchanged);
+                        return Ok(false);
                     };
                     let wanted = args.trim() != "off";
-                    if wanted == current.wanted.unwrap_or(current.active) {
-                        return Ok(ProjectionTransition::Unchanged);
+                    if wanted == state.wanted.unwrap_or(state.active) {
+                        return Ok(false);
                     }
-                    current.wanted = Some(wanted);
-                    return ProjectionTransition::changed(current);
+                    state.wanted = Some(wanted);
+                    return Ok(true);
                 }
                 if event.event_type == "plan/mode" {
-                    current.active = event
+                    state.active = event
                         .data
                         .get("active")
                         .and_then(JsonRef::as_bool)
                         .unwrap_or(false);
-                    current.wanted = None;
-                    return ProjectionTransition::changed(current);
+                    state.wanted = None;
+                    return Ok(true);
                 }
-                Ok(ProjectionTransition::Unchanged)
+                Ok(false)
             },
-            |state: &Value| {
-                let unit: PlanUnitState = serde_json::from_value(state.clone())?;
+            |unit: &PlanUnitState| {
                 let pending = unit.wanted.is_some() && unit.wanted.unwrap_or(false) != unit.active;
                 Ok(serde_json::to_value(crate::types::PlanProjection {
                     active: unit.active,

@@ -488,17 +488,18 @@ impl Session {
             appending: false,
         };
         if let Some(seed) = seed {
+            validate_seed_envelopes(&seed)?;
+            // The surface mutates only after an event passes every check, and
+            // a failing seed event fails the whole construction, so the fold
+            // applies in place instead of copying the surface per event.
             for event in seed {
-                validate_envelope(&event, inner.log.len())?;
-                let mut next_surface = inner.surface.clone();
-                next_surface.apply(&event, &inner.log).map_err(|error| {
+                inner.surface.apply(&event, &inner.log).map_err(|error| {
                     invalid(format!(
                         "invalid seed event at index {}: {error}",
                         inner.log.len()
                     ))
                 })?;
                 Arc::make_mut(&mut inner.log).push(event);
-                inner.surface = next_surface;
             }
         }
         let header =
@@ -521,10 +522,8 @@ impl Session {
                 surface_op: None,
                 ignorable: None,
             };
-            let mut next_surface = inner.surface.clone();
-            next_surface.apply(&event, &inner.log)?;
+            inner.surface.apply(&event, &inner.log)?;
             Arc::make_mut(&mut inner.log).push(event);
-            inner.surface = next_surface;
         }
         Ok(Arc::new(Self {
             header,
@@ -811,6 +810,54 @@ pub fn fold_surface(events: &[SessionEvent]) -> Result<SurfaceFoldResult, Sessio
         nodes: state.nodes,
         replacements,
     })
+}
+
+/// Seeds at least this long validate their envelopes across threads.
+const PARALLEL_SEED_VALIDATION_MIN_EVENTS: usize = 4096;
+
+/// Validates every seed event's envelope, reporting the failure the
+/// sequential fold would have reached first.
+///
+/// Each envelope check depends only on the event and its index, so a long seed
+/// validates in contiguous runs on scoped threads; the lowest failing index
+/// wins, which is exactly the error an in-order walk raises. Short seeds, and
+/// targets without threads, walk in order.
+fn validate_seed_envelopes(seed: &[SessionEvent]) -> Result<(), SessionError> {
+    let threads = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZero::get)
+        .min(seed.len() / PARALLEL_SEED_VALIDATION_MIN_EVENTS)
+        .max(1);
+    if threads == 1 {
+        return seed
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, event)| validate_envelope(event, index));
+    }
+    let run_length = seed.len().div_ceil(threads);
+    let first_failure = std::thread::scope(|scope| {
+        let handles = seed
+            .chunks(run_length)
+            .enumerate()
+            .map(|(run, events)| {
+                scope.spawn(move || {
+                    events.iter().enumerate().find_map(|(offset, event)| {
+                        let index = run * run_length + offset;
+                        validate_envelope(event, index)
+                            .err()
+                            .map(|error| (index, error))
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .filter_map(|handle| handle.join().expect("seed validation does not panic"))
+            .min_by_key(|(index, _)| *index)
+    });
+    match first_failure {
+        Some((_, error)) => Err(error),
+        None => Ok(()),
+    }
 }
 
 fn validate_envelope(event: &SessionEvent, index: usize) -> Result<(), SessionError> {

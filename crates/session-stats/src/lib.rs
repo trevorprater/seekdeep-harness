@@ -6,11 +6,8 @@ use indexmap::IndexMap;
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::{JsonValue, SessionEvent};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SessionProjectionRegistry,
-};
+use seekdeep_session_projection::{ProjectionDefinition, SessionProjectionRegistry};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 /// Projection registry key owned by this package.
 pub const SESSION_STATS_KEY: &str = "sessionStats";
@@ -63,15 +60,14 @@ struct SessionStatsState {
 /// Builds the pure `sessionStats` projection definition.
 #[must_use]
 pub fn definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         SESSION_STATS_KEY,
         1,
-        || Ok(serde_json::to_value(SessionStatsState::default())?),
+        SessionStatsState::default,
         apply,
-        |state| {
-            let state: SessionStatsState = serde_json::from_value(state.clone())?;
+        |state: &SessionStatsState| {
             validate_totals(&state.totals)?;
-            Ok(serde_json::to_value(state.totals)?)
+            Ok(serde_json::to_value(&state.totals)?)
         },
     )
 }
@@ -102,8 +98,7 @@ pub fn plugin() -> Plugin {
     })
 }
 
-fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransition> {
-    let mut state: SessionStatsState = serde_json::from_value(state.clone())?;
+fn apply(state: &mut SessionStatsState, event: &SessionEvent) -> anyhow::Result<bool> {
     match event.event_type.as_str() {
         "step/start" => {
             let (turn, step) = coordinates(event)?;
@@ -117,27 +112,27 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
         "assistant/chunk" => {
             let (turn, step) = coordinates(event)?;
             let Some(open) = &mut state.open_step else {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             };
             if open.turn != turn
                 || open.step != step
                 || open.first_token_time.is_some()
                 || !is_token_delta(event.data.get_value("chunk"))
             {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             }
             open.first_token_time = Some(event.time);
         }
         "assistant/message" => {
             let (turn, step) = coordinates(event)?;
             let Some(open) = state.open_step.as_ref() else {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             };
             if open.turn != turn || open.step != step {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             }
             let Some(open) = state.open_step.take() else {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             };
             state.totals.llm_ms = state
                 .totals
@@ -167,7 +162,7 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
                 anyhow::bail!("tool/result lacks message.source.callId");
             };
             let Some(dispatched) = state.pending_calls.shift_remove(call_id) else {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             };
             state.totals.tool_ms = state
                 .totals
@@ -185,13 +180,13 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
         }
         "turn/end" => {
             if state.pending_calls.is_empty() {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             }
             state.pending_calls.clear();
         }
-        _ => return Ok(ProjectionTransition::Unchanged),
+        _ => return Ok(false),
     }
-    ProjectionTransition::changed(state)
+    Ok(true)
 }
 
 fn coordinates(event: &SessionEvent) -> anyhow::Result<(u64, u64)> {
@@ -276,8 +271,8 @@ mod tests {
         session_store::{CreateSessionOptions, SessionStore},
     };
     use seekdeep_invariants::InvariantConfig;
-    use seekdeep_session_projection::SessionProjectionRegistry;
-    use serde_json::json;
+    use seekdeep_session_projection::{ProjectionTransition, SessionProjectionRegistry};
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -650,5 +645,67 @@ mod tests {
         assert!(invariants.is_registered("seekdeep-session-stats"));
         registration.dispose().await.expect("dispose");
         assert!(!invariants.is_registered("seekdeep-session-stats"));
+    }
+}
+
+#[cfg(test)]
+mod fold_bench {
+    use super::*;
+    use seekdeep_core::session::SessionEvent;
+    use seekdeep_session_projection::ProjectionTransition;
+
+    /// Times the statistics fold over a real decompressed log named by
+    /// `SEEKDEEP_FOLD_BENCH_LOG` (plain JSONL, chunk rows packed).
+    #[test]
+    #[ignore = "manual measurement over a real session log"]
+    fn fold_a_real_log() {
+        let Ok(path) = std::env::var("SEEKDEEP_FOLD_BENCH_LOG") else {
+            return;
+        };
+        let text = std::fs::read_to_string(path).expect("log");
+        let started = std::time::Instant::now();
+        let mut events = Vec::new();
+        for line in text.lines().skip(1) {
+            let row = seekdeep_core::session::JsonValue::parse(line.to_owned()).expect("row");
+            for value in seekdeep_core::chunk_rows::decode_storage_record_json(row).expect("decode")
+            {
+                events.push(value.deserialize::<SessionEvent>().expect("event"));
+            }
+        }
+        eprintln!("decoded {} events in {:?}", events.len(), started.elapsed());
+        let definition = definition();
+        let started = std::time::Instant::now();
+        let mut state = definition.initial_state().expect("init");
+        let mut changed = 0usize;
+        for event in &events {
+            if let ProjectionTransition::Changed(next) =
+                definition.apply_event(&state, event).expect("apply")
+            {
+                state = next;
+                changed += 1;
+            }
+        }
+        eprintln!(
+            "session-stats per-event JSON fold: {} events, {changed} changes, {:?}",
+            events.len(),
+            started.elapsed()
+        );
+        let started = std::time::Instant::now();
+        let mut folder = definition
+            .folder(&definition.initial_state().expect("init"))
+            .expect("folder");
+        let mut folder_changes = 0usize;
+        for event in &events {
+            if folder.apply(event).expect("fold") {
+                folder_changes += 1;
+            }
+        }
+        let view = folder.view().expect("view");
+        eprintln!(
+            "session-stats typed folder: {} events, {folder_changes} changes, {:?}",
+            events.len(),
+            started.elapsed()
+        );
+        assert_eq!(view, definition.project(&state).expect("project"));
     }
 }

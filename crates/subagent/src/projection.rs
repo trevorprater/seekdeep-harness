@@ -1,9 +1,8 @@
 //! Pure session projections for subagent identity and active-turn duration.
 
 use seekdeep_core::session::SessionEvent;
-use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
+use seekdeep_session_projection::ProjectionDefinition;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::descriptor::{SubagentDescriptorData, fold_subagent_descriptor};
 use crate::projection_types::{
@@ -33,13 +32,12 @@ fn event_time(event: &SessionEvent) -> u64 {
 /// Panics if the folded state is malformed.
 #[must_use]
 pub fn subagent_timing_projection_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         "subagentTiming",
         2,
-        || Ok(serde_json::to_value(TimingState::default())?),
-        |state: &Value, event: &SessionEvent| {
-            let mut current: TimingState = serde_json::from_value(state.clone())?;
-            let next = match event.event_type.as_str() {
+        TimingState::default,
+        |current: &mut TimingState, event: &SessionEvent| {
+            match event.event_type.as_str() {
                 "turn/start" => {
                     if current.descriptor_seen {
                         current.active = Some(SubagentActiveTiming {
@@ -47,10 +45,8 @@ pub fn subagent_timing_projection_definition() -> ProjectionDefinition {
                             through: event_time(event),
                         });
                         current.pending_turn_start = None;
-                        Some(current)
                     } else {
                         current.pending_turn_start = Some(event_time(event));
-                        Some(current)
                     }
                 }
                 "subagent/descriptor" => {
@@ -64,43 +60,31 @@ pub fn subagent_timing_projection_definition() -> ProjectionDefinition {
                         since,
                         through: event_time(event),
                     });
-                    Some(current)
                 }
                 "turn/end" => {
-                    if !current.descriptor_seen {
-                        if current.pending_turn_start.is_none() {
-                            None
-                        } else {
-                            current.pending_turn_start = None;
-                            Some(current)
-                        }
-                    } else if current.active.is_none() {
-                        None
-                    } else {
-                        let active = current.active.expect("checked above");
+                    if current.descriptor_seen {
+                        let Some(active) = current.active else {
+                            return Ok(false);
+                        };
                         current.settled_ms += event_time(event).saturating_sub(active.since);
                         current.active = None;
-                        Some(current)
+                    } else {
+                        if current.pending_turn_start.is_none() {
+                            return Ok(false);
+                        }
+                        current.pending_turn_start = None;
                     }
                 }
                 _ => {
-                    if current.active.is_none() {
-                        None
-                    } else {
-                        let mut active = current.active.expect("checked above");
-                        active.through = event_time(event);
-                        current.active = Some(active);
-                        Some(current)
-                    }
+                    let Some(active) = current.active.as_mut() else {
+                        return Ok(false);
+                    };
+                    active.through = event_time(event);
                 }
-            };
-            match next {
-                None => Ok(ProjectionTransition::Unchanged),
-                Some(next) => ProjectionTransition::changed(next),
             }
+            Ok(true)
         },
-        |state: &Value| {
-            let current: TimingState = serde_json::from_value(state.clone())?;
+        |current: &TimingState| {
             Ok(serde_json::to_value(SubagentTimingProjection {
                 settled_ms: current.settled_ms,
                 active: current.active,
@@ -142,22 +126,18 @@ fn descriptor_identity(event: &SessionEvent) -> Option<SubagentIdentityProjectio
 /// The durable mode/label identity projection.
 #[must_use]
 pub fn subagent_identity_projection_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         "subagent",
         2,
-        || Ok(serde_json::to_value(IdentityState::default())?),
-        |_state: &Value, event: &SessionEvent| {
+        IdentityState::default,
+        |state: &mut IdentityState, event: &SessionEvent| {
             if event.event_type != "subagent/descriptor" {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             }
-            let identity = descriptor_identity(event);
-            let next = IdentityState { identity };
-            ProjectionTransition::changed(next)
+            state.identity = descriptor_identity(event);
+            Ok(true)
         },
-        |state: &Value| {
-            let current: IdentityState = serde_json::from_value(state.clone())?;
-            Ok(serde_json::to_value(current.identity)?)
-        },
+        |current: &IdentityState| Ok(serde_json::to_value(&current.identity)?),
     )
 }
 

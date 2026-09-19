@@ -430,6 +430,68 @@ impl std::fmt::Debug for SessionLogScanner {
     }
 }
 
+/// Fewest complete lines worth parsing across threads.
+const PARALLEL_PARSE_MIN_LINES: usize = 512;
+
+/// Parses one newline-free JSONL record into its expanded events.
+fn parse_event_line(line: &[u8]) -> anyhow::Result<Vec<SessionEvent>> {
+    // A packed chunk row always carries a `seq0` key, so a record without
+    // that byte sequence is one plain event and parses in a single pass; the
+    // event deserializer reads the same bytes the lossless snapshot would.
+    if !contains_bytes(line, b"\"seq0\"") {
+        return Ok(vec![serde_json::from_slice(line)?]);
+    }
+    let value: JsonValue = serde_json::from_slice(line)?;
+    decode_storage_record_json(value)?
+        .into_iter()
+        .map(|value| value.deserialize().map_err(Into::into))
+        .collect()
+}
+
+fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+/// Parses every newline-terminated record in `complete`, in order, returning
+/// each record's end offset (one past its newline) with its parse result.
+///
+/// Records parse independently, so a large body is split into contiguous runs
+/// parsed on scoped threads; the returned order is the record order.
+fn parse_event_lines(complete: &[u8]) -> Vec<(usize, anyhow::Result<Vec<SessionEvent>>)> {
+    let mut lines = Vec::new();
+    let mut start = 0;
+    while let Some(relative_newline) = complete[start..].iter().position(|byte| *byte == b'\n') {
+        let newline = start + relative_newline;
+        lines.push((start, newline));
+        start = newline + 1;
+    }
+    let parse_run = |run: &[(usize, usize)]| {
+        run.iter()
+            .map(|&(start, newline)| (newline + 1, parse_event_line(&complete[start..newline])))
+            .collect::<Vec<_>>()
+    };
+    let threads = std::thread::available_parallelism()
+        .map_or(1, std::num::NonZero::get)
+        .min(lines.len() / PARALLEL_PARSE_MIN_LINES)
+        .max(1);
+    if threads == 1 {
+        return parse_run(&lines);
+    }
+    let run_length = lines.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles = lines
+            .chunks(run_length)
+            .map(|run| scope.spawn(move || parse_run(run)))
+            .collect::<Vec<_>>();
+        handles
+            .into_iter()
+            .flat_map(|handle| handle.join().expect("record parsing does not panic"))
+            .collect()
+    })
+}
+
 impl SessionLogScanner {
     /// Creates a scanner from exactly one newline-terminated header record.
     ///
@@ -472,22 +534,28 @@ impl SessionLogScanner {
         let chunk_start = self.input_bytes;
         self.input_bytes = self.input_bytes.saturating_add(chunk.len());
         let mut line_start = 0;
-        while let Some(relative_newline) =
-            chunk[line_start..].iter().position(|byte| *byte == b'\n')
-        {
-            let newline = line_start + relative_newline;
-            let line = if self.fragment.is_empty() {
-                chunk[line_start..newline].to_vec()
-            } else {
-                self.fragment.extend_from_slice(&chunk[line_start..newline]);
-                std::mem::take(&mut self.fragment)
+        if !self.fragment.is_empty() {
+            let Some(newline) = chunk.iter().position(|byte| *byte == b'\n') else {
+                self.fragment.extend_from_slice(chunk);
+                return Ok(());
             };
-            self.consume_event_line(&line, chunk_start + newline + 1)?;
+            self.fragment.extend_from_slice(&chunk[..newline]);
+            let line = std::mem::take(&mut self.fragment);
+            self.consume_decoded(parse_event_line(&line), chunk_start + newline + 1)?;
             line_start = newline + 1;
         }
-        if line_start < chunk.len() {
-            self.fragment.extend_from_slice(&chunk[line_start..]);
+        let body = &chunk[line_start..];
+        let Some(last_newline) = body.iter().rposition(|byte| *byte == b'\n') else {
+            self.fragment.extend_from_slice(body);
+            return Ok(());
+        };
+        // Every complete line parses independently, so a large chunk parses
+        // across threads; the sequential checks below still see the lines in
+        // log order, one at a time, exactly as a line-at-a-time scan does.
+        for (end, decoded) in parse_event_lines(&body[..=last_newline]) {
+            self.consume_decoded(decoded, chunk_start + line_start + end)?;
         }
+        self.fragment.extend_from_slice(&body[last_newline + 1..]);
         Ok(())
     }
 
@@ -512,15 +580,12 @@ impl SessionLogScanner {
         }
     }
 
-    fn consume_event_line(&mut self, line: &[u8], end_byte: usize) -> anyhow::Result<()> {
+    fn consume_decoded(
+        &mut self,
+        decoded: anyhow::Result<Vec<SessionEvent>>,
+        end_byte: usize,
+    ) -> anyhow::Result<()> {
         self.event_line += 1;
-        let decoded = (|| -> anyhow::Result<Vec<SessionEvent>> {
-            let value: JsonValue = serde_json::from_slice(line)?;
-            decode_storage_record_json(value)?
-                .into_iter()
-                .map(|value| value.deserialize().map_err(Into::into))
-                .collect()
-        })();
         let Ok(decoded) = decoded else {
             self.issue.get_or_insert_with(|| {
                 format!(

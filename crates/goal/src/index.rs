@@ -12,9 +12,7 @@ use seekdeep_agent_loop::SessionStartEvent;
 use seekdeep_api_gateway::register_invocable_service_if_available;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
-};
+use seekdeep_session_projection::{ProjectionDefinition, SESSION_PROJECTIONS};
 use seekdeep_typert_protocol::{
     RemoteMethodMarker, TypertBoundaryValue, TypertHostArgument, TypertInvocableService,
     TypertInvocationFuture, TypertRemoteService, typert_remote_method,
@@ -1089,31 +1087,32 @@ fn global_events() -> EventOptions {
     }
 }
 
+/// The unit state is the projection value itself: `null` while no goal is
+/// durable, otherwise the current [`GoalProjection`] object.
 fn goal_projection_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         "goal",
         4,
-        || Ok(Value::Null),
-        |_state, event| {
+        || None,
+        |state: &mut Option<GoalProjection>, event| {
             if event.event_type != "goal/change" {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             }
             let Some(change) = decode_goal_change_raw(event.data.as_ref()).ok().flatten() else {
-                return Ok(ProjectionTransition::Unchanged);
+                return Ok(false);
             };
-            match change {
-                GoalChangeMeta::Clear(_) => Ok(ProjectionTransition::changed(Value::Null)?),
-                GoalChangeMeta::Snapshot(snapshot) => {
-                    Ok(ProjectionTransition::changed(GoalProjection {
-                        goal: snapshot.goal,
-                        rounds_started: snapshot.rounds_started,
-                        created_at: snapshot.created_at,
-                        updated_at: snapshot.updated_at,
-                    })?)
-                }
-            }
+            *state = match change {
+                GoalChangeMeta::Clear(_) => None,
+                GoalChangeMeta::Snapshot(snapshot) => Some(GoalProjection {
+                    goal: snapshot.goal,
+                    rounds_started: snapshot.rounds_started,
+                    created_at: snapshot.created_at,
+                    updated_at: snapshot.updated_at,
+                }),
+            };
+            Ok(true)
         },
-        |state| Ok(state.clone()),
+        |state| Ok(serde_json::to_value(state)?),
     )
 }
 

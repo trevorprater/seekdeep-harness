@@ -2,7 +2,7 @@
 
 use seekdeep_core::session::{JsonRef, JsonValue, SessionEvent};
 use seekdeep_llm::TokenUsage;
-use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
+use seekdeep_session_projection::ProjectionDefinition;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -48,34 +48,30 @@ struct ContextPressureState {
 /// Builds the cumulative `tokenUsage` definition.
 #[must_use]
 pub fn token_usage_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         TOKEN_USAGE_KEY,
         1,
-        || Ok(serde_json::to_value(TokenUsageState::default())?),
+        TokenUsageState::default,
         apply_usage,
-        |state| {
-            let state: TokenUsageState = serde_json::from_value(state.clone())?;
-            Ok(serde_json::to_value(state.totals)?)
-        },
+        |state: &TokenUsageState| Ok(serde_json::to_value(&state.totals)?),
     )
 }
 
 /// Builds the last-wins `contextPressure` definition.
 #[must_use]
 pub fn context_pressure_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         CONTEXT_PRESSURE_KEY,
         4,
-        || Ok(serde_json::to_value(ContextPressureState::default())?),
+        ContextPressureState::default,
         apply_pressure,
         pressure_view,
     )
 }
 
-fn apply_usage(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransition> {
-    let state: TokenUsageState = serde_json::from_value(state.clone())?;
+fn apply_usage(state: &mut TokenUsageState, event: &SessionEvent) -> anyhow::Result<bool> {
     let Some((turn, step, usage)) = usage_sample(event)? else {
-        return Ok(ProjectionTransition::Unchanged);
+        return Ok(false);
     };
     let buckets = buckets_from(&usage);
     let previous = state
@@ -84,21 +80,21 @@ fn apply_usage(state: &Value, event: &SessionEvent) -> anyhow::Result<Projection
         .filter(|sample| sample.turn == turn && sample.step == step)
         .map(|sample| &sample.buckets);
     if previous == Some(&buckets) {
-        return Ok(ProjectionTransition::Unchanged);
+        return Ok(false);
     }
-    let next = TokenUsageState {
-        totals: add_replacing(&state.totals, previous, &buckets)?,
-        last: Some(UsageSample {
-            turn,
-            step,
-            buckets,
-        }),
-    };
-    ProjectionTransition::changed(next)
+    // The replacement total is computed before any field is assigned so an overflow error
+    // leaves the state untouched, as the by-value fold did.
+    let totals = add_replacing(&state.totals, previous, &buckets)?;
+    state.totals = totals;
+    state.last = Some(UsageSample {
+        turn,
+        step,
+        buckets,
+    });
+    Ok(true)
 }
 
-fn apply_pressure(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransition> {
-    let state: ContextPressureState = serde_json::from_value(state.clone())?;
+fn apply_pressure(state: &mut ContextPressureState, event: &SessionEvent) -> anyhow::Result<bool> {
     let fold = fold_surface_projection(state.claim.as_ref(), event)?;
     let mut next = state.clone();
     if event.event_type == "request/context" {
@@ -113,15 +109,15 @@ fn apply_pressure(state: &Value, event: &SessionEvent) -> anyhow::Result<Project
         .checked_add(fold.delta_tokens)
         .ok_or_else(|| anyhow::anyhow!("contextPressure surface token total overflowed"))?;
     next.claim = fold.claim;
-    if next == state {
-        Ok(ProjectionTransition::Unchanged)
+    if next == *state {
+        Ok(false)
     } else {
-        ProjectionTransition::changed(next)
+        *state = next;
+        Ok(true)
     }
 }
 
-fn pressure_view(state: &Value) -> anyhow::Result<Value> {
-    let state: ContextPressureState = serde_json::from_value(state.clone())?;
+fn pressure_view(state: &ContextPressureState) -> anyhow::Result<Value> {
     anyhow::ensure!(
         state.context_window.is_none_or(|window| window > 0),
         "contextPressure contextWindow must be positive when present"

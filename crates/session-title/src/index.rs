@@ -22,7 +22,7 @@ use seekdeep_cordis::{
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_core::session_store::{SESSIONS, SessionStore};
 use seekdeep_llm::{AbortSignal, GenerateOptions, LLM, is_agent_loop_request};
-use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
+use seekdeep_session_projection::ProjectionDefinition;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{Notify, oneshot};
@@ -542,11 +542,11 @@ impl SessionTitleService {
     /// activates only when a projection registry is composed, so headless
     /// assemblies stay unaffected and later-mounted registries still receive it.
     fn register_projection(context: &Context) -> anyhow::Result<()> {
-        let definition = ProjectionDefinition::new(
+        let definition = ProjectionDefinition::typed(
             "title",
             1,
-            || Ok(Value::Null),
-            |state: &Value, event: &SessionEvent| {
+            || Value::Null,
+            |state: &mut Value, event: &SessionEvent| {
                 if event.event_type == "session/title" {
                     let title = event
                         .data
@@ -555,12 +555,13 @@ impl SessionTitleService {
                         .transpose()?
                         .unwrap_or(Value::Null);
                     if title == *state {
-                        Ok(ProjectionTransition::Unchanged)
+                        Ok(false)
                     } else {
-                        Ok(ProjectionTransition::Changed(title.into()))
+                        *state = title;
+                        Ok(true)
                     }
                 } else {
-                    Ok(ProjectionTransition::Unchanged)
+                    Ok(false)
                 }
             },
             |state: &Value| Ok(state.clone()),

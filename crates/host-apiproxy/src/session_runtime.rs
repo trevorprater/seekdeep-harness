@@ -39,8 +39,7 @@ use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
 };
 use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionSnapshot, ProjectionTransition, SESSION_PROJECTIONS,
-    SessionProjectionRegistry,
+    ProjectionDefinition, ProjectionSnapshot, SESSION_PROJECTIONS, SessionProjectionRegistry,
 };
 use seekdeep_session_projection_cache::{SESSION_PROJECTION_CACHE, SessionProjectionCache};
 use seekdeep_session_query::{
@@ -307,11 +306,11 @@ impl SessionApiProxyRuntime {
                 let limits = attachments.image_limits().clone();
                 registry.register(
                     context,
-                    ProjectionDefinition::new(
+                    ProjectionDefinition::typed(
                         "imageLimits",
                         1,
-                        || Ok(Value::Null),
-                        |_, _| Ok(ProjectionTransition::Unchanged),
+                        || Value::Null,
+                        |_: &mut Value, _| Ok(false),
                         move |_| Ok(serde_json::to_value(&limits)?),
                     ),
                 )?;
@@ -1830,19 +1829,15 @@ fn fold_list_metadata(events: &[SessionEvent]) -> SessionListMetadata {
 }
 
 fn session_list_projection_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         "sessionListMetadata",
         1,
-        || {
-            Ok(serde_json::to_value(SessionListMetadata {
-                blank: true,
-                last_prompt_at: None,
-            })?)
+        || SessionListMetadata {
+            blank: true,
+            last_prompt_at: None,
         },
-        |state, event| {
-            let current = SessionListMetadata::parse(state)
-                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            let mut next = current.clone();
+        |state: &mut SessionListMetadata, event| {
+            let mut next = state.clone();
             if event.event_type == "turn/start" {
                 next.blank = false;
             }
@@ -1857,16 +1852,18 @@ fn session_list_projection_definition() -> ProjectionDefinition {
             {
                 next.last_prompt_at = Some(i64_wire_number(event.time));
             }
-            if next == current {
-                Ok(ProjectionTransition::Unchanged)
+            if next == *state {
+                Ok(false)
             } else {
-                ProjectionTransition::changed(next)
+                *state = next;
+                Ok(true)
             }
         },
-        |state| {
-            SessionListMetadata::parse(state)
+        |state: &SessionListMetadata| {
+            let value = serde_json::to_value(state)?;
+            SessionListMetadata::parse(&value)
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            Ok(state.clone())
+            Ok(value)
         },
     )
 }

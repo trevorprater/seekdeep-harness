@@ -1134,9 +1134,15 @@ impl JsonlSessionPersistence {
         expected_id: Option<&SessionId>,
     ) -> anyhow::Result<StoredScan> {
         let (bytes, metadata) = self.read_stable(path).await?;
-        let mut stored = self
-            .scan_artifact(&bytes)
-            .map_err(|error| enrich_format_error(error, path))?;
+        // Scanning a large log is seconds of CPU work: it runs on the blocking
+        // pool so the async workers keep serving every other request.
+        let compression = self.compression;
+        let scan_path = path.to_owned();
+        let mut stored = tokio::task::spawn_blocking(move || {
+            scan_artifact(compression, &bytes)
+                .map_err(|error| enrich_format_error(error, &scan_path))
+        })
+        .await??;
         stored.revision = revision_identity(&metadata);
         let scan = &stored.scan;
         if let Some(expected_id) = expected_id {
@@ -1158,39 +1164,45 @@ impl JsonlSessionPersistence {
             "corrupt session log: header location does not match artifact path {}",
             path.display()
         );
-        let normalized = normalize_stored_events(&stored.scan.events, &stored.scan.meta.id)?;
-        assert_known_events(&normalized, &stored.scan.meta.id).map_err(|error| {
-            let location = SessionLocation {
-                kind: "jsonl".to_owned(),
-                path: path.to_owned(),
-            };
-            SessionFormatUnsupportedError::new(
-                format!("{error} (raw log: {})", path.display()),
-                Some(location),
-            )
-        })?;
-        validate_normalized_events(&stored.scan.meta, &normalized)?;
-        stored.scan.events = normalized;
+        let validate_path = path.to_owned();
+        stored = tokio::task::spawn_blocking(move || -> anyhow::Result<StoredScan> {
+            let normalized = normalize_stored_events(&stored.scan.events, &stored.scan.meta.id)?;
+            assert_known_events(&normalized, &stored.scan.meta.id).map_err(|error| {
+                let location = SessionLocation {
+                    kind: "jsonl".to_owned(),
+                    path: validate_path.clone(),
+                };
+                SessionFormatUnsupportedError::new(
+                    format!("{error} (raw log: {})", validate_path.display()),
+                    Some(location),
+                )
+            })?;
+            validate_normalized_events(&stored.scan.meta, &normalized)?;
+            stored.scan.events = normalized;
+            Ok(stored)
+        })
+        .await??;
         Ok(stored)
     }
+}
 
-    fn scan_artifact(&self, bytes: &[u8]) -> anyhow::Result<StoredScan> {
-        match self.compression {
-            JsonlCompression::None => {
-                let scan = scan_log(bytes)?;
-                let truncate_to =
-                    (scan.committed_bytes < bytes.len()).then_some(scan.committed_bytes);
-                Ok(StoredScan {
-                    scan,
-                    truncate_to,
-                    recovered_events: Vec::new(),
-                    revision: String::new(),
-                })
-            }
-            JsonlCompression::Zstd => Self::scan_zstd_artifact(bytes),
+fn scan_artifact(compression: JsonlCompression, bytes: &[u8]) -> anyhow::Result<StoredScan> {
+    match compression {
+        JsonlCompression::None => {
+            let scan = scan_log(bytes)?;
+            let truncate_to = (scan.committed_bytes < bytes.len()).then_some(scan.committed_bytes);
+            Ok(StoredScan {
+                scan,
+                truncate_to,
+                recovered_events: Vec::new(),
+                revision: String::new(),
+            })
         }
+        JsonlCompression::Zstd => JsonlSessionPersistence::scan_zstd_artifact(bytes),
     }
+}
 
+impl JsonlSessionPersistence {
     fn scan_zstd_artifact(bytes: &[u8]) -> anyhow::Result<StoredScan> {
         let structure = scan_zstd_frames(bytes, None)?;
         anyhow::ensure!(
@@ -1201,10 +1213,14 @@ impl JsonlSessionPersistence {
             decompress_zstd_frame(&bytes[structure.frames[0].start..structure.frames[0].end])?;
         assert_zstd_header_frame(&header)?;
         let mut scanner = SessionLogScanner::new(&header)?;
+        // One write for every complete frame: the scanner is line-based, so
+        // the concatenation scans exactly as frame-by-frame writes do, and a
+        // log of many small durable batches still parses in wide runs.
+        let mut plaintext = Vec::new();
         for frame in structure.frames.iter().skip(1) {
-            let plaintext = decompress_zstd_frame(&bytes[frame.start..frame.end])?;
-            scanner.write(&plaintext)?;
+            plaintext.extend(decompress_zstd_frame(&bytes[frame.start..frame.end])?);
         }
+        scanner.write(&plaintext)?;
         let complete = scanner.checkpoint();
         anyhow::ensure!(
             complete.committed_bytes == complete.input_bytes,
@@ -3396,6 +3412,211 @@ mod tests {
                 .map(|event| event.seq)
                 .collect::<Vec<_>>(),
             [0, 1]
+        );
+    }
+}
+
+#[cfg(test)]
+mod cross_host_tests {
+    use super::*;
+    use seekdeep_core::session::AppendOptions;
+    use seekdeep_core::session_store::CreateSessionOptions;
+    use serde_json::json;
+
+    fn host(root: &Path) -> (Arc<JsonlSessionPersistence>, Arc<SessionStore>, Context) {
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).expect("sessions");
+        let backend = JsonlSessionPersistence::new(
+            sessions.clone(),
+            JsonlConfig {
+                root: root.to_owned(),
+                pack_chunks: true,
+                compression: JsonlCompression::Zstd,
+                write_batch_max_delay_ms: 200,
+                prepared_session_cache_size: 5,
+            },
+        )
+        .expect("backend");
+        (backend, sessions, context)
+    }
+
+    /// Two Hosts share one sessions root. A second Host that creates a fresh
+    /// session under an id the first Host is still appending to must not write
+    /// into the first Host's log.
+    #[tokio::test]
+    async fn a_second_host_cannot_append_a_fresh_same_id_session_into_a_live_log() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (_backend_a, sessions_a, context_a) = host(temporary.path());
+        let id = SessionId::new("shared-id");
+        let cwd = Some("/project".to_owned());
+        let first = sessions_a
+            .create(
+                &context_a,
+                Some(id.clone()),
+                CreateSessionOptions {
+                    cwd: cwd.clone(),
+                    ..CreateSessionOptions::default()
+                },
+            )
+            .expect("first host session");
+        for turn in 1..=3 {
+            first
+                .append(
+                    "turn/start",
+                    json!({"turn": turn}),
+                    AppendOptions::default(),
+                )
+                .expect("start");
+            first
+                .append(
+                    "turn/end",
+                    json!({"turn": turn, "reason": {"kind": "completed"}}),
+                    AppendOptions::default(),
+                )
+                .expect("end");
+        }
+        sessions_a.flush(&first).await.expect("first host flush");
+
+        let (_backend_b, sessions_b, context_b) = host(temporary.path());
+        let second = sessions_b
+            .create(
+                &context_b,
+                Some(id.clone()),
+                CreateSessionOptions {
+                    cwd,
+                    ..CreateSessionOptions::default()
+                },
+            )
+            .expect("second host session");
+        second
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("second host start");
+        let result = sessions_b.flush(&second).await;
+        let path = log_path(
+            temporary.path(),
+            Some("/project"),
+            &id,
+            JsonlCompression::Zstd,
+        )
+        .expect("log path");
+        let bytes = std::fs::read(&path).expect("shared log bytes");
+        let text = String::from_utf8(decompress_zstd_prefix(&bytes).expect("decode")).unwrap();
+        let rows: Vec<(String, Option<u64>)> = text
+            .lines()
+            .map(|line| {
+                let value: serde_json::Value = serde_json::from_str(line).unwrap();
+                (
+                    value["type"].as_str().unwrap().to_owned(),
+                    value["seq"].as_u64(),
+                )
+            })
+            .collect();
+        eprintln!("second host flush: {result:?}");
+        eprintln!("shared log rows: {rows:?}");
+        assert_eq!(
+            rows.iter().filter_map(|(_, seq)| *seq).collect::<Vec<_>>(),
+            (0..6).collect::<Vec<_>>(),
+            "the second host's turn must not land in the first host's log"
+        );
+        let error = result.expect_err("second host collides");
+        assert!(error.to_string().contains("id collision"), "{error:#}");
+    }
+}
+
+#[cfg(test)]
+mod cold_phase_bench {
+    use super::*;
+    use seekdeep_core::session_store::CreateSessionOptions;
+
+    /// Times each cold-prepare phase over a real Zstandard log named by
+    /// `SEEKDEEP_COLD_BENCH_LOG` (a `session.jsonl.zstd` file).
+    #[tokio::test]
+    #[ignore = "manual measurement over a real session log"]
+    async fn cold_phases_of_a_real_log() {
+        let Ok(log) = std::env::var("SEEKDEEP_COLD_BENCH_LOG") else {
+            return;
+        };
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let bytes = std::fs::read(&log).expect("log bytes");
+        let header_frame = decompress_zstd_prefix(&bytes[..bytes.len().min(4096)])
+            .ok()
+            .and_then(|text| String::from_utf8(text).ok())
+            .expect("header frame");
+        let meta = parse_header_meta(header_frame.lines().next().unwrap())
+            .expect("header")
+            .expect("header meta");
+        let path = log_path(
+            temporary.path(),
+            meta.cwd.as_deref(),
+            &meta.id,
+            JsonlCompression::Zstd,
+        )
+        .expect("log path");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::copy(&log, &path).unwrap();
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).expect("sessions");
+        let backend = JsonlSessionPersistence::new(
+            sessions.clone(),
+            JsonlConfig {
+                root: temporary.path().to_owned(),
+                pack_chunks: true,
+                compression: JsonlCompression::Zstd,
+                write_batch_max_delay_ms: 200,
+                prepared_session_cache_size: 5,
+            },
+        )
+        .expect("backend");
+        let started = std::time::Instant::now();
+        let stored = backend
+            .read_scan(&path, Some(&meta.id))
+            .await
+            .expect("scan");
+        eprintln!(
+            "read_scan: {} events in {:?}",
+            stored.scan.events.len(),
+            started.elapsed()
+        );
+        let started = std::time::Instant::now();
+        let balanced = stored.scan.events.clone();
+        eprintln!("clone events: {:?}", started.elapsed());
+        let started = std::time::Instant::now();
+        let closers = try_interrupted_turn_closers(&balanced).expect("closers");
+        eprintln!("closers ({}): {:?}", closers.len(), started.elapsed());
+        let started = std::time::Instant::now();
+        let session = sessions
+            .prepare(
+                Some(meta.id.clone()),
+                CreateSessionOptions {
+                    seed: Some(balanced.clone()),
+                    cwd: stored.scan.meta.cwd.clone(),
+                    created_at: Some(stored.scan.meta.created_at),
+                    seed_length: stored.scan.meta.seed_length,
+                    ..CreateSessionOptions::default()
+                },
+            )
+            .expect("prepare");
+        eprintln!(
+            "sessions.prepare (seed fold): {} events in {:?}",
+            session.events_len(),
+            started.elapsed()
+        );
+        let started = std::time::Instant::now();
+        let inspected = backend.inspect(&meta.id, None).await.expect("inspect");
+        eprintln!(
+            "backend.inspect (full cold prepare): {} events in {:?}",
+            inspected.events.len(),
+            started.elapsed()
+        );
+        let started = std::time::Instant::now();
+        let again = backend
+            .inspect(&meta.id, None)
+            .await
+            .expect("inspect again");
+        eprintln!(
+            "backend.inspect (cached): {} events in {:?}",
+            again.events.len(),
+            started.elapsed()
         );
     }
 }

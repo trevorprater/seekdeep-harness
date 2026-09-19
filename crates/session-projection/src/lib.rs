@@ -54,6 +54,99 @@ type Init = Arc<dyn Fn() -> anyhow::Result<JsonValue> + Send + Sync>;
 type Apply =
     Arc<dyn Fn(&JsonValue, &SessionEvent) -> anyhow::Result<ProjectionTransition> + Send + Sync>;
 type View = Arc<dyn Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync>;
+type FolderFactory =
+    Arc<dyn Fn(&JsonValue) -> anyhow::Result<Box<dyn ProjectionFolder>> + Send + Sync>;
+
+/// One unit's state folded over a run of events without leaving its native
+/// representation between events.
+///
+/// The registry folds a cold log through a folder so a typed unit deserializes
+/// its state once per run instead of once per event; the detached JSON state
+/// is produced only when a checkpoint row or a view needs it.
+pub trait ProjectionFolder: Send {
+    /// Folds one committed event; returns whether the state changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the definition's transition failure.
+    fn apply(&mut self, event: &SessionEvent) -> anyhow::Result<bool>;
+
+    /// Produces the detached plain-JSON internal state.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the state cannot be represented as lossless JSON.
+    fn state(&self) -> anyhow::Result<JsonValue>;
+
+    /// Produces and validates the wire-facing whole value.
+    ///
+    /// # Errors
+    ///
+    /// Returns the definition's view or schema failure.
+    fn view(&self) -> anyhow::Result<JsonValue>;
+}
+
+/// Folder over the plain-JSON contract: every event runs the JSON `apply`.
+struct JsonFolder {
+    state: JsonValue,
+    apply: Apply,
+    view: View,
+}
+
+impl ProjectionFolder for JsonFolder {
+    fn apply(&mut self, event: &SessionEvent) -> anyhow::Result<bool> {
+        match (self.apply)(&self.state, event)? {
+            ProjectionTransition::Unchanged => Ok(false),
+            ProjectionTransition::Changed(next) => {
+                self.state = next;
+                Ok(true)
+            }
+        }
+    }
+
+    fn state(&self) -> anyhow::Result<JsonValue> {
+        Ok(self.state.clone())
+    }
+
+    fn view(&self) -> anyhow::Result<JsonValue> {
+        (self.view)(&self.state)
+    }
+}
+
+/// Reads a plain-JSON state into its typed form the way the plain-JSON
+/// closures do: through `serde_json::Value`.
+fn typed_state<S: serde::de::DeserializeOwned>(state: &JsonValue) -> anyhow::Result<S> {
+    let value = state.as_serde_json().ok_or_else(|| {
+        anyhow::anyhow!("projection scalar state contains an unpaired UTF-16 surrogate")
+    })?;
+    Ok(serde_json::from_value(value.clone())?)
+}
+
+/// Folder over a typed state: deserialized once, serialized on demand.
+struct TypedFolder<S, A, V> {
+    state: S,
+    apply: Arc<A>,
+    view: Arc<V>,
+}
+
+impl<S, A, V> ProjectionFolder for TypedFolder<S, A, V>
+where
+    S: Serialize + Send,
+    A: Fn(&mut S, &SessionEvent) -> anyhow::Result<bool> + Send + Sync,
+    V: Fn(&S) -> anyhow::Result<Value> + Send + Sync,
+{
+    fn apply(&mut self, event: &SessionEvent) -> anyhow::Result<bool> {
+        (self.apply)(&mut self.state, event)
+    }
+
+    fn state(&self) -> anyhow::Result<JsonValue> {
+        Ok(JsonValue::from_serialize(&self.state)?)
+    }
+
+    fn view(&self) -> anyhow::Result<JsonValue> {
+        (self.view)(&self.state).map(JsonValue::from)
+    }
+}
 
 /// One domain's synchronous pure projection fold.
 #[derive(Clone)]
@@ -65,6 +158,7 @@ pub struct ProjectionDefinition {
     init: Init,
     apply: Apply,
     view: View,
+    folder: FolderFactory,
 }
 
 impl std::fmt::Debug for ProjectionDefinition {
@@ -135,13 +229,89 @@ impl ProjectionDefinition {
             + 'static,
         V: Fn(&JsonValue) -> anyhow::Result<JsonValue> + Send + Sync + 'static,
     {
+        let apply: Apply = Arc::new(apply);
+        let view: View = Arc::new(view);
+        let folder_apply = apply.clone();
+        let folder_view = view.clone();
         Self {
             key: key.into(),
             state_version,
             init: Arc::new(init),
-            apply: Arc::new(apply),
-            view: Arc::new(view),
+            apply,
+            view,
+            folder: Arc::new(move |state| {
+                Ok(Box::new(JsonFolder {
+                    state: state.clone(),
+                    apply: folder_apply.clone(),
+                    view: folder_view.clone(),
+                }))
+            }),
         }
+    }
+
+    /// Defines a fold over a typed state that the registry deserializes once
+    /// per run.
+    ///
+    /// `apply` mutates the state in place and reports whether it changed,
+    /// exactly as the plain-JSON `apply` reports [`ProjectionTransition`]; the
+    /// plain-JSON contract stays available through the derived closures, so
+    /// the definition still folds one event at a time when asked to.
+    #[must_use]
+    pub fn typed<S, I, A, V>(
+        key: impl Into<String>,
+        state_version: u64,
+        init: I,
+        apply: A,
+        view: V,
+    ) -> Self
+    where
+        S: Serialize + serde::de::DeserializeOwned + Send + 'static,
+        I: Fn() -> S + Send + Sync + 'static,
+        A: Fn(&mut S, &SessionEvent) -> anyhow::Result<bool> + Send + Sync + 'static,
+        V: Fn(&S) -> anyhow::Result<Value> + Send + Sync + 'static,
+    {
+        let apply = Arc::new(apply);
+        let view = Arc::new(view);
+        let event_apply = apply.clone();
+        let json_view = view.clone();
+        let folder_apply = apply.clone();
+        let folder_view = view.clone();
+        // The plain-JSON contract converts through `serde_json::Value` on the
+        // way in and `from_serialize` on the way out, so a typed unit's states
+        // stay byte-identical to the ones its plain-JSON closures produced.
+        Self {
+            key: key.into(),
+            state_version,
+            init: Arc::new(move || Ok(JsonValue::from(serde_json::to_value(init())?))),
+            apply: Arc::new(move |state, event| {
+                let mut state: S = typed_state(state)?;
+                if event_apply(&mut state, event)? {
+                    ProjectionTransition::changed(state)
+                } else {
+                    Ok(ProjectionTransition::Unchanged)
+                }
+            }),
+            view: Arc::new(move |state| {
+                let state: S = typed_state(state)?;
+                json_view(&state).map(JsonValue::from)
+            }),
+            folder: Arc::new(move |state| {
+                Ok(Box::new(TypedFolder {
+                    state: typed_state::<S>(state)?,
+                    apply: folder_apply.clone(),
+                    view: folder_view.clone(),
+                }))
+            }),
+        }
+    }
+
+    /// Opens a folder positioned at `state`.
+    ///
+    /// # Errors
+    ///
+    /// Returns when `state` is not a state this definition produced.
+    pub fn folder(&self, state: &JsonValue) -> anyhow::Result<Box<dyn ProjectionFolder>> {
+        (self.folder)(state)
     }
 
     /// Produces the plain-JSON state for an empty log.
@@ -382,7 +552,7 @@ impl SessionProjectionRegistry {
     ///
     /// Returns an init, fold, or view-schema failure.
     pub fn snapshot(&self, session: &Arc<Session>) -> anyhow::Result<ProjectionSnapshot> {
-        let events = session.events();
+        let events = session.events_shared();
         let mut values = IndexMap::new();
         let mut state = self.state.lock();
         for registration in state.registrations.values_mut() {
@@ -404,7 +574,7 @@ impl SessionProjectionRegistry {
     ///
     /// Returns an init or fold failure while lazily building a cell.
     pub fn checkpoint(&self, session: &Arc<Session>) -> anyhow::Result<ProjectionCheckpoint> {
-        let events = session.events();
+        let events = session.events_shared();
         let mut rows = IndexMap::new();
         let mut state = self.state.lock();
         for registration in state.registrations.values_mut() {
@@ -485,8 +655,7 @@ impl SessionProjectionRegistry {
             i64::try_from(event.seq).unwrap_or(i64::MAX)
         });
         let state = self.state.lock();
-        let mut values = IndexMap::new();
-        let mut refreshed = IndexMap::new();
+        let mut folders = Vec::with_capacity(state.registrations.len());
         for registration in state.registrations.values() {
             let definition = &registration.definition;
             let row = checkpoint.get(&definition.key);
@@ -498,34 +667,38 @@ impl SessionProjectionRegistry {
                 "session projection {:?} cannot restore from seq {base_seq}: its checkpoint row is missing, version-mismatched, or beyond the supplied log end; re-read from seq 0",
                 definition.key
             );
-            let mut projection_state = if let Some(row) = usable_row {
-                row.val.clone()
+            let folder = if let Some(row) = usable_row {
+                definition.folder(&row.val)?
             } else {
-                (definition.init)()?
+                definition.folder(&(definition.init)()?)?
             };
             let from = if let Some(row) = usable_row {
                 row.seq
             } else {
                 base_seq - 1
             };
-            for event in events {
-                if i64::try_from(event.seq).unwrap_or(i64::MAX) > from
-                    && let ProjectionTransition::Changed(next) =
-                        (definition.apply)(&projection_state, event)?
-                {
-                    projection_state = next;
+            folders.push((definition, from, folder));
+        }
+        // One pass over the supplied log: each unit folds exactly the events
+        // above its own watermark, in log order, as the per-unit loops did.
+        for event in events {
+            let seq = i64::try_from(event.seq).unwrap_or(i64::MAX);
+            for (_, from, folder) in &mut folders {
+                if seq > *from {
+                    folder.apply(event)?;
                 }
             }
-            values.insert(
-                definition.key.clone(),
-                (definition.view)(&projection_state)?,
-            );
+        }
+        let mut values = IndexMap::new();
+        let mut refreshed = IndexMap::new();
+        for (definition, _, folder) in &folders {
+            values.insert(definition.key.clone(), folder.view()?);
             refreshed.insert(
                 definition.key.clone(),
                 ProjectionCheckpointRow {
                     ver: definition.state_version,
                     seq: end_seq,
-                    val: projection_state,
+                    val: folder.state()?,
                 },
             );
         }
@@ -635,14 +808,12 @@ fn build_cell(
     definition: &ProjectionDefinition,
     events: &[SessionEvent],
 ) -> anyhow::Result<UnitCell> {
-    let mut state = (definition.init)()?;
+    let mut folder = definition.folder(&(definition.init)()?)?;
     for event in events {
-        if let ProjectionTransition::Changed(next) = (definition.apply)(&state, event)? {
-            state = next;
-        }
+        folder.apply(event)?;
     }
     Ok(UnitCell {
-        state,
+        state: folder.state()?,
         observed_seq: events
             .last()
             .map_or(-1, |event| i64::try_from(event.seq).unwrap_or(i64::MAX)),

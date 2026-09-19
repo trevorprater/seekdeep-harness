@@ -791,7 +791,13 @@ impl<'a> JsonRef<'a> {
         }
         let mut current = self;
         for component in pointer.strip_prefix('/')?.split('/') {
-            let component = component.replace("~1", "/").replace("~0", "~");
+            // Only an escaped component allocates; the common literal key
+            // resolves against the pointer text directly.
+            let component = if component.contains('~') {
+                std::borrow::Cow::Owned(component.replace("~1", "/").replace("~0", "~"))
+            } else {
+                std::borrow::Cow::Borrowed(component)
+            };
             current = if current.is_object() {
                 current.get(&component)?
             } else {

@@ -4,7 +4,7 @@ use seekdeep_core::{
     request_header::{EpochHeader, canonical_header},
     session::SessionEvent,
 };
-use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
+use seekdeep_session_projection::ProjectionDefinition;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -30,17 +30,16 @@ struct ContextBreakdownState {
 /// Builds the bounded `contextBreakdown` definition.
 #[must_use]
 pub fn context_breakdown_definition() -> ProjectionDefinition {
-    ProjectionDefinition::new(
+    ProjectionDefinition::typed(
         CONTEXT_BREAKDOWN_KEY,
         2,
-        || Ok(serde_json::to_value(ContextBreakdownState::default())?),
+        ContextBreakdownState::default,
         apply,
         view,
     )
 }
 
-fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransition> {
-    let state: ContextBreakdownState = serde_json::from_value(state.clone())?;
+fn apply(state: &mut ContextBreakdownState, event: &SessionEvent) -> anyhow::Result<bool> {
     let fold = fold_surface_projection(state.claim.as_ref(), event)?;
     let mut next = state.clone();
     if event.event_type == "request/header" {
@@ -66,15 +65,15 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
         .checked_add(fold.delta_tokens)
         .ok_or_else(|| anyhow::anyhow!("contextBreakdown message token total overflowed"))?;
     next.claim = fold.claim;
-    if next == state {
-        Ok(ProjectionTransition::Unchanged)
+    if next == *state {
+        Ok(false)
     } else {
-        ProjectionTransition::changed(next)
+        *state = next;
+        Ok(true)
     }
 }
 
-fn view(state: &Value) -> anyhow::Result<Value> {
-    let state: ContextBreakdownState = serde_json::from_value(state.clone())?;
+fn view(state: &ContextBreakdownState) -> anyhow::Result<Value> {
     let message_tokens = u64::try_from(state.message_tokens)
         .map_err(|_| anyhow::anyhow!("contextBreakdown messageTokens must be non-negative"))?;
     Ok(serde_json::to_value(ContextBreakdownProjection {
