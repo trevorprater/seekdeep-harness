@@ -877,3 +877,64 @@ fn sandbox_legs_run_their_native_world_suites_and_require_them() {
     let generator = step(leg, "Install Rust/WASM binding generator");
     assert_eq!(generator["if"], "matrix.runner == 'landlock'");
 }
+
+#[test]
+fn pi_ai_provider_e2e_is_manual_only_requires_both_keys_and_runs_the_native_lane() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let provider = workflow(include_str!(
+        "../../../.github/workflows/pi-ai-provider-e2e.yml"
+    ));
+    let triggers = provider["on"].as_object().expect("workflow triggers");
+    assert_eq!(triggers.keys().collect::<Vec<_>>(), ["workflow_dispatch"]);
+    let inputs = &triggers["workflow_dispatch"]["inputs"];
+    assert_eq!(inputs["azure_openai_model"]["default"], "gpt-5.5");
+    assert_eq!(inputs["anthropic_model"]["default"], "claude-opus-4-8");
+    let e2e = job(&provider, "e2e");
+    let preflight = step(e2e, "Preflight (require provider API keys)");
+    assert_eq!(
+        preflight["env"]["AZURE_OPENAI_API_KEY"],
+        "${{ secrets.AZURE_OPENAI_API_KEY_EXTERNAL }}"
+    );
+    assert_eq!(
+        preflight["env"]["ANTHROPIC_API_KEY"],
+        "${{ secrets.ANTHROPIC_API_KEY_EXTERNAL }}"
+    );
+    assert!(
+        preflight["run"]
+            .as_str()
+            .unwrap()
+            .contains("for name in AZURE_OPENAI_API_KEY ANTHROPIC_API_KEY")
+    );
+    let tests = step(e2e, "E2E tests (real Azure OpenAI and Anthropic APIs)");
+    assert_eq!(
+        tests["env"]["SEEKDEEP_PI_AI_OPENAI_MODEL"],
+        "${{ inputs.azure_openai_model }}"
+    );
+    assert_eq!(
+        tests["env"]["SEEKDEEP_PI_AI_ANTHROPIC_MODEL"],
+        "${{ inputs.anthropic_model }}"
+    );
+    assert_eq!(
+        tests["env"]["SEEKDEEP_PI_AI_OPENAI_BASE_URL"],
+        "https://openai-routerhub-resource.services.ai.azure.com/api/projects/openai/openai/v1"
+    );
+    assert_eq!(tests["env"]["SEEKDEEP_E2E_MAX_WORKERS"], 2);
+    assert_eq!(
+        tests["run"],
+        "bash scripts/run-e2e-lane.sh crates/llm-pi-ai/tests/provider_apis_e2e.rs"
+    );
+    assert!(
+        root.join("crates/llm-pi-ai/tests/provider_apis_e2e.rs")
+            .is_file()
+    );
+    assert!(run_steps(e2e).iter().all(|run| !run.contains("vitest")));
+    let steps = e2e["steps"].as_array().unwrap();
+    let cache = steps
+        .iter()
+        .position(|step| step["uses"] == "Swatinem/rust-cache@v2")
+        .expect("rust cache");
+    assert_eq!(
+        steps[cache + 1]["uses"],
+        "./.github/actions/prune-stale-v8-builds"
+    );
+}

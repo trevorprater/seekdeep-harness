@@ -23667,14 +23667,19 @@
     {
       "source": ".github/workflows/pi-ai-provider-e2e.yml",
       "kind": "configuration",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        ".github/workflows/pi-ai-provider-e2e.yml"
+        ".github/workflows/pi-ai-provider-e2e.yml",
+        "crates/llm-pi-ai/tests/provider_apis_e2e.rs",
+        "scripts/run-e2e-lane.sh",
+        "crates/repository-tools/tests/ci_workflow_contract.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "2026-09-19: the manual workflow runs the native mirror of provider-apis.e2e.ts through the credentialed lane (bash scripts/run-e2e-lane.sh crates/llm-pi-ai/tests/provider_apis_e2e.rs) after the same two-key preflight, with the SEEKDEEP_PI_AI_* model and base-URL inputs and SEEKDEEP_E2E_MAX_WORKERS=2; ci_workflow_contract pins the single workflow_dispatch trigger, the input defaults, the preflight secrets, the lane command, and the absence of Vitest",
+        "keyless: the lane selects the file and runs its five ignored cases, each of which self-skips without its provider key (5 passed, 0 spent); the loopback case proves the openai profile sends the Azure key in api-key and blanks Authorization as the source's profile did"
       ],
-      "note": "The provider workflow still invokes the removed Vitest end-to-end configuration. Its complete provider matrix needs equivalent native test routing and execution."
+      "note": "Runs the native key-gated mirror through the credentialed lane; a dispatch with AZURE_OPENAI_API_KEY_EXTERNAL and ANTHROPIC_API_KEY_EXTERNAL spends provider credit and is the repository owner's call."
     },
     {
       "source": ".github/workflows/python-release.yml",
@@ -68200,6 +68205,7 @@
       "kind": "test",
       "status": "verified",
       "targets": [
+        "crates/llm-pi-ai/tests/provider_apis_e2e.rs",
         "crates/llm-pi-ai/tests/openai_responses_parity.rs",
         "crates/llm-pi-ai/tests/anthropic_messages_parity.rs",
         "crates/llm-pi-ai/tests/adapter_parity.rs",
@@ -68210,7 +68216,8 @@
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: five key-gated OpenAI Responses and Anthropic Messages cases declared and correctly skipped without provider credentials",
         "Rust loopback endpoints verify authenticated request headers and bodies, streamed text with usage, native replay metadata, tool-call identity and follow-up reconstruction, reasoning signatures, and terminal stop mapping",
         "Rust attachment/context tests resolve durable images for the next request and verify Anthropic-capable image conversion plus every unsupported-image boundary",
-        "focused Rust adapter, OpenAI Responses, Anthropic Messages, context/image, and replay suites passed 28/28"
+        "focused Rust adapter, OpenAI Responses, Anthropic Messages, context/image, and replay suites passed 28/28",
+        "2026-09-19: crates/llm-pi-ai/tests/provider_apis_e2e.rs is the credentialed mirror of the five source cases (text with usage and native replay, tool-call round trip with native replay, the Anthropic image path through a read-only fixture attachment store), each #[ignore] and self-skipping without its provider key; a keyless loopback case pins the Azure header shaping; cargo test -p seekdeep-llm-pi-ai --test provider_apis_e2e (1 passed, 5 ignored) and the lane run with --include-ignored (5 passed keylessly)"
       ]
     },
     {
@@ -90313,7 +90320,8 @@
       "evidence": [
         "bash scripts/run-e2e-lane.sh --list (keyless, probe .env: selects every crates/*/tests target that reads DEEPSEEK_API_KEY, one cargo invocation per package, ignored tests included, SEEKDEEP_E2E_MAX_WORKERS from the root .env honoured as --test-threads)",
         "env-file loader checked against quoted, single-quoted, bare-with-comment, padded, empty, export-prefixed, invalid-name lines and an environment value that must win",
-        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (7 passed: the e2e workflow stays manual-only and fails loud before running the lane)"
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract (7 passed: the e2e workflow stays manual-only and fails loud before running the lane)",
+        "2026-09-19: leading crates/<crate>/tests/<name>.rs arguments select the lane's targets, as a file passed to vitest did for the pi-ai provider workflow; bash scripts/run-e2e-lane.sh crates/llm-pi-ai/tests/provider_apis_e2e.rs ran that single target with ignored tests included"
       ],
       "note": "vitest is not shipped; the shell lane owns the credentialed inventory. Keyed suites are the crates' #[ignore] tests (the workspace gate never spends a credential by accident) run with --include-ignored, the gitignored root .env is loaded with the environment winning like process.loadEnvFile, SEEKDEEP_E2E_MAX_WORKERS (default 4, rejects non-positive-integers) bounds --test-threads instead of file parallelism, and each package retries twice instead of each test. The source's 120 s per-test timeout is carried by the suites' own tokio timeouts; the tsconfig-paths resolution and decorator transform have no counterpart in compiled Rust."
     },

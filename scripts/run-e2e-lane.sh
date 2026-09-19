@@ -11,7 +11,10 @@
 # also holds keyless suites does not run them here; cargo applies --test as a filter across
 # every selected package, so the lane invokes cargo once per crate. Each package name comes
 # from its own manifest because crate directories do not all share a prefix
-# (crates/jsonrpc-demo is seekdeep-sdk-jsonrpc-demo). Extra arguments go to the test binaries.
+# (crates/jsonrpc-demo is seekdeep-sdk-jsonrpc-demo). Leading arguments naming test files
+# (crates/<crate>/tests/<name>.rs) select those targets instead, as the source passed a file to
+# vitest for a provider-specific lane; `--` ends that selection, and every remaining argument
+# goes to the test binaries.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -50,12 +53,32 @@ elif ! [[ "$max_workers" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
+selected=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    crates/*/tests/*.rs)
+      if [ ! -f "$1" ]; then
+        echo "e2e lane: no such test file: $1" >&2
+        exit 1
+      fi
+      selected+=("$1")
+      shift
+      ;;
+    *) break ;;
+  esac
+done
+
 # Only a crate's direct tests/*.rs files are cargo test targets; fixtures and support modules in
 # subdirectories are not.
-files=$(grep -l 'DEEPSEEK_API_KEY' crates/*/tests/*.rs | sort)
-if [ -z "$files" ]; then
-  echo "e2e lane: no test target reads DEEPSEEK_API_KEY" >&2
-  exit 1
+if [ "${#selected[@]}" -gt 0 ]; then
+  files=$(printf '%s\n' "${selected[@]}" | sort -u)
+else
+  files=$(grep -l 'DEEPSEEK_API_KEY' crates/*/tests/*.rs | sort)
+  if [ -z "$files" ]; then
+    echo "e2e lane: no test target reads DEEPSEEK_API_KEY" >&2
+    exit 1
+  fi
 fi
 
 status=0
