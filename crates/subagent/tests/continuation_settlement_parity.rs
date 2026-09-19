@@ -1,7 +1,7 @@
 //! The remaining review regressions and the settlement-delivery contract of
 //! the pinned `continuation.spec.ts`, against the assembled Rust stack.
 
-mod support;
+use super::support;
 
 use std::{sync::Arc, time::Duration};
 

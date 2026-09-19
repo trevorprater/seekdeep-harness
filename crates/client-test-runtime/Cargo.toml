@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -37,3 +38,43 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_browser_languages_parity"
+path = "tests/wasm_browser_languages_parity.rs"
+
+[[test]]
+name = "wasm_fixture_session_parity"
+path = "tests/wasm_fixture_session_parity.rs"
+
+[[test]]
+name = "wasm_fixtures_parity"
+path = "tests/wasm_fixtures_parity.rs"
+
+[[test]]
+name = "wasm_public_helpers_parity"
+path = "tests/wasm_public_helpers_parity.rs"
+
+[[test]]
+name = "wasm_remote_parity"
+path = "tests/wasm_remote_parity.rs"
+
+[[test]]
+name = "wasm_runtime_parity"
+path = "tests/wasm_runtime_parity.rs"
+
+[[test]]
+name = "wasm_sessions_service_parity"
+path = "tests/wasm_sessions_service_parity.rs"
+
+[[test]]
+name = "wasm_snapshot_parity"
+path = "tests/wasm_snapshot_parity.rs"
+
+[[test]]
+name = "wasm_workspaces_parity"
+path = "tests/wasm_workspaces_parity.rs"

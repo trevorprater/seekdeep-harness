@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Newline-delimited JSON-RPC and typed SDK wire contracts for SeekDeep Harness"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -26,3 +27,7 @@ async-trait.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust/WASM Client plugin hot reload chain"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -55,3 +56,11 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_client_hmr_parity"
+path = "tests/wasm_client_hmr_parity.rs"

@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Workspace browser tree, search, ordering, and Rust/WASM UI semantics"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -32,3 +33,23 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_apply_parity"
+path = "tests/wasm_apply_parity.rs"
+
+[[test]]
+name = "wasm_browser_parity"
+path = "tests/wasm_browser_parity.rs"
+
+[[test]]
+name = "wasm_picker_parity"
+path = "tests/wasm_picker_parity.rs"
+
+[[test]]
+name = "wasm_rows_parity"
+path = "tests/wasm_rows_parity.rs"

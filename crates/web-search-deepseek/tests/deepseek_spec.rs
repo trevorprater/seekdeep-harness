@@ -1,6 +1,6 @@
 //! Parity mirror of the source deepseek.spec.ts provider suite.
 
-mod support;
+use super::support;
 
 use std::sync::{
     Arc,

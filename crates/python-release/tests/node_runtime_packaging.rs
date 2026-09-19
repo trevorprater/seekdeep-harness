@@ -24,8 +24,7 @@ use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 use zip::write::SimpleFileOptions;
 
-#[path = "common/node_fixture.rs"]
-mod node_fixture;
+use super::node_fixture;
 
 #[derive(Default)]
 struct FixtureFetcher {

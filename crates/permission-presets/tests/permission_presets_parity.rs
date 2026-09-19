@@ -1,6 +1,6 @@
 //! Behavioral mirror of the permission-preset service and session-default source suite.
 
-mod support;
+use super::support;
 
 use std::{panic::AssertUnwindSafe, time::Duration};
 

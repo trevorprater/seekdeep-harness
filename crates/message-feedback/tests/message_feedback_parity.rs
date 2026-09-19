@@ -1,6 +1,6 @@
 //! Behavioral mirror of the message-feedback service source suite.
 
-mod support;
+use super::support;
 
 use std::sync::Arc;
 

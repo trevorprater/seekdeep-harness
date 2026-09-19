@@ -1,6 +1,6 @@
 //! Parity mirror of the source redirect.spec.ts redirect-policy suite.
 
-mod support;
+use super::support;
 
 use seekdeep_llm::HarnessError;
 use seekdeep_web::{WebSearchProvider, WebSearchRequest};

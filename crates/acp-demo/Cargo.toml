@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "ACP automation server application"
+autotests = false
 
 [[bin]]
 name = "seekdeep-acp-demo"
@@ -126,3 +127,7 @@ zstd.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

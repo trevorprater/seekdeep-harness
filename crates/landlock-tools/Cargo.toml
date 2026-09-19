@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Native build and release tooling for the Landlock launcher package family"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -26,3 +27,7 @@ seekdeep-source-oracle = { path = "../source-oracle" }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

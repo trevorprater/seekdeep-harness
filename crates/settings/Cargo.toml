@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 description = "User-settings capability seam for SeekDeep Harness"
 readme = "README.md"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -30,3 +31,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

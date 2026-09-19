@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Model-defined Cordis Host package registry and lifecycle"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -35,3 +36,7 @@ seekdeep-typert-registry = { path = "../typert-registry" }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

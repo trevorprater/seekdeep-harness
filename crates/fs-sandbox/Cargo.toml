@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Sandbox-enforcing local filesystem backend for SeekDeep Harness"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -26,3 +27,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

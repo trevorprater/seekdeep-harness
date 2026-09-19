@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -46,3 +47,11 @@ seekdeep-source-oracle = { path = "../source-oracle" }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_browser_face_parity"
+path = "tests/wasm_browser_face_parity.rs"

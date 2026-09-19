@@ -1,6 +1,6 @@
 //! Source-differential npm identity, retry, integrity, and publication-order contracts.
 
-mod release_support;
+use super::release_support;
 
 use std::{collections::VecDeque, fs, path::Path, time::Duration};
 

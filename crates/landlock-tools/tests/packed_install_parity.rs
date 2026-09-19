@@ -1,6 +1,6 @@
 //! Real local tarballs, installed entry calls, payload refusals, and confinement process seams.
 
-mod release_support;
+use super::release_support;
 
 use std::{
     fs,

@@ -7,7 +7,7 @@
     reason = "spec cases ported statement for statement"
 )]
 
-mod support;
+use super::support;
 
 use std::{sync::Arc, time::Duration};
 

@@ -2,7 +2,7 @@
 
 #![cfg(unix)]
 
-mod release_support;
+use super::release_support;
 
 use std::{collections::BTreeMap, fs, process::Command};
 

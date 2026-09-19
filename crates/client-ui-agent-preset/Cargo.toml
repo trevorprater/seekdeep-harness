@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust/WASM Agent preset identity and management UI semantics"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -32,3 +33,19 @@ seekdeep-cordis = { path = "../cordis" }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_apply_parity"
+path = "tests/wasm_apply_parity.rs"
+
+[[test]]
+name = "wasm_components_parity"
+path = "tests/wasm_components_parity.rs"
+
+[[test]]
+name = "wasm_store_parity"
+path = "tests/wasm_store_parity.rs"

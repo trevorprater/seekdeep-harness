@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Portable models and Rust/WASM React primitives for the SeekDeep browser UI"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -28,3 +29,71 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_atoms_parity"
+path = "tests/wasm_atoms_parity.rs"
+
+[[test]]
+name = "wasm_clipboard_parity"
+path = "tests/wasm_clipboard_parity.rs"
+
+[[test]]
+name = "wasm_code_read_parity"
+path = "tests/wasm_code_read_parity.rs"
+
+[[test]]
+name = "wasm_dialogs_parity"
+path = "tests/wasm_dialogs_parity.rs"
+
+[[test]]
+name = "wasm_diff_block_parity"
+path = "tests/wasm_diff_block_parity.rs"
+
+[[test]]
+name = "wasm_highlight_parity"
+path = "tests/wasm_highlight_parity.rs"
+
+[[test]]
+name = "wasm_hover_card_parity"
+path = "tests/wasm_hover_card_parity.rs"
+
+[[test]]
+name = "wasm_icons_parity"
+path = "tests/wasm_icons_parity.rs"
+
+[[test]]
+name = "wasm_json_tree_parity"
+path = "tests/wasm_json_tree_parity.rs"
+
+[[test]]
+name = "wasm_markdown_atoms_parity"
+path = "tests/wasm_markdown_atoms_parity.rs"
+
+[[test]]
+name = "wasm_markdown_render_parity"
+path = "tests/wasm_markdown_render_parity.rs"
+
+[[test]]
+name = "wasm_menu_parity"
+path = "tests/wasm_menu_parity.rs"
+
+[[test]]
+name = "wasm_search_block_parity"
+path = "tests/wasm_search_block_parity.rs"
+
+[[test]]
+name = "wasm_terminal_block_parity"
+path = "tests/wasm_terminal_block_parity.rs"
+
+[[test]]
+name = "wasm_tooltip_parity"
+path = "tests/wasm_tooltip_parity.rs"
+
+[[test]]
+name = "wasm_web_block_parity"
+path = "tests/wasm_web_block_parity.rs"

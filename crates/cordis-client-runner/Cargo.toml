@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust/WASM dynamic Cordis Client evaluator and runtime"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -48,3 +49,11 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_mount_engine_parity"
+path = "tests/wasm_mount_engine_parity.rs"

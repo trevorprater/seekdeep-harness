@@ -3,7 +3,7 @@
 //! the source's promise-reaction order guarantees, and it publishes exactly
 //! once whether or not anyone awaits the run.
 
-mod support;
+use super::support;
 
 use std::{sync::Arc, time::Duration};
 

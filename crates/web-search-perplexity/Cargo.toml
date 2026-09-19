@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust Perplexity-backed search provider for the SeekDeep web capability seam"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -27,3 +28,7 @@ parking_lot.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

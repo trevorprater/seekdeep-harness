@@ -3,7 +3,7 @@
 //! monkey-patch the persistence backend or the projection cache in place are
 //! not portable to the typed Rust services and are recorded in the manifest.
 
-mod support;
+use super::support;
 
 use std::sync::Arc;
 

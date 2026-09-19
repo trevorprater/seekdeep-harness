@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "MCP client bridge for external tool servers"
+autotests = false
 
 [[bin]]
 name = "seekdeep-mcp-server-fixture"
@@ -39,3 +40,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

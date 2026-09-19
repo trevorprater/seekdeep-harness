@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust subprocess client for the SeekDeep Harness SDK runtime"
+autotests = false
 
 [[bin]]
 name = "seekdeep-sdk-fake-runtime"
@@ -34,3 +35,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

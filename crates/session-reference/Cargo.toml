@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Cross-session snapshot references and durable untrusted model context"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -34,3 +35,7 @@ seekdeep-session-title = { path = "../session-title" }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

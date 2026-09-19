@@ -1,6 +1,6 @@
 //! Behavioral mirror of the permissions projection and `/permission` command source suite.
 
-mod support;
+use super::support;
 
 use std::sync::Arc;
 

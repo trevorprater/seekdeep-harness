@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "One-shot Claude Code subagent provider over the native CLI stream protocol"
+autotests = false
 
 [[bin]]
 name = "seekdeep-claude-code-fixture"
@@ -42,3 +43,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

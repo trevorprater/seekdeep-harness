@@ -15,9 +15,7 @@ use seekdeep_python_release::{
 };
 use sha2::{Digest as _, Sha512};
 
-#[allow(dead_code)]
-#[path = "common/node_fixture.rs"]
-mod node_fixture;
+use super::node_fixture;
 
 #[derive(Default)]
 struct FixtureFetcher {

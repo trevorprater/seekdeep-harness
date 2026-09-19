@@ -4,7 +4,7 @@
 //! onto the child's own log as delegation events, and a cold resume replays
 //! that persisted snapshot instead of re-capturing the parent.
 
-mod support;
+use super::support;
 
 use std::sync::Arc;
 

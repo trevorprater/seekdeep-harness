@@ -1,6 +1,6 @@
 //! Behavioral mirror of the permission-preset invariant source suite.
 
-mod support;
+use super::support;
 
 use seekdeep_cordis::EventArgs;
 use seekdeep_core::session::{AppendOptions, JsonValue};

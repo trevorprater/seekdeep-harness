@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Portable Rust/WASM settings namespace scope service and settings Slot contracts"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -37,3 +38,11 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_settings_parity"
+path = "tests/wasm_settings_parity.rs"

@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust/WASM input-trigger detection and menu state machine"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -35,3 +36,11 @@ regex.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_parity"
+path = "tests/wasm_parity.rs"

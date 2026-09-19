@@ -89,9 +89,18 @@ for directory in $(printf '%s\n' "$files" | cut -d/ -f2 | sort -u); do
     exit 1
   fi
   targets=(--package "$name")
-  for stem in $(printf '%s\n' "$files" | grep "^crates/$directory/" | sed 's|.*/||; s|\.rs$||'); do
-    targets+=(--test "$stem")
-  done
+  # A crate whose top-level test files are modules of tests/main.rs has one binary; each
+  # selected file then becomes a name filter on it. Other crates still name a binary per file.
+  if [ -f "crates/$directory/tests/main.rs" ]; then
+    targets+=(--test main)
+    for stem in $(printf '%s\n' "$files" | grep "^crates/$directory/" | sed 's|.*/||; s|\.rs$||'); do
+      targets+=("$stem::")
+    done
+  else
+    for stem in $(printf '%s\n' "$files" | grep "^crates/$directory/" | sed 's|.*/||; s|\.rs$||'); do
+      targets+=(--test "$stem")
+    done
+  fi
   echo "e2e lane: $name (test threads $max_workers)" >&2
   code=0
   for attempt in 1 2 3; do

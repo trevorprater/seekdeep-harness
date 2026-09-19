@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 description = "One-shot fail-closed user-approval seam for SeekDeep Harness"
 readme = "README.md"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -31,3 +32,7 @@ uuid.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

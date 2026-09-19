@@ -1,6 +1,6 @@
 //! Provider registration order: `list()` reports the oracle's Map iteration order.
 
-mod support;
+use super::support;
 
 use seekdeep_cordis::Context;
 use seekdeep_subagent::index::SubagentRuntime;

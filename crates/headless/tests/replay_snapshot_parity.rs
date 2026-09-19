@@ -2,10 +2,8 @@
 
 #![cfg(not(windows))]
 
-#[path = "support/retry_snapshot_backend.rs"]
-mod retry_backend;
-#[path = "support/settlement_fence.rs"]
-mod settlement_fence;
+use super::retry_backend;
+use super::settlement_fence;
 
 use std::{
     collections::BTreeMap,

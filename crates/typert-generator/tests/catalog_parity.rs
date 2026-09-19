@@ -2,8 +2,7 @@
 
 use serde_json::{Value, json};
 
-#[path = "support/catalog_cases.rs"]
-mod cases;
+use super::cases;
 
 fn outcome(name: &str) -> Value {
     cases::outcome(

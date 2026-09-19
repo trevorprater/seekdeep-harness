@@ -1,20 +1,6 @@
 //! Commit-addressed baseline source comparisons, real tarballs, and isolated process lifecycles.
 
-#[path = "npm_baseline/bundle.rs"]
-mod bundle;
-#[path = "npm_baseline/capture.rs"]
-mod capture;
-#[path = "npm_baseline/pack.rs"]
-mod pack;
-#[path = "npm_baseline/registry.rs"]
-mod registry;
-#[cfg(unix)]
-#[path = "npm_baseline/release.rs"]
-mod release;
-#[path = "npm_baseline/smoke.rs"]
-mod smoke;
-#[path = "npm_baseline/support.rs"]
-mod support;
+use super::support;
 
 use std::process::Command;
 

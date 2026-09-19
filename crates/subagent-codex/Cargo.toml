@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "One-shot official Codex app-server subagent provider for SeekDeep Harness"
+autotests = false
 
 [[bin]]
 name = "seekdeep-codex-app-server-fixture"
@@ -44,3 +45,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

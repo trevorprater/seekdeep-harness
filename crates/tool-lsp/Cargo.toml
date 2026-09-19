@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Model-facing language-server navigation tool for SeekDeep Harness"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -37,3 +38,7 @@ tokio.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

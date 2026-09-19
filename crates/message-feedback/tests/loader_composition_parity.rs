@@ -1,6 +1,6 @@
 //! Cold-restart proof through a real Rust Loader composition and JSONL persistence.
 
-mod support;
+use super::support;
 
 use seekdeep_core::session::{SessionId, derive_event_message};
 use seekdeep_loader::PluginCatalog;

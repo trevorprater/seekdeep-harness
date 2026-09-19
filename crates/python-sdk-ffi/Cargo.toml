@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Narrow C ABI for Rust-owned Python SDK behavior"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -32,3 +33,7 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

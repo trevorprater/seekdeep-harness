@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Portable and Rust/WASM in-app directory browser"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -27,3 +28,19 @@ wasm-bindgen-test = "0.3.77"
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_apply_parity"
+path = "tests/wasm_apply_parity.rs"
+
+[[test]]
+name = "wasm_controller_parity"
+path = "tests/wasm_controller_parity.rs"
+
+[[test]]
+name = "wasm_ui_parity"
+path = "tests/wasm_ui_parity.rs"

@@ -1,6 +1,6 @@
 //! Parity mirror of the source settings.spec.ts settings-section suite.
 
-mod support;
+use super::support;
 
 use seekdeep_cordis::Context;
 use seekdeep_web::{WebRuntime, WebRuntimeConfig, WebSearchRequest};

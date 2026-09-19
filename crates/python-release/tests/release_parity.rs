@@ -13,8 +13,7 @@ use seekdeep_python_release::{
 use serde_json::json;
 use zip::write::SimpleFileOptions;
 
-#[path = "common/node_fixture.rs"]
-mod node_fixture;
+use super::node_fixture;
 
 fn fixture() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();

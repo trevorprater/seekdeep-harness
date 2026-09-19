@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Scriptable OpenAI-compatible fault server for SeekDeep Harness tests"
+autotests = false
 
 [[bin]]
 name = "seekdeep-llm-mock-server"
@@ -32,3 +33,7 @@ nix.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

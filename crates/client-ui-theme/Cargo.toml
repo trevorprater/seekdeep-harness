@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Rust theme settings, registry, Host bootstrap, and browser Appearance surface"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -38,3 +39,11 @@ tokio.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_theme_parity"
+path = "tests/wasm_theme_parity.rs"

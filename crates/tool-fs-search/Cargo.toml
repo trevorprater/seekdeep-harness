@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Spawn-backed glob and grep tools for SeekDeep Harness"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -35,3 +36,7 @@ tempfile.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

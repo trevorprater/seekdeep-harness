@@ -1,7 +1,7 @@
 //! `SubagentRuntime.startContinuable` and followup residency routing, ported
 //! from the pinned `continuation.spec.ts` against the assembled Rust stack.
 
-mod support;
+use super::support;
 
 use std::{sync::Arc, time::Duration};
 

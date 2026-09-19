@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Produced-file prompt, projection, and browser UI semantics"
+autotests = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -37,3 +38,11 @@ tokio.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_parity"
+path = "tests/wasm_parity.rs"

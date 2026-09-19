@@ -5,7 +5,7 @@
 
 #![cfg(unix)]
 
-mod support;
+use super::support;
 
 use std::{collections::BTreeMap, sync::Arc};
 

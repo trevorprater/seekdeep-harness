@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "First-human-message model title provider"
+autotests = false
 
 [dependencies]
 anyhow.workspace = true
@@ -28,3 +29,7 @@ tokio.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

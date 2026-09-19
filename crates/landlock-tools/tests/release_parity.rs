@@ -1,6 +1,6 @@
 //! Differential artifact, version, commit-order, and package-manager release contracts.
 
-mod release_support;
+use super::release_support;
 
 use std::{fs, path::Path, process::Command};
 

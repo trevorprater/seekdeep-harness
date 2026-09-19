@@ -10,7 +10,7 @@
 
 #![cfg(unix)]
 
-mod support;
+use super::support;
 
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 

@@ -8,7 +8,7 @@
 
 #![cfg(unix)]
 
-mod support;
+use super::support;
 
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 

@@ -1,7 +1,6 @@
 //! Full generated-Client fake roster and stream-control parity.
 
-#[path = "support/fake_api.rs"]
-mod fake_api;
+use super::fake_api;
 
 use fake_api::{FakeApiClient, METHOD_ROSTER, StreamItem};
 use seekdeep_client_runtime::{ClientRpcError, ClientRpcResult};

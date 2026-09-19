@@ -1,7 +1,6 @@
 //! Deterministic Rust port of the source Client event-script fixture.
 
-#[path = "support/event_script.rs"]
-mod event_script;
+use super::event_script;
 
 use serde_json::json;
 
