@@ -2,6 +2,10 @@
 
 use std::sync::Arc;
 
+use futures::{
+    FutureExt as _,
+    future::{BoxFuture, Shared},
+};
 use seekdeep_agent::Agent;
 use seekdeep_cordis::{Context, EventArgs};
 use seekdeep_core::session::{SessionEvent, SessionId};
@@ -11,7 +15,8 @@ use uuid::Uuid;
 
 use crate::assistant_output::final_assistant_output;
 use crate::types::{
-    SubagentRun, SubagentRunEndInfo, SubagentRunId, SubagentRunInfo, SubagentStopReason,
+    SubagentResult, SubagentRun, SubagentRunEndInfo, SubagentRunId, SubagentRunInfo,
+    SubagentStopReason,
 };
 
 /// Emits one subagent lifecycle edge with per-listener containment.
@@ -57,24 +62,59 @@ pub fn observe_run(
         id: run.id().clone(),
         local: run.local_agent().is_some(),
     };
-    let ctx = context.clone();
-    let identity_end = identity.clone();
-    let parent_end = Arc::clone(parent);
-    let run_end = Arc::clone(&run);
-    tokio::spawn(async move {
-        let result = run_end.result().await;
-        let (stop_reason, output) = match result {
-            Ok(result) => (result.stop_reason, result.output),
+    let settled = settle_with_end_edge(context, &identity, parent, &run);
+    // The end edge publishes when the child settles even if nobody awaits the run.
+    tokio::spawn(settled.clone());
+    emit_subagent_lifecycle(
+        context,
+        "subagent/start",
+        EventArgs::one(identity),
+        Some(parent),
+    )?;
+    Ok(Arc::new(ObservedRun {
+        inner: run,
+        settled,
+    }))
+}
+
+/// The settled outcome every awaiter of an observed run shares: the child's
+/// result, published as `subagent/end` before any awaiter can resume with it.
+type SettledResult = Shared<BoxFuture<'static, Result<SubagentResult, String>>>;
+
+/// Folds the end edge into the one result future every awaiter polls.
+///
+/// The source registers the end-edge reaction on the run's result promise before
+/// handing the run to its caller, so JavaScript's reaction order publishes
+/// `subagent/end` ahead of every later awaiter's continuation, and a parent's
+/// `tool/result` for the run always follows the child's terminal edge. A Rust
+/// runtime schedules independent tasks freely, so a separately spawned publisher
+/// could lose that race to the caller's continuation; folding the publication
+/// into the shared future makes it happen exactly once, before the result is
+/// observable.
+fn settle_with_end_edge(
+    context: &Context,
+    identity: &SubagentRunInfo,
+    parent: &Arc<Agent>,
+    run: &Arc<dyn SubagentRun>,
+) -> SettledResult {
+    let context = context.clone();
+    let identity = identity.clone();
+    let parent = Arc::clone(parent);
+    let run = Arc::clone(run);
+    async move {
+        let result = run.result().await.map_err(|error| format!("{error:#}"));
+        let (stop_reason, output) = match &result {
+            Ok(result) => (result.stop_reason, result.output.clone()),
             Err(error) => {
                 tracing::warn!(%error, "subagent result channel failed");
                 (SubagentStopReason::Error, Vec::new())
             }
         };
         let info = SubagentRunEndInfo {
-            run_id: identity_end.run_id,
-            provider: identity_end.provider,
-            id: identity_end.id,
-            local: identity_end.local,
+            run_id: identity.run_id,
+            provider: identity.provider,
+            id: identity.id,
+            local: identity.local,
             stop_reason,
             last_assistant_message: if output.is_empty() {
                 None
@@ -83,21 +123,45 @@ pub fn observe_run(
             },
         };
         if let Err(error) = emit_subagent_lifecycle(
-            &ctx,
+            &context,
             "subagent/end",
             EventArgs::one(info),
-            Some(&parent_end),
+            Some(&parent),
         ) {
             tracing::warn!(%error, "subagent end publication was vetoed");
         }
-    });
-    emit_subagent_lifecycle(
-        context,
-        "subagent/start",
-        EventArgs::one(identity),
-        Some(parent),
-    )?;
-    Ok(run)
+        result
+    }
+    .boxed()
+    .shared()
+}
+
+/// A one-shot run whose result resolves only after its end edge has published.
+struct ObservedRun {
+    inner: Arc<dyn SubagentRun>,
+    settled: SettledResult,
+}
+
+impl SubagentRun for ObservedRun {
+    fn id(&self) -> &SessionId {
+        self.inner.id()
+    }
+
+    fn local_agent(&self) -> Option<&Arc<Agent>> {
+        self.inner.local_agent()
+    }
+
+    fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
+        Box::pin(
+            self.settled
+                .clone()
+                .map(|result| result.map_err(anyhow::Error::msg)),
+        )
+    }
+
+    fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {
+        self.inner.dispose()
+    }
 }
 
 /// Derives one epoch's terminal stop reason from consumed work.
