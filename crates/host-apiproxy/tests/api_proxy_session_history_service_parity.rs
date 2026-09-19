@@ -1118,3 +1118,134 @@ async fn composition_without_projection_registry_serves_history_and_emits_no_pro
     );
     signal.abort();
 }
+
+/// Registers the terminal fixture whose call and result presenters the view cases use.
+fn register_terminal_tool(harness: &Harness) {
+    let definition = ContentToolFixtureOptions::new(
+        "term",
+        "terminal fixture",
+        json!({ "cmd": { "type": "string", "required": true } }),
+        Arc::new(|_: CommandArgs, _| Box::pin(async { Ok(Vec::<ContentBlock>::new()) })),
+    )
+    .present_call(Arc::new(|args| {
+        Some(ToolCallView::Terminal(TerminalCallView {
+            title: args.cmd.clone(),
+            description: None,
+            cwd: None,
+        }))
+    }))
+    .present_result(Arc::new(|args, _| {
+        Some(ToolResultView::Terminal(TerminalResultView {
+            title: Some(args.cmd.clone()),
+            output: Some("done".to_owned()),
+            exit_code: Some(0),
+            signal: None,
+        }))
+    }));
+    harness
+        .tools
+        .register(
+            &harness.context,
+            define_content_tool_fixture(definition).unwrap(),
+        )
+        .unwrap();
+}
+
+/// Reads the next live `session/event` frame, skipping subscribe and projection frames.
+async fn next_session_event(
+    mux: &mut ApiDownlinkStream<MuxFrame>,
+) -> (
+    String,
+    Option<seekdeep_host_apiproxy::api::sessions::ToolEventView>,
+) {
+    loop {
+        match mux.next().await.unwrap().unwrap().payload {
+            MuxFrame::SessionEvent { event, view, .. } => return (event.kind, view),
+            MuxFrame::SessionSubscribed { .. } | MuxFrame::SessionProjection { .. } => {}
+            other => panic!("unexpected mux frame {other:?}"),
+        }
+    }
+}
+
+/// Source: `drops a disposed session from the live open-call table (result after dispose gets no view)`.
+///
+/// The probe goes one step past the source: a fresh session under the same id
+/// streams a result for the disposed session's call id without its own
+/// `tool/call`, so a leaked table entry would pair it and a cleared one leaves
+/// the result viewless after the backscan misses.
+#[tokio::test]
+async fn a_disposed_session_leaves_the_live_open_call_table() {
+    let harness = Harness::new();
+    register_terminal_tool(&harness);
+    let runtime = harness.runtime();
+    let signal = AbortSignal::default();
+    let mut mux = runtime.mux(
+        RpcRequest::new(RpcId::new("doomed-mux"), json!({})),
+        signal.clone(),
+    );
+    let id = SessionId::new("session-doomed");
+    let call_id = CallId::new("c-doomed");
+    let enter = |session: &Arc<Session>| {
+        let detach = harness.sessions.enter(session).unwrap();
+        harness.sessions.announce(session).unwrap();
+        session
+            .append("turn/start", json!({ "turn": 1 }), AppendOptions::default())
+            .unwrap();
+        detach
+    };
+
+    let doomed = harness
+        .sessions
+        .prepare(Some(id.clone()), CreateSessionOptions::default())
+        .unwrap();
+    let detach = enter(&doomed);
+    doomed
+        .append(
+            "tool/call",
+            json!({
+                "turn": 1, "step": 1, "callId": call_id,
+                "name": "term", "arguments": "{\"cmd\":\"x\"}"
+            }),
+            AppendOptions::default(),
+        )
+        .unwrap();
+    let (_turn_start, _) = next_session_event(&mut mux).await;
+    let (call, call_view) = next_session_event(&mut mux).await;
+    assert_eq!(call, "tool/call");
+    assert_eq!(
+        serde_json::to_value(call_view.unwrap()).unwrap()["for"],
+        "call"
+    );
+    // Disposing the owning effect detaches the session mid-stream; the
+    // session/disposed listener must clear its open-call table entry.
+    detach.dispose().await.unwrap();
+    assert!(harness.sessions.get(&id).is_none());
+
+    let reborn = harness
+        .sessions
+        .prepare(Some(id.clone()), CreateSessionOptions::default())
+        .unwrap();
+    let _detach = enter(&reborn);
+    reborn
+        .append(
+            "tool/result",
+            json!({
+                "turn": 1, "step": 1,
+                "message": Message::tool_result(
+                    &call_id,
+                    vec![ContentBlock::Text { text: "ok".into() }],
+                    false,
+                ),
+            }),
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                ..AppendOptions::default()
+            },
+        )
+        .unwrap();
+    let (_turn_start, _) = next_session_event(&mut mux).await;
+    let (result, result_view) = next_session_event(&mut mux).await;
+    assert_eq!(result, "tool/result");
+    assert_eq!(result_view, None);
+    signal.abort();
+}

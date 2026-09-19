@@ -872,7 +872,11 @@ impl SessionApiProxyRuntime {
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
                     event: crate::api::sessions::SessionEvent::from_durable(event)?,
-                    view: self.history_view(event, events.iter().copied(), scope),
+                    view: self.history_view(
+                        event,
+                        |call_id| backscan_call(events.iter().copied(), call_id),
+                        scope,
+                    ),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -1083,7 +1087,11 @@ impl SessionApiProxyRuntime {
             .map(|event| -> anyhow::Result<HistoryEntry> {
                 Ok(HistoryEntry {
                     event: crate::api::sessions::SessionEvent::from_durable(event)?,
-                    view: self.history_view(event, events.iter().copied(), scope),
+                    view: self.history_view(
+                        event,
+                        |call_id| backscan_call(events.iter().copied(), call_id),
+                        scope,
+                    ),
                 })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -1128,10 +1136,16 @@ impl SessionApiProxyRuntime {
         })
     }
 
-    fn history_view<'a>(
+    /// Renders one event's tool view, resolving a result's originating call through
+    /// `resolve_call`.
+    ///
+    /// Source: a history page backscans that page, while the live mux resolves through its
+    /// open-call table and only backscans on a miss, so a streamed result does not walk the
+    /// whole log per event.
+    fn history_view(
         &self,
         event: &SessionEvent,
-        page: impl DoubleEndedIterator<Item = &'a SessionEvent>,
+        resolve_call: impl FnOnce(&JsonString) -> Option<(String, JsonValue)>,
         scope: Option<seekdeep_scope::ScopeKey>,
     ) -> Option<ToolEventView> {
         let tools = self.tools.as_ref()?;
@@ -1155,7 +1169,7 @@ impl SessionApiProxyRuntime {
                 let message = event.data.get("message")?;
                 let call_id: JsonString =
                     message.get("source")?.get("callId")?.deserialize().ok()?;
-                let (name, arguments) = backscan_call(page, &call_id)?;
+                let (name, arguments) = resolve_call(&call_id)?;
                 let blocks = message.get("content")?.array_items()?;
                 let block = *blocks.first()?;
                 if block.get("type")?.deserialize::<String>().ok()? != "tool-result" {
@@ -1193,10 +1207,15 @@ impl SessionApiProxyRuntime {
         subscribed: &Arc<parking_lot::Mutex<HashSet<SessionId>>>,
     ) -> (Vec<EffectHandle>, anyhow::Result<()>) {
         let mut effects = Vec::new();
+        // Source: the mux keeps every open call's name and arguments per session so a streamed
+        // `tool/result` resolves its call by lookup; a turn's end drops the table. Without it
+        // each result backscans the whole log, which is quadratic over a long session.
+        let open_calls = OpenCallTable::default();
         let result = (|| -> anyhow::Result<()> {
             let runtime = self.clone();
             let event_sender = sender.clone();
             let event_subscribed = subscribed.clone();
+            let event_open_calls = open_calls.clone();
             effects.push(self.context.events().on_sync(
                 &self.context,
                 "session/event",
@@ -1212,7 +1231,51 @@ impl SessionApiProxyRuntime {
                         .agents
                         .get(session.id())
                         .map(|agent| agent.scope_key());
-                    let view = runtime.history_view(&event, session.events_shared().iter(), scope);
+                    match event.event_type.as_str() {
+                        "tool/call" => {
+                            if let Some(call_id) = event
+                                .data
+                                .get("callId")
+                                .and_then(|value| value.deserialize::<JsonString>().ok())
+                                .and_then(|call_id| call_id.as_str().map(str::to_owned))
+                                && let Some(name) = event
+                                    .data
+                                    .get("name")
+                                    .and_then(|value| value.deserialize::<String>().ok())
+                                && let Some(arguments) = event
+                                    .data
+                                    .get("arguments")
+                                    .and_then(|value| value.deserialize::<JsonString>().ok())
+                                    .and_then(|text| JsonValue::parse_text(&text).ok())
+                            {
+                                event_open_calls
+                                    .lock()
+                                    .entry(session.id().clone())
+                                    .or_default()
+                                    .insert(call_id, (name, arguments));
+                            }
+                        }
+                        "turn/end" => {
+                            event_open_calls.lock().remove(session.id());
+                        }
+                        _ => {}
+                    }
+                    let view = runtime.history_view(
+                        &event,
+                        |call_id| {
+                            let cached = call_id.as_str().and_then(|call_id| {
+                                event_open_calls
+                                    .lock()
+                                    .get(session.id())
+                                    .and_then(|table| table.get(call_id))
+                                    .cloned()
+                            });
+                            cached.or_else(|| {
+                                backscan_call(session.events_shared().iter(), call_id)
+                            })
+                        },
+                        scope,
+                    );
                     let Ok(wire_event) = JsonValue::from_serialize(&*event)?.deserialize()
                     else {
                         tracing::warn!(session = %session.id(), "API Proxy could not encode a committed Session event");
@@ -1270,12 +1333,14 @@ impl SessionApiProxyRuntime {
                 EventOptions::default(),
             )?);
             let disposed_subscribed = subscribed.clone();
+            let disposed_open_calls = open_calls.clone();
             effects.push(self.context.events().on_sync(
                 &self.context,
                 "session/disposed",
                 move |_, args| {
                     if let Some(session) = args.get::<Session>(0) {
                         disposed_subscribed.lock().remove(session.id());
+                        disposed_open_calls.lock().remove(session.id());
                     }
                     Ok(EventReply::Undefined)
                 },
@@ -1934,6 +1999,12 @@ struct HistorySource {
     header: SessionHeader,
     events: Arc<Vec<SessionEvent>>,
 }
+
+/// Every open tool call of a session, by call id, holding its name and parsed arguments.
+///
+/// A streamed `tool/result` resolves its originating call here instead of walking the log.
+type OpenCallTable =
+    Arc<parking_lot::Mutex<HashMap<SessionId, HashMap<String, (String, JsonValue)>>>>;
 
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]

@@ -65259,10 +65259,10 @@
       ],
       "evidence": [
         "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-view.spec.ts packages/host/apiproxy/tests/api-proxy-projections.spec.ts --reporter=dot (19 passed)",
-        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_history_service_parity --all-features (8 consolidated history/mux cases passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_history_service_parity --all-features (11 consolidated history/mux cases passed, including a_disposed_session_leaves_the_live_open_call_table)",
         "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
       ],
-      "note": "The production presenter path covers live and history call/result cards, page-local and post-turn backscan pairing, absent and panicking presenter soft-fall, raw-event preservation, disposal without an open-call leak, and append-origin compaction-aware pagination."
+      "note": "The production presenter path covers live and history call/result cards, live open-call table pairing with page-local and post-turn backscan fallback, absent and panicking presenter soft-fall, raw-event preservation, disposal without an open-call leak, and append-origin compaction-aware pagination."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-workspace.spec.ts",
