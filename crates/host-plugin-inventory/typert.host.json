@@ -1,0 +1,659 @@
+{
+  "package": "@seekdeep-ai/seekdeep-host-plugin-inventory",
+  "face": "host",
+  "model": {
+    "services": [],
+    "events": [],
+    "objects": []
+  },
+  "invocations": [
+    {
+      "id": "@seekdeep-ai/seekdeep-host-plugin-inventory#pluginInventory/list",
+      "service": "pluginInventory",
+      "namespace": "pluginInventory",
+      "method": "list",
+      "invocation": {
+        "kind": "direct"
+      },
+      "parameters": [],
+      "result": {
+        "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#1",
+        "codecType": "type:packages/host/plugin-inventory/src/index.ts:57:11#2",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-host-plugin-inventory/types#PluginInventorySnapshot",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventorySnapshot",
+            "specifier": "@seekdeep-ai/seekdeep-host-plugin-inventory/types",
+            "name": "PluginInventorySnapshot"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/host/plugin-inventory/src/index.ts",
+        "line": 57,
+        "column": 3
+      }
+    }
+  ],
+  "graph": {
+    "declarations": [
+      {
+        "description": "A string carrying a compile-time-only brand `B`.",
+        "summary": "A string carrying a compile-time-only brand `B`.",
+        "tags": [],
+        "jsDoc": "/** A string carrying a compile-time-only brand `B`. */",
+        "id": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded",
+        "package": "@seekdeep-ai/seekdeep-brand",
+        "name": "Branded",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/util/brand/src/index.ts",
+          "line": 27,
+          "column": 1
+        },
+        "text": "export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};",
+        "typeParameters": [
+          {
+            "id": "packages/util/brand/src/index.ts:27:21#B",
+            "name": "B",
+            "const": false,
+            "constraint": "type:packages/util/brand/src/index.ts:27:31#1"
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/util/brand/src/index.ts:27:41#1"
+      },
+      {
+        "description": "Stable Loader-tree identity of one configured plugin entry.",
+        "summary": "Stable Loader-tree identity of one configured plugin entry.",
+        "tags": [],
+        "jsDoc": "/** Stable Loader-tree identity of one configured plugin entry. */",
+        "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginEntryId",
+        "package": "@seekdeep-ai/seekdeep-host-plugin-inventory",
+        "name": "PluginEntryId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/host/plugin-inventory/src/types.ts",
+          "line": 4,
+          "column": 1
+        },
+        "text": "export type PluginEntryId = Branded<'PluginEntryId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/host/plugin-inventory/src/types.ts:4:29#1"
+      },
+      {
+        "description": "Lifecycle state of an entry's root Fiber, or null when it has no live root Fiber.",
+        "summary": "Lifecycle state of an entry's root Fiber, or null when it has no live root Fiber.",
+        "tags": [],
+        "jsDoc": "/** Lifecycle state of an entry's root Fiber, or null when it has no live root Fiber. */",
+        "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginFiberPhase",
+        "package": "@seekdeep-ai/seekdeep-host-plugin-inventory",
+        "name": "PluginFiberPhase",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/host/plugin-inventory/src/types.ts",
+          "line": 7,
+          "column": 1
+        },
+        "text": "export type PluginFiberPhase = 'pending' | 'loading' | 'active' | 'failed' | 'unloading' | null;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/host/plugin-inventory/src/types.ts:8:3#1"
+      },
+      {
+        "description": "One non-group Loader entry exposed to trusted clients.",
+        "summary": "One non-group Loader entry exposed to trusted clients.",
+        "tags": [],
+        "jsDoc": "/** One non-group Loader entry exposed to trusted clients. */",
+        "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry",
+        "package": "@seekdeep-ai/seekdeep-host-plugin-inventory",
+        "name": "PluginInventoryEntry",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/host/plugin-inventory/src/types.ts",
+          "line": 16,
+          "column": 1
+        },
+        "text": "export interface PluginInventoryEntry {\n    readonly entryId: PluginEntryId;\n    readonly moduleName: string;\n    readonly enabled: boolean;\n    readonly fiberPhase: PluginFiberPhase;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry#entryId@480",
+            "name": "entryId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/types.ts",
+              "line": 17,
+              "column": 3
+            },
+            "text": "readonly entryId: PluginEntryId",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/types.ts:17:21#1"
+          },
+          {
+            "description": "Exact module specifier imported by the Loader entry.",
+            "summary": "Exact module specifier imported by the Loader entry.",
+            "tags": [],
+            "jsDoc": "/** Exact module specifier imported by the Loader entry. */",
+            "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry#moduleName@576",
+            "name": "moduleName",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/types.ts",
+              "line": 19,
+              "column": 3
+            },
+            "text": "readonly moduleName: string",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/types.ts:19:24#1"
+          },
+          {
+            "description": "Effective Loader enablement, including disabled ancestor groups.",
+            "summary": "Effective Loader enablement, including disabled ancestor groups.",
+            "tags": [],
+            "jsDoc": "/** Effective Loader enablement, including disabled ancestor groups. */",
+            "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry#enabled@680",
+            "name": "enabled",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/types.ts",
+              "line": 21,
+              "column": 3
+            },
+            "text": "readonly enabled: boolean",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/types.ts:21:21#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry#fiberPhase@708",
+            "name": "fiberPhase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/types.ts",
+              "line": 22,
+              "column": 3
+            },
+            "text": "readonly fiberPhase: PluginFiberPhase",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/types.ts:22:24#1"
+          }
+        ]
+      },
+      {
+        "description": "Point-in-time inventory returned by the plugin inventory Remote.",
+        "summary": "Point-in-time inventory returned by the plugin inventory Remote.",
+        "tags": [],
+        "jsDoc": "/** Point-in-time inventory returned by the plugin inventory Remote. */",
+        "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventorySnapshot",
+        "package": "@seekdeep-ai/seekdeep-host-plugin-inventory",
+        "name": "PluginInventorySnapshot",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/host/plugin-inventory/src/types.ts",
+          "line": 26,
+          "column": 1
+        },
+        "text": "export interface PluginInventorySnapshot {\n    readonly entries: readonly PluginInventoryEntry[];\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventorySnapshot#entries@866",
+            "name": "entries",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/types.ts",
+              "line": 27,
+              "column": 3
+            },
+            "text": "readonly entries: readonly PluginInventoryEntry[]",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/types.ts:27:21#1"
+          }
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#1",
+        "kind": "reference",
+        "name": "PluginInventorySnapshot",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventorySnapshot"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#10",
+        "kind": "union",
+        "types": [
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#11",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#12",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#13",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#14",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#15",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#16"
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#11",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#12",
+        "kind": "literal",
+        "value": "failed",
+        "text": "\"failed\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#13",
+        "kind": "literal",
+        "value": "pending",
+        "text": "\"pending\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#14",
+        "kind": "literal",
+        "value": "active",
+        "text": "\"active\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#15",
+        "kind": "literal",
+        "value": "loading",
+        "text": "\"loading\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#16",
+        "kind": "literal",
+        "value": "unloading",
+        "text": "\"unloading\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#2",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#2#entries",
+            "name": "entries",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#3"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#3",
+        "kind": "array",
+        "element": "type:packages/host/plugin-inventory/src/index.ts:57:11#4"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#4#entryId",
+            "name": "entryId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#4#moduleName",
+            "name": "moduleName",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#6"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#4#enabled",
+            "name": "enabled",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#4#fiberPhase",
+            "name": "fiberPhase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#10"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#5",
+        "kind": "intersection",
+        "types": [
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#6",
+          "type:packages/host/plugin-inventory/src/index.ts:57:11#7"
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#6",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#7",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#7#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/host/plugin-inventory/src/index.ts",
+              "line": 57,
+              "column": 11
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/host/plugin-inventory/src/index.ts:57:11#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#8",
+        "kind": "literal",
+        "value": "PluginEntryId",
+        "text": "\"PluginEntryId\""
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/index.ts:57:11#9",
+        "kind": "keyword",
+        "name": "boolean"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:10:5#1",
+        "kind": "literal",
+        "value": "active",
+        "text": "'active'"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:11:5#1",
+        "kind": "literal",
+        "value": "failed",
+        "text": "'failed'"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:12:5#1",
+        "kind": "literal",
+        "value": "unloading",
+        "text": "'unloading'"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:13:5#1",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:17:21#1",
+        "kind": "reference",
+        "name": "PluginEntryId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginEntryId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:19:24#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:21:21#1",
+        "kind": "keyword",
+        "name": "boolean"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:22:24#1",
+        "kind": "reference",
+        "name": "PluginFiberPhase",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginFiberPhase"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:27:21#1",
+        "kind": "operator",
+        "operator": "readonly",
+        "type": "type:packages/host/plugin-inventory/src/types.ts:27:30#1"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:27:30#1",
+        "kind": "array",
+        "element": "type:packages/host/plugin-inventory/src/types.ts:27:30#2"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:27:30#2",
+        "kind": "reference",
+        "name": "PluginInventoryEntry",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-host-plugin-inventory:packages/host/plugin-inventory/src/types.ts#PluginInventoryEntry"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:4:29#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/host/plugin-inventory/src/types.ts:4:37#1"
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:4:37#1",
+        "kind": "literal",
+        "value": "PluginEntryId",
+        "text": "'PluginEntryId'"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:8:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/host/plugin-inventory/src/types.ts:8:5#1",
+          "type:packages/host/plugin-inventory/src/types.ts:9:5#1",
+          "type:packages/host/plugin-inventory/src/types.ts:10:5#1",
+          "type:packages/host/plugin-inventory/src/types.ts:11:5#1",
+          "type:packages/host/plugin-inventory/src/types.ts:12:5#1",
+          "type:packages/host/plugin-inventory/src/types.ts:13:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:8:5#1",
+        "kind": "literal",
+        "value": "pending",
+        "text": "'pending'"
+      },
+      {
+        "id": "type:packages/host/plugin-inventory/src/types.ts:9:5#1",
+        "kind": "literal",
+        "value": "loading",
+        "text": "'loading'"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:31#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#1",
+        "kind": "intersection",
+        "types": [
+          "type:packages/util/brand/src/index.ts:27:41#2",
+          "type:packages/util/brand/src/index.ts:27:50#1"
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#2",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:50#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/util/brand/src/index.ts:27:50#1#[BRAND]@1293",
+            "name": "[BRAND]",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/util/brand/src/index.ts",
+              "line": 27,
+              "column": 52
+            },
+            "text": "readonly [BRAND]: B",
+            "kind": "property",
+            "type": "type:packages/util/brand/src/index.ts:27:70#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:70#1",
+        "kind": "reference",
+        "name": "B",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/util/brand/src/index.ts:27:21#B"
+        },
+        "arguments": []
+      }
+    ]
+  }
+}

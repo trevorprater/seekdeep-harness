@@ -1,0 +1,112 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/docs-pages.yml'
+      - '.github/actions/setup-source-oracle/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'SOURCE_SNAPSHOT'
+      - 'crates/repository-tools/**'
+      - 'crates/repository-runner/**'
+      - 'crates/docs-site-runtime/**'
+      - 'crates/source-oracle/**'
+      - 'crates/typert-generator/**'
+      - 'xtask/**'
+      - 'packages/**/README*'
+      - 'packages/**/package.json'
+      - 'scripts/**'
+      - 'docs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'website/**'
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
+  # CI runs must never report to the production telemetry endpoint baked
+  # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  SEEKDEEP_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: documentation-rust-wasm
+
+      - uses: ./.github/actions/prune-stale-v8-builds
+
+      - name: Install Rust/WASM binding generator
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
+
+      - name: Install pinned browser build dependencies
+        run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/setup-source-oracle
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Verify and build documentation
+        env:
+          DOCS_BASE: ${{ steps.pages.outputs.base_path }}/
+        run: pnpm run doc-sync
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/.dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

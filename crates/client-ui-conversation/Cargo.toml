@@ -1,0 +1,192 @@
+[package]
+name = "seekdeep-client-ui-conversation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM conversation UI semantic core and surfaces"
+autotests = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seekdeep-lossless-json = { path = "../lossless-json" }
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-identity = { path = "../identity" }
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-failure-display = { path = "../failure-display" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+base64.workspace = true
+js-sys.workspace = true
+seekdeep-client-ui-primitives = { path = "../client-ui-primitives" }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_apply_parity"
+path = "tests/wasm_apply_parity.rs"
+
+[[test]]
+name = "wasm_approval_panel_parity"
+path = "tests/wasm_approval_panel_parity.rs"
+
+[[test]]
+name = "wasm_assistant_parity"
+path = "tests/wasm_assistant_parity.rs"
+
+[[test]]
+name = "wasm_chat_seat_parity"
+path = "tests/wasm_chat_seat_parity.rs"
+
+[[test]]
+name = "wasm_chat_store_parity"
+path = "tests/wasm_chat_store_parity.rs"
+
+[[test]]
+name = "wasm_chat_view_parity"
+path = "tests/wasm_chat_view_parity.rs"
+
+[[test]]
+name = "wasm_command_parity"
+path = "tests/wasm_command_parity.rs"
+
+[[test]]
+name = "wasm_context_body_parity"
+path = "tests/wasm_context_body_parity.rs"
+
+[[test]]
+name = "wasm_context_meter_parity"
+path = "tests/wasm_context_meter_parity.rs"
+
+[[test]]
+name = "wasm_conversation_controller_parity"
+path = "tests/wasm_conversation_controller_parity.rs"
+
+[[test]]
+name = "wasm_conversation_nodes_parity"
+path = "tests/wasm_conversation_nodes_parity.rs"
+
+[[test]]
+name = "wasm_conversation_root_parity"
+path = "tests/wasm_conversation_root_parity.rs"
+
+[[test]]
+name = "wasm_conversation_session_parity"
+path = "tests/wasm_conversation_session_parity.rs"
+
+[[test]]
+name = "wasm_details_panel_parity"
+path = "tests/wasm_details_panel_parity.rs"
+
+[[test]]
+name = "wasm_empty_hero_parity"
+path = "tests/wasm_empty_hero_parity.rs"
+
+[[test]]
+name = "wasm_enter_behavior_parity"
+path = "tests/wasm_enter_behavior_parity.rs"
+
+[[test]]
+name = "wasm_image_labels_parity"
+path = "tests/wasm_image_labels_parity.rs"
+
+[[test]]
+name = "wasm_input_bar_parity"
+path = "tests/wasm_input_bar_parity.rs"
+
+[[test]]
+name = "wasm_input_blocks_parity"
+path = "tests/wasm_input_blocks_parity.rs"
+
+[[test]]
+name = "wasm_input_decorations_parity"
+path = "tests/wasm_input_decorations_parity.rs"
+
+[[test]]
+name = "wasm_input_facade_parity"
+path = "tests/wasm_input_facade_parity.rs"
+
+[[test]]
+name = "wasm_input_hub_parity"
+path = "tests/wasm_input_hub_parity.rs"
+
+[[test]]
+name = "wasm_input_machine_port_parity"
+path = "tests/wasm_input_machine_port_parity.rs"
+
+[[test]]
+name = "wasm_locales_parity"
+path = "tests/wasm_locales_parity.rs"
+
+[[test]]
+name = "wasm_message_actions_parity"
+path = "tests/wasm_message_actions_parity.rs"
+
+[[test]]
+name = "wasm_message_chrome_parity"
+path = "tests/wasm_message_chrome_parity.rs"
+
+[[test]]
+name = "wasm_message_item_parity"
+path = "tests/wasm_message_item_parity.rs"
+
+[[test]]
+name = "wasm_permission_select_parity"
+path = "tests/wasm_permission_select_parity.rs"
+
+[[test]]
+name = "wasm_queue_dock_parity"
+path = "tests/wasm_queue_dock_parity.rs"
+
+[[test]]
+name = "wasm_queue_face_parity"
+path = "tests/wasm_queue_face_parity.rs"
+
+[[test]]
+name = "wasm_reasoning_parity"
+path = "tests/wasm_reasoning_parity.rs"
+
+[[test]]
+name = "wasm_register_node_renderers_parity"
+path = "tests/wasm_register_node_renderers_parity.rs"
+
+[[test]]
+name = "wasm_stats_line_parity"
+path = "tests/wasm_stats_line_parity.rs"
+
+[[test]]
+name = "wasm_todo_panel_parity"
+path = "tests/wasm_todo_panel_parity.rs"
+
+[[test]]
+name = "wasm_tool_node_reader_parity"
+path = "tests/wasm_tool_node_reader_parity.rs"
+
+[[test]]
+name = "wasm_turn_tail_parity"
+path = "tests/wasm_turn_tail_parity.rs"

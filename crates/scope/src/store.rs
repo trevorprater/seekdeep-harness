@@ -720,4 +720,43 @@ mod tests {
         child.dispose().await.expect("child scope");
         parent.dispose().await.expect("parent scope");
     }
+
+    #[tokio::test]
+    async fn scoped_layers_notify_in_order_and_reclaim_anonymous_layers() {
+        let root = Context::new();
+        let key = ScopeKey::new();
+        let scope = create_scope(&root, key, None).expect("scope");
+        let events = Arc::new(parking_lot::Mutex::new(Vec::<&'static str>::new()));
+        let effect_events = events.clone();
+        let layers = ScopedLayers::new(TestLayer::new, move || {
+            effect_events.lock().push("notify");
+        });
+
+        let action_events = events.clone();
+        let undo_events = events.clone();
+        let effect = layers
+            .effect(
+                &scope.context,
+                move |layer| {
+                    action_events.lock().push("action");
+                    let undo = layer.anonymous.append("kept".to_owned());
+                    Ok(EntryUndo::new(move || {
+                        undo_events.lock().push("undo");
+                        undo.dispose();
+                    }))
+                },
+                LayerEffectOptions::new("store.order"),
+            )
+            .expect("effect");
+
+        assert_eq!(events.lock().clone(), ["action", "notify"]);
+        effect.dispose().await.expect("dispose");
+        effect.dispose().await.expect("idempotent dispose");
+        assert_eq!(
+            events.lock().clone(),
+            ["action", "notify", "undo", "notify"]
+        );
+        assert!(layers.peek(Some(key)).is_none());
+        scope.dispose().await.expect("scope");
+    }
 }

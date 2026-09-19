@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEEKDEEP Pre-Push Checks"
+  short_description: "Run the relevant SeekDeep Harness checks before push"
+  default_prompt: "Use $seekdeep-pre-push-checks before pushing this SeekDeep Harness branch."

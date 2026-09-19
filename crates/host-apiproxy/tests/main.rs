@@ -1,0 +1,31 @@
+//! One test binary per crate: every top-level test file is a module here.
+
+mod api_proxy_configuration_service_parity;
+mod api_proxy_host_service_parity;
+mod api_proxy_interaction_service_parity;
+mod api_proxy_jobs_service_parity;
+mod api_proxy_preset_service_parity;
+mod api_proxy_session_create_service_parity;
+mod api_proxy_session_history_service_parity;
+mod api_proxy_session_list_service_parity;
+mod api_proxy_session_models_service_parity;
+mod api_proxy_session_rename_service_parity;
+mod api_proxy_session_search_service_parity;
+mod api_proxy_subagent_service_parity;
+mod api_proxy_workspace_service_parity;
+mod client_contract_parity;
+mod download_schema_parity;
+mod event_response_schema_parity;
+mod handler_parity;
+mod history_wire_equivalence;
+mod host_workspace_skill_schema_parity;
+mod in_process_carrier_parity;
+mod invariant_parity;
+mod method_registry_parity;
+mod native_path_opener_parity;
+mod preset_goal_subagent_schema_parity;
+mod registry_workspace_integration;
+mod rpc_schema_parity;
+mod session_export_parity;
+mod session_schema_parity;
+mod settings_credentials_llm_schema_parity;

@@ -1,0 +1,45 @@
+{
+  "name": "@seekdeep-ai/seekdeep-web-search-exa",
+  "description": "Exa-backed search provider for the SeekDeep Harness web capability seam (ctx.web)",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/web/web-search-exa"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-web": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-web": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

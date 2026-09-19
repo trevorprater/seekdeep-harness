@@ -1,0 +1,20 @@
+[package]
+name = "seekdeep-abort"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+futures.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.53.1", default-features = false, features = ["rt", "sync"] }
+
+[lints]
+workspace = true

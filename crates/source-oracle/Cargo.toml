@@ -1,0 +1,18 @@
+[package]
+name = "seekdeep-source-oracle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pinned source checkout resolution for parity and repository tooling"
+
+[dependencies]
+anyhow.workspace = true
+dunce.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

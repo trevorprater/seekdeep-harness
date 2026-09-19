@@ -1,0 +1,256 @@
+{
+  "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+  "verified_at": "2026-09-15T18:14:22Z",
+  "completion": "incomplete",
+  "checks": {
+    "cargo_fmt_all_check": "passed",
+    "cargo_clippy_workspace_all_targets_all_features_deny_warnings": "passed",
+    "cargo_test_workspace_all_features": {
+      "status": "passed",
+      "passed": 5757,
+      "failed": 0,
+      "ignored": 26,
+      "seconds": 3212.5,
+      "commit": "09c3cfc3689c4627364a05f36d745cef5168335c",
+      "scope": "Previous full workspace verification; a fresh full run remains required after the subsequent lifecycle, package/documentation, and portable source-oracle changes."
+    },
+    "pnpm_build": "passed: native Host and runtime assets, all 48 Client artifacts, npm launcher, all 1312 canonical public declarations, 2 positive and 20 negative isolated consumer cases, and Vite frontend",
+    "pnpm_lint": "passed",
+    "wasm_loader_and_runtime_clippy": "passed for both packages, all targets, with warnings denied",
+    "wasm_loader_regressions": "3 passed, including entry ownership and refresh after disposal",
+    "wasm_registry_regressions": "9 passed, including actual Cordis caller ownership and replacement after disposal",
+    "web_hmr": {
+      "status": "passed",
+      "source_case": "hot-reloads a real client-plugin source edit without refreshing the page",
+      "launcher": "built npm CLI entry with SEEKDEEP_EXECUTABLE selecting the compiled native Host",
+      "watch_command": "pnpm run dev:web",
+      "source_edit_deadline_ms": 30000,
+      "edit_to_visible_ms": 16486,
+      "page_identity": "49a1fd33-7206-4030-b483-cde1b539ae33",
+      "page_errors": [],
+      "source_and_bundle_sidecars_restored": true
+    },
+    "web_pwsh_terminal": "2 pinned source cases passed with an actual PowerShell executable and parsed terminal exit pill",
+    "web_steering": {
+      "status": "passed",
+      "command": "cargo xtask web-keyless --scenario steering",
+      "source_cases": 6,
+      "isolated_source_describes": 4,
+      "live_model_calls": 0,
+      "comparison": "Exact source golden bytes, allowing only the product identity rename",
+      "saved_outputs": "Four distinct actual-output files were compared again with their respective steering and steer-all source goldens. Their filenames include the full source-relative golden path.",
+      "coverage": [
+        "mid-steer and settled snapshots with the durable claimed interjection",
+        "Cmd+Enter steering without a Queue row",
+        "Cmd+Enter queuing when Enter is configured to steer",
+        "empty-draft Cmd+Enter flushing two queued messages",
+        "both fixture inventories"
+      ],
+      "supersedes": "The old steering mismatch report compared a saved output that the later steer-all case overwrote under the same basename. The assertions compare the correct source golden before saving the next case. The fresh run passes all assertions and retains all four outputs separately."
+    },
+    "source_smoke_keyless": "4 CLI cases passed through the built npm launcher and native Host",
+    "source_smoke_local_provider": {
+      "status": "8 browser cases passed with a local loopback provider fixture",
+      "live_provider_evidence": false,
+      "coverage": "cold start, first conversation, title and sidebar, trajectory, Bash, details, layout persistence, theme, and history recovery"
+    },
+    "sdk_interrupt_probe": {
+      "local": "passed for owner-only SIGINT and foreground-process-group SIGINT",
+      "linux_ci": "passed in CI run 34987732970 at 581c7d5a2196a71984e6e04da75076b6d9e916df; the installed-wheel step executes python_runtime_sdk_interrupt after all runtime scenarios"
+    },
+    "ci_workflow_contract": "11 passed",
+    "doc_site_and_gate_regressions": "38 passed across CI routing, site configuration, fragment checking, site projection, and gate construction",
+    "cargo_xtask_parity_all": "failed: 6 pending, 0 ported but unverified, 3 withdrawn",
+    "pnpm_doc_sync": {
+      "status": "passed",
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 668.52,
+      "source_checkout": "Fresh pinned checkout with original source access denied; all 28 gates ran through the staged Rust repository runner."
+    },
+    "phase3_lifecycle": {
+      "status": "passed",
+      "passed": 270,
+      "ignored": 3,
+      "coverage": "CoreSessionStore clock injection, Schedule ownership and teardown, persistence fairness, natural exit, and explicit seal-close in both storage backends",
+      "commits": [
+        "0f1b014fa66c7184c9128ea671970a6c912b1edf",
+        "e56af7d03bc4b4e58ce9fc6d468c9480f393b629",
+        "078c1d5c46b4dbb1efdd69ab15bcee4e2405ed7f"
+      ]
+    },
+    "public_package_declarations": {
+      "status": "passed",
+      "source_compiler": "6.0.3",
+      "source_diagnostics": 0,
+      "public_declarations": 1312,
+      "public_packages": 229,
+      "remote_declaration_pairs": 5,
+      "capture": "Read-only source solution build, keeping Host and Client programs separate; a fresh capture matched the committed model and every final published header.",
+      "consumer": {
+        "host_positive": 1,
+        "host_negative": 7,
+        "client_positive": 1,
+        "client_negative": 13
+      },
+      "regression_proof": "An isolated consumer copy rejects a Binary.toBase64 return type weakened to any. The actual public build catches declaration drift after all specialized package builders."
+    },
+    "workspace_package_metadata": {
+      "frozen_install": "passed with pnpm 11.7.0, CI=true pnpm install --frozen-lockfile in a fresh checkout without node_modules; package and root lifecycle scripts executed",
+      "restored_manifests": 53,
+      "existing_importer_changes": 0,
+      "constraints": "passed",
+      "invariant_declarations": "219 passed",
+      "runtime_dependency_closure": "78 workspace packages passed",
+      "vendored_links": "9 passed"
+    },
+    "subprocess_postinstall": {
+      "status": "passed",
+      "source_blob": "54386fcf1d0d483d5bb3602f03049cb9530cd9e9",
+      "source_comparisons": 11,
+      "coverage": "Both helper paths, 0755 permissions, missing files, directories, live and broken symlinks, platform selection, original error identity, early failure, and empty module exports",
+      "node_only_bootstrap": "The published entry embeds compiled Rust WebAssembly; differential child processes have no executables on PATH and no NODE_PATH override",
+      "regression_proof": "Changing the Rust permission mode to 0700 and regenerating the actual package entry makes the source comparison fail. Restoring 0755 and rebuilding passes all 11 cases.",
+      "relocated_rebuild": "cargo xtask subprocess-postinstall --check produces identical bytes in a second checkout",
+      "fresh_install": "CI=true pnpm install --frozen-lockfile succeeds in a fresh checkout, including the subprocess package postinstall and root lifecycle scripts",
+      "package_entry": {
+        "path": "packages/subprocess/subprocess-local/scripts/ensure-spawn-helper.mjs",
+        "bytes": 31659,
+        "npm_pack_dry_run": "included"
+      },
+      "validation": "Native and WASM Clippy pass with warnings denied; public pnpm build, four root-command regressions, and cargo fmt --all -- --check pass. Host asset builds verify the generated installer against its Rust source.",
+      "ci": "CI run 34987732970 at 581c7d5a2196a71984e6e04da75076b6d9e916df passed dependency installation in all primary lanes. Node 22 and 26 compatibility, Wine, Python SDK, and release-shaped Linux Python runtime jobs passed. Static, coverage, consumers, and native Windows jobs progressed to separate gate failures."
+    },
+    "docs_source_and_packaging_regressions": {
+      "documentation_suites": "32 passed across declaration equivalence, repository TypeScript commands, source links, package paths, site configuration/projection, and archive fixtures",
+      "source_header_tests": "2 passed, including actual UI branding and the terminal prompt declaration",
+      "website_dependency_install": "Passed, failed with the old skip-on-present-binary behavior restored, and passed again after restoring the fingerprint receipt implementation",
+      "root_commands": "4 passed, including deliberate native/WASM type errors and Clippy warnings through the public scripts",
+      "typert_dependency_copy": "1 passed; an absolute source Zod link resolves to the corpus-owned copy"
+    },
+    "documentation_browser_runtime": {
+      "status": "passed",
+      "node_comparisons": 26,
+      "chromium_scenarios": 7,
+      "disposed_listener_and_timer": true,
+      "vite_dev_hydrated": true,
+      "local_images_loaded": 2
+    },
+    "windows_xtask_cross_check": {
+      "status": "blocked by the local cross-compilation environment",
+      "cause": "ring's Windows C compilation cannot find assert.h in the macOS cross toolchain; native Windows CI remains required",
+      "related_proof": "The platform-specific link helper passes its native regression. The repository-tools Windows metadata fix passed its separate MSVC Clippy check."
+    },
+    "built_package_runtime": {
+      "status": "failed",
+      "companions_checked": 219,
+      "missing_invariant_modules": 188,
+      "loader_initialization_failures_in_plain_node": 31,
+      "note": "Public declaration and manifest checks do not establish runtime parity. Host runtime exports, functional invariant companions, and native CLI platform packages remain incomplete."
+    },
+    "portable_source_oracle": {
+      "status": "passed",
+      "source_revision": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+      "source_setup": "The actual composite action allocates the oracle under RUNNER_TEMP outside the project, fetches the exact public source commit, and completes normal frozen dependency installation and the original Host build. A fresh run passed all five steps and left the source checkout clean.",
+      "resolution": "Native tests and repository tooling use SEEKDEEP_PARITY_SOURCE, an adjacent deepseek-harness checkout, or the recorded SOURCE_SNAPSHOT path. Revision drift is rejected before source execution; immutable source files are read from the pinned Git objects.",
+      "checks": {
+        "groups": 16,
+        "passed": 205,
+        "failed": 0,
+        "ignored": 1,
+        "original_source_file_access": "denied for every check",
+        "includes": "Native source comparisons, the actual repository command paths, documentation Node/Chromium behavior, and all five Remotes WASM lifecycle cases including the explicit source comparison",
+        "ignored_case": "SQLite child-process helper, exercised by its parent test"
+      },
+      "regression_proof": "The actual type-equivalence CLI passes with conflicting hook GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, and Git configuration variables. Removing Git environment isolation makes it fail; restoring isolation passes.",
+      "public_build": "Passed with access to the original checkout denied: native Host and assets, 48 Client artifacts, 1312 canonical declarations, two valid and 20 invalid isolated consumers, and the Vite frontend.",
+      "documentation": "All 28 doc-sync gates passed with access to the original checkout denied, including source-dependent catalogs and type checks, projection, and the production site build.",
+      "public_validation": "pnpm lint, cargo fmt --all -- --check, workspace constraints, third-party notices, and all four built keyless CLI source smoke cases passed with access to the original checkout denied.",
+      "manifest_gate": "The fresh all-surface gate admits the relocated source and fails only on the existing six pending rows; three withdrawn entries still require final audit.",
+      "ci_setup_checks": "Four tests cover all 13 source-dependent job inventories, documentation triggers and toolchains, the actual pin/location scripts, and the unchanged Git checkout script fetching an older pinned commit from a local remote into a separate temporary directory.",
+      "clippy": "The full native workspace and changed Remotes WASM target pass with all targets, all features, and warnings denied.",
+      "platform_ci": "CI run 35000940775 at 4e96ee974b99e1cceca961ce57b130226082a0f6 completed source setup in all four primary consuming lanes; Linux source catalogs, declaration checks, and documentation gates passed. The follow-up move outside the project and stricter CLI admission still require their own CI run.",
+      "cli_admission": "Three real xtask process regressions reject missing sources and unchanged source files at a different commit, and preserve explicit --source precedence over SEEKDEEP_PARITY_SOURCE. The actual client-catalog command that accepted a drifted clone before the fix now fails with both actual and expected revisions.",
+      "pin_validation": "SourceRevision rejects missing, malformed, uppercase, or duplicate commit entries, matching the CI pin parser.",
+      "source_optional_consumer": "The real remote-consumer command passes both valid and all 20 invalid declaration cases with an explicitly nonexistent source path when --browser is absent."
+    },
+    "latest_ci": {
+      "commit": "4e96ee974b99e1cceca961ce57b130226082a0f6",
+      "run": "https://github.com/trevorprater/seekdeep-harness/actions/runs/35000940775",
+      "status": "in_progress",
+      "passed": [
+        "Node 22.19 compatibility",
+        "Node 26 compatibility",
+        "Wine Windows gates",
+        "Python 3.10 keyless SDK",
+        "Release-shaped Linux Python SDK and runtime wheels"
+      ],
+      "remaining_failures": [
+        "Static gates: 31 passed; Cordis config dependency declarations, translation pairing of the nested source checkout, and a stale module graph failed. The external source checkout repair has fresh local action evidence.",
+        "Coverage and built-bin leaves still invoke removed TypeScript tests; the nested source checkout was also discovered as local Vitest tests.",
+        "Public Host npm runtime files and invariant companions remain missing; publint and built-package checks still fail.",
+        "The preceding native Windows run exposed a running-executable replacement failure, pnpm command resolution, and platform Clippy errors. Their local repairs and staged-runner checks pass; native Windows CI must validate them."
+      ],
+      "required_aggregate": "failed",
+      "native_windows": "in_progress at this checkpoint"
+    },
+    "documentation_integrity": {
+      "primary_type_equivalence": 384,
+      "paired_type_equivalence": 384,
+      "translation_pairs": 986,
+      "agent_notes": 552,
+      "sealed_archived_artifacts": 426
+    },
+    "windows_repository_gates": {
+      "status": "local checks passed; native Windows CI required",
+      "runner": "All 14 root gate aggregates launch a dependency-free Rust bootstrap that builds run-gates, copies it outside Cargo outputs, forwards arguments and process status, and removes its temporary directory after exit. Its real Cargo fixture rebuilds the running gate workspace and checks empty, Unicode, and spaced arguments, exit 17, and cleanup.",
+      "runner_regression_proof": "Running the gate directly from the Cargo output instead of the staged copy fails the regression; restoring the copy passes.",
+      "documentation_launcher": "Dependency preparation executes pnpm.cmd on Windows and pnpm on Unix. The platform process fixture checks the actual argument vector and successful-install receipt; the failed-refresh retry regression also passes.",
+      "jsonl": "The platform code removes four Windows Clippy failures without changing the durable directory or MoveFileEx behavior; all five Win32 publication logic tests pass.",
+      "clippy": "Native repository-runner, repository-tools, source-oracle, xtask, and JSONL checks pass. Repository-runner, repository-tools, and source-oracle also pass all-target, all-feature MSVC Clippy with warnings denied.",
+      "local_cross_limit": "The macOS cross toolchain lacks Windows C headers for zstd-sys, so the JSONL crate still requires native Windows CI.",
+      "public_build": "pnpm build passed in 604.02 seconds; all 28 doc-sync gates passed in 668.52 seconds through the staged bootstrap.",
+      "scoped_tests": {
+        "native": 44,
+        "wasm": 5,
+        "pinned_source": 2,
+        "failed": 0
+      }
+    },
+    "review_source_contracts": {
+      "status": "passed",
+      "preset_label": "The pinned source explicitly tests that the session preset ID remains visible until the roster supplies its name. The compiled WASM regression passes for idle, loading, ready-without-metadata, and ready-with-metadata states.",
+      "web_host": "The pinned source explicitly tests rejection of --host 0.0.0.0 before consumer activation. The Rust startup test preserves that result and diagnostic.",
+      "source_cases": "Both named source cases passed fresh; 31 other cases were outside the selected filter.",
+      "review_disposition": "Two findings in review 5685060608 were dismissed against these executable source contracts; the other five remain open."
+    }
+  },
+  "manifest": {
+    "total": 7420,
+    "verified": 7411,
+    "ported": 0,
+    "pending": 6,
+    "failed": 0,
+    "withdrawn": 3,
+    "strict_verified_percent": 99.87870619946092,
+    "verified_plus_ported_percent": 99.87870619946092,
+    "pending_sources": [
+      "apps/web/tests/smoke-real.e2e.ts",
+      "examples/headless-agent/tests/fixtures/e2b/e2b/bin.ts",
+      "examples/headless-agent/tests/fixtures/e2b/e2b/fixture-lsp.mjs",
+      "package.json",
+      "packages/e2b/e2b/tests/composition.e2e.ts",
+      "scripts/run-gates.ts"
+    ]
+  },
+  "remaining_work": [
+    "Verify the real-provider browser smoke and record the PR GIF after the requested payload approval.",
+    "Implement the native E2B SDK factory and verify the real E2B composition and fixture paths after sandbox authorization.",
+    "Produce and test the public Host npm exports, functional invariant companions, and native CLI platform packages.",
+    "Complete native aggregate-test and coverage routing, and audit the three withdrawn tooling configurations.",
+    "Verify the staged Windows gate runner, pnpm.cmd dispatch, platform lint fixes, and external pinned-source checkout in GitHub Actions; repair Cordis config dependencies and the stale module graph.",
+    "Finish the PR-finding audit and repair remaining confirmed lifecycle and deterministic-input cases.",
+    "Run the full workspace formatting, Clippy, tests, and parity gate fresh after all remaining changes."
+  ]
+}

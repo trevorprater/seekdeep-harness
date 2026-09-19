@@ -106,7 +106,7 @@ pub fn snake_case(value: &str) -> String {
 pub fn format_property(key: &str) -> String {
     static IDENTIFIER: OnceLock<regex::Regex> = OnceLock::new();
     let identifier = IDENTIFIER.get_or_init(|| {
-        regex::Regex::new(r"(?i)^[a-z_$][\w$]*$").expect("static property regex is valid")
+        regex::Regex::new(r"(?i)^[a-z_$][a-z0-9_$]*$").expect("static property regex is valid")
     });
     if identifier.is_match(key) {
         format!(".{key}")
@@ -157,5 +157,12 @@ mod tests {
         assert_eq!(sanitize(""), "");
         assert_eq!(sanitize("foo/"), "/foo");
         assert_eq!(trim_slash("foo//"), "foo/");
+    }
+
+    #[test]
+    fn property_formatting_keeps_javascript_ascii_identifier_rules() {
+        assert_eq!(format_property("alpha_$1"), ".alpha_$1");
+        assert_eq!(format_property("é"), "[\"é\"]");
+        assert_eq!(format_property("bad-key"), "[\"bad-key\"]");
     }
 }

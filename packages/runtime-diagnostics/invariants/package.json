@@ -1,0 +1,41 @@
+{
+  "name": "@seekdeep-ai/seekdeep-invariants",
+  "description": "Registry service for package-owned SeekDeep Harness runtime invariants",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/runtime-diagnostics/invariants"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

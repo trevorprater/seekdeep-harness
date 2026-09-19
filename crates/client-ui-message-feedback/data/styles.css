@@ -1,0 +1,108 @@
+/* Per-message feedback controls. The rating buttons mirror the shared message
+   IconActions chrome so the strip reads as one row; the note editor is an
+   inline expansion anchored to the same row. */
+
+.seekdeep-feedback-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.seekdeep-feedback-action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.seekdeep-feedback-action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* A recorded rating stays legible without hover, so the signal survives a
+   pointer leaving the row. */
+.seekdeep-feedback-action[data-active] {
+  color: var(--dsw-alias-label-primary);
+}
+
+.seekdeep-feedback-note-open {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 0 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 28px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.seekdeep-feedback-note-open:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.seekdeep-feedback-note-editor {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.seekdeep-feedback-note-input {
+  width: 260px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-primary);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.seekdeep-feedback-note-save,
+.seekdeep-feedback-note-cancel {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seekdeep-feedback-note-save {
+  background: var(--dsw-alias-interactive-bg-primary);
+  color: var(--dsw-alias-label-inverse);
+}
+
+.seekdeep-feedback-note-save:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.seekdeep-feedback-note-cancel {
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-feedback-note-cancel:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.seekdeep-feedback-failure {
+  padding-left: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 28px;
+}

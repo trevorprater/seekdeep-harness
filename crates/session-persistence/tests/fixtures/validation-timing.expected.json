@@ -1,0 +1,1274 @@
+[
+  {
+    "name": "standalone-header",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "request/header",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "header": {
+            "config": {
+              "provider": "origin",
+              "model": "model"
+            }
+          },
+          "reason": "initial"
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "request/header",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "header": {
+            "config": {
+              "provider": "origin",
+              "model": "model"
+            }
+          },
+          "reason": "initial"
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "request/header",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "header": {
+            "config": {
+              "provider": "origin",
+              "model": "model"
+            }
+          },
+          "reason": "initial"
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "malformed-turn",
+    "append": true,
+    "read": true,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": "bad"
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": "bad"
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 1,
+        "time": 1,
+        "data": {
+          "turn": "bad",
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": null,
+    "appendError": null,
+    "readError": null,
+    "loadError": "stored session \"malformed-turn\" failed validation: Error: session \"malformed-turn\" contains malformed pre-react-loop turn/end at seq 1",
+    "readKind": null,
+    "loadKind": "corruption"
+  },
+  {
+    "name": "malformed-current-message",
+    "append": true,
+    "read": false,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "user/message",
+        "seq": 0,
+        "time": 1,
+        "surfaceOp": "append",
+        "data": {
+          "id": "message",
+          "role": "assistant",
+          "content": [],
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": null,
+    "readError": "stored session \"malformed-current-message\" failed validation: Error: session event at seq 0 message must have role \"user\"",
+    "loadError": "stored session \"malformed-current-message\" failed validation: Error: session event at seq 0 message must have role \"user\"",
+    "readKind": "corruption",
+    "loadKind": "corruption"
+  },
+  {
+    "name": "malformed-legacy-message",
+    "append": true,
+    "read": false,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "user/message",
+        "seq": 0,
+        "time": 1,
+        "surfaceOp": "append",
+        "data": {
+          "content": "bad",
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": null,
+    "readError": "stored session \"malformed-legacy-message\" failed validation: Error: session event at seq 0 message has invalid content",
+    "loadError": "stored session \"malformed-legacy-message\" failed validation: Error: session event at seq 0 message has invalid content",
+    "readKind": "corruption",
+    "loadKind": "corruption"
+  },
+  {
+    "name": "legacy-message",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "user/message",
+        "seq": 0,
+        "time": 1,
+        "surfaceOp": "append",
+        "data": {
+          "content": [
+            {
+              "type": "text",
+              "text": "legacy"
+            }
+          ],
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "user/message",
+        "seq": 0,
+        "time": 1,
+        "surfaceOp": "append",
+        "data": {
+          "content": [
+            {
+              "type": "text",
+              "text": "legacy"
+            }
+          ],
+          "source": {
+            "kind": "user"
+          },
+          "id": "legacy-message:legacy-message:0",
+          "role": "user"
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "user/message",
+        "seq": 0,
+        "time": 1,
+        "surfaceOp": "append",
+        "data": {
+          "content": [
+            {
+              "type": "text",
+              "text": "legacy"
+            }
+          ],
+          "source": {
+            "kind": "user"
+          },
+          "id": "legacy-message:legacy-message:0",
+          "role": "user"
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "unknown-required",
+    "append": true,
+    "read": false,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "future/event",
+        "seq": 0,
+        "time": 1,
+        "data": {}
+      }
+    ],
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": null,
+    "readError": "session \"unknown-required\" contains event type \"future/event\" (seq 0) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness",
+    "loadError": "session \"unknown-required\" contains event type \"future/event\" (seq 0) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness",
+    "readKind": "unsupported",
+    "loadKind": "unsupported"
+  },
+  {
+    "name": "unknown-ignorable",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "future/event",
+        "seq": 0,
+        "time": 1,
+        "ignorable": true,
+        "data": {}
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "future/event",
+        "seq": 0,
+        "time": 1,
+        "ignorable": true,
+        "data": {}
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "future/event",
+        "seq": 0,
+        "time": 1,
+        "ignorable": true,
+        "data": {}
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "retired-delta",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "session \"retired-delta\" contains unsupported legacy request/header-delta event at seq 0",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "retired-mode",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "session \"retired-mode\" contains unsupported legacy mode/set event at seq 0",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "retired-fallback",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "session \"retired-fallback\" contains unsupported legacy request/header reason \"fallback\" at seq 0",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "retired-priority",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "session \"retired-priority\" contains unsupported legacy request/header-delta event at seq 1",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "retired-before-gap",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "session \"retired-before-gap\" contains unsupported legacy mode/set event at seq 4",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "gap",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "append seq mismatch for \"gap\": expected 0 at index 0, got 1",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "null-header",
+    "append": false,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": "Cannot read properties of null (reading 'reason')",
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "missing-turn",
+    "append": true,
+    "read": true,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {}
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {}
+      },
+      {
+        "type": "turn/end",
+        "seq": 1,
+        "time": 1,
+        "data": {
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": null,
+    "appendError": null,
+    "readError": null,
+    "loadError": "stored session \"missing-turn\" failed validation: Error: session \"missing-turn\" contains malformed pre-react-loop turn/end at seq 1",
+    "readKind": null,
+    "loadKind": "corruption"
+  },
+  {
+    "name": "null-turn",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": null
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": null
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": null
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "null-turn-data",
+    "append": true,
+    "read": false,
+    "load": false,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": null
+      }
+    ],
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": null,
+    "readError": "stored session \"null-turn-data\" failed validation: TypeError: Cannot read properties of null (reading 'turn')",
+    "loadError": "stored session \"null-turn-data\" failed validation: TypeError: Cannot read properties of null (reading 'turn')",
+    "readKind": "corruption",
+    "loadKind": "corruption"
+  },
+  {
+    "name": "missing-step",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/end",
+        "seq": 2,
+        "time": 2,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 3,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/end",
+        "seq": 2,
+        "time": 2,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 3,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "bad-step",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": "bad"
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": "bad"
+        }
+      },
+      {
+        "type": "step/end",
+        "seq": 2,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": "bad"
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 3,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": "bad"
+        }
+      },
+      {
+        "type": "step/end",
+        "seq": 2,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": "bad"
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 3,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "pending-tool",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "tool/result",
+        "seq": 3,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "interrupted-tool-result-call-3",
+            "role": "user",
+            "source": {
+              "kind": "tool",
+              "callId": "call"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call",
+                "isError": true,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
+                  }
+                ]
+              }
+            ]
+          },
+          "error": {
+            "name": "ToolNotStartedError",
+            "code": "TOOL_NOT_STARTED"
+          }
+        },
+        "surfaceOp": "append"
+      },
+      {
+        "type": "step/end",
+        "seq": 4,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 5,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "tool/result",
+        "seq": 3,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "interrupted-tool-result-call-3",
+            "role": "user",
+            "source": {
+              "kind": "tool",
+              "callId": "call"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call",
+                "isError": true,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
+                  }
+                ]
+              }
+            ]
+          },
+          "error": {
+            "name": "ToolNotStartedError",
+            "code": "TOOL_NOT_STARTED"
+          }
+        },
+        "surfaceOp": "append"
+      },
+      {
+        "type": "step/end",
+        "seq": 4,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 5,
+        "time": 3,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "started-tool",
+    "append": true,
+    "read": true,
+    "load": true,
+    "rawEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "tool/call",
+        "seq": 3,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "callId": "call",
+          "name": "bash",
+          "arguments": "{}"
+        }
+      }
+    ],
+    "readEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "tool/call",
+        "seq": 3,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "callId": "call",
+          "name": "bash",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "tool/result",
+        "seq": 4,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "interrupted-tool-result-call-4",
+            "role": "user",
+            "source": {
+              "kind": "tool",
+              "callId": "call"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call",
+                "isError": true,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly."
+                  }
+                ]
+              }
+            ]
+          },
+          "error": {
+            "name": "ToolOutcomeUnknownError",
+            "code": "TOOL_OUTCOME_UNKNOWN"
+          }
+        },
+        "surfaceOp": "append",
+        "sourceEventSeqs": [
+          3
+        ]
+      },
+      {
+        "type": "step/end",
+        "seq": 5,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 6,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "loadEvents": [
+      {
+        "type": "turn/start",
+        "seq": 0,
+        "time": 1,
+        "data": {
+          "turn": 1
+        }
+      },
+      {
+        "type": "step/start",
+        "seq": 1,
+        "time": 2,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "assistant/message",
+        "seq": 2,
+        "time": 3,
+        "surfaceOp": "append",
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "assistant",
+            "role": "assistant",
+            "source": {
+              "kind": "model",
+              "provider": "origin",
+              "model": "model"
+            },
+            "content": [
+              {
+                "type": "tool-call",
+                "id": "call",
+                "name": "bash",
+                "arguments": "{}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "tool/call",
+        "seq": 3,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "callId": "call",
+          "name": "bash",
+          "arguments": "{}"
+        }
+      },
+      {
+        "type": "tool/result",
+        "seq": 4,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1,
+          "message": {
+            "id": "interrupted-tool-result-call-4",
+            "role": "user",
+            "source": {
+              "kind": "tool",
+              "callId": "call"
+            },
+            "content": [
+              {
+                "type": "tool-result",
+                "toolCallId": "call",
+                "isError": true,
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly."
+                  }
+                ]
+              }
+            ]
+          },
+          "error": {
+            "name": "ToolOutcomeUnknownError",
+            "code": "TOOL_OUTCOME_UNKNOWN"
+          }
+        },
+        "surfaceOp": "append",
+        "sourceEventSeqs": [
+          3
+        ]
+      },
+      {
+        "type": "step/end",
+        "seq": 5,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "step": 1
+        }
+      },
+      {
+        "type": "turn/end",
+        "seq": 6,
+        "time": 4,
+        "data": {
+          "turn": 1,
+          "reason": {
+            "kind": "interrupted"
+          }
+        }
+      }
+    ],
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  },
+  {
+    "name": "empty",
+    "append": true,
+    "read": false,
+    "load": false,
+    "rawEvents": null,
+    "readEvents": null,
+    "loadEvents": null,
+    "appendError": null,
+    "readError": null,
+    "loadError": null,
+    "readKind": null,
+    "loadKind": null
+  }
+]

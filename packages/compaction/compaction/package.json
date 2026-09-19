@@ -1,0 +1,54 @@
+{
+  "name": "@seekdeep-ai/seekdeep-compaction",
+  "description": "Abstract compaction service seam (ctx.compaction) for the SeekDeep Harness",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/compaction/compaction"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
+    "./checkpoint": {
+      "types": "./lib/types/checkpoint.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

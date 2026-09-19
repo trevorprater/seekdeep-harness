@@ -1,0 +1,32 @@
+# Keyless replay counterpart of agent-instructions.cordis.yml. Patches do not
+# compose across includes, so this applies the scenario config and model swap
+# directly to the live tree.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@seekdeep-ai/seekdeep-llm-deepseek'
+        disabled: true
+      - id: acp-agent
+        name: '@seekdeep-ai/seekdeep-acp-demo'
+        config:
+          provider: deepseek-official
+          model: deepseek-v4-flash
+          persistenceRoot: !!js process.env.SEEKDEEP_SNAPSHOT_SESSIONS_ROOT ?? './.sessions'
+          persistenceCompression: 'none'
+          workspaceContext:
+            maxBytes: 65536
+            seekdeepHome: !!js process.cwd() + '/.seekdeep'
+            projectRootMarkers:
+              - .seekdeep-project
+          persona: |
+            You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.
+
+            Verify your work by running the code or tests. Keep answers brief and factual.
+      - insert:
+          - id: llm-replay
+            name: '@seekdeep-ai/seekdeep-llm-replay'
+          - id: workspace-context-compaction
+            name: './tests/fixtures/workspace-context-compaction.ts'

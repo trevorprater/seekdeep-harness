@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-agent-default-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+parking_lot.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

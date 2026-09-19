@@ -1,0 +1,31 @@
+[package]
+name = "seekdeep-tool-jobs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-facing background job control tools over the ctx.jobs registry"
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+seekdeep-jobs-local = { path = "../jobs-local" }
+
+[lints]
+workspace = true

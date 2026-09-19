@@ -1,0 +1,44 @@
+[package]
+name = "seekdeep-client-web-react"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM React bindings for Client snapshots, sessions, slots, and invoke lifecycle"
+autotests = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+wasm-bindgen-futures.workspace = true
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_bind_invoke_parity"
+path = "tests/wasm_bind_invoke_parity.rs"
+
+[[test]]
+name = "wasm_real_core_parity"
+path = "tests/wasm_real_core_parity.rs"
+
+[[test]]
+name = "wasm_renderer_parity"
+path = "tests/wasm_renderer_parity.rs"
+
+[[test]]
+name = "wasm_session_parity"
+path = "tests/wasm_session_parity.rs"

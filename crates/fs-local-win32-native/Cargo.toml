@@ -1,0 +1,23 @@
+[package]
+name = "seekdeep-fs-local-win32-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Narrow Win32 DACL and atomic replacement primitives for fs-local"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+] }
+
+# The Win32 API is pointer-based. This crate is the documented narrow native
+# exception; every caller receives an owned safe Rust result.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

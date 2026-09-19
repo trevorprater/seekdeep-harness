@@ -1,0 +1,60 @@
+{
+  "name": "@seekdeep-ai/seekdeep-permission-presets",
+  "description": "User-facing permission presets (ctx.permissionPresets) for the SeekDeep Harness: one product-level Permissions select bundling the sandbox-mode and approval-policy knobs, written through to their own session events",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/interaction/permission-presets"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

@@ -1,0 +1,41 @@
+# Keyless real-Loader composition for the semantic-checkpoint recovery snapshot.
+# The headless driver resumes the seeded interrupted session and emits its next
+# turn over stream-json; the replay adapter supplies the deterministic response.
+
+- id: persistence
+  name: '@seekdeep-ai/seekdeep-session-persistence-jsonl'
+  config:
+    root: './.sessions'
+    compression: none
+
+- id: checkpoint
+  name: '@seekdeep-ai/seekdeep-session-checkpoint-policy'
+
+- id: replay
+  name: '@seekdeep-ai/seekdeep-llm-replay'
+  config:
+    file: !!js process.env.SEEKDEEP_SNAPSHOT_FILE
+    overrideFile: !!js process.env.SEEKDEEP_SNAPSHOT_OVERRIDE
+
+# Managed child-process groups for the bash executor (spawn/kill/output plumbing).
+- id: subprocess
+  name: '@seekdeep-ai/seekdeep-subprocess-local'
+
+- id: bash
+  name: '@seekdeep-ai/seekdeep-bash-local'
+  config:
+    timeoutMs: 60000
+
+- id: agent
+  name: '@seekdeep-ai/seekdeep-agent-spine-demo'
+  config:
+    agents: []
+    workspaceContext: false
+    skills:
+      enabled: false
+    toolJobs: false
+    goals: false
+
+# Await the persisted resume before the headless driver inspects root agents.
+- id: resumed-agent
+  name: './tests/fixtures/semantic-checkpoint-agent.ts'

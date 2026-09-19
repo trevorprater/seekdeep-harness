@@ -1,0 +1,24 @@
+[package]
+name = "seekdeep-agent-loop-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Prerequisite service spine for SeekDeep AgentLoop tests"
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+
+[dev-dependencies]
+seekdeep-agent-loop = { path = "../agent-loop" }
+tokio.workspace = true
+
+[lints]
+workspace = true

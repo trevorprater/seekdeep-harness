@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-subprocess-postinstall"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Compiled Rust npm installation repair for node-pty compatibility"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

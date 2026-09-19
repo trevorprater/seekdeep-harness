@@ -1,0 +1,65 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 配置 API 密钥或提供方登录，即可使用其模型。
+  - list
+  - text: 提供方
+  - combobox "提供方":
+    - option "amazon-bedrock"
+    - option "ant-ling"
+    - option "anthropic"
+    - option "azure-openai-responses"
+    - option "cerebras"
+    - option "cloudflare-ai-gateway"
+    - option "cloudflare-workers-ai"
+    - option "deepseek"
+    - option "fireworks"
+    - option "github-copilot"
+    - option "google"
+    - option "google-vertex"
+    - option "groq"
+    - option "huggingface"
+    - option "kimi-coding"
+    - option "minimax"
+    - option "minimax-cn"
+    - option "mistral"
+    - option "moonshotai"
+    - option "moonshotai-cn"
+    - option "nvidia"
+    - option "openai"
+    - option "openai-codex" [selected]
+    - option "opencode"
+    - option "opencode-go"
+    - option "openrouter"
+    - option "qwen-token-plan"
+    - option "qwen-token-plan-cn"
+    - option "together"
+    - option "vercel-ai-gateway"
+    - option "xai"
+    - option "xiaomi"
+    - option "xiaomi-token-plan-ams"
+    - option "xiaomi-token-plan-cn"
+    - option "xiaomi-token-plan-sgp"
+    - option "zai"
+    - option "zai-coding-cn"
+  - paragraph: 使用 Codex CLI 保存的 ChatGPT 登录。发送请求前，请运行 codex login，并设置 cli_auth_credentials_store = "file"。
+  - group: 自定义设置
+  - button "取消"
+  - button "保存"
