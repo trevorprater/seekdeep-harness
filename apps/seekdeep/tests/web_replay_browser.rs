@@ -33,8 +33,7 @@ use seekdeep_util::launch_environment::{
 };
 use serde_json::json;
 
-#[path = "support/web_replay_browser.rs"]
-mod browser_driver;
+use super::browser_driver;
 
 const PROMPT: &str = "Reply with the single word LIGHTHOUSE and stop.";
 
