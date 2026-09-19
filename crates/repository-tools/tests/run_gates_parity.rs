@@ -69,7 +69,7 @@ fn every_mode_constructs_a_valid_nonempty_graph() {
         (GateMode::CiWindowsBlocking, 2),
         (GateMode::CiWindowsComplete, 43),
         (GateMode::CiWindowsObservational, 41),
-        (GateMode::NodeCompat, 1),
+        (GateMode::NodeCompat, 4),
         (GateMode::CheckAll, 45),
         (GateMode::DocSync, 28),
     ] {
@@ -324,11 +324,22 @@ fn coverage_gate_uses_the_public_compiled_reporter_entry_and_worker_budget() {
 
 #[test]
 fn lint_and_typert_consumers_preserve_command_and_dependency_contracts() {
-    let mut environment = environment();
-    environment
+    let lint = gates_for_mode(GateMode::CiLintContractsReady, &environment())
+        .unwrap()
+        .remove(0);
+    assert_eq!(lint.id, "lint");
+    assert_eq!(lint.display_command, "pnpm run lint:contracts-ready");
+    assert_eq!(lint.command, PathBuf::from("/node"));
+    assert_eq!(
+        lint.args,
+        ["/private/pnpm.cjs", "run", "lint:contracts-ready"].map(OsString::from)
+    );
+
+    let mut bounded = environment();
+    bounded
         .variables
         .insert("SEEKDEEP_OXLINT_THREADS".into(), "4".into());
-    let lint = gates_for_mode(GateMode::CiLintContractsReady, &environment)
+    let lint = gates_for_mode(GateMode::CiLintContractsReady, &bounded)
         .unwrap()
         .remove(0);
     assert_eq!(
@@ -337,27 +348,31 @@ fn lint_and_typert_consumers_preserve_command_and_dependency_contracts() {
     );
     assert_eq!(
         lint.args,
-        [
-            OsString::from("/private/pnpm.cjs"),
-            OsString::from("run"),
-            OsString::from("lint:contracts-ready")
-        ]
+        ["/private/pnpm.cjs", "run", "lint:contracts-ready"].map(OsString::from)
     );
 
-    let primary = gates_for_mode(GateMode::CiPrimary, &environment).unwrap();
+    let primary = gates_for_mode(GateMode::CiPrimary, &environment()).unwrap();
+    let contracts = primary
+        .iter()
+        .find(|gate| gate.id == "typert-contracts")
+        .unwrap();
+    assert_eq!(contracts.display_command, "pnpm run build:lib:host");
     assert_eq!(
-        primary
-            .iter()
-            .find(|gate| gate.id == "typert-contracts")
-            .unwrap()
-            .display_command,
-        "pnpm run build:lib:host"
+        contracts.args,
+        ["/private/pnpm.cjs", "run", "build:lib:host"].map(OsString::from)
     );
-    for id in ["typecheck", "lint", "doc-typecheck"] {
+    for (id, script) in [
+        ("typecheck", "typecheck:contracts-ready"),
+        ("lint", "lint:contracts-ready"),
+        ("doc-typecheck", "doc-typecheck:contracts-ready"),
+    ] {
+        let gate = primary.iter().find(|gate| gate.id == id).unwrap();
+        assert_eq!(gate.display_command, format!("pnpm run {script}"));
         assert_eq!(
-            primary.iter().find(|gate| gate.id == id).unwrap().needs,
-            ["typert-contracts"]
+            gate.args,
+            ["/private/pnpm.cjs", "run", script].map(OsString::from)
         );
+        assert_eq!(gate.needs, ["typert-contracts"]);
     }
     assert_eq!(
         primary
@@ -367,6 +382,19 @@ fn lint_and_typert_consumers_preserve_command_and_dependency_contracts() {
             .needs,
         ["typecheck", "lint", "doc-typecheck"]
     );
+
+    let consumers = gates_for_mode(GateMode::CiConsumers, &environment()).unwrap();
+    for (id, script) in [
+        ("lint-and-duplication", "check:ci:lint:contracts-ready"),
+        ("doc-typecheck", "doc-typecheck:contracts-ready"),
+    ] {
+        let gate = consumers.iter().find(|gate| gate.id == id).unwrap();
+        assert_eq!(gate.display_command, format!("pnpm run {script}"));
+        assert_eq!(
+            gate.args,
+            ["/private/pnpm.cjs", "run", script].map(OsString::from)
+        );
+    }
 }
 
 #[test]
@@ -386,16 +414,225 @@ fn doc_sync_and_node_compat_keep_standalone_entrypoints() {
         assert_eq!(node[0].id, "typecheck");
         assert_eq!(node[0].display_command, "pnpm run typecheck");
         assert!(node[0].needs.is_empty());
+        let ids = node.iter().map(|gate| gate.id.as_str()).collect::<Vec<_>>();
         if node_major == 22 {
-            assert_eq!(node.len(), 3);
+            assert_eq!(
+                ids,
+                [
+                    "typecheck",
+                    "build",
+                    "build:web",
+                    "source-worker-smoke",
+                    "jsonl-zstd-smoke",
+                    "seekdeep-source-launch-smoke",
+                    "cli-lazy-search-startup-smoke",
+                ]
+            );
             assert_eq!(node[1].display_command, "pnpm run build");
             assert_eq!(node[1].needs, ["typecheck"]);
             assert_eq!(node[2].display_command, "pnpm run build:web");
             assert_eq!(node[2].needs, ["build"]);
         } else {
-            assert_eq!(node.len(), 1);
+            assert_eq!(
+                ids,
+                [
+                    "typecheck",
+                    "source-worker-smoke",
+                    "jsonl-zstd-smoke",
+                    "seekdeep-source-launch-smoke",
+                ]
+            );
         }
     }
+}
+
+#[test]
+fn node_compat_smokes_run_the_verified_suites_on_every_node_line() {
+    for node_major in [22, 24, 26] {
+        let mut environment = environment();
+        environment.node_major = node_major;
+        let node = gates_for_mode(GateMode::NodeCompat, &environment).unwrap();
+        for (id, label, args) in [
+            (
+                "source-worker-smoke",
+                "source worker smoke",
+                "test --locked -p seekdeep-workflow-worker-thread --all-features --test start_validation_parity",
+            ),
+            (
+                "jsonl-zstd-smoke",
+                "JSONL Zstandard smoke",
+                "test --locked -p seekdeep-session-persistence-jsonl --all-features --lib zstd::tests",
+            ),
+            (
+                "seekdeep-source-launch-smoke",
+                "seekdeep source-launch smoke",
+                "test --locked -p seekdeep --all-features --test source_launch_compat",
+            ),
+        ] {
+            let smoke = node.iter().find(|gate| gate.id == id).unwrap();
+            assert_eq!(smoke.label, label);
+            assert_eq!(smoke.command, PathBuf::from("cargo"));
+            assert_eq!(
+                smoke.args,
+                args.split(' ').map(OsString::from).collect::<Vec<_>>()
+            );
+            assert_eq!(smoke.display_command, format!("cargo {args}"));
+            assert!(smoke.needs.is_empty());
+            assert!(smoke.environment.is_empty());
+            assert_eq!(smoke.serial_group.as_deref(), Some("cargo-target"));
+            assert!(!smoke.allow_failure);
+        }
+        // The port carries no Vitest projects, so the source's jsdom environment smoke has
+        // no suite to run; `typecheck` checks the browser Rust on every line instead.
+        assert!(node.iter().all(|gate| gate.id != "vitest-jsdom-smoke"));
+        let cli = node
+            .iter()
+            .find(|gate| gate.id == "cli-lazy-search-startup-smoke");
+        if node_major == 22 {
+            let cli = cli.unwrap();
+            assert_eq!(cli.label, "CLI lazy-search startup smoke");
+            assert_eq!(cli.needs, ["build:web"]);
+            assert_eq!(
+                cli.environment.get("SEEKDEEP_REQUIRE_BUILT_CLI_SMOKE"),
+                Some(&Some("1".to_owned()))
+            );
+            assert_eq!(
+                cli.display_command,
+                "cargo test --locked -p seekdeep --all-features --test shipped_cli_contracts"
+            );
+            assert_eq!(cli.serial_group.as_deref(), Some("cargo-target"));
+        } else {
+            assert!(cli.is_none());
+        }
+    }
+}
+
+#[test]
+fn node_compat_skips_typecheck_only_on_the_exact_flag() {
+    let mut environment = environment();
+    environment.node_major = 22;
+    environment
+        .variables
+        .insert("SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK".into(), "1".into());
+    let node = gates_for_mode(GateMode::NodeCompat, &environment).unwrap();
+    assert_eq!(
+        node.iter().map(|gate| gate.id.as_str()).collect::<Vec<_>>(),
+        [
+            "build",
+            "build:web",
+            "source-worker-smoke",
+            "jsonl-zstd-smoke",
+            "seekdeep-source-launch-smoke",
+            "cli-lazy-search-startup-smoke",
+        ]
+    );
+    assert!(node[0].needs.is_empty());
+    environment.node_major = 24;
+    let node = gates_for_mode(GateMode::NodeCompat, &environment).unwrap();
+    assert_eq!(
+        node.iter().map(|gate| gate.id.as_str()).collect::<Vec<_>>(),
+        [
+            "source-worker-smoke",
+            "jsonl-zstd-smoke",
+            "seekdeep-source-launch-smoke",
+        ]
+    );
+    environment
+        .variables
+        .insert("SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK".into(), "".into());
+    assert_eq!(
+        gates_for_mode(GateMode::NodeCompat, &environment).unwrap()[0].id,
+        "typecheck"
+    );
+    environment
+        .variables
+        .insert("SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK".into(), "yes".into());
+    let error = gates_for_mode(GateMode::NodeCompat, &environment)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "run-gates: SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK must be 1 when set, got \"yes\"."
+    );
+}
+
+#[test]
+fn node_compat_smokes_name_suites_the_workspace_builds() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let metadata = std::process::Command::new(env!("CARGO"))
+        .args(["metadata", "--locked", "--no-deps", "--format-version=1"])
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(
+        metadata.status.success(),
+        "{}",
+        String::from_utf8_lossy(&metadata.stderr)
+    );
+    let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout).unwrap();
+    let mut environment = environment();
+    environment.node_major = 22;
+    let smokes = gates_for_mode(GateMode::NodeCompat, &environment)
+        .unwrap()
+        .into_iter()
+        .filter(|gate| gate.command == std::path::Path::new("cargo"))
+        .collect::<Vec<_>>();
+    assert_eq!(smokes.len(), 4);
+    for smoke in smokes {
+        let args = smoke
+            .args
+            .iter()
+            .map(|arg| arg.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(args[..2], ["test", "--locked"], "{}", smoke.id);
+        let package = args.windows(2).find(|pair| pair[0] == "-p").unwrap()[1];
+        let package = metadata["packages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|value| value["name"] == package)
+            .unwrap_or_else(|| panic!("{}: package {package} is not in the workspace", smoke.id));
+        let targets = package["targets"].as_array().unwrap();
+        let has_target = |name: &str, kind: &str| {
+            targets.iter().any(|value| {
+                value["name"] == name
+                    && value["kind"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|value| value == kind)
+            })
+        };
+        for target in args
+            .windows(2)
+            .filter(|pair| pair[0] == "--test")
+            .map(|pair| pair[1])
+        {
+            assert!(has_target(target, "test"), "{}: {target}", smoke.id);
+        }
+        if args.contains(&"--lib") {
+            assert!(
+                targets.iter().any(|value| value["kind"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|kind| kind == "lib")),
+                "{}: no library target",
+                smoke.id
+            );
+        }
+    }
+}
+
+#[test]
+fn static_lane_stays_source_only() {
+    let ids = gates_for_mode(GateMode::CiStatic, &environment())
+        .unwrap()
+        .into_iter()
+        .map(|gate| gate.id)
+        .collect::<Vec<_>>();
+    assert!(!ids.iter().any(|id| id == "build"));
+    assert!(!ids.iter().any(|id| id == "doc-typecheck"));
 }
 
 #[test]
@@ -447,6 +684,32 @@ fn consumer_graph_owns_build_and_orders_all_artifact_readers() {
             ["built-package-invariants"]
         );
     }
+    assert_eq!(
+        gates
+            .iter()
+            .find(|gate| gate.id == "publint")
+            .unwrap()
+            .needs,
+        ["build"]
+    );
+    assert_eq!(
+        gates
+            .iter()
+            .find(|gate| gate.id == "snapshot")
+            .unwrap()
+            .environment
+            .get("SEEKDEEP_EXAMPLE_MODE"),
+        Some(&Some("lib".to_owned()))
+    );
+    assert_eq!(
+        gates
+            .iter()
+            .find(|gate| gate.id == "doc-typecheck")
+            .unwrap()
+            .environment
+            .get("SEEKDEEP_DOC_TYPECHECK_USE_BUILD_OUTPUT"),
+        Some(&Some("1".to_owned()))
+    );
     let built = gates
         .iter()
         .find(|gate| gate.id == "built-bin-smoke")

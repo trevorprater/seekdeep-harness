@@ -348,7 +348,7 @@ pub fn gates_for_mode(mode: GateMode, environment: &GateEnvironment) -> anyhow::
         GateMode::CiWindowsBlocking => Ok(ci_windows_blocking_gates(environment)),
         GateMode::CiWindowsComplete => ci_windows_complete_gates(environment),
         GateMode::CiWindowsObservational => Ok(ci_windows_observational_gates(environment)),
-        GateMode::NodeCompat => Ok(node_compat_gates(environment)),
+        GateMode::NodeCompat => node_compat_gates(environment),
         GateMode::CheckAll => Ok(check_all_gates(environment)),
         GateMode::DocSync => Ok(doc_sync_leaf_gates(environment, DocSyncOptions::default())),
     }
@@ -504,19 +504,26 @@ fn ci_primary_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> 
 
 /// Gates that exercise the port on a specific Node release.
 ///
-/// Every supported Node release runs the root command's native and browser Rust checks.
-/// The primary Node release also builds the runtime and Web artifacts.
-fn node_compat_gates(environment: &GateEnvironment) -> Vec<Gate> {
-    let mut gates = vec![pnpm_script(environment, "typecheck", "typecheck")];
-    if environment.node_major != 22 {
-        return gates;
+/// Every supported Node release runs the root command's native and browser Rust checks and
+/// the compatibility smokes. The primary Node release also builds the runtime and Web
+/// artifacts and adds the built-CLI smoke behind them.
+fn node_compat_gates(environment: &GateEnvironment) -> anyhow::Result<Vec<Gate>> {
+    let skip_typecheck = flag_enabled(environment, "SEEKDEEP_NODE_COMPAT_SKIP_TYPECHECK")?;
+    let mut gates = Vec::new();
+    if !skip_typecheck {
+        gates.push(pnpm_script(environment, "typecheck", "typecheck"));
     }
+    if environment.node_major != 22 {
+        gates.extend(node_compat_smoke_gates(false));
+        return Ok(gates);
+    }
+    let build_needs: &[&str] = if skip_typecheck { &[] } else { &["typecheck"] };
     gates.push(script_with(
         environment,
         "build",
         "build",
         None,
-        &["typecheck"],
+        build_needs,
         IndexMap::new(),
     ));
     gates.push(script_with(
@@ -527,7 +534,130 @@ fn node_compat_gates(environment: &GateEnvironment) -> Vec<Gate> {
         &["build"],
         IndexMap::new(),
     ));
+    gates.extend(node_compat_smoke_gates(true));
+    Ok(gates)
+}
+
+/// One pinned-source Node compatibility smoke and the compiled suite that realizes it.
+struct NodeCompatSmoke {
+    id: &'static str,
+    label: &'static str,
+    /// Cargo arguments, excluding the executable name.
+    cargo_args: &'static [&'static str],
+}
+
+/// The compatibility smokes every advertised Node release runs, in the pinned source's order.
+///
+/// Each source smoke ran one Vitest file; its replacement is the compiled suite the parity
+/// manifest verified for that file. The source's `vitest-jsdom-smoke` has no counterpart:
+/// the port carries no Vitest projects, and `typecheck` already checks its browser Rust on
+/// every release through `cargo xtask check-client`, so that gate is withdrawn.
+const NODE_COMPAT_SMOKES: &[NodeCompatSmoke] = &[
+    NodeCompatSmoke {
+        id: "source-worker-smoke",
+        label: "source worker smoke",
+        cargo_args: &[
+            "test",
+            "--locked",
+            "-p",
+            "seekdeep-workflow-worker-thread",
+            "--all-features",
+            "--test",
+            "start_validation_parity",
+        ],
+    },
+    NodeCompatSmoke {
+        id: "jsonl-zstd-smoke",
+        label: "JSONL Zstandard smoke",
+        cargo_args: &[
+            "test",
+            "--locked",
+            "-p",
+            "seekdeep-session-persistence-jsonl",
+            "--all-features",
+            "--lib",
+            "zstd::tests",
+        ],
+    },
+    NodeCompatSmoke {
+        id: "seekdeep-source-launch-smoke",
+        label: "seekdeep source-launch smoke",
+        cargo_args: &[
+            "test",
+            "--locked",
+            "-p",
+            "seekdeep",
+            "--all-features",
+            "--test",
+            "source_launch_compat",
+        ],
+    },
+];
+
+/// The built-CLI smoke the primary Node release adds behind the Web build.
+///
+/// The compiled suite always exercises the shipped CLI, so the flag the source set to
+/// forbid skipping it has nothing left to force; it stays on the gate as its contract.
+const CLI_LAZY_SEARCH_STARTUP_SMOKE: NodeCompatSmoke = NodeCompatSmoke {
+    id: "cli-lazy-search-startup-smoke",
+    label: "CLI lazy-search startup smoke",
+    cargo_args: &[
+        "test",
+        "--locked",
+        "-p",
+        "seekdeep",
+        "--all-features",
+        "--test",
+        "shipped_cli_contracts",
+    ],
+};
+
+fn node_compat_smoke_gates(cli_smoke: bool) -> Vec<Gate> {
+    let mut gates = NODE_COMPAT_SMOKES
+        .iter()
+        .map(|smoke| cargo_suite_gate(smoke, &[], IndexMap::new()))
+        .collect::<Vec<_>>();
+    if cli_smoke {
+        gates.push(cargo_suite_gate(
+            &CLI_LAZY_SEARCH_STARTUP_SMOKE,
+            &["build:web"],
+            environment_map(&[("SEEKDEEP_REQUIRE_BUILT_CLI_SMOKE", Some("1"))]),
+        ));
+    }
     gates
+}
+
+/// A gate that runs one compiled suite through Cargo directly, serialized on the build target.
+fn cargo_suite_gate(
+    smoke: &NodeCompatSmoke,
+    needs: &[&str],
+    environment: IndexMap<String, Option<String>>,
+) -> Gate {
+    Gate {
+        id: smoke.id.to_owned(),
+        label: smoke.label.to_owned(),
+        display_command: format!("cargo {}", smoke.cargo_args.join(" ")),
+        command: PathBuf::from("cargo"),
+        args: smoke.cargo_args.iter().map(OsString::from).collect(),
+        needs: needs.iter().map(|need| (*need).to_owned()).collect(),
+        environment,
+        allow_failure: false,
+        serial_group: Some("cargo-target".to_owned()),
+    }
+}
+
+/// `flagEnabled`: an unset or empty variable is off, `1` is on, and any other value is a
+/// configuration error.
+fn flag_enabled(environment: &GateEnvironment, name: &str) -> anyhow::Result<bool> {
+    let Some(raw) = environment.variable(name).filter(|raw| !raw.is_empty()) else {
+        return Ok(false);
+    };
+    anyhow::ensure!(
+        raw == "1",
+        "run-gates: {name} must be 1 when set, got {}.",
+        serde_json::to_string(raw)?
+    );
+    Ok(true)
 }
 
 fn ci_static_gates(environment: &GateEnvironment, owns_build: bool) -> Vec<Gate> {
