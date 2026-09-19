@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
 use seekdeep_agent::Agent;
 use seekdeep_cordis::{Context, EventArgs};
 use seekdeep_core::session::{SessionEvent, SessionId};
@@ -11,7 +12,8 @@ use uuid::Uuid;
 
 use crate::assistant_output::final_assistant_output;
 use crate::types::{
-    SubagentRun, SubagentRunEndInfo, SubagentRunId, SubagentRunInfo, SubagentStopReason,
+    SubagentResult, SubagentRun, SubagentRunEndInfo, SubagentRunId, SubagentRunInfo,
+    SubagentStopReason,
 };
 
 /// Emits one subagent lifecycle edge with per-listener containment.
@@ -42,6 +44,12 @@ pub fn emit_subagent_lifecycle(
 
 /// Wraps a one-shot run with its start/end lifecycle pair.
 ///
+/// The end edge is published exactly once, and before any awaiter of `result()` observes
+/// the terminal result: the source attached its terminal observer as the first promise
+/// reaction, so `subagent/end` always preceded a caller's own continuation, and the
+/// returned run keeps that order under a multi-threaded runtime. A fallback awaiter still
+/// publishes the edge when nobody awaits the result.
+///
 /// # Errors
 ///
 /// Returns the start-edge publication failure.
@@ -57,47 +65,102 @@ pub fn observe_run(
         id: run.id().clone(),
         local: run.local_agent().is_some(),
     };
-    let ctx = context.clone();
-    let identity_end = identity.clone();
-    let parent_end = Arc::clone(parent);
-    let run_end = Arc::clone(&run);
-    tokio::spawn(async move {
-        let result = run_end.result().await;
-        let (stop_reason, output) = match result {
-            Ok(result) => (result.stop_reason, result.output),
-            Err(error) => {
-                tracing::warn!(%error, "subagent result channel failed");
-                (SubagentStopReason::Error, Vec::new())
-            }
-        };
-        let info = SubagentRunEndInfo {
-            run_id: identity_end.run_id,
-            provider: identity_end.provider,
-            id: identity_end.id,
-            local: identity_end.local,
-            stop_reason,
-            last_assistant_message: if output.is_empty() {
-                None
-            } else {
-                Some(output)
-            },
-        };
-        if let Err(error) = emit_subagent_lifecycle(
-            &ctx,
-            "subagent/end",
-            EventArgs::one(info),
-            Some(&parent_end),
-        ) {
-            tracing::warn!(%error, "subagent end publication was vetoed");
-        }
-    });
     emit_subagent_lifecycle(
         context,
         "subagent/start",
-        EventArgs::one(identity),
+        EventArgs::one(identity.clone()),
         Some(parent),
     )?;
-    Ok(run)
+    let observed = Arc::new(ObservedRun {
+        inner: run,
+        end: Arc::new(EndEdge {
+            context: context.clone(),
+            identity,
+            parent: Arc::clone(parent),
+            published: tokio::sync::OnceCell::new(),
+        }),
+    });
+    let fallback = Arc::clone(&observed);
+    tokio::spawn(async move {
+        let _ = fallback.result().await;
+    });
+    Ok(observed)
+}
+
+/// The end edge of one observed run, published at most once.
+struct EndEdge {
+    context: Context,
+    identity: SubagentRunInfo,
+    parent: Arc<Agent>,
+    published: tokio::sync::OnceCell<()>,
+}
+
+impl EndEdge {
+    /// Publishes `subagent/end` for `result` once; every concurrent caller returns only
+    /// after that one publication has completed.
+    async fn publish(&self, result: &anyhow::Result<SubagentResult>) {
+        self.published
+            .get_or_init(|| async {
+                let (stop_reason, output) = match result {
+                    Ok(result) => (result.stop_reason, result.output.clone()),
+                    Err(error) => {
+                        tracing::warn!(%error, "subagent result channel failed");
+                        (SubagentStopReason::Error, Vec::new())
+                    }
+                };
+                let info = SubagentRunEndInfo {
+                    run_id: self.identity.run_id.clone(),
+                    provider: self.identity.provider.clone(),
+                    id: self.identity.id.clone(),
+                    local: self.identity.local,
+                    stop_reason,
+                    last_assistant_message: if output.is_empty() {
+                        None
+                    } else {
+                        Some(output)
+                    },
+                };
+                if let Err(error) = emit_subagent_lifecycle(
+                    &self.context,
+                    "subagent/end",
+                    EventArgs::one(info),
+                    Some(&self.parent),
+                ) {
+                    tracing::warn!(%error, "subagent end publication was vetoed");
+                }
+            })
+            .await;
+    }
+}
+
+/// A run whose result resolves only after its end edge was published.
+struct ObservedRun {
+    inner: Arc<dyn SubagentRun>,
+    end: Arc<EndEdge>,
+}
+
+impl SubagentRun for ObservedRun {
+    fn id(&self) -> &SessionId {
+        self.inner.id()
+    }
+
+    fn local_agent(&self) -> Option<&Arc<Agent>> {
+        self.inner.local_agent()
+    }
+
+    fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
+        let inner = Arc::clone(&self.inner);
+        let end = Arc::clone(&self.end);
+        Box::pin(async move {
+            let result = inner.result().await;
+            end.publish(&result).await;
+            result
+        })
+    }
+
+    fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {
+        self.inner.dispose()
+    }
 }
 
 /// Derives one epoch's terminal stop reason from consumed work.
