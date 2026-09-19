@@ -16,6 +16,12 @@ use super::lane::{
 };
 use crate::coverage_exempt::{COVERAGE_EXEMPT_ENV, INSTRUMENTED_LANE_EXCLUDED_PACKAGES};
 
+/// The Cargo profile override the instrumented build receives unless the caller set one.
+pub const DEBUGINFO_ENV: &str = "CARGO_PROFILE_DEV_DEBUG";
+
+/// Line tables only: enough for readable panics, a fraction of full debug info's size.
+pub const INSTRUMENTED_DEBUGINFO: &str = "line-tables-only";
+
 /// Caller arguments the lane understands.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CoverageArguments {
@@ -281,10 +287,17 @@ fn run_instrumented(
             .collect::<Vec<_>>()
             .join(" ")
     );
-    let status = Command::new(&cargo)
+    let mut instrumented = Command::new(&cargo);
+    instrumented
         .args(&test)
         .current_dir(repository)
-        .env(COVERAGE_EXEMPT_ENV, "1")
+        .env(COVERAGE_EXEMPT_ENV, "1");
+    // Coverage mapping does not need full DWARF, and full debug info makes the instrumented
+    // build several times larger than a hosted runner's disk; line tables keep panics readable.
+    if std::env::var_os(DEBUGINFO_ENV).is_none() {
+        instrumented.env(DEBUGINFO_ENV, INSTRUMENTED_DEBUGINFO);
+    }
+    let status = instrumented
         .status()
         .context("run-coverage: execute the instrumented suites")?;
     let output = coverage_target_dir(repository)

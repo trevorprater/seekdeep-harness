@@ -716,14 +716,37 @@ fn coverage_lanes_install_the_instrumentation_toolchain_before_their_gate_invent
         );
         assert!(installer["if"].is_null());
     }
-    // The instrumented target directory has its own cache key on the Linux lane.
-    let cache = job(&ci, "node-24-coverage")["steps"]
-        .as_array()
-        .unwrap()
+    // The instrumented target directory has its own cache key on the Linux lane, the lane
+    // reclaims a hosted runner's disk before building, drops the instrumented target before
+    // the cache saves, and has a timeout that fits a cold instrumented build.
+    let coverage = job(&ci, "node-24-coverage");
+    let steps = coverage["steps"].as_array().unwrap();
+    let cache = steps
         .iter()
         .find(|step| step["uses"] == "Swatinem/rust-cache@v2")
         .expect("rust cache");
     assert_eq!(cache["with"]["key"], "coverage-rust-wasm");
+    let reclaim = step(coverage, "Free hosted-runner disk space")["run"]
+        .as_str()
+        .unwrap();
+    assert!(reclaim.contains("\"${RUNNER_ENVIRONMENT:-}\" != github-hosted"));
+    assert!(reclaim.contains("/usr/share/dotnet"));
+    assert_eq!(coverage["timeout-minutes"], 120);
+    for (name, gate) in [
+        ("node-24-coverage", "pnpm run check:ci:coverage"),
+        ("windows-native", "pnpm run check:ci:windows-complete"),
+    ] {
+        let lane = job(&ci, name);
+        let drop = step(lane, "Drop the instrumented build before caching");
+        assert_eq!(drop["if"], "always()", "{name}");
+        assert_eq!(drop["run"], "rm -rf target/llvm-cov-target", "{name}");
+        let steps = lane["steps"].as_array().unwrap();
+        let position = steps
+            .iter()
+            .position(|step| step["run"] == gate)
+            .expect("gate inventory");
+        assert_eq!(steps[position + 1]["name"], drop["name"], "{name}");
+    }
 }
 
 #[test]

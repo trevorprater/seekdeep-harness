@@ -18,8 +18,8 @@ pub use lane::{
     regenerate_roster, roster_additions, translate_export,
 };
 pub use launcher::{
-    CoverageArguments, coverage_target_dir, instrumented_exclusions, parse_arguments,
-    report_command, run_coverage, test_command,
+    CoverageArguments, DEBUGINFO_ENV, INSTRUMENTED_DEBUGINFO, coverage_target_dir,
+    instrumented_exclusions, parse_arguments, report_command, run_coverage, test_command,
 };
 
 /// State passed through the Istanbul compatibility adapter.
