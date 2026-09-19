@@ -800,7 +800,7 @@ mod tests {
         let appended = session
             .append("turn/start", json!({"turn": 1}), AppendOptions::default())
             .unwrap();
-        assert_eq!(session.events(), [appended.clone()]);
+        assert_eq!(session.events(), std::slice::from_ref(&appended));
         assert_eq!(*heard.lock(), [appended]);
         assert_eq!(
             *rejections.lock(),
