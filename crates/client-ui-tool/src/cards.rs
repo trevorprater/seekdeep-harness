@@ -1,6 +1,6 @@
 //! Defensive diff, read, Web, search, and terminal card narrowing.
 
-use seekdeep_lossless_json::{JsonString, JsonValue as Value};
+use seekdeep_lossless_json::{JsonNumber, JsonString, JsonValue as Value};
 
 use crate::{
     ToolCallBlock,
@@ -75,8 +75,8 @@ pub fn diff_card_model(block: &ToolCallBlock) -> Option<DiffCardModel> {
 /// One read-result line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadLine {
-    /// One-based source line number.
-    pub number: u64,
+    /// One-based source line number, a JavaScript number as the wire carries it.
+    pub number: JsonNumber,
     /// Line text.
     pub text: JsonString,
 }
@@ -88,8 +88,8 @@ pub struct ReadCardModel {
     pub label: JsonString,
     /// Detached line rows.
     pub lines: Vec<ReadLine>,
-    /// Complete file line count.
-    pub total_lines: u64,
+    /// Complete file line count, a JavaScript number as the wire carries it.
+    pub total_lines: JsonNumber,
     /// Optional syntax language.
     pub lang: Option<JsonString>,
 }
@@ -111,7 +111,7 @@ pub fn read_card_model(block: &ToolCallBlock, cwd: Option<&str>) -> Option<ReadC
                 return None;
             }
             Some(ReadLine {
-                number: line.get_value("number")?.as_u64()?,
+                number: JsonNumber::new(line.get_value("number")?.as_f64()?),
                 text: json_string(line.get_value("text")?)?,
             })
         })
@@ -122,7 +122,7 @@ pub fn read_card_model(block: &ToolCallBlock, cwd: Option<&str>) -> Option<ReadC
             .and_then(json_string)
             .unwrap_or_else(|| relativize_json_to_cwd(&path, cwd)),
         lines,
-        total_lines: view.get_value("totalLines")?.as_u64()?,
+        total_lines: JsonNumber::new(view.get_value("totalLines")?.as_f64()?),
         lang: view.get_value("lang").and_then(json_string),
     })
 }

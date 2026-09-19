@@ -5,7 +5,7 @@ use seekdeep_tool_lsp::{
     DEFAULT_MAX_LOCATIONS, DEFAULT_MAX_RESULT_CHARS, LSP_OPERATIONS, LspToolArgs, format_hover,
     format_locations, parse_lsp_args, present_lsp_call, render_uri,
 };
-use seekdeep_tools::{FileLocation, GenericCallView, ToolCallKind, ToolCallView};
+use seekdeep_tools::{FileLocation, GenericCallView, JsonNumber, ToolCallKind, ToolCallView};
 
 const WORKSPACE_URI: &str = "file:///home/u/proj";
 
@@ -217,7 +217,7 @@ fn pending_presentation_is_the_exact_generic_search_card() {
             content: None,
             locations: Some(vec![FileLocation {
                 path: "a.ts".to_owned(),
-                line: Some(3.0),
+                line: Some(JsonNumber::new(3.0)),
             }]),
         })
     );

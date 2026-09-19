@@ -138,8 +138,8 @@ fn read_card_is_result_only_detached_and_uses_replacement_or_relative_label() {
     });
     let model = read_card_model(&settled(Some("{}"), None, Some(view)), Some("/work")).unwrap();
     assert_eq!(model.label, "src/lib.rs");
-    assert_eq!(model.lines[0].number, 1);
-    assert_eq!(model.total_lines, 10);
+    assert_eq!(model.lines[0].number, 1.0);
+    assert_eq!(model.total_lines, 10.0);
     assert_eq!(
         model.lang.as_ref().and_then(JsonString::as_str),
         Some("rust")

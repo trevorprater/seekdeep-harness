@@ -9,7 +9,7 @@ use seekdeep_core::{
     session_store::SessionStore,
 };
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, Message};
-use seekdeep_lossless_json::{JsonString, JsonValue};
+use seekdeep_lossless_json::{JsonNumber, JsonString, JsonValue};
 use seekdeep_sandbox::SandboxMode;
 use seekdeep_sandbox_policy::{SandboxPolicyConfig, SandboxPolicyService};
 use seekdeep_scope::ScopeKey;
@@ -273,7 +273,7 @@ async fn read_preserves_split_surrogate_through_output_card_and_jsonl_replay() {
         let harness = harness_with_config(
             false,
             &seekdeep_tool_fs::Config {
-                read_stream_min_size: Some(threshold),
+                read_stream_min_size: Some(JsonNumber::from(threshold)),
                 ..Default::default()
             },
         );

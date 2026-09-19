@@ -2,6 +2,7 @@
 
 use seekdeep_code_runtime::{CodeJsonString, CodeJsonValue};
 use seekdeep_llm::ContentBlock;
+use seekdeep_lossless_json::JsonNumber;
 use serde::{Deserialize, Serialize, de::Error as _};
 
 /// Category used by clients to choose a call icon or treatment.
@@ -33,34 +34,9 @@ pub enum ToolCallKind {
 pub struct FileLocation {
     /// Path the tool operated on.
     pub path: String,
-    /// Optional one-based line.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_optional_js_number"
-    )]
-    pub line: Option<f64>,
-}
-
-#[allow(clippy::ref_option)]
-fn serialize_optional_js_number<S>(value: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match value {
-        Some(value) if *value == 0.0 => serializer.serialize_some(&0_i64),
-        Some(value)
-            if value.is_finite()
-                && value.fract() == 0.0
-                && *value >= -9_223_372_036_854_775_808.0
-                && *value < 9_223_372_036_854_775_808.0 =>
-        {
-            #[allow(clippy::cast_possible_truncation)]
-            serializer.serialize_some(&(*value as i64))
-        }
-        Some(value) => serializer.serialize_some(value),
-        None => serializer.serialize_none(),
-    }
+    /// Optional one-based line, a JavaScript number as the wire carries it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<JsonNumber>,
 }
 
 /// One file change for inline-diff presentation.
@@ -173,8 +149,8 @@ fn deserialize_card<'de, D: serde::Deserializer<'de>>(
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReadFileLine {
-    /// One-based file line number.
-    pub number: u64,
+    /// One-based file line number, a JavaScript number as the wire carries it.
+    pub number: JsonNumber,
     /// Line text without its trailing newline.
     pub text: CodeJsonString,
 }
@@ -289,12 +265,12 @@ pub struct ReadResultView {
     pub title: Option<CodeJsonString>,
     /// Model-facing path.
     pub path: CodeJsonString,
-    /// One-based first requested line.
-    pub offset: u64,
+    /// One-based first requested line, a JavaScript number as the wire carries it.
+    pub offset: JsonNumber,
     /// Returned line window.
     pub lines: Vec<ReadFileLine>,
-    /// Exact file line count.
-    pub total_lines: u64,
+    /// Exact file line count, a JavaScript number as the wire carries it.
+    pub total_lines: JsonNumber,
     /// Syntax-highlighting hint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<CodeJsonString>,
@@ -432,7 +408,7 @@ mod tests {
             content: None,
             locations: Some(vec![FileLocation {
                 path: "/a".to_owned(),
-                line: Some(3.0),
+                line: Some(JsonNumber::new(3.0)),
             }]),
         });
         assert_eq!(
@@ -627,12 +603,12 @@ mod tests {
             ToolResultView::Read(ReadResultView {
                 title: Some("Read src/lib.rs".into()),
                 path: "src/lib.rs".into(),
-                offset: 2,
+                offset: JsonNumber::new(2.0),
                 lines: vec![ReadFileLine {
-                    number: 2,
+                    number: JsonNumber::new(2.0),
                     text: "fn main() {}".into(),
                 }],
-                total_lines: 3,
+                total_lines: JsonNumber::new(3.0),
                 lang: Some("rs".into()),
                 content: Some(content),
             }),

@@ -191,7 +191,7 @@ pub(crate) fn read_card_props(model: &ReadCardModel) -> Result<Object, JsValue> 
     for line in &model.lines {
         lines.push(
             object(&[
-                ("number", wire_u64_number(line.number)),
+                ("number", JsValue::from_f64(line.number.get())),
                 ("text", json_text(&line.text)),
             ])?
             .as_ref(),
@@ -200,7 +200,7 @@ pub(crate) fn read_card_props(model: &ReadCardModel) -> Result<Object, JsValue> 
     object(&[
         ("label", json_text(&model.label)),
         ("lines", lines.into()),
-        ("totalLines", wire_u64_number(model.total_lines)),
+        ("totalLines", JsValue::from_f64(model.total_lines.get())),
         (
             "lang",
             model.lang.as_ref().map_or(JsValue::UNDEFINED, json_text),
@@ -360,9 +360,4 @@ fn json_value(value: &JsValue) -> Result<Value, JsValue> {
         .ok_or_else(|| js_sys::TypeError::new("Tool wire value is not JSON-compatible"))?;
     Value::parse(encoded)
         .map_err(|error| js_sys::TypeError::new(&format!("invalid Tool wire JSON: {error}")).into())
-}
-
-#[allow(clippy::cast_precision_loss)] // The source wire value is already a JavaScript number.
-fn wire_u64_number(value: u64) -> JsValue {
-    JsValue::from_f64(value as f64)
 }

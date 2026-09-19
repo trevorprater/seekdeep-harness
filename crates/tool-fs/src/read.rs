@@ -6,7 +6,7 @@ use futures::TryStreamExt as _;
 use seekdeep_cordis::Context;
 use seekdeep_fs::{FS, FsObservation};
 use seekdeep_llm::ContentBlock;
-use seekdeep_lossless_json::{JsonString, JsonValue};
+use seekdeep_lossless_json::{JsonNumber, JsonString, JsonValue};
 use seekdeep_system_prompt::{PromptSection, PromptText, SYSTEM_PROMPT};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, FileLocation, GenericCallView, ReadFileLine,
@@ -32,13 +32,13 @@ pub const STREAM_MIN_SIZE: u64 = 10 * 1024 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct ReadToolCaps {
     /// Default and maximum number of lines returned by one call.
-    pub limit: u64,
+    pub limit: JsonNumber,
     /// Maximum characters returned for a single line.
-    pub max_line_length: usize,
+    pub max_line_length: JsonNumber,
     /// Maximum bytes returned for selected file lines.
-    pub max_bytes: usize,
+    pub max_bytes: JsonNumber,
     /// Files at or above this size stream.
-    pub stream_min_size: u64,
+    pub stream_min_size: JsonNumber,
 }
 
 /// Raw schema-validated read arguments.
@@ -48,10 +48,10 @@ pub struct ReadArgsRaw {
     pub file_path: String,
     /// 1-based first line to return.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub offset: Option<f64>,
+    pub offset: Option<JsonNumber>,
     /// Maximum number of lines to return.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub limit: Option<f64>,
+    pub limit: Option<JsonNumber>,
 }
 
 /// Validated read arguments after defaulting.
@@ -60,19 +60,18 @@ pub struct ReadInput {
     /// Path to read.
     pub file_path: String,
     /// 1-based first line to return.
-    pub offset: u64,
+    pub offset: JsonNumber,
     /// Maximum number of lines to return.
-    pub limit: u64,
+    pub limit: JsonNumber,
 }
 
-fn parse_positive_integer(value: f64, name: &str) -> anyhow::Result<u64> {
-    if !value.is_finite() || value.fract() != 0.0 || value < 1.0 {
+/// The source admits any finite positive integer the JavaScript number range
+/// holds, so the value keeps that number instead of narrowing to `u64`.
+fn parse_positive_integer(value: JsonNumber, name: &str) -> anyhow::Result<JsonNumber> {
+    if !value.is_positive_integer() {
         anyhow::bail!("{name} must be a positive integer");
     }
-    // The guard above proves the value is a positive finite integer, so the
-    // saturating float-to-int cast is exact within the representable range.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    Ok(value as u64)
+    Ok(value)
 }
 
 /// Validates value constraints the schema cannot express and applies defaults.
@@ -80,13 +79,13 @@ fn parse_positive_integer(value: f64, name: &str) -> anyhow::Result<u64> {
 /// # Errors
 ///
 /// Returns a blank-path, non-integer, non-positive, or over-limit failure.
-pub fn parse_read_args(args: &ReadArgsRaw, max_limit: u64) -> anyhow::Result<ReadInput> {
+pub fn parse_read_args(args: &ReadArgsRaw, max_limit: JsonNumber) -> anyhow::Result<ReadInput> {
     if args.file_path.trim().is_empty() {
         anyhow::bail!("file_path must be a non-empty string");
     }
-    let offset = args
-        .offset
-        .map_or(Ok(1), |value| parse_positive_integer(value, "offset"))?;
+    let offset = args.offset.map_or(Ok(JsonNumber::new(1.0)), |value| {
+        parse_positive_integer(value, "offset")
+    })?;
     let limit = args.limit.map_or(Ok(max_limit), |value| {
         parse_positive_integer(value, "limit")
     })?;
@@ -107,11 +106,11 @@ pub struct ReadOutcome {
     /// Resolved model-facing path.
     pub path: String,
     /// 1-based first line requested.
-    pub offset: u64,
+    pub offset: JsonNumber,
     /// Returned line window.
     pub lines: Vec<FileTextLine>,
     /// Exact total line count.
-    pub total_lines: u64,
+    pub total_lines: JsonNumber,
 }
 
 /// Extracts the body between the read envelope's `<content>` fences.
@@ -181,13 +180,12 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
         }),
         Arc::new(move |args: &ReadArgsRaw, value: &ReadOutcome| {
             let input = parse_read_args(args, caps.limit)?;
-            let end_line = value
-                .lines
-                .last()
-                .map_or_else(|| value.offset.saturating_sub(1), |line| line.number);
-            let truncated_by_bytes = value.lines.len()
-                < usize::try_from(input.limit).unwrap_or(usize::MAX)
-                && end_line < value.total_lines;
+            let end_line = value.lines.last().map_or_else(
+                || JsonNumber::new((value.offset - 1.0).get().max(0.0)),
+                |line| line.number,
+            );
+            let truncated_by_bytes =
+                JsonNumber::from(value.lines.len()) < input.limit && end_line < value.total_lines;
             Ok(vec![ContentBlock::Text {
                 text: format_read_output(
                     &value.path,
@@ -236,13 +234,14 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                     let signal = execution.signal();
                     let request = ReadWindow {
                         offset: input.offset,
-                        limit: usize::try_from(input.limit).unwrap_or(usize::MAX),
-                        max_line_length: caps.max_line_length,
-                        max_bytes: caps.max_bytes,
+                        limit: input.limit,
+                        max_line_length: caps.max_line_length.saturating_usize(),
+                        max_bytes: caps.max_bytes.saturating_usize(),
                     };
                     let mut builder = ReadWindowBuilder::new(&request);
-                    if info.size.is_none()
-                        || info.size.is_some_and(|size| size >= caps.stream_min_size)
+                    if info
+                        .size
+                        .is_none_or(|size| JsonNumber::from(size) >= caps.stream_min_size)
                     {
                         let mut stream = filesystem.stream_text(&target, Some(&signal)).await?;
                         while let Some(chunk) = stream.try_next().await? {
@@ -272,7 +271,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
         )
         .concurrency_safe(Arc::new(|_args: &ReadArgsRaw| true))
         .present_call(Arc::new(|args: &ReadArgsRaw| {
-            let offset = args.offset.unwrap_or(1.0);
+            let offset = args.offset.unwrap_or(JsonNumber::new(1.0));
             let window = if let Some(limit) = args.limit {
                 if limit > 0.0 {
                     format!(" ({} - {})", offset, offset + limit - 1.0)
@@ -350,30 +349,65 @@ mod tests {
     fn raw(file_path: &str, offset: Option<f64>, limit: Option<f64>) -> ReadArgsRaw {
         ReadArgsRaw {
             file_path: file_path.to_owned(),
-            offset,
-            limit,
+            offset: offset.map(JsonNumber::new),
+            limit: limit.map(JsonNumber::new),
         }
+    }
+
+    fn cap(limit: f64) -> JsonNumber {
+        JsonNumber::new(limit)
     }
 
     #[test]
     fn defaults_offset_and_limit() {
-        let input = parse_read_args(&raw("a.txt", None, None), 100).expect("defaults");
-        assert_eq!(input.offset, 1);
-        assert_eq!(input.limit, 100);
+        let input = parse_read_args(&raw("a.txt", None, None), cap(100.0)).expect("defaults");
+        assert_eq!(input.offset, 1.0);
+        assert_eq!(input.limit, 100.0);
     }
 
     #[test]
     fn rejects_blank_path_and_invalid_numbers() {
-        assert!(parse_read_args(&raw("  ", None, None), 100).is_err());
-        assert!(parse_read_args(&raw("a", Some(0.0), None), 100).is_err());
-        assert!(parse_read_args(&raw("a", Some(1.5), None), 100).is_err());
-        assert!(parse_read_args(&raw("a", None, Some(101.0)), 100).is_err());
+        assert!(parse_read_args(&raw("  ", None, None), cap(100.0)).is_err());
+        for invalid in [0.0, -1.0, 1.5, f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                parse_read_args(&raw("a", Some(invalid), None), cap(100.0))
+                    .expect_err("offset")
+                    .to_string(),
+                "offset must be a positive integer"
+            );
+            assert_eq!(
+                parse_read_args(&raw("a", None, Some(invalid)), cap(100.0))
+                    .expect_err("limit")
+                    .to_string(),
+                "limit must be a positive integer"
+            );
+        }
+        assert_eq!(
+            parse_read_args(&raw("a", None, Some(101.0)), cap(100.0))
+                .expect_err("over the cap")
+                .to_string(),
+            "limit must be less than or equal to 100"
+        );
     }
 
     #[test]
     fn accepts_valid_explicit_values() {
-        let input = parse_read_args(&raw("a", Some(5.0), Some(10.0)), 100).expect("valid");
-        assert_eq!(input.offset, 5);
-        assert_eq!(input.limit, 10);
+        let input = parse_read_args(&raw("a", Some(5.0), Some(10.0)), cap(100.0)).expect("valid");
+        assert_eq!(input.offset, 5.0);
+        assert_eq!(input.limit, 10.0);
+    }
+
+    #[test]
+    fn keeps_javascript_integers_past_the_u64_range_and_formats_caps_as_javascript() {
+        let huge = 18_446_744_073_709_551_616.0;
+        let input = parse_read_args(&raw("a", Some(huge), Some(1e300)), cap(1e300)).expect("valid");
+        assert_eq!(input.offset, JsonNumber::new(huge));
+        assert_eq!(input.limit, JsonNumber::new(1e300));
+        assert_eq!(
+            parse_read_args(&raw("a", None, Some(1e300)), cap(huge))
+                .expect_err("over the cap")
+                .to_string(),
+            "limit must be less than or equal to 18446744073709552000"
+        );
     }
 }

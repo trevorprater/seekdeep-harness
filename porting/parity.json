@@ -52756,7 +52756,7 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/models/read-card-model.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/client-ui-tool/src/cards.rs",
         "crates/client-ui-tool/tests/model_parity.rs",
@@ -52765,9 +52765,10 @@
       "evidence": [
         "pinned source read-card suite passed in the 94-assertion model/card selection",
         "Rust parity preserves result-only authority, detached line data, replacement titles, workspace-relative labels, optional language, and malformed-wire fallback",
-        "Native read-card and compiled WASM row regressions preserve lone UTF-16 units in labels, line text, and language props"
+        "Native read-card and compiled WASM row regressions preserve lone UTF-16 units in labels, line text, and language props",
+        "cargo test -p seekdeep-client-ui-tool --all-features with the read card model and WASM props carrying JsonNumber line numbers and totals"
       ],
-      "note": "Read labels, lines, and language preserve UTF-16 through compiled WASM props. Read line numbers and totals still use u64 instead of the full source number range."
+      "note": "Read labels, lines, and language preserve UTF-16 through compiled WASM props; line numbers and totals are JavaScript numbers (seekdeep_lossless_json::JsonNumber) end to end, so values past u64 keep the source value and formatting."
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/search-card-model.ts",
@@ -58233,7 +58234,7 @@
     {
       "source": "packages/core/session/src/index.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/core/src/lib.rs",
         "crates/core/src/session.rs",
@@ -58242,9 +58243,10 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings",
-        "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented"
+        "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented",
+        "cargo test -p seekdeep-core --all-features: contains_a_reentrant_observer_append_without_reordering_later_observers rejects the nested append with \"session append cannot reenter while another append is being published\" and keeps the later observer ordered"
       ],
-      "note": "The source rejects reentrant appends throughout session/event publication. Rust clears its admission flag before invoking observers and currently allows a nested append, which can reorder later observers."
+      "note": "Reentrant appends are rejected throughout session/event publication: the admission flag stays set while observers run, so an observer that appends fails with the source message and later observers still see the committed event in order."
     },
     {
       "source": "packages/core/session/src/invariant.ts",
@@ -58480,7 +58482,7 @@
     {
       "source": "packages/core/session/tests/session.spec.ts",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/core/src/session.rs",
         "crates/core/src/session_store.rs"
@@ -58488,9 +58490,10 @@
       "evidence": [
         "pinned-source Vitest: six Session parity suites 196/196",
         "cargo test -p seekdeep-core --all-features",
-        "cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-core --all-features: contains_a_reentrant_observer_append_without_reordering_later_observers"
       ],
-      "note": "The source test contains a reentrant observer append without publishing it. The native committed_event_observers_can_append_the_next_ordered_event test asserts the opposite behavior and needs a source-backed replacement."
+      "note": "The reentrant observer case is ported as contains_a_reentrant_observer_append_without_reordering_later_observers: the observer append is rejected with the source message, the log keeps only the outer event, and the second observer still hears it."
     },
     {
       "source": "packages/core/session/tests/surface.spec.ts",
@@ -58784,7 +58787,7 @@
     {
       "source": "packages/core/tools/src/presentation.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/tools/src/presentation.rs"
       ],
@@ -58792,9 +58795,10 @@
         "manual source-to-Rust wire-vocabulary audit",
         "cargo test -p seekdeep-tools --all-features",
         "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings",
-        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay"
+        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay",
+        "cargo test -p seekdeep-tools --all-features with JsonNumber read views; cargo test -p seekdeep-lossless-json --all-features pins the ECMAScript formatting and JSON.stringify serialization of the number type"
       ],
-      "note": "Read presentation strings preserve every UTF-16 code unit. Read line numbers and counts still use u64 where the source permits larger JavaScript integers."
+      "note": "Read presentation strings preserve every UTF-16 code unit; FileLocation.line, ReadFileLine.number, ReadResultView.offset, and totalLines are JavaScript numbers (seekdeep_lossless_json::JsonNumber) that serialize as JSON.stringify would, including integers past 2^53."
     },
     {
       "source": "packages/core/tools/src/py-types.ts",
@@ -62684,14 +62688,15 @@
     {
       "source": "packages/fs/tool-fs/src/index.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/index.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-tool-fs --all-features: resolved_defaults_and_rejects_zero covers 0, 2.5, NaN, Infinity, 1e300, and 2^64 caps; config_deserializes_camel_case_and_rejects_unknown_fields reads fractional numbers as the source schema does"
       ],
-      "note": "Read configuration still uses u64 fields; the source accepts finite positive integer caps above that range."
+      "note": "Read configuration caps are JavaScript numbers validated with the source predicate (Number.isInteger and at least one) and message; finite integer caps past u64 are accepted and saturate only where they bound a Rust slice."
     },
     {
       "source": "packages/fs/tool-fs/src/invariant.ts",
@@ -62720,7 +62725,7 @@
     {
       "source": "packages/fs/tool-fs/src/read-render.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read_render.rs",
         "crates/tool-fs/tests/read_render_oracle.rs"
@@ -62728,9 +62733,10 @@
       "evidence": [
         "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
         "cargo test -p seekdeep-tool-fs --all-features: 41 tests, including 3807 source comparisons",
-        "cargo xtask web-assembled --read-utf16: real read output, persisted history, search, exact DOM and copy code units, Shiki highlighting, and browser reload passed"
+        "cargo xtask web-assembled --read-utf16: real read output, persisted history, search, exact DOM and copy code units, Shiki highlighting, and browser reload passed",
+        "SEEKDEEP_PARITY_SOURCE cargo test -p seekdeep-tool-fs --all-features: 42 tests, including 4144 source comparisons with offsets, limits, replayed line numbers, and totals at 2^53, 2^53+1, 2^60, 2^64, 1e300, and 1e400"
       ],
-      "note": "Exact UTF-16 truncation, byte accounting, metadata, and the assembled read path are verified. Replayed line numbers and offsets above the u64 range remain unsupported."
+      "note": "Exact UTF-16 truncation, byte accounting, metadata, and the assembled read path are verified; offsets, limits, line numbers, and totals are JavaScript numbers, so replayed values past 2^53 and past u64 keep the source value, formatting, and binary64 comparisons."
     },
     {
       "source": "packages/fs/tool-fs/src/read-target.ts",
@@ -62747,15 +62753,16 @@
     {
       "source": "packages/fs/tool-fs/src/read.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings",
-        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay"
+        "crates/tool-fs/tests/integration_parity.rs verifies real streamed/whole-file read values, metadata, read views, the client model, and fresh JSONL replay",
+        "cargo test -p seekdeep-tool-fs --all-features: keeps_javascript_integers_past_the_u64_range_and_formats_caps_as_javascript and rejects_blank_path_and_invalid_numbers pin the source messages; the read_render_oracle differential run covers out-of-range offsets at 2^53, 2^53+1, 2^60, 2^64, and 1e300 and limits past the file length"
       ],
-      "note": "Streaming, rendering, and replay preserve UTF-16 code units. Positive integer offsets above u64::MAX still saturate instead of retaining the source number."
+      "note": "Streaming, rendering, and replay preserve UTF-16 code units; offsets and limits are JavaScript numbers validated with the source predicate, so integers past u64 keep their value and format as JavaScript does in messages and results."
     },
     {
       "source": "packages/fs/tool-fs/src/sandbox.ts",

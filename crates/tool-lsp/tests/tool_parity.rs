@@ -20,7 +20,7 @@ use seekdeep_tool_lsp::{
     apply,
 };
 use seekdeep_tools::{
-    FileLocation, GenericCallView, ToolCallKind, ToolCallView, ToolExecutionInput,
+    FileLocation, GenericCallView, JsonNumber, ToolCallKind, ToolCallView, ToolExecutionInput,
     ToolExecutionResult, ToolPresentationMode, ToolRuntimeConfig,
 };
 use serde_json::{Value, json};
@@ -438,7 +438,7 @@ fn pending_call_projection_is_replay_safe_and_exact() {
             content: None,
             locations: Some(vec![FileLocation {
                 path: "a.ts".to_owned(),
-                line: Some(2.0),
+                line: Some(JsonNumber::new(2.0)),
             }]),
         }))
     );

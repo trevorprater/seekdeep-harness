@@ -3,7 +3,7 @@
 use indexmap::IndexMap;
 use percent_encoding::percent_decode_str;
 use seekdeep_lsp::{LspHover, LspLocation, LspOperation, LspPosition};
-use seekdeep_tools::{FileLocation, GenericCallView, ToolCallKind, ToolCallView};
+use seekdeep_tools::{FileLocation, GenericCallView, JsonNumber, ToolCallKind, ToolCallView};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -355,7 +355,7 @@ pub fn present_lsp_call(args: &LspToolArgs) -> ToolCallView {
         content: None,
         locations: Some(vec![FileLocation {
             path: args.file_path.clone(),
-            line: Some(args.line),
+            line: Some(JsonNumber::new(args.line)),
         }]),
     })
 }
