@@ -155,7 +155,13 @@ fn stage_and_probe(
         }
     }
     let probe = format!(
-        "import Loader from {}\nimport * as companion from {}\nconst loader = Object.create(Loader.prototype)\nif ('default' in companion) throw new Error('companion has a default export')\nconst unwrapped = loader.unwrapExports(companion)\nif (unwrapped !== companion) throw new Error('Loader collapsed the companion namespace')\nif (typeof unwrapped.name !== 'string') throw new Error('companion name is missing')\nif (!Array.isArray(unwrapped.inject) || !unwrapped.inject.includes('invariants')) throw new Error('companion does not inject invariants')\nif (typeof unwrapped.apply !== 'function') throw new Error('companion apply is missing')\n",
+        // The source's loader package default-exports the `Loader` class and unwraps a module
+        // namespace through `Loader.unwrapExports`, which returns a namespace without a default
+        // export unchanged. The port's generated loader package exports the class by name and the
+        // plugin object as its default, and applies the unwrapping rule in Rust, so the probe
+        // takes whichever export is the class and unwraps through it only when it offers the
+        // method; a companion without a default export is its own plugin namespace either way.
+        "import * as loaderModule from {}\nimport * as companion from {}\nconst Loader = typeof loaderModule.default === 'function' ? loaderModule.default : loaderModule.Loader\nif (typeof Loader !== 'function') throw new Error('loader package exposes no Loader class')\nconst loader = Object.create(Loader.prototype)\nif ('default' in companion) throw new Error('companion has a default export')\nconst unwrapped = typeof loader.unwrapExports === 'function' ? loader.unwrapExports(companion) : companion\nif (unwrapped !== companion) throw new Error('Loader collapsed the companion namespace')\nif (typeof unwrapped.name !== 'string') throw new Error('companion name is missing')\nif (!Array.isArray(unwrapped.inject) || !unwrapped.inject.includes('invariants')) throw new Error('companion does not inject invariants')\nif (typeof unwrapped.apply !== 'function') throw new Error('companion apply is missing')\n",
         serde_json::to_string(loader_url)?,
         serde_json::to_string(&format!("{package_name}/invariant"))?
     );

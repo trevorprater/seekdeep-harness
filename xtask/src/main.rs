@@ -2027,9 +2027,15 @@ export declare function apply(context: Context): void;
 }
 
 fn client_loader_esm_wrapper() -> &'static str {
+    // A browser streams the module from its URL. Node cannot fetch a `file:` URL, and the
+    // built-package invariant gate imports this loader under plain Node, so there the bytes
+    // come from the filesystem through the runtime's own builtin accessor, which no bundler
+    // resolves.
     r"import init, * as wasm from './client.js';
 
-await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
+const wasmUrl = new URL('./client_bg.wasm', import.meta.url);
+const fs = globalThis.process?.getBuiltinModule?.('node:fs/promises');
+await init({ module_or_path: fs && wasmUrl.protocol === 'file:' ? await fs.readFile(wasmUrl) : wasmUrl });
 const plugin = wasm.clientLoaderPlugin();
 
 export const Loader = wasm.WasmClientLoader;
@@ -6910,6 +6916,9 @@ mod tests {
             "wasm.clientLoaderPlugin()",
             "export const Loader = wasm.WasmClientLoader",
             "export default plugin",
+            // Node reads the module from disk; a browser keeps streaming it from the URL.
+            "globalThis.process?.getBuiltinModule?.('node:fs/promises')",
+            "fs && wasmUrl.protocol === 'file:' ? await fs.readFile(wasmUrl) : wasmUrl",
         ] {
             assert!(loader.contains(expected), "missing Loader {expected:?}");
         }
