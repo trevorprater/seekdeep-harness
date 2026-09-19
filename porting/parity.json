@@ -23728,14 +23728,24 @@
     {
       "source": ".github/workflows/sandbox.yml",
       "kind": "configuration",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        ".github/workflows/sandbox.yml"
+        ".github/workflows/sandbox.yml",
+        "crates/repository-tools/tests/ci_workflow_contract.rs",
+        "crates/sandbox-local/tests/bwrap_e2e.rs",
+        "crates/sandbox-local/tests/seatbelt_e2e.rs",
+        "crates/bash-sandbox/tests/bwrap_e2e.rs",
+        "crates/bash-sandbox/tests/seatbelt_e2e.rs",
+        "crates/landlock-run/tests/launcher_parity.rs",
+        "crates/landlock-run/tests/assembled_bash_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "2026-09-19: every leg runs the native suites that port its two platform files with SEEKDEEP_REQUIRE_SANDBOX_E2E=1 (plus SEEKDEEP_REQUIRE_BWRAP / SEEKDEEP_REQUIRE_LANDLOCK on their legs), under which a self-skip fails instead of passing as a false green; the packed-install rehearsal is the Landlock package's release:pack and release:verify-packed-install on the current platform; the darwin leg runs the sandbox crates' unit and parity suites; ci_workflow_contract pins the legs, the flag, the rehearsal, the musl target, and the absence of Vitest",
+        "Branch dispatch run 35422805004 (workflow_dispatch on 4fa80e6be): all four legs passed on their real runners: bubblewrap on ubuntu-latest (sandbox-local and bash-sandbox bwrap_e2e), Landlock on ubuntu-24.04 and ubuntu-24.04-arm (landlock-run launcher, assembled, and entry suites, sandbox-local local_parity, and the pack, install, confine rehearsal through the installed launcher), Seatbelt on macos-latest (sandbox-local and bash-sandbox seatbelt_e2e, 4 world tests, plus the crates' unit suites)",
+        "Local Seatbelt leg under real sandbox-exec with SEEKDEEP_REQUIRE_SANDBOX_E2E=1: 4 world tests and 31 crate tests passed"
       ],
-      "note": "The native kernel tests are wired, but later confinement and packed-install steps still invoke removed Vitest files. Those requirements need native replacements and real platform execution."
+      "note": "Master-push workflow with a manual dispatch added so a branch can prove its legs; the first dispatch failed both Landlock legs at the launcher build until the host musl target was added beside musl-tools."
     },
     {
       "source": ".gitignore",
