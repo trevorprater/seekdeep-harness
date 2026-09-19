@@ -86821,11 +86821,10 @@
       ],
       "evidence": [
         "pnpm exec vitest run scripts/ci-workflow.spec.ts (pinned source: 12 passed)",
-        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract --all-features (7 passed)",
-        "cargo clippy -p seekdeep-repository-tools --tests --all-features -- -D warnings",
-        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract: 11 topology, toolchain, source-setup and release-job checks passed"
+        "cargo test -p seekdeep-repository-tools --test ci_workflow_contract --all-features (16 passed): ten of the twelve source cases ported, verbatim or through the documented Rust replacements (the Rust release crate's GitHub output in place of the PEP 440 shell step, cargo xtask macos-deployment-target in place of the Python checker, the GLIBC proof read from the Rust executable in place of the node-pty rebuild, the optional lifecycle app's client-id guard ahead of the source's verbatim handoff condition)",
+        "cargo clippy -p seekdeep-repository-tools --tests --all-features -- -D warnings"
       ],
-      "note": "Workflow topology and setup checks pass. The source assertions for native Windows LSP coverage selection and per-project process isolation still require equivalent checks against the actual Rust coverage inventory."
+      "note": "Workflow topology, setup, Python release, wheel builder, GitLab, and issue-lifecycle checks pass. The source's two native Windows coverage-selection cases (supported LSP source stays under instrumented coverage; every project stays process-isolated) have no counterpart until the instrumented Rust coverage lane exists, which the scripts/run-gates.ts row tracks."
     },
     {
       "source": "scripts/clean.spec.ts",

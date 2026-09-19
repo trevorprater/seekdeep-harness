@@ -1,8 +1,9 @@
 //! Port of the source `scripts/ci-workflow.spec.ts`: the shape of the CI, E2B, and git-hook
 //! configuration that the runbooks rely on, read from the checked-in YAML.
 //!
-//! Native Windows LSP coverage selection and per-project process isolation still need
-//! equivalent assertions against the Rust coverage inventory.
+//! The source's two native Windows coverage-selection assertions (supported LSP source stays
+//! under instrumented coverage; every project stays process-isolated) have no counterpart until
+//! the instrumented Rust coverage lane exists; the run-gates parity row tracks that lane.
 
 use serde_json::Value;
 
@@ -34,6 +35,15 @@ fn run_steps(job: &Value) -> Vec<&str> {
 
 fn runs_on(job: &Value) -> &str {
     job["runs-on"].as_str().expect("runs-on expression")
+}
+
+fn step<'a>(job: &'a Value, name: &str) -> &'a Value {
+    job["steps"]
+        .as_array()
+        .expect("job steps")
+        .iter()
+        .find(|step| step["name"] == name)
+        .unwrap_or_else(|| panic!("workflow job must define the {name} step"))
 }
 
 fn needs(job: &Value) -> Vec<&str> {
@@ -448,4 +458,218 @@ fn git_hooks_leave_frozen_agent_note_sidecars_to_the_archive_verifier() {
             serde_json::json!([".agents/notes/archived/**"])
         );
     }
+}
+
+#[test]
+fn python_release_validates_wheels_from_a_labeled_dry_run_before_any_publication() {
+    let release = workflow(include_str!(
+        "../../../.github/workflows/python-release.yml"
+    ));
+    let publish = &release["on"]["workflow_dispatch"]["inputs"]["publish"];
+    assert_eq!(publish["type"], "boolean");
+    assert_eq!(publish["default"], false);
+    assert_eq!(
+        release["on"]["pull_request"],
+        serde_json::json!({"types": ["labeled"]})
+    );
+    let build = job(&release, "build");
+    assert_eq!(
+        build["if"],
+        "github.event_name == 'workflow_dispatch' || github.event.label.name == 'python-release-dry-run'"
+    );
+    assert_eq!(
+        build["uses"],
+        "./.github/workflows/build-exe-for-python-sdk.yml"
+    );
+    assert_eq!(
+        build["with"]["targets"],
+        "node24-linux-x64,node24-linux-arm64,node24-macos-arm64"
+    );
+    assert_eq!(build["with"]["release"], true);
+    let compatibility = job(&release, "python-compat");
+    assert_eq!(
+        compatibility["strategy"]["matrix"]["python"],
+        serde_json::json!(["3.10", "3.14"])
+    );
+    // The product rename carries the SDK distribution the source pins as `deepseek-harness-sdk`.
+    assert!(
+        compatibility["steps"]
+            .to_string()
+            .contains("seekdeep-harness-sdk==${{ steps.compatibility-version.outputs.version }}")
+    );
+    let validate = job(&release, "validate");
+    let validate_steps = validate["steps"].to_string();
+    assert!(validate_steps.contains("PUBLIC_PYPI_RELEASE_ENABLED"));
+    assert!(validate_steps.contains("100000000"));
+    let authorize = step(validate, "Authorize publication request");
+    assert_eq!(
+        authorize["env"]["PYPI_PUBLISHER_REPOSITORY"],
+        "${{ vars.PYPI_PUBLISHER_REPOSITORY }}"
+    );
+    assert_eq!(authorize["env"]["REPOSITORY"], "${{ github.repository }}");
+    assert!(
+        authorize["run"]
+            .as_str()
+            .unwrap()
+            .contains("[ \"$REPOSITORY\" = \"$PYPI_PUBLISHER_REPOSITORY\" ]")
+    );
+}
+
+#[test]
+fn python_release_publishes_only_from_a_manual_dispatch_with_verified_hashes() {
+    let release = workflow(include_str!(
+        "../../../.github/workflows/python-release.yml"
+    ));
+    let runtime = job(&release, "publish-runtime");
+    let sdk = job(&release, "publish-sdk");
+    let manual = "github.event_name == 'workflow_dispatch' && inputs.publish";
+    let permissions = serde_json::json!({"contents": "read", "id-token": "write"});
+    assert_eq!(runtime["if"], manual);
+    assert_eq!(runtime["needs"], "validate");
+    assert_eq!(runtime["environment"], "pypi-runtime");
+    assert_eq!(runtime["permissions"], permissions);
+    assert_eq!(sdk["if"], manual);
+    assert_eq!(
+        sdk["needs"],
+        serde_json::json!(["validate", "publish-runtime"])
+    );
+    assert_eq!(sdk["environment"], "pypi");
+    assert_eq!(sdk["permissions"], permissions);
+    let steps = [runtime, sdk]
+        .iter()
+        .flat_map(|job| job["steps"].as_array().expect("publish steps"))
+        .collect::<Vec<_>>();
+    assert!(steps.iter().all(|step| {
+        !step["uses"]
+            .as_str()
+            .is_some_and(|uses| uses.starts_with("actions/checkout@"))
+    }));
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|step| step["uses"] == "pypa/gh-action-pypi-publish@release/v1")
+            .count(),
+        2
+    );
+    let runtime_publish = step(runtime, "Publish runtime wheels");
+    assert_eq!(runtime_publish["with"]["packages-dir"], "dist/runtime/");
+    assert_eq!(runtime_publish["with"]["attestations"], false);
+    let sdk_publish = step(sdk, "Publish SDK wheel");
+    assert_eq!(sdk_publish["with"]["packages-dir"], "dist/sdk/");
+    assert_eq!(sdk_publish["with"]["attestations"], false);
+    for publisher in [runtime, sdk] {
+        assert_eq!(
+            step(publisher, "Verify release artifact hashes")["run"],
+            "cd dist && sha256sum -c SHA256SUMS"
+        );
+    }
+}
+
+#[test]
+fn python_wheel_builder_exposes_itself_to_the_release_caller_with_normalized_versions() {
+    let builder = workflow(include_str!(
+        "../../../.github/workflows/build-exe-for-python-sdk.yml"
+    ));
+    let inputs = &builder["on"]["workflow_call"]["inputs"];
+    assert!(inputs["targets"].is_object());
+    for flag in ["ci", "release"] {
+        assert_eq!(inputs[flag]["type"], "boolean");
+        assert_eq!(inputs[flag]["default"], false);
+    }
+    assert_eq!(
+        builder["concurrency"]["group"],
+        "build-single-exe-${{ github.workflow }}-${{ github.ref }}"
+    );
+    let plan = job(&builder, "plan");
+    let condition = plan["if"].as_str().unwrap();
+    assert!(condition.contains("inputs.ci"));
+    assert!(condition.contains("inputs.release"));
+    // The source normalizes its PEP 440 version in a shell step; the port resolves it through
+    // the Rust release crate, whose GitHub output feeds the same plan outputs.
+    let version = step(plan, "Resolve repository version");
+    assert_eq!(version["id"], "version");
+    assert!(version["run"].as_str().unwrap().contains(
+        "cargo run --quiet --locked -p seekdeep-python-release -- version --github-output >> \"$GITHUB_OUTPUT\""
+    ));
+    assert_eq!(
+        plan["outputs"]["version"],
+        "${{ steps.version.outputs.version }}"
+    );
+    assert_eq!(
+        plan["outputs"]["repository-version"],
+        "${{ steps.version.outputs.repository-version }}"
+    );
+    assert!(builder.to_string().contains("macosx_14_0_arm64"));
+    let build = job(&builder, "build");
+    // The source rebuilds node-pty inside manylinux 2.28 and reads the addon's GLIBC
+    // requirements; the port builds the Rust runtime inside that container and proves the
+    // payload's GLIBC requirement from the produced executable and binding.
+    let container_build = step(build, "Build Rust executable against manylinux 2.28");
+    assert_eq!(container_build["if"], "runner.os == 'Linux'");
+    let glibc = step(build, "Check Linux GLIBC requirements");
+    assert_eq!(glibc["if"], "runner.os == 'Linux'");
+    let glibc_script = glibc["run"].as_str().unwrap();
+    assert!(glibc_script.contains("readelf --version-info"));
+    assert!(glibc_script.contains("glibc-versions.txt"));
+    assert!(glibc_script.contains("le 2.28"));
+    // The source's Python deployment-target checker is the verified xtask command.
+    let macos = step(build, "Check macOS deployment target");
+    assert_eq!(macos["if"], "runner.os == 'macOS'");
+    let macos_script = macos["run"].as_str().unwrap();
+    assert!(macos_script.contains("cargo xtask macos-deployment-target"));
+    assert!(macos_script.contains("$EXE-spawn-helper"));
+    let smoke = step(build, "Run wheel in a manylinux 2.28 container");
+    assert_eq!(smoke["if"], "runner.os == 'Linux'");
+    assert!(
+        smoke["run"]
+            .as_str()
+            .unwrap()
+            .contains("-e SEEKDEEP_TELEMETRY_DISABLED")
+    );
+}
+
+#[test]
+fn gitlab_uses_the_shared_macos_deployment_target_check() {
+    let gitlab = workflow(include_str!("../../../.gitlab-ci.yml"));
+    let script = gitlab[".runtime-wheel"]["script"]
+        .as_array()
+        .expect("GitLab CI must define the runtime wheel script");
+    let check = script
+        .iter()
+        .filter_map(Value::as_str)
+        .find(|step| step.contains("PLATFORM\" = macos-arm64"))
+        .expect("GitLab CI must check the macOS deployment target");
+    assert!(check.contains("cargo xtask macos-deployment-target"));
+    assert!(check.contains("\"$EXE\" \"$EXE-spawn-helper\""));
+}
+
+#[test]
+fn issue_lifecycle_uses_explicit_review_handoff_events_without_rerunning_when_a_draft_becomes_ready()
+ {
+    let lifecycle = workflow(include_str!(
+        "../../../.github/workflows/issue-lifecycle.yml"
+    ));
+    let policy = workflow(include_str!("../../../.github/workflows/issue-policy.yml"));
+    let pull_request_types = lifecycle["on"]["pull_request"]["types"]
+        .as_array()
+        .expect("lifecycle pull_request types");
+    assert!(!pull_request_types.contains(&Value::from("ready_for_review")));
+    assert!(pull_request_types.contains(&Value::from("review_requested")));
+    assert_eq!(
+        lifecycle["on"]["pull_request_review"]["types"],
+        serde_json::json!(["submitted"])
+    );
+    // The port's lifecycle app is optional, so its client id guards the job ahead of the
+    // source's review-handoff condition, which is kept verbatim.
+    let condition = job(&lifecycle, "lifecycle")["if"].as_str().unwrap();
+    assert!(condition.starts_with("${{ vars.SEEKDEEP_ISSUE_APP_CLIENT_ID != '' && ("));
+    assert!(condition.contains(
+        "github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested')"
+    ));
+    assert!(
+        policy["on"]["pull_request"]["types"]
+            .as_array()
+            .expect("policy pull_request types")
+            .contains(&Value::from("ready_for_review"))
+    );
 }
