@@ -83,6 +83,32 @@ mod tests {
         }
     }
 
+    /// Copies the pinned source's package sources into an output workspace.
+    ///
+    /// A declaration links to its source file only while the repository the graph is written
+    /// to still carries that file, so reproducing the pinned source's graphs byte for byte
+    /// needs its package sources at the paths the pinned source keeps them.
+    fn copy_package_sources(root: &Path, source: &Path) {
+        for package in walkdir::WalkDir::new(source.join("packages"))
+            .min_depth(2)
+            .max_depth(2)
+        {
+            let sources = package.unwrap().path().join("src");
+            if !sources.is_dir() {
+                continue;
+            }
+            for entry in walkdir::WalkDir::new(&sources) {
+                let entry = entry.unwrap();
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let target = root.join(entry.path().strip_prefix(source).unwrap());
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
     #[test]
     fn every_graph_matches_the_pinned_generated_artifact_and_round_trips_freshness() {
         run_with_stack(|| {
@@ -104,6 +130,7 @@ mod tests {
                 );
             }
             copy_package_documentation(root.path(), source);
+            copy_package_sources(root.path(), source);
             for example in DocGraphPolicy::default().app_examples {
                 write(
                     root.path(),
@@ -257,6 +284,7 @@ mod tests {
             r#"{"name":"@seekdeep-ai/seekdeep-consumer","peerDependencies":{"@seekdeep-ai/seekdeep-invariants":"workspace:^"}}"#,
         );
         copy_package_documentation(root.path(), &source_root());
+        copy_package_sources(root.path(), &source_root());
         assert!(run(root.path(), &source_root(), false).unwrap());
         for rel in [
             "docs/graph-atlas.md",
