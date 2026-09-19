@@ -36091,7 +36091,8 @@
     {
       "source": "examples/headless-agent/tests/fixtures/e2b/e2b/bin.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "pending",
+      "note": "The live E2B composition driver and its stdio LSP fixture port together with packages/e2b/e2b/tests/composition.e2e.ts, which needs a live E2bSandbox implementation and an E2B_API_KEY before it can run."
     },
     {
       "source": "examples/headless-agent/tests/fixtures/e2b/e2b/cordis.yml",
@@ -36107,7 +36108,8 @@
     {
       "source": "examples/headless-agent/tests/fixtures/e2b/e2b/fixture-lsp.mjs",
       "kind": "fixture",
-      "status": "pending"
+      "status": "pending",
+      "note": "The live E2B composition driver and its stdio LSP fixture port together with packages/e2b/e2b/tests/composition.e2e.ts, which needs a live E2bSandbox implementation and an E2B_API_KEY before it can run."
     },
     {
       "source": "examples/headless-agent/tests/fixtures/goal-domain/cordis.yml",
@@ -59481,7 +59483,7 @@
       "source": "packages/e2b/e2b/tests/composition.e2e.ts",
       "kind": "test",
       "status": "pending",
-      "note": "requires a live E2B_API_KEY and the still-pending Rust subprocess-e2b, PTY, and remote LSP assembled path; unit/fake lifecycle evidence does not substitute for this world-level deletion and credential-scrubbing proof"
+      "note": "Requires a live E2B_API_KEY and a live E2bSandbox implementation. The port carries the sandbox traits (crates/e2b), the fs, subprocess, and terminal runtimes over them, and fake sandboxes for their parity suites, but no E2B API client (the source composed the e2b SDK), so this world-level deletion and credential-scrubbing proof has nothing to run against yet; unit/fake lifecycle evidence does not substitute for it."
     },
     {
       "source": "packages/e2b/e2b/tests/e2b.spec.ts",
