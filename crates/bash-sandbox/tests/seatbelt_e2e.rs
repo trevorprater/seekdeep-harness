@@ -30,6 +30,22 @@ fn usable() -> bool {
         .is_ok_and(|status| status.success())
 }
 
+/// A host whose `sandbox-exec` cannot enforce the profile skips the assembled tests, unless the
+/// sandbox workflow's Seatbelt leg required them: a self-skip on the platform that exists to
+/// prove the rung would otherwise pass as a false green.
+fn require_or_skip() -> bool {
+    if usable() {
+        return true;
+    }
+    assert_ne!(
+        std::env::var("SEEKDEEP_REQUIRE_SANDBOX_E2E").as_deref(),
+        Ok("1"),
+        "seatbelt e2e was required but sandbox-exec cannot enforce the profile"
+    );
+    eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    false
+}
+
 async fn executor(
     context: &Context,
     workspace: &Path,
@@ -77,8 +93,7 @@ fn policy(mode: SandboxMode, workspace: &Path) -> SandboxExecutionPolicy {
 
 #[tokio::test]
 async fn assembled_seatbelt_denies_read_only_and_escape_writes_but_grants_workspace_write() {
-    if !usable() {
-        eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    if !require_or_skip() {
         return;
     }
     let home = std::env::var_os("HOME").expect("home");
@@ -163,8 +178,7 @@ async fn assembled_seatbelt_denies_read_only_and_escape_writes_but_grants_worksp
 
 #[tokio::test]
 async fn assembled_seatbelt_background_denial_is_stamped_before_done_returns() {
-    if !usable() {
-        eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    if !require_or_skip() {
         return;
     }
     let home = std::env::var_os("HOME").expect("home");
@@ -192,8 +206,7 @@ async fn assembled_seatbelt_background_denial_is_stamped_before_done_returns() {
 
 #[tokio::test]
 async fn model_facing_bash_tool_renders_a_real_seatbelt_denial() {
-    if !usable() {
-        eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    if !require_or_skip() {
         return;
     }
     let home = std::env::var_os("HOME").expect("home");

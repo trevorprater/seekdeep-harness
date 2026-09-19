@@ -60,6 +60,13 @@ fn real_kernel_exec_exit_grants_denials_inheritance_and_fail_closed_behavior() {
             Ok("1"),
             "SEEKDEEP_REQUIRE_LANDLOCK=1 but the functional probe is unusable"
         );
+        // The sandbox workflow's Landlock legs exist to prove this rung; a self-skip there is
+        // a failure, not a pass.
+        assert_ne!(
+            std::env::var("SEEKDEEP_REQUIRE_SANDBOX_E2E").as_deref(),
+            Ok("1"),
+            "Landlock e2e was required but the functional probe is unusable"
+        );
         return;
     }
     let expected_notice = if enforcement == LandlockEnforcement::Partial {

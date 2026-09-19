@@ -10,6 +10,9 @@ name: Sandbox
 on:
   push:
     branches: [master]
+  # Manual runs let a branch prove the legs before its master merge; the
+  # automatic trigger stays master-only.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,11 +37,13 @@ jobs:
   # version only: kernel confinement does not vary by node, and ci.yml's
   # node matrix already covers the node axis.
   #
-  # The e2e files self-skip where their runner is absent, so a leg that lost
+  # The e2e suites self-skip where their runner is absent, so a leg that lost
   # its runner (no bwrap, kernel without Landlock, macOS without
   # sandbox-exec) would otherwise pass as a false green — the same trap
-  # e2e.yml's key preflight guards against. Each leg therefore asserts BOTH
-  # its platform files actually ran: `Test Files  2 passed (2)`, no skips.
+  # e2e.yml's key preflight guards against. Each leg therefore runs its
+  # native world suites with SEEKDEEP_REQUIRE_SANDBOX_E2E set, under which a
+  # self-skip is a failure: the port's form of the source's `Test Files
+  # 2 passed (2)` run-guard.
   sandbox-e2e:
     strategy:
       fail-fast: false
@@ -54,7 +59,9 @@ jobs:
             runner: seatbelt
     name: sandbox e2e (${{ matrix.runner }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # Every leg compiles its native suites from a cold cache; the Seatbelt leg
+    # also compiles the sandbox crates' unit inventory.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -65,7 +72,14 @@ jobs:
           node-version: 24
 
       - uses: dtolnay/rust-toolchain@1.93.1
-        if: matrix.runner == 'bwrap' || matrix.runner == 'landlock'
+        with:
+          targets: wasm32-unknown-unknown
+
+      # The Landlock launcher's compiled Rust/WASM entry needs the binding
+      # generator at the workspace crate version.
+      - name: Install Rust/WASM binding generator
+        if: matrix.runner == 'landlock'
+        run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
@@ -90,62 +104,54 @@ jobs:
           pnpm --dir native/landlock-run run build:ts
           pnpm --dir native/landlock-run run build:native
 
-      - name: Rust sandbox e2e (real kernel confinement)
-        if: matrix.runner == 'bwrap' || matrix.runner == 'landlock'
+      # Each leg runs the native world suites that port its two platform files;
+      # SEEKDEEP_REQUIRE_SANDBOX_E2E (and the launcher-specific require flags)
+      # turn a self-skip into a failure, so a leg whose runner is missing cannot
+      # pass as a false green.
+      - name: Sandbox e2e (real kernel confinement, world-verified)
         env:
           SEEKDEEP_REQUIRE_SANDBOX_E2E: '1'
+          SEEKDEEP_REQUIRE_BWRAP: ${{ matrix.runner == 'bwrap' && '1' || '' }}
+          SEEKDEEP_REQUIRE_LANDLOCK: ${{ matrix.runner == 'landlock' && '1' || '' }}
         run: |
-          if [[ '${{ matrix.runner }}' == 'bwrap' ]]; then
-            cargo test --locked \
-              --package seekdeep-sandbox-local \
-              --package seekdeep-bash-sandbox \
-              --test bwrap_e2e --all-features
-          else
-            cargo test --locked \
-              --package seekdeep-landlock-run \
-              --all-targets --all-features
-          fi
+          set -euo pipefail
+          case '${{ matrix.runner }}' in
+            bwrap)
+              cargo test --locked --all-features \
+                --package seekdeep-sandbox-local --package seekdeep-bash-sandbox \
+                --test bwrap_e2e
+              ;;
+            landlock)
+              cargo test --locked --all-features \
+                --package seekdeep-landlock-run --all-targets
+              cargo test --locked --all-features \
+                --package seekdeep-sandbox-local --test local_parity
+              ;;
+            seatbelt)
+              cargo test --locked --all-features \
+                --package seekdeep-sandbox-local --package seekdeep-bash-sandbox \
+                --test seatbelt_e2e
+              ;;
+          esac
 
-      # The unit suite runs on ubuntu in `checks`; this is the one darwin leg
-      # in the workflow, so run it here too — the platform-dependent unit
-      # expectations (Seatbelt path canonicalization: /tmp IS /private/tmp)
-      # take their darwin branch only on this runner.
+      # The unit inventory runs on ubuntu in ci.yml; this is the one darwin leg
+      # in the workflow, so run the sandbox crates' unit and parity suites here
+      # too — the platform-dependent expectations (Seatbelt path
+      # canonicalization: /tmp IS /private/tmp) take their darwin branch only on
+      # this runner.
       - name: Unit tests (darwin parity)
         if: matrix.runner == 'seatbelt'
-        run: pnpm run test
+        run: >-
+          cargo test --locked --all-features
+          --package seekdeep-sandbox-local --package seekdeep-bash-sandbox
 
-      - name: Sandbox e2e (real kernel confinement, world-verified)
-        # NO_COLOR: vitest force-enables ANSI color under GITHUB_ACTIONS even
-        # without a TTY, which would thread escape codes through the summary
-        # line the run-guard greps.
-        env:
-          NO_COLOR: 1
-        run: |
-          set -u +e -o pipefail
-          out=$(pnpm exec vitest run --config vitest.e2e.config.ts \
-            packages/sandbox/sandbox-local/tests/${{ matrix.runner }}.e2e.ts \
-            packages/shell/bash-sandbox/tests/${{ matrix.runner }}.e2e.ts 2>&1); status=$?
-          echo "$out"
-          [ "$status" -eq 0 ]
-          # Both platform files must have RUN — a self-skip (runner missing on
-          # the very platform that exists to prove it) is a failure, not a pass.
-          echo "$out" | grep -qE 'Test Files[[:space:]]+2 passed \(2\)'
-
-      # Publish-path rehearsal, Landlock legs only. Build the launcher on its
-      # native architecture, then install the local native and harness tarballs
-      # together so registry state cannot mask source/package drift.
-      - name: Build packages for the pack rehearsal
-        if: matrix.runner == 'landlock'
-        run: pnpm run build
-
+      # Publish-path rehearsal, Landlock legs only. The launcher was built on its
+      # native architecture above; pack the local entry and platform tarballs and
+      # install them together so registry state cannot mask source/package
+      # drift, then confine through the installed launcher.
       - name: Packed-distribution e2e (pack → install → confine)
         if: matrix.runner == 'landlock'
-        env:
-          NO_COLOR: 1
         run: |
-          set -u +e -o pipefail
-          out=$(pnpm exec vitest run --config vitest.e2e.config.ts \
-            packages/sandbox/sandbox-local/tests/packed-install.e2e.ts 2>&1); status=$?
-          echo "$out"
-          [ "$status" -eq 0 ]
-          echo "$out" | grep -qE 'Test Files[[:space:]]+1 passed \(1\)'
+          set -euo pipefail
+          pnpm --dir native/landlock-run release:pack .release/npm --current-platform-only
+          pnpm --dir native/landlock-run release:verify-packed-install .release/npm --current-platform-only

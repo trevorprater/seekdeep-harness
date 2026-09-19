@@ -827,3 +827,53 @@ fn every_rust_cache_restore_is_followed_by_the_stale_v8_build_prune() {
         "expected every workflow's cache restores, saw {restores}"
     );
 }
+
+#[test]
+fn sandbox_legs_run_their_native_world_suites_and_require_them() {
+    // The source's legs ran two Vitest files each and grepped `Test Files 2 passed (2)` so a
+    // self-skip could not pass as a false green; the port's legs run the native suites that
+    // port those files with SEEKDEEP_REQUIRE_SANDBOX_E2E set, under which a self-skip fails.
+    let sandbox = workflow(include_str!("../../../.github/workflows/sandbox.yml"));
+    assert_eq!(
+        sandbox["on"]["push"]["branches"],
+        serde_json::json!(["master"])
+    );
+    assert!(
+        sandbox["on"]
+            .as_object()
+            .is_some_and(|triggers| triggers.contains_key("workflow_dispatch")),
+        "the sandbox workflow must be dispatchable so a branch can prove its legs"
+    );
+    let leg = job(&sandbox, "sandbox-e2e");
+    let runners = leg["strategy"]["matrix"]["include"]
+        .as_array()
+        .expect("runner matrix")
+        .iter()
+        .map(|entry| entry["runner"].as_str().unwrap_or_default())
+        .collect::<Vec<_>>();
+    assert_eq!(runners, ["bwrap", "landlock", "landlock", "seatbelt"]);
+    assert!(
+        run_steps(leg).iter().all(|run| !run.contains("vitest")),
+        "no Vitest invocation may remain in the sandbox workflow"
+    );
+    let world = step(leg, "Sandbox e2e (real kernel confinement, world-verified)");
+    assert_eq!(world["env"]["SEEKDEEP_REQUIRE_SANDBOX_E2E"], "1");
+    assert!(world["if"].is_null(), "every leg runs its world suites");
+    let run = world["run"].as_str().unwrap();
+    for expected in [
+        "--locked",
+        "--test bwrap_e2e",
+        "--package seekdeep-landlock-run --all-targets",
+        "--test local_parity",
+        "--test seatbelt_e2e",
+    ] {
+        assert!(run.contains(expected), "world step must run {expected}");
+    }
+    let packed = step(leg, "Packed-distribution e2e (pack → install → confine)");
+    assert_eq!(packed["if"], "matrix.runner == 'landlock'");
+    let run = packed["run"].as_str().unwrap();
+    assert!(run.contains("release:pack .release/npm --current-platform-only"));
+    assert!(run.contains("release:verify-packed-install .release/npm --current-platform-only"));
+    let generator = step(leg, "Install Rust/WASM binding generator");
+    assert_eq!(generator["if"], "matrix.runner == 'landlock'");
+}

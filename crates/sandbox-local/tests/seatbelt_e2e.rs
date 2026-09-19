@@ -42,10 +42,25 @@ fn run(
     (output, confined)
 }
 
+/// A host whose `sandbox-exec` cannot enforce the profile skips the world test, unless the
+/// sandbox workflow's Seatbelt leg required it: a self-skip on the platform that exists to prove
+/// the rung would otherwise pass as a false green.
+fn require_or_skip() -> bool {
+    if usable() {
+        return true;
+    }
+    assert_ne!(
+        std::env::var("SEEKDEEP_REQUIRE_SANDBOX_E2E").as_deref(),
+        Ok("1"),
+        "seatbelt e2e was required but sandbox-exec cannot enforce the profile"
+    );
+    eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    false
+}
+
 #[test]
 fn real_seatbelt_denies_read_only_writes_and_grants_workspace_and_temp_roots() {
-    if !usable() {
-        eprintln!("seatbelt e2e skipped: sandbox-exec cannot enforce the profile");
+    if !require_or_skip() {
         return;
     }
     let provider = LocalSandboxProvider::new(&LocalSandboxConfig::default()).unwrap();

@@ -67,6 +67,13 @@ fn real_bwrap_denies_read_only_and_grants_workspace_with_ephemeral_tmp() {
             Ok("1"),
             "SEEKDEEP_REQUIRE_BWRAP=1 but bwrap/user namespaces are unusable"
         );
+        // The sandbox workflow's bwrap leg exists to prove this rung; a self-skip there is a
+        // failure, not a pass.
+        assert_ne!(
+            std::env::var("SEEKDEEP_REQUIRE_SANDBOX_E2E").as_deref(),
+            Ok("1"),
+            "bubblewrap e2e was required but bwrap/user namespaces are unusable"
+        );
         return;
     }
     let provider = LocalSandboxProvider::new(&LocalSandboxConfig::default()).unwrap();
