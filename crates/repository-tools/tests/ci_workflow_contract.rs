@@ -773,3 +773,57 @@ fn keeps_every_suite_process_isolated_on_native_windows() {
         assert!(text.contains(&(*package).to_owned()));
     }
 }
+
+#[test]
+fn every_rust_cache_restore_is_followed_by_the_stale_v8_build_prune() {
+    // A restored cache can carry the v8 crate's build-script output without the prebuilt
+    // rusty_v8 static library, after which every link fails until the stamp is removed; the
+    // prune action repairs that right after each restore, in every workflow.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let action = workflow(include_str!(
+        "../../../.github/actions/prune-stale-v8-builds/action.yml"
+    ));
+    assert_eq!(action["runs"]["using"], "composite");
+    let script = action["runs"]["steps"][0]["run"].as_str().unwrap();
+    for expected in [
+        "build/v8-",
+        "gn_out",
+        "librusty_v8.a",
+        "rusty_v8.lib",
+        "rm -rf",
+    ] {
+        assert!(
+            script.contains(expected),
+            "prune action must handle {expected}"
+        );
+    }
+    let mut restores = 0;
+    for entry in std::fs::read_dir(root.join(".github/workflows")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|extension| extension != "yml") {
+            continue;
+        }
+        let document = workflow(&std::fs::read_to_string(&path).unwrap());
+        for (name, job) in document["jobs"].as_object().into_iter().flatten() {
+            let Some(steps) = job["steps"].as_array() else {
+                continue;
+            };
+            for (index, step) in steps.iter().enumerate() {
+                if step["uses"] != "Swatinem/rust-cache@v2" {
+                    continue;
+                }
+                restores += 1;
+                assert_eq!(
+                    steps.get(index + 1).map(|next| &next["uses"]),
+                    Some(&Value::from("./.github/actions/prune-stale-v8-builds")),
+                    "{}: job {name} must prune stale v8 builds right after its cache restore",
+                    path.display()
+                );
+            }
+        }
+    }
+    assert!(
+        restores >= 16,
+        "expected every workflow's cache restores, saw {restores}"
+    );
+}

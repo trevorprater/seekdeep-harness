@@ -97,6 +97,8 @@ jobs:
         with:
           key: primary-rust-wasm
 
+      - uses: ./.github/actions/prune-stale-v8-builds
+
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
@@ -164,6 +166,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: coverage-rust-wasm
+
+      - uses: ./.github/actions/prune-stale-v8-builds
 
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
@@ -246,6 +250,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: primary-rust-wasm
+
+      - uses: ./.github/actions/prune-stale-v8-builds
 
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
@@ -350,6 +356,8 @@ jobs:
         with:
           key: node-compat-${{ matrix.node }}
 
+      - uses: ./.github/actions/prune-stale-v8-builds
+
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
@@ -398,9 +406,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          # Bumped once: the previous entry restored a V8 build directory without its
-          # prebuilt static library, and every later run failed to link `rusty_v8`.
+          # Bumped once when an entry restored a V8 build directory without its prebuilt
+          # static library; the prune step below now repairs such restores everywhere.
           key: python-sdk-keyless-v2
+
+      - uses: ./.github/actions/prune-stale-v8-builds
 
       - uses: actions/setup-python@v6.3.0
         with:
@@ -524,6 +534,8 @@ jobs:
         with:
           key: wine-gates
 
+      - uses: ./.github/actions/prune-stale-v8-builds
+
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 
@@ -608,6 +620,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: windows-native-rust-wasm
+
+      - uses: ./.github/actions/prune-stale-v8-builds
 
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127

@@ -81,6 +81,8 @@ jobs:
         with:
           key: real-api-e2e
 
+      - uses: ./.github/actions/prune-stale-v8-builds
+
       - name: Install Rust/WASM binding generator
         run: cargo install --locked wasm-bindgen-cli --version 0.2.127
 

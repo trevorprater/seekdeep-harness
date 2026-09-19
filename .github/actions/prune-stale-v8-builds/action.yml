@@ -1,0 +1,26 @@
+name: Prune stale V8 build directories
+description: >-
+  A restored Rust cache can carry the v8 crate's build-script output while the prebuilt
+  rusty_v8 static library it downloaded into target/<profile>/gn_out is absent. Cargo then
+  treats the build script as fresh, its checksum stamp skips the download, and every link of
+  rusty_v8 fails. Remove such build directories and stamps so the build script runs again.
+
+runs:
+  using: composite
+  steps:
+    - name: Prune v8 build directories restored without their static library
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        pruned=0
+        for profile in target/* target/*/*; do
+          builds=("$profile"/build/v8-*)
+          [ "${#builds[@]}" -gt 0 ] || continue
+          if [ -z "$(find "$profile/gn_out" \( -name 'librusty_v8.a' -o -name 'rusty_v8.lib' \) -print -quit 2>/dev/null)" ]; then
+            echo "pruning ${builds[*]}: $profile/gn_out carries no prebuilt rusty_v8 static library"
+            rm -rf "${builds[@]}" "$profile/gn_out"
+            pruned=$((pruned + 1))
+          fi
+        done
+        echo "pruned $pruned stale v8 build director$([ "$pruned" -eq 1 ] && echo y || echo ies)"
