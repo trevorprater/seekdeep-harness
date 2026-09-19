@@ -153,22 +153,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # A hosted runner keeps about 14 GB free, and the instrumented build needs
-      # more than that on top of the ordinary target; the preinstalled toolchains
-      # this repository never uses are the cheapest space to reclaim. Self-hosted
-      # runners are left alone.
-      - name: Free hosted-runner disk space
-        run: |
-          set -euo pipefail
-          if [ "${RUNNER_ENVIRONMENT:-}" != github-hosted ]; then
-            echo "not a GitHub-hosted runner; nothing to reclaim"
-            exit 0
-          fi
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
-          sudo docker image prune --all --force >/dev/null 2>&1 || true
-          df -h /
-
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm
@@ -232,6 +216,12 @@ jobs:
           exit "$sandbox_status"
 
       - uses: ./.github/actions/setup-source-oracle
+
+      # The gate prints a lane's output only when the lane ends, so a runner that
+      # dies inside the instrumented build leaves no trace; this streams the same
+      # build first, and the gate then reuses every artifact.
+      - name: Warm the instrumented build
+        run: pnpm run test:coverage --build-only
 
       - name: Run exhaustive coverage
         run: pnpm run check:ci:coverage

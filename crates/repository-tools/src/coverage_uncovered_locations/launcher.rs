@@ -31,6 +31,9 @@ pub struct CoverageArguments {
     pub from_json: Option<PathBuf>,
     /// `--write-roster`: regenerate `scripts/coverage-roster.json` from this run.
     pub write_roster: bool,
+    /// `--build-only`: compile the instrumented suites without running them, streaming the
+    /// build so a CI log shows what the buffered gate would hide.
+    pub build_only: bool,
     /// `--repository <path>`: the repository to measure instead of the compiled one.
     pub repository: Option<PathBuf>,
     /// Further `cargo llvm-cov` arguments, such as `-p <crate>`.
@@ -70,6 +73,8 @@ pub fn parse_arguments(arguments: &[OsString]) -> anyhow::Result<CoverageArgumen
             parsed.repository = Some(PathBuf::from(value_of(&mut iterator, &text)?));
         } else if text == "--write-roster" {
             parsed.write_roster = true;
+        } else if text == "--build-only" {
+            parsed.build_only = true;
         } else {
             parsed.cargo.push(argument.clone());
         }
@@ -123,6 +128,56 @@ pub fn test_command(arguments: &CoverageArguments, excluded: &[&str]) -> Vec<OsS
     command
 }
 
+/// The build-only counterpart of [`test_command`]: the same package selection compiled with
+/// `cargo test --no-run` under cargo-llvm-cov's exported build environment, so the artifacts
+/// serve the instrumented run afterwards.
+#[must_use]
+pub fn build_command(arguments: &CoverageArguments, excluded: &[&str]) -> Vec<OsString> {
+    let mut command = [
+        "test",
+        "--locked",
+        "--workspace",
+        "--all-features",
+        "--no-run",
+    ]
+    .map(OsString::from)
+    .to_vec();
+    for package in excluded {
+        command.push("--exclude".into());
+        command.push((*package).into());
+    }
+    command.extend(arguments.cargo.iter().cloned());
+    command
+}
+
+/// Parses `cargo llvm-cov show-env --sh` output: `export NAME=value` lines whose values may be
+/// single-quoted with `'\''` escapes.
+///
+/// # Errors
+///
+/// Returns a line that is not an export statement.
+pub fn parse_coverage_environment(output: &str) -> anyhow::Result<BTreeMap<String, String>> {
+    let mut environment = BTreeMap::new();
+    for line in output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        let assignment = line
+            .strip_prefix("export ")
+            .ok_or_else(|| anyhow::anyhow!("run-coverage: unexpected show-env line {line:?}"))?;
+        let (name, value) = assignment
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("run-coverage: unexpected show-env line {line:?}"))?;
+        let value = value
+            .strip_prefix('\'')
+            .and_then(|rest| rest.strip_suffix('\''))
+            .map_or_else(|| value.to_owned(), |quoted| quoted.replace("'\\''", "'"));
+        environment.insert(name.to_owned(), value);
+    }
+    Ok(environment)
+}
+
 /// The export step after the instrumented run.
 #[must_use]
 pub fn report_command(output: &Path) -> Vec<OsString> {
@@ -154,6 +209,9 @@ pub fn run_coverage(repository: &Path, arguments: &[OsString]) -> anyhow::Result
     let repository = dunce::canonicalize(&repository)
         .with_context(|| format!("run-coverage: resolve {}", repository.display()))?;
     let measured = MeasuredSet::load(&repository)?;
+    if arguments.build_only {
+        return build_instrumented(&repository, &arguments, &measured);
+    }
     let roster_path = repository.join(ROSTER_PATH);
     let roster = Roster::load(&roster_path)?;
     let (export_path, suites_passed) = match &arguments.from_json {
@@ -224,6 +282,61 @@ pub fn instrumented_exclusions(
         }
     }
     excluded.into_iter().collect()
+}
+
+/// Compiles the instrumented suites without running them, under the environment
+/// `cargo llvm-cov show-env` exports, streaming cargo's output; returns the process exit code.
+fn build_instrumented(
+    repository: &Path,
+    arguments: &CoverageArguments,
+    measured: &MeasuredSet,
+) -> anyhow::Result<i32> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let exported = Command::new(&cargo)
+        .args(["llvm-cov", "show-env", "--sh"])
+        .current_dir(repository)
+        .stdin(Stdio::null())
+        .stderr(Stdio::inherit())
+        .output()
+        .context("run-coverage: read the instrumented build environment")?;
+    anyhow::ensure!(
+        exported.status.success(),
+        "run-coverage: cargo llvm-cov show-env exited with {}; run `cargo install --locked cargo-llvm-cov --version {CARGO_LLVM_COV_VERSION}` and `rustup component add llvm-tools-preview`",
+        exported.status
+    );
+    let environment = parse_coverage_environment(&String::from_utf8(exported.stdout)?)?;
+    let members = workspace_packages(&cargo, repository)?;
+    let excluded = instrumented_exclusions(&members, repository, measured);
+    let excluded = excluded.iter().map(String::as_str).collect::<Vec<_>>();
+    let build = build_command(arguments, &excluded);
+    println!(
+        "run-coverage: cargo {} (instrumented, build only)",
+        build
+            .iter()
+            .map(|argument| argument.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    // The exported environment names the target root; cargo-llvm-cov itself builds under its
+    // `llvm-cov-target` subdirectory, which is where the instrumented run must find these
+    // artifacts.
+    let root = environment
+        .get("CARGO_LLVM_COV_TARGET_DIR")
+        .map_or_else(|| coverage_target_dir(repository), PathBuf::from);
+    let mut command = Command::new(&cargo);
+    command
+        .args(&build)
+        .current_dir(repository)
+        .envs(&environment)
+        .env("CARGO_TARGET_DIR", root.join("llvm-cov-target"))
+        .env(COVERAGE_EXEMPT_ENV, "1");
+    if std::env::var_os(DEBUGINFO_ENV).is_none() {
+        command.env(DEBUGINFO_ENV, INSTRUMENTED_DEBUGINFO);
+    }
+    let status = command
+        .status()
+        .context("run-coverage: compile the instrumented suites")?;
+    Ok(i32::from(!status.success()))
 }
 
 /// The packages the repository's workspace defines: name to manifest directory.

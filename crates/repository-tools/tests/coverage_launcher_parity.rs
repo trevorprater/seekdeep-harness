@@ -12,8 +12,9 @@ use seekdeep_repository_tools::{
     coverage_exempt::INSTRUMENTED_LANE_EXCLUDED_PACKAGES,
     coverage_uncovered_locations::{
         ADOPTION_REASON, Host, MeasuredSet, Metric, ROSTER_NOTE, ROSTER_PATH, Roster, RosterEntry,
-        evaluate, instrumented_exclusions, parse_arguments, regenerate_roster, report_command,
-        roster_additions, test_command, translate_export,
+        build_command, evaluate, instrumented_exclusions, parse_arguments,
+        parse_coverage_environment, regenerate_roster, report_command, roster_additions,
+        test_command, translate_export,
     },
 };
 use serde_json::{Value, json};
@@ -78,6 +79,34 @@ fn arguments_map_the_gate_worker_budget_and_the_lane_flags() {
         report_command(Path::new("out.json")),
         strings(&["llvm-cov", "report", "--json", "--output-path", "out.json"])
     );
+    let build_only = parse_arguments(&strings(&["--build-only", "-p", "seekdeep-util"])).unwrap();
+    assert!(build_only.build_only);
+    assert_eq!(
+        build_command(&build_only, &["seekdeep-change-scope"]),
+        strings(&[
+            "test",
+            "--locked",
+            "--workspace",
+            "--all-features",
+            "--no-run",
+            "--exclude",
+            "seekdeep-change-scope",
+            "-p",
+            "seekdeep-util",
+        ])
+    );
+}
+
+#[test]
+fn the_exported_build_environment_parses_quoted_and_bare_values() {
+    let environment = parse_coverage_environment(
+        "export LLVM_PROFILE_FILE='/tmp/x y-%p-%10m.profraw'\nexport CARGO_LLVM_COV=1\nexport ODD='it'\\''s'\n\n",
+    )
+    .unwrap();
+    assert_eq!(environment["LLVM_PROFILE_FILE"], "/tmp/x y-%p-%10m.profraw");
+    assert_eq!(environment["CARGO_LLVM_COV"], "1");
+    assert_eq!(environment["ODD"], "it's");
+    assert!(parse_coverage_environment("LLVM_PROFILE_FILE=x").is_err());
 }
 
 #[test]
@@ -623,6 +652,22 @@ fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     fixture_workspace(root);
+    // The warm-up compiles into cargo-llvm-cov's own target directory, so the run reuses it.
+    let warmed = run_entry(root, &["--build-only"]);
+    assert!(
+        warmed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&warmed.stderr)
+    );
+    assert!(String::from_utf8_lossy(&warmed.stdout).contains("(instrumented, build only)"),);
+    let built = std::fs::read_dir(root.join("target/llvm-cov-target/debug/deps"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("smoke-"));
+    assert!(
+        built,
+        "the warm-up must build the suite under llvm-cov-target"
+    );
     let failed = run_entry(root, &["--maxWorkers=1"]);
     let stdout = String::from_utf8_lossy(&failed.stdout);
     let stderr = String::from_utf8_lossy(&failed.stderr);

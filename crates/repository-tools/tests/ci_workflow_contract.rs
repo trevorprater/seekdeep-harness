@@ -726,11 +726,13 @@ fn coverage_lanes_install_the_instrumentation_toolchain_before_their_gate_invent
         .find(|step| step["uses"] == "Swatinem/rust-cache@v2")
         .expect("rust cache");
     assert_eq!(cache["with"]["key"], "coverage-rust-wasm");
-    let reclaim = step(coverage, "Free hosted-runner disk space")["run"]
-        .as_str()
-        .unwrap();
-    assert!(reclaim.contains("\"${RUNNER_ENVIRONMENT:-}\" != github-hosted"));
-    assert!(reclaim.contains("/usr/share/dotnet"));
+    let warm = step(coverage, "Warm the instrumented build");
+    assert_eq!(warm["run"], "pnpm run test:coverage --build-only");
+    let gate = steps
+        .iter()
+        .position(|step| step["run"] == "pnpm run check:ci:coverage")
+        .expect("coverage gate");
+    assert_eq!(steps[gate - 1]["name"], warm["name"]);
     assert_eq!(coverage["timeout-minutes"], 120);
     for (name, gate) in [
         ("node-24-coverage", "pnpm run check:ci:coverage"),
