@@ -899,6 +899,15 @@ fn sandbox_legs_run_their_native_world_suites_and_require_them() {
     assert!(run.contains("release:verify-packed-install .release/npm --current-platform-only"));
     let generator = step(leg, "Install Rust/WASM binding generator");
     assert_eq!(generator["if"], "matrix.runner == 'landlock'");
+    // The static musl launcher needs the host's musl target, not only musl-tools.
+    let launcher = step(leg, "Build Landlock launcher for this architecture");
+    assert_eq!(launcher["if"], "matrix.runner == 'landlock'");
+    let run = launcher["run"].as_str().unwrap();
+    assert!(run.contains("apt-get install -yq musl-tools"));
+    assert!(run.contains(
+        "rustup target add \"$(rustc -vV | sed -n 's/^host: //p' | sed 's/-gnu$/-musl/')\""
+    ));
+    assert!(run.contains("run build:native"));
 }
 
 #[test]

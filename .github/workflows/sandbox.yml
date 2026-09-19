@@ -96,11 +96,14 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 \
             || echo "apparmor userns knob absent — the functional probe decides"
 
+      # The launcher is a static musl binary: the leg needs the host's musl
+      # target as well as the native musl tools, as the Landlock workflow installs.
       - name: Build Landlock launcher for this architecture
         if: matrix.runner == 'landlock'
         run: |
           sudo apt-get update -q
           sudo apt-get install -yq musl-tools
+          rustup target add "$(rustc -vV | sed -n 's/^host: //p' | sed 's/-gnu$/-musl/')"
           pnpm --dir native/landlock-run run build:ts
           pnpm --dir native/landlock-run run build:native
 
