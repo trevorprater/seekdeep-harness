@@ -1,0 +1,32 @@
+[package]
+name = "seekdeep-terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Persistent PTY session seam for SeekDeep Harness: owner-scoped IDs, backend registry, interactive sends, reads, signals, and awaited cleanup"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subprocess = { path = "../subprocess" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+
+[lints]
+workspace = true

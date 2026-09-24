@@ -1,0 +1,2266 @@
+{
+  "note": "Measured files still below the per-file 100% coverage bar. The instrumented lane (pnpm run test:coverage) holds every other measured file to the bar. An entry may name `platforms` (it applies only there) or `unless: pwsh` (it applies only where no PowerShell answers, as the source exempted its pwsh suites). The gate rejects entries for missing or unmeasured files and names entries whose file is fully covered; remove those.",
+  "files": {
+    "crates/acp-demo/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp-demo/src/snapshot_fixtures.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp-snapshot/src/harness.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp-snapshot/src/launcher.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp-snapshot/src/normalize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp-snapshot/src/suite.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp/src/bridge.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp/src/client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp/src/codec.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/acp/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-default-model/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/files.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/render.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-instructions/src/state.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop-testkit/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/driver.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/factory.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/runtime_context.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-loop/src/tool_calls.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/authoring.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/discovery.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/metadata.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-presets/src/mount.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-spine-demo/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent-tool-presentation/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/consumed_work.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/dispatch.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/factory.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/inbox.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/model_selection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/agent/src/runtime_types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/anonymous-user-id/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/api-gateway/src/client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/api-gateway/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/api-remotes/src/agent_lookup.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/api-remotes/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/api-remotes/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/boot.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/config_dump.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/environment.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/fail_loud.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/profile.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/reload.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/source_section.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/user_patches.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/app-boot/src/watch.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/attachment-local/src/image.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/attachment-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/attachment-local/src/store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/attachment/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/bash-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/bash-sandbox/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/fixture.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/rpc.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/trust.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/web_api_client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-connection/src/websocket_downlink.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-hmr/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-hmr/src/protocol.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-hmr/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-locale/src/core.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-locale/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-modules/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-modules/src/manifest.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-modules/src/system.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/context_provenance.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/conversation_assembler.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/conversation_location.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/conversation_registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/notifier.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/partial.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/pending.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/pending_blocks.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/provide.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/queue_mirror.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/request_inspection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/session.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/session_manager.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/session_service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/slots.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/subagent_lineage.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/tool_call_tree.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/workspace.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/workspace_manager.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-runtime/src/workspace_service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-schema-form/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-settings-contract/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/fixtures.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/settings_scope.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/snapshot.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/translate.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-test-runtime/src/workspaces.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-agent-preset/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-agent-preset/src/seat_store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-agent-preset/src/section_store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-agent-preset/src/settings_store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-commands/src/directory.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-commands/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-commands/src/popup.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-commands/src/ranking.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/assistant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/chat_snapshot_builder.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/command.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/common.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/compaction.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/fallback.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/inbox.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/message.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/mod.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/retry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/tool.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/turn_error.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/turn_max_tokens.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/conversation_nodes/turn_tail.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/images.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/input_blocks.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/input_contract.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/input_decorations.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/input_machine.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-conversation/src/metrics.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/card_model.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/dynamic_port.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/inventory.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/presentation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/run_card_index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-cordis/src/status.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-deliverables/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-deliverables/src/produced.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-deliverables/src/projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-directory-picker-browse/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-directory-picker-browse/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-directory-picker-browse/src/model.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-directory-picker-native/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-goal/src/bar.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-goal/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-input-trigger/src/detect.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-input-trigger/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-input-trigger/src/menu.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-input-trigger/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-jobs/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-layout/src/service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-message-feedback/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-message-feedback/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-model-selection/src/directory.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-model-selection/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-permission-presets/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-permission-presets/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-plan/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-primitives/src/ansi.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-primitives/src/markdown.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-general/src/document.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-general/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-models/src/api_key.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-models/src/editor.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-models/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-models/src/models.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-models/src/welcome.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-plugin-inventory/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-plugins/src/controllers.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-plugins/src/form.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings-plugins/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-settings/src/core.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-sidebar/src/state.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-skill/src/catalog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-skill/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-slots/src/core.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-slots/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-slots/src/renderer.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-slots/src/typed.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-subagent/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-subagent/src/model.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-theme/src/core.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-theme/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-tool/src/cards.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-tool/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-tool/src/model.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/assistant_definition.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/compaction_definitions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/contract.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/json_value.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/layout.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/message_definitions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/preview.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/prompt_diff.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/record.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/request_header.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/search_index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/snapshot_builder.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/table_controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/table_projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/text_value.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/timeline.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/timeline_controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/tool_definition.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/view_projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-trajectory/src/virtual_rows.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-user-questions/src/flow.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-user-questions/src/pending.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workflow-run/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workflow-run/src/panel.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workflow-run/src/projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workspace/src/browser_logic.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workspace/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workspace/src/state.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-ui-workspace/src/tree.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-web/src/boot.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/client-web/src/signal.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cmdline/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/engine.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/modules.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/node.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/node_assets.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/output_json.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/output_ledger.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/snapshot.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/typescript.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/watchdog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/worker_globals.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime-worker-thread/src/worker_json.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/code-runtime/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/command-compact/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/command-feedback/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/command-goal/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/command-goal/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/commands/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/commands/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-basic/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-basic/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-basic/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-basic/src/region.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-basic/src/summarizer.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-tool-result-pruner/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-tool-result-pruner/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction-tool-result-pruner/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction/src/service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/compaction/src/tool_pairing.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-api-catalog/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/api_catalog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/evaluator.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/guard.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/inspect_registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/orchestrator.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/providers.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-client-runner/src/slot_catalog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-dynamic-types/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/inspect_registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/remote.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/runner.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-host-runner/src/sandbox.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis-timer/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/context.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/events.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/fiber.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/logger.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/logger/format.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/plugin.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/cordis/src/utils.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/chunk_rows.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/preparation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/repair.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/request_header.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/session.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/core/src/session_store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/credentials-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/credentials/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/credentials/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/e2b/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/e2b/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-e2b/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-local-win32-native/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-local/src/fsio.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-local/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-local/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-observation-policy/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-observation-policy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs-sandbox/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/fs/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal-round-driver/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal-round-driver/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal/src/domain.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal/src/fold.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/goal/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/headless/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/headless/src/startup.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/codec.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/detached.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/events.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/matcher.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hook-protocol/src/runner.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hooks-claude-code/src/bridge.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hooks-claude-code/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/hooks-codex/src/bridge.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/agent_presets.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/approvals.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/credentials.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/downloads.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/events.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/goals.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/jobs.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/llm.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/method.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/questions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/rpc.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/sessions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/settings.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/skills.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/subagents.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/api/workspace.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/configuration.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/handler.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/interactions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/native_path_opener.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/presets.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/registry_workspace.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/session_export.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-apiproxy/src/session_runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-directory-picker-auto/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-directory-picker-browse/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-directory-picker-native/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-directory-picker-native/src/win32_dialog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-directory-picker/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-frontend-static/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-plugin-inventory/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/host-webserver/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/identity/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/invariants/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/invariants/src/noop.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/invariants/src/test_host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/jobs-local/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/jobs/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/jobs/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/jsonrpc-demo/src/runner.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/jsonrpc-demo/src/runtime_catalog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-deepseek/src/adapter.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-deepseek/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-deepseek/src/serialize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-deepseek/src/sse.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-deepseek/src/translate.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-mock-server/src/cli.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-mock-server/src/server.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/adapter.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/anthropic_messages.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/bedrock.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/catalog.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/codex_auth.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/context.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/context/deserialize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/discovery.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/executor.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/google_generative.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/json.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/openai_completions.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/openai_responses.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/plugin.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/replay.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/replay/deserialize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/stream.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-pi-ai/src/stream/deserialize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-replay/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-retry/src/history.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-retry/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-retry/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-retry/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm-retry/src/types/deserialize.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/adapter_failure.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/assembler.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/error.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/message.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/message_fields.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/never.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/retry_policy.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/llm/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader-smoke/src/agent_turn.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader-smoke/src/process.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/expression.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/host_hmr.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/javascript_plugin.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/javascript_plugin/json.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/launcher.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/node_plugin.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/node_tools.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/node_watch.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/profile_patch.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/loader/src/sandbox_service.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/abort.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/connection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/framing.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/instance.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/protocol.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp-stdio/src/translate.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/lsp/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/connection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/protocol.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/tools.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/mcp-client/src/transport.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/message-feedback/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/permission-presets/src/client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/permission-presets/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/permission-presets/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/persona/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/plan-mode/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/plan-mode/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/process-exit-hook/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/pwsh-local/src/lib.rs": {
+      "reason": "the pwsh executor suites self-skip without a real PowerShell, as the source's pwshCoverageExclusions exempted these files on pwsh-less hosts",
+      "unless": "pwsh"
+    },
+    "crates/pwsh-sandbox/src/lib.rs": {
+      "reason": "the pwsh executor suites self-skip without a real PowerShell, as the source's pwshCoverageExclusions exempted these files on pwsh-less hosts",
+      "unless": "pwsh"
+    },
+    "crates/repeat-tool-reminder/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-policy/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-policy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl-native/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/acl.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/grant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/path_boundary.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/runner.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/sandbox.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/spawn.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox-windows-acl/src/token.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox/src/escalation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sandbox/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/domain.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/persistence.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schedule/src/tools.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/schemastery/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/scope/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/scope/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/scope/src/store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-client/src/api.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-client/src/client.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-protocol/src/transport.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-protocol/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-protocol/src/wire.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-server/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/sdk-server/src/server.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-checkpoint-policy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-log-export/src/command.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-log-export/src/controller.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-jsonl/src/backend.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-jsonl/src/format.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-jsonl/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-jsonl/src/win32.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-jsonl/src/zstd.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-sqlite/src/backend.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence-sqlite/src/schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence/src/preparations.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence/src/stored_events.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence/src/stored_events/raw_object.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-persistence/src/write_behind.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-projection-cache/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-projection/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query-sqlite/src/engine.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query-sqlite/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query-sqlite/src/query.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query-sqlite/src/schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/corpus.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/documents.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/extraction.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/filters.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/tracing.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-query/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-reference/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-reference/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-reference/src/projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-reference/src/uri.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-stats/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-telemetry-otel/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-telemetry-otel/src/native.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-telemetry/src/coordinator.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-telemetry/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-telemetry/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-all-prompts-llm/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-all-prompts-llm/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-first-prompt-llm/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-first-prompt-llm/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-llm/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title-llm/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/session-title/src/model.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/settings-file/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/settings/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/settings/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/shell-env/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/shell/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/skill-badge/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/skill-filesystem/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/skill/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/spill-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/spill-local/src/store.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/spill-policy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/spill/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-domain/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-json/src/atomic.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-json/src/format.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-json/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-json/src/unit.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-sqlite/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-sqlite/src/schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage-sqlite/src/unit.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/storage/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-acp/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-acp/src/run.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-claude-code/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-claude-code/src/process.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-claude-code/src/run.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-codex/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-codex/src/run.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-codex/src/wire.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-fork-in-process/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-in-process-driver/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-sdk/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-sdk/src/run.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent-spawn-in-process/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/activation_setup_registry.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/assistant_output.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/child_agent.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/continuation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/descriptor.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/descriptor_seed.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/error.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/lifecycle.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/list_children.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/out_of_process.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/run_settlement.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subagent/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/environment.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/output.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/process.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/remote.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-e2b/src/terminal.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-local/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-local/src/output.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-local/src/process_inspector.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-local/src/spawn.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess-local/src/terminal.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/subprocess/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/system-prompt/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/terminal-bash/src/backend.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/terminal-bash/src/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/terminal-bash/src/session.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/terminal/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/terminal/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/time-context/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/time-context/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/time-context/src/request_zone.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/time-context/src/timestamp.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tmux-context/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/breakdown_projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/estimate.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/surface_fold.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/surface_projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/token-meter/src/usage_projection.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-ask-user/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-bash-persistent/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-bash/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-cordis/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-cordis/src/inspect.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-cordis/src/present.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-cordis/src/providers.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs-search/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/diff.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/edit.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/error.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/read.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/read_image.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/read_render.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/read_target.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/sandbox.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/session_cwd.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-fs/src/write.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-goal/src/authority.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-goal/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-goal/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-jobs/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-jobs/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-lsp/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-lsp/src/render.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-pwsh/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-ralph/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-ralph/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-ralph/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/input.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/operations.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/presentation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/service_boundary.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-session-query/src/workspace_access.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-skill/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-str-replace-editor/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-subagent-control/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-subagent-report/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-subagent/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-terminal/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-terminal/src/render.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-timeout-policy/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-todo/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-web/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-workflow/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-workflow/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tool-workflow/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/code_output.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/json_schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/json_schema/lossless.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/presentation.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/py_types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/testing.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/tools/src/ts_types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/engine.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/face.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/js.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/jstext.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/paths.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/remote.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/repository.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/repository/config.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/repository/declarations.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/repository/diagnostics.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/repository_graphs.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/syntax.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/system.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/native/workspace.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/analyzer/package.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/catalog/jsdoc.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/catalog/markdown.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/catalog/mod.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/catalog/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/emitter.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/plugin.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/remote.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/renderer.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/schema.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/source_map.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/text.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-generator/src/workspace.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-loader/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-protocol/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-protocol/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-registry/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/typert-registry/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/user-approval/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/user-approval/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/user-questions/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/atomic_write.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/brand.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/home_paths.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/native_command.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/output_retention.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/product_assets.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/util/src/timeout.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-app/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-app/src/startup.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-fetch-http/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-fetch-http/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-fetch-http/src/policy.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-fetch-http/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-deepseek/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-deepseek/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-deepseek/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-exa/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-exa/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-exa/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-perplexity/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-perplexity/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-perplexity/src/provider.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web-search-perplexity/src/types.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/web/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/win32-directory-dialog/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/win32-durable-namespace/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/host.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/job_executor.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/meta.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/process.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/protocol.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/realm.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/runtime.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow-worker-thread/src/worker.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow/src/index.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workflow/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workspace/src/entity.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workspace/src/invariant.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workspace/src/lib.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workspace/src/paths.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    },
+    "crates/workspace/src/spec.rs": {
+      "reason": "below the per-file bar when the instrumented lane measured it"
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "@seekdeep-ai/seekdeep-web-frontend",
+  "description": "Web application entry: vite build over the @seekdeep-ai/seekdeep-client-web shell library; dist/ served by apps/cli's seekdeep web",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "apps/web"
+  },
+  "type": "module",
+  "exports": {
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "scripts": {
+    "build": "cargo xtask web-frontend && vite build --config generated/vite.config.mjs",
+    "dev": "cargo xtask web-frontend && vite --config generated/vite.config.mjs",
+    "watch": "cargo xtask web-frontend && vite build --watch --config generated/vite.config.mjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-client-web": "workspace:^",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-group": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-web-react": "workspace:^",
+    "@seekdeep-ai/seekdeep-cmdline": "workspace:^",
+    "@seekdeep-ai/seekdeep-pwsh-local": "workspace:^",
+    "@types/node": "^22.0.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "playwright": "^1.49.0",
+    "typescript": "^6.0.3",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.8",
+    "fflate": "^0.8.2"
+  }
+}

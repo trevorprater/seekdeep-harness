@@ -1,0 +1,3 @@
+# Bilingual-pair consistency record. Update both hashes after changing either FAMILY file.
+FAMILY.md: 8cc370eabcf596c16fafe3e37ae5b16f3848231d
+FAMILY.zh.md: 59a7097a2b32d60fdfc28dc4e835616b12cd91a0

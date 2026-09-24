@@ -1,0 +1,121 @@
+[package]
+name = "seekdeep-client-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "React-free Rust/WASM Client object layer and runtime services"
+autotests = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["wasm-bindings"]
+wasm-bindings = ["seekdeep-client-ui-slots/wasm-bindings"]
+
+[dependencies]
+base64.workspace = true
+indexmap.workspace = true
+futures.workspace = true
+seekdeep-client-ui-slots = { path = "../client-ui-slots", default-features = false }
+seekdeep-client-settings-contract = { path = "../client-settings-contract" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-identity = { path = "../identity" }
+seekdeep-lossless-json = { path = "../lossless-json" }
+seekdeep-failure-display = { path = "../failure-display" }
+serde_json.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_client_apply_parity"
+path = "tests/wasm_client_apply_parity.rs"
+
+[[test]]
+name = "wasm_conversation_classifier_parity"
+path = "tests/wasm_conversation_classifier_parity.rs"
+
+[[test]]
+name = "wasm_conversation_registry_parity"
+path = "tests/wasm_conversation_registry_parity.rs"
+
+[[test]]
+name = "wasm_invariant_parity"
+path = "tests/wasm_invariant_parity.rs"
+
+[[test]]
+name = "wasm_misc_parity"
+path = "tests/wasm_misc_parity.rs"
+
+[[test]]
+name = "wasm_native_definition_parity"
+path = "tests/wasm_native_definition_parity.rs"
+
+[[test]]
+name = "wasm_projection_store_parity"
+path = "tests/wasm_projection_store_parity.rs"
+
+[[test]]
+name = "wasm_provide_parity"
+path = "tests/wasm_provide_parity.rs"
+
+[[test]]
+name = "wasm_public_api_parity"
+path = "tests/wasm_public_api_parity.rs"
+
+[[test]]
+name = "wasm_runtime_owner_parity"
+path = "tests/wasm_runtime_owner_parity.rs"
+
+[[test]]
+name = "wasm_scope_parity"
+path = "tests/wasm_scope_parity.rs"
+
+[[test]]
+name = "wasm_session_manager_parity"
+path = "tests/wasm_session_manager_parity.rs"
+
+[[test]]
+name = "wasm_session_parity"
+path = "tests/wasm_session_parity.rs"
+
+[[test]]
+name = "wasm_session_service_parity"
+path = "tests/wasm_session_service_parity.rs"
+
+[[test]]
+name = "wasm_slots_service_parity"
+path = "tests/wasm_slots_service_parity.rs"
+
+[[test]]
+name = "wasm_store_parity"
+path = "tests/wasm_store_parity.rs"
+
+[[test]]
+name = "wasm_value_bridge_parity"
+path = "tests/wasm_value_bridge_parity.rs"
+
+[[test]]
+name = "wasm_workspace_service_parity"
+path = "tests/wasm_workspace_service_parity.rs"

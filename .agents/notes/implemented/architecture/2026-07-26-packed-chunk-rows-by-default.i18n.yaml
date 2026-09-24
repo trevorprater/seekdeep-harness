@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-26-packed-chunk-rows-by-default.md
+2026-07-26-packed-chunk-rows-by-default.md: a3954850a7e76d968c2285a7b998b76791cb32f1
+2026-07-26-packed-chunk-rows-by-default.zh.md: a1f653f35af53850f2e5cf033e0fa11e723cc71c

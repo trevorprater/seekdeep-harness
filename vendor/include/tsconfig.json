@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "noImplicitAny": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitOverride": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": [
+  ],
+  "references": [,
+    {,
+      "path": "../cosmokit",
+    },
+    {,
+      "path": "../cordis",
+    },
+    {,
+      "path": "../loader",
+    }
+  ]
+}

@@ -1,34 +1,52 @@
 //! Immutable message values, identity, and construction helpers.
 
-use serde::{Deserialize, Serialize};
+use std::ops::Deref;
+
+use seekdeep_lossless_json::{JsonString, JsonValue};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::Error as _};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::{
+    MessageFields,
     brand::{CallId, MessageId},
     types::{ContentBlock, StreamChunk, is_token_delta},
 };
 
 /// Maximum UTF-16 code-unit count for a notice summary.
 pub const CONTEXT_SUMMARY_MAX_CHARS: usize = 120;
+const ELLIPSIS_UTF16: u16 = 0x2026;
+
+/// One named contribution to a snapshot-form runtime context.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextSnapshotSection {
+    /// Contributing subsystem name.
+    pub name: String,
+    /// Exact model-facing text.
+    pub text: String,
+}
 
 /// Bounds one notice summary and appends a single ellipsis when truncated.
+///
+/// This native `str` wrapper reconstructs an isolated surrogate as U+FFFD.
+/// Foreign-string bindings use [`bound_context_summary_units`] to retain the
+/// exact ECMAScript code units.
 #[must_use]
 pub fn bound_context_summary(summary: &str) -> String {
-    if summary.encode_utf16().count() <= CONTEXT_SUMMARY_MAX_CHARS {
-        return summary.to_owned();
+    let units = summary.encode_utf16().collect::<Vec<_>>();
+    String::from_utf16_lossy(&bound_context_summary_units(&units))
+}
+
+/// Exact ECMAScript-code-unit form of [`bound_context_summary`], including a
+/// lone surrogate when `String.prototype.slice` cuts a valid pair.
+#[must_use]
+pub fn bound_context_summary_units(summary: &[u16]) -> Vec<u16> {
+    if summary.len() <= CONTEXT_SUMMARY_MAX_CHARS {
+        return summary.to_vec();
     }
-    let mut used = 0;
-    let mut boundary = 0;
-    for (index, character) in summary.char_indices() {
-        let width = character.len_utf16();
-        if used + width > CONTEXT_SUMMARY_MAX_CHARS - 1 {
-            break;
-        }
-        used += width;
-        boundary = index + character.len_utf8();
-    }
-    format!("{}…", &summary[..boundary])
+    let mut bounded = summary[..CONTEXT_SUMMARY_MAX_CHARS - 1].to_vec();
+    bounded.push(ELLIPSIS_UTF16);
+    bounded
 }
 
 /// Provider-neutral conversation role.
@@ -44,13 +62,51 @@ pub enum MessageRole {
 }
 
 /// Merge-extensible producer attribution retained as lossless JSON fields.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MessageSource {
     /// Producer kind.
     pub kind: String,
     /// Kind-specific fields.
-    #[serde(flatten)]
-    pub fields: Map<String, Value>,
+    pub fields: MessageFields,
+}
+
+impl Serialize for MessageSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        JsonValue::object(
+            std::iter::once((
+                JsonString::from("kind"),
+                Value::String(self.kind.clone()).into(),
+            ))
+            .chain(
+                self.fields
+                    .iter()
+                    .filter(|(field, _)| field.as_str() != Some("kind")),
+            ),
+        )
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for MessageSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        if !value.is_object() {
+            return Err(D::Error::custom("message source must be an object"));
+        }
+        let kind = value
+            .get("kind")
+            .and_then(|value| value.deserialize::<String>().ok())
+            .ok_or_else(|| D::Error::custom("message source kind must be a string"))?;
+        let mut fields = MessageFields::try_from(value).map_err(D::Error::custom)?;
+        fields.remove("kind");
+        Ok(Self { kind, fields })
+    }
 }
 
 impl MessageSource {
@@ -59,7 +115,7 @@ impl MessageSource {
     pub fn user() -> Self {
         Self {
             kind: "user".to_owned(),
-            fields: Map::new(),
+            fields: MessageFields::new(),
         }
     }
 
@@ -70,7 +126,7 @@ impl MessageSource {
         fields.insert("plugin".to_owned(), Value::String(plugin.into()));
         Self {
             kind: "plugin".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 
@@ -82,7 +138,7 @@ impl MessageSource {
         fields.insert("model".to_owned(), Value::String(model.into()));
         Self {
             kind: "model".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 
@@ -96,34 +152,216 @@ impl MessageSource {
         );
         Self {
             kind: "tool".to_owned(),
-            fields,
+            fields: fields.into(),
         }
     }
 }
 
 /// One immutable identified provider-neutral message.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Message {
     /// Stable identity.
-    pub id: MessageId,
+    id: MessageId,
     /// Conversation role.
-    pub role: MessageRole,
+    role: MessageRole,
     /// Exact model-facing blocks.
-    pub content: Vec<ContentBlock>,
+    content: Vec<ContentBlock>,
     /// Producer attribution.
-    pub source: MessageSource,
+    source: MessageSource,
+    /// Module-augmented message fields preserved by construction, persistence,
+    /// and routing boundaries.
+    fields: MessageFields,
+}
+
+impl<'de> Deserialize<'de> for Message {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let mut fields = MessageFields::new();
+        for (name, field) in value
+            .object_entries()
+            .ok_or_else(|| D::Error::custom("message must be an object"))?
+        {
+            let name: JsonString = name.deserialize().map_err(D::Error::custom)?;
+            if !matches!(name.as_str(), Some("id" | "role" | "content" | "source")) {
+                fields.insert(name, field.to_owned());
+            }
+        }
+        Ok(Self {
+            id: message_field(&value, "id")?,
+            role: message_field(&value, "role")?,
+            content: message_field(&value, "content")?,
+            source: message_field(&value, "source")?,
+            fields,
+        })
+    }
+}
+
+fn message_field<T: serde::de::DeserializeOwned, E: serde::de::Error>(
+    value: &JsonValue,
+    field: &'static str,
+) -> Result<T, E> {
+    value
+        .get(field)
+        .ok_or_else(|| E::missing_field(field))?
+        .deserialize()
+        .map_err(E::custom)
+}
+
+impl Serialize for Message {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let source = JsonValue::from_serialize(&self.source).map_err(S::Error::custom)?;
+        let content = JsonValue::from_serialize(&self.content).map_err(S::Error::custom)?;
+        let role = JsonValue::from_serialize(&self.role).map_err(S::Error::custom)?;
+        let id = JsonValue::from_serialize(&self.id).map_err(S::Error::custom)?;
+        let mut fields: Vec<(JsonString, JsonValue)> = match self.role {
+            MessageRole::User if self.source.kind == "tool" => {
+                vec![("source".into(), source), ("content".into(), content)]
+            }
+            MessageRole::User => {
+                vec![("content".into(), content), ("source".into(), source)]
+            }
+            MessageRole::System | MessageRole::Assistant => vec![
+                ("role".into(), role.clone()),
+                ("content".into(), content),
+                ("source".into(), source),
+            ],
+        };
+        fields.extend(self.fields.iter());
+        if self.role == MessageRole::User {
+            fields.push(("role".into(), role));
+        }
+        fields.push(("id".into(), id));
+        JsonValue::object(fields).serialize(serializer)
+    }
+}
+
+/// User-role specialization of the shared immutable message representation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UserMessage(Message);
+
+impl UserMessage {
+    /// Creates an identified user-role message.
+    #[must_use]
+    pub fn new(content: Vec<ContentBlock>, source: MessageSource) -> Self {
+        Self(Message::new(MessageRole::User, content, source))
+    }
+
+    /// Validates and specializes an existing message without changing identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns the original message when it does not have the user role.
+    pub fn try_from_message(message: Message) -> Result<Self, Box<Message>> {
+        if message.role == MessageRole::User {
+            Ok(Self(message))
+        } else {
+            Err(Box::new(message))
+        }
+    }
+
+    /// Consumes the specialization and returns the shared representation.
+    #[must_use]
+    pub fn into_message(self) -> Message {
+        self.0
+    }
+}
+
+impl Deref for UserMessage {
+    type Target = Message;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl Message {
+    /// Stable identity preserved across every representation boundary.
+    #[must_use]
+    pub const fn id(&self) -> &MessageId {
+        &self.id
+    }
+
+    /// Provider-neutral conversation role.
+    #[must_use]
+    pub const fn role(&self) -> MessageRole {
+        self.role
+    }
+
+    /// Exact model-facing blocks.
+    #[must_use]
+    pub fn content(&self) -> &[ContentBlock] {
+        &self.content
+    }
+
+    /// Required producer attribution.
+    #[must_use]
+    pub const fn source(&self) -> &MessageSource {
+        &self.source
+    }
+
+    /// Module-augmented message fields.
+    #[must_use]
+    pub const fn fields(&self) -> &MessageFields {
+        &self.fields
+    }
+
     /// Creates an identified message.
     #[must_use]
     pub fn new(role: MessageRole, content: Vec<ContentBlock>, source: MessageSource) -> Self {
+        Self::new_with_fields(role, content, source, MessageFields::new())
+    }
+
+    /// Creates an identified message while preserving module-augmented fields.
+    #[must_use]
+    pub fn new_with_fields(
+        role: MessageRole,
+        content: Vec<ContentBlock>,
+        source: MessageSource,
+        fields: impl Into<MessageFields>,
+    ) -> Self {
+        let mut fields = fields.into();
+        remove_reserved_message_fields(&mut fields);
         Self {
             id: MessageId::new(Uuid::new_v4().to_string()),
             role,
             content,
             source,
+            fields,
         }
+    }
+
+    /// Detaches a complete message that already has a durable identity.
+    #[must_use]
+    pub fn from_existing(
+        id: MessageId,
+        role: MessageRole,
+        content: Vec<ContentBlock>,
+        source: MessageSource,
+        fields: impl Into<MessageFields>,
+    ) -> Self {
+        let mut fields = fields.into();
+        remove_reserved_message_fields(&mut fields);
+        Self {
+            id,
+            role,
+            content,
+            source,
+            fields,
+        }
+    }
+
+    /// Replaces producer attribution while retaining all other immutable facts.
+    #[must_use]
+    pub fn with_source(mut self, source: MessageSource) -> Self {
+        self.source = source;
+        self
     }
 
     /// Creates direct or plugin-produced user input.
@@ -160,6 +398,12 @@ impl Message {
     }
 }
 
+fn remove_reserved_message_fields(fields: &mut MessageFields) {
+    for field in ["id", "role", "content", "source"] {
+        fields.remove(field);
+    }
+}
+
 /// Re-export of the canonical first-token predicate beside message helpers.
 #[must_use]
 pub fn chunk_is_token_delta(chunk: &StreamChunk) -> bool {
@@ -176,6 +420,14 @@ mod tests {
         let bounded = bound_context_summary(&summary);
         assert_eq!(bounded.encode_utf16().count(), CONTEXT_SUMMARY_MAX_CHARS);
         assert!(bounded.ends_with('…'));
+
+        let split_pair = format!("{}😀x", "a".repeat(118))
+            .encode_utf16()
+            .collect::<Vec<_>>();
+        let exact = bound_context_summary_units(&split_pair);
+        assert_eq!(exact.len(), CONTEXT_SUMMARY_MAX_CHARS);
+        assert_eq!(exact[118], 0xd83d);
+        assert_eq!(exact[119], ELLIPSIS_UTF16);
     }
 
     #[test]
@@ -183,15 +435,22 @@ mod tests {
         let message = Message::tool_result(
             &CallId::new("call-1"),
             vec![ContentBlock::Text {
-                text: "done".to_owned(),
+                text: "done".into(),
             }],
             false,
         );
-        assert_eq!(message.role, MessageRole::User);
-        assert_eq!(message.source.fields["callId"], "call-1");
-        let ContentBlock::ToolResult { tool_call_id, .. } = &message.content[0] else {
+        assert_eq!(message.role(), MessageRole::User);
+        assert_eq!(message.source().fields["callId"], "call-1");
+        let ContentBlock::ToolResult { tool_call_id, .. } = &message.content()[0] else {
             panic!("tool result block");
         };
         assert_eq!(tool_call_id.as_str(), "call-1");
+    }
+
+    #[test]
+    fn source_round_trip_preserves_kind_specific_field_order() {
+        let raw = r#"{"kind":"goal","goalId":"goal-1","revision":1,"round":2}"#;
+        let source: MessageSource = serde_json::from_str(raw).unwrap();
+        assert_eq!(serde_json::to_string(&source).unwrap(), raw);
     }
 }

@@ -1,0 +1,27 @@
+.seekdeep-lockup { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.seekdeep-wordmark { display: block; height: 22px; width: auto; color: var(--vp-c-text-1); }
+.seekdeep-tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vp-c-brand-soft);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--vp-c-brand-1);
+}
+
+.VPSidebar::-webkit-scrollbar { width: 6px; }
+.VPSidebar::-webkit-scrollbar-track { background: transparent; }
+.VPSidebar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 3px;
+  transition: background-color 0.3s;
+}
+.VPSidebar[data-scrolling]::-webkit-scrollbar-thumb { background-color: var(--vp-c-text-3); }
+@supports not selector(::-webkit-scrollbar) {
+  .VPSidebar { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .VPSidebar[data-scrolling] { scrollbar-color: var(--vp-c-text-3) transparent; }
+}

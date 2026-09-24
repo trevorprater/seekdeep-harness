@@ -1,0 +1,848 @@
+{
+  "serviceCatalog": {
+    "mode": "catalog",
+    "services": [
+      {
+        "key": "layout",
+        "description": "The outward layout face (`ctx.layout`): the panel transitions other plugins may trigger — and exactly what a test fake must supply.",
+        "methods": [
+          {
+            "signature": "toggleSidebar(): void"
+          },
+          {
+            "signature": "openDetails(): void"
+          },
+          {
+            "signature": "closeDetails(): void"
+          }
+        ]
+      },
+      {
+        "key": "locale",
+        "description": "Dictionary registry plus locale preference.",
+        "methods": [
+          {
+            "signature": "getLocale(): LocaleSnapshot"
+          },
+          {
+            "signature": "getSnapshot(): LocaleSnapshot"
+          },
+          {
+            "signature": "subscribe(fn: () => void): () => void"
+          },
+          {
+            "signature": "setLocale(id: string): void"
+          },
+          {
+            "signature": "register<N extends keyof LocaleNamespaceMap & string>(ns: N, dicts: Record<LocaleId, LocaleDictOf<N>>): () => void"
+          },
+          {
+            "signature": "register(ns: string, locale: string, dict: LocaleDict): () => void"
+          },
+          {
+            "signature": "bind<N extends keyof LocaleNamespaceMap & string>(ns: N): TranslateNS<N>"
+          },
+          {
+            "signature": "bind(ns: string): Translate"
+          }
+        ]
+      },
+      {
+        "key": "sessions",
+        "description": "The sessions-service face injected as `ctx.sessions`.",
+        "methods": [
+          {
+            "signature": "open(id: SessionId): void"
+          },
+          {
+            "signature": "openSubagent(address: SubagentAddress): void"
+          },
+          {
+            "signature": "setSubagentCatalogOpen(parentSessionId: SessionId, open: boolean): void"
+          },
+          {
+            "signature": "refreshSubagents(parentSessionId: SessionId): Promise<void>"
+          },
+          {
+            "signature": "search( query: string, signal: AbortSignal, ): Promise<RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>>"
+          },
+          {
+            "signature": "fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>"
+          },
+          {
+            "signature": "scope(id: SessionId): AgentContext | undefined"
+          },
+          {
+            "signature": "binding(id: SessionId): SessionBinding | undefined"
+          }
+        ]
+      },
+      {
+        "key": "slots",
+        "description": "cordis Service layer of the slot system; see the module doc for the split with SlotCore.",
+        "methods": [
+          {
+            "signature": "declare readonly register: SlotCore['register']"
+          },
+          {
+            "signature": "inject(key: keyof SlotMap & string, callback: () => SlotInjectionEffect): () => void"
+          }
+        ]
+      },
+      {
+        "key": "theme",
+        "description": "Theme registry and preference owner.",
+        "methods": [
+          {
+            "signature": "getTheme(): ThemeSnapshot"
+          },
+          {
+            "signature": "setTheme(id: string): void"
+          },
+          {
+            "signature": "register(definition: ThemeDefinition): () => void"
+          },
+          {
+            "signature": "overrideTokens(source: string, tokens: ThemeTokenOverrides): () => void"
+          }
+        ]
+      },
+      {
+        "key": "timer",
+        "description": "Disposable timer helpers mixed into Cordis contexts.",
+        "methods": [
+          {
+            "signature": "timeout(callback: () => void, delay: number): () => void"
+          },
+          {
+            "signature": "timeout(delay: number): Promise<void>"
+          },
+          {
+            "signature": "interval(callback: () => void, delay: number): () => void"
+          },
+          {
+            "signature": "interval<R = any>(delay: number): AsyncIterableIterator<void, R, void>"
+          },
+          {
+            "signature": "throttle<F extends (...args: any[]) => void>(callback: F, delay: number, noTrailing?: boolean): F & { dispose: () => void }"
+          },
+          {
+            "signature": "debounce<F extends (...args: any[]) => void>(callback: F, delay: number): F & { dispose: () => void }"
+          }
+        ]
+      },
+      {
+        "key": "workspaces",
+        "description": "The workspaces-service face injected as `ctx.workspaces`.",
+        "methods": [
+          {
+            "signature": "connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>"
+          },
+          {
+            "signature": "startSession(workspaceId?: WorkspaceId): void"
+          },
+          {
+            "signature": "create(input: { path: string }): Promise<WorkspaceView>"
+          },
+          {
+            "signature": "pickDirectory(): Promise<string | null>"
+          },
+          {
+            "signature": "listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>"
+          },
+          {
+            "signature": "createDirectory(path: string, name: string): Promise<string>"
+          },
+          {
+            "signature": "openPath(path: string): Promise<void>"
+          },
+          {
+            "signature": "rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView>"
+          },
+          {
+            "signature": "delete(workspaceId: WorkspaceId): Promise<void>"
+          },
+          {
+            "signature": "insertSessionBefore(workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId): Promise<WorkspaceView>"
+          },
+          {
+            "signature": "archiveSession(sessionId: SessionId): Promise<void>"
+          }
+        ]
+      }
+    ]
+  },
+  "services": {
+    "layout": {
+      "mode": "service",
+      "service": {
+        "key": "layout",
+        "description": "The outward layout face (`ctx.layout`): the panel transitions other plugins may trigger — and exactly what a test fake must supply. The attachPanels wiring hook stays on the concrete class (root-entry assembly only).",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"layout\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "layout"
+            ],
+            "expression": "ctx.layout"
+          }
+        },
+        "methods": [
+          {
+            "signature": "toggleSidebar(): void",
+            "description": "Toggle the sidebar panel (closed ⟷ contract default width).",
+            "parameters": []
+          },
+          {
+            "signature": "openDetails(): void",
+            "description": "Open the details panel (no-op when already open).",
+            "parameters": []
+          },
+          {
+            "signature": "closeDetails(): void",
+            "description": "Close the details panel.",
+            "parameters": []
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "locale": {
+      "mode": "service",
+      "service": {
+        "key": "locale",
+        "description": "Dictionary registry plus locale preference. Lookup chain per key: the entry's namespace in the active locale -> that namespace's zh fallback -> the shared common namespace (active, then zh) -> the key itself (missing text stays visible, fail loud in the UI rather than blank). Reads go through getLocale; writes only through setLocale; continuous sync through the `locale/change` event, or through the LocaleFace getSnapshot/subscribe pair the render machinery consumes (installed via `ctx.slots.installLocale`).",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"locale\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "locale"
+            ],
+            "expression": "ctx.locale"
+          }
+        },
+        "methods": [
+          {
+            "signature": "getLocale(): LocaleSnapshot",
+            "description": "Read the current immutable locale snapshot.",
+            "parameters": [],
+            "returns": "the current snapshot (stable reference until the next change)."
+          },
+          {
+            "signature": "getSnapshot(): LocaleSnapshot",
+            "description": "LocaleFace getSnapshot: the current snapshot (carries `revision`; stable reference between changes, uSES-safe).",
+            "parameters": [],
+            "returns": "the current snapshot."
+          },
+          {
+            "signature": "subscribe(fn: () => void): () => void",
+            "description": "LocaleFace subscribe: notified on every snapshot change (locale switch or dictionary registration — registrations bump the revision so already rendered outlets pick up late-arriving dictionaries).",
+            "parameters": [
+              {
+                "name": "fn",
+                "description": "change callback."
+              }
+            ],
+            "returns": "unsubscribe."
+          },
+          {
+            "signature": "setLocale(id: string): void",
+            "description": "Switch the active locale — the only user preference write entry.",
+            "parameters": [
+              {
+                "name": "id",
+                "description": "a registered locale id; unknown ids throw."
+              }
+            ]
+          },
+          {
+            "signature": "register<N extends keyof LocaleNamespaceMap & string>(ns: N, dicts: Record<LocaleId, LocaleDictOf<N>>): () => void",
+            "description": "Register a declared namespace's dictionaries, all locales in one call — the typed form: each dictionary is checked against the namespace's LocaleNamespaceMap key union (a missing or extra key is a compile error), and every shipped locale is required (bilingual balance enforced at registration). Duplicate (ns, locale) throws (single occupant; a namespace's texts have one owner). Registration bumps the revision so mounted outlets pick up late-arriving dictionaries.",
+            "parameters": [
+              {
+                "name": "ns",
+                "description": "a namespace merged into LocaleNamespaceMap."
+              },
+              {
+                "name": "dicts",
+                "description": "complete dictionaries keyed by locale id."
+              }
+            ],
+            "returns": "disposer removing every locale registered by this call (idempotent)."
+          },
+          {
+            "signature": "register(ns: string, locale: string, dict: LocaleDict): () => void",
+            "description": "Single-locale untyped form for namespaces outside the merge table (dynamic composition, tests).",
+            "parameters": [
+              {
+                "name": "ns",
+                "description": "namespace."
+              },
+              {
+                "name": "locale",
+                "description": "locale tag."
+              },
+              {
+                "name": "dict",
+                "description": "dictionary."
+              }
+            ],
+            "returns": "disposer (idempotent)."
+          },
+          {
+            "signature": "bind<N extends keyof LocaleNamespaceMap & string>(ns: N): TranslateNS<N>",
+            "description": "Bind a declared namespace to a translate function typed to its dictionary key union (plus the shared common vocabulary) — the same key domain the framework-injected `t` seat carries. The returned reference is stable per namespace (repeat binds return the same function), so it can ride inject surfaces without breaking memoization.",
+            "parameters": [
+              {
+                "name": "ns",
+                "description": "a namespace merged into LocaleNamespaceMap."
+              }
+            ],
+            "returns": "the typed translate function (reads the active locale at call time)."
+          },
+          {
+            "signature": "bind(ns: string): Translate",
+            "description": "Untyped form for namespaces outside the merge table (dynamic composition, tests).",
+            "parameters": [
+              {
+                "name": "ns",
+                "description": "namespace."
+              }
+            ],
+            "returns": "the translate function."
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "sessions": {
+      "mode": "service",
+      "service": {
+        "key": "sessions",
+        "description": "The sessions-service face injected as `ctx.sessions`.",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"sessions\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "sessions"
+            ],
+            "expression": "ctx.sessions"
+          }
+        },
+        "methods": [
+          {
+            "signature": "open(id: SessionId): void",
+            "description": "Select a session as current.",
+            "parameters": [
+              {
+                "name": "id",
+                "description": "session id (must exist in the list; unknown ids fail loud)."
+              }
+            ]
+          },
+          {
+            "signature": "openSubagent(address: SubagentAddress): void",
+            "description": "Open a healthy catalog child through its exact direct-parent address.",
+            "parameters": [
+              {
+                "name": "address",
+                "description": "catalog-derived parent and child ids."
+              }
+            ]
+          },
+          {
+            "signature": "setSubagentCatalogOpen(parentSessionId: SessionId, open: boolean): void",
+            "description": "Mark whether a catalog menu is consuming live membership updates.",
+            "parameters": [
+              {
+                "name": "parentSessionId",
+                "description": "catalog owner."
+              },
+              {
+                "name": "open",
+                "description": "current menu state."
+              }
+            ]
+          },
+          {
+            "signature": "refreshSubagents(parentSessionId: SessionId): Promise<void>",
+            "description": "Refresh one direct-child catalog.",
+            "parameters": [
+              {
+                "name": "parentSessionId",
+                "description": "catalog owner."
+              }
+            ],
+            "returns": "completion of the current or newly started refresh."
+          },
+          {
+            "signature": "search( query: string, signal: AbortSignal, ): Promise<RpcResult<{ items: SessionSearchResultItem[]; hasMore: boolean }>>",
+            "description": "Search the Host's visible message-content index. Results stay request-local; the list snapshot remains the metadata authority.",
+            "parameters": [
+              {
+                "name": "query",
+                "description": "non-blank literal phrase."
+              },
+              {
+                "name": "signal",
+                "description": "cancellation for a superseded search."
+              }
+            ],
+            "returns": "bounded results, or a business/transport error."
+          },
+          {
+            "signature": "fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>",
+            "description": "Fork a session from a completed-turn prefix of the source; on resolution the child is in the list store and `open()` can target it.",
+            "parameters": [
+              {
+                "name": "opts",
+                "description": "source session id, the optional event seq anchoring the cut (the boundary is the first turn/end at or after it; an in-log anchor in an open turn is unavailable rather than clipped backward), and whether to increment an inherited durable title before resolving."
+              }
+            ],
+            "returns": "the child session id.",
+            "throws": [
+              "when the fork fails, or when a requested child-title rename fails after creation."
+            ]
+          },
+          {
+            "signature": "scope(id: SessionId): AgentContext | undefined",
+            "description": "Resolve an Agent-scoped context view (use-and-discard).",
+            "parameters": [
+              {
+                "name": "id",
+                "description": "session id."
+              }
+            ],
+            "returns": "scoped ctx, or undefined for a session neither listed nor already scoped."
+          },
+          {
+            "signature": "binding(id: SessionId): SessionBinding | undefined",
+            "description": "Resolve the stable session binding (scope-addressed assembly feed).",
+            "parameters": [
+              {
+                "name": "id",
+                "description": "session id."
+              }
+            ],
+            "returns": "binding, or undefined for a session neither listed nor already scoped."
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "slots": {
+      "mode": "service",
+      "service": {
+        "key": "slots",
+        "description": "cordis Service layer of the slot system; see the module doc for the split with SlotCore.",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"slots\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "slots"
+            ],
+            "expression": "ctx.slots"
+          }
+        },
+        "methods": [
+          {
+            "signature": "declare readonly register: SlotCore['register']",
+            "description": "The single registration API. The typed face IS the core's register (both overloads reused verbatim — one authority, no structural copy; see SlotCore.register for children declaration, store seat, inject face, load-time validation, and the unload cascade). This layer adds: disposal through the caller's ctx.effect (fiber unload = cascade), exclusive-factory minting (`store: createXxxStore` becomes a per-entry handle), the registrant diagnostics stamp, and store-instance lifecycle on the entry axis.\n\nDeclared here, implemented by prototype assignment below the class: it MUST stay a prototype method (never an instance arrow) — the cordis service proxy binds `this.ctx` to the CALLER's context at call time, which is what routes the effect (and the unload cascade) into the caller's fiber. An arrow property would freeze `this` to the service's own root ctx and silently break per-plugin disposal.",
+            "parameters": []
+          },
+          {
+            "signature": "inject(key: keyof SlotMap & string, callback: () => SlotInjectionEffect): () => void",
+            "description": "Install an effect for each declaration lifetime of a slot. The callback runs synchronously when the declaration already exists; otherwise it runs inside the declaring `register()` call after the declaration is committed. Collapse disposes the effect and a later declaration runs it again. Callback effects are synchronous disposers; iterable effects install transactionally and dispose in reverse order. The controller belongs to the caller's fiber, so plugin unload cancels a pending wait and removes any active contribution.",
+            "parameters": [
+              {
+                "name": "key",
+                "description": "declared SlotMap key to depend on."
+              },
+              {
+                "name": "callback",
+                "description": "creates one disposer or an iterable of disposers."
+              }
+            ],
+            "returns": "idempotent disposer for the wait and active effect.",
+            "throws": [
+              "callback setup failures synchronously when the slot is already declared."
+            ]
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "theme": {
+      "mode": "service",
+      "service": {
+        "key": "theme",
+        "description": "Theme registry and preference owner. `light`/`dark` are built in (the base stylesheets carry both palettes); third-party themes register alias-layer overrides. Reads go through getTheme; preference writes only through setTheme; continuous sync only through the `theme/change` event. overrideTokens stacks partial token layers over the active theme without touching the registry. The service holds the `prefers-color-scheme` media query (environment sensing, not presentation) and re-emits when the OS scheme flips while the preference is `system`.",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"theme\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "theme"
+            ],
+            "expression": "ctx.theme"
+          }
+        },
+        "methods": [
+          {
+            "signature": "getTheme(): ThemeSnapshot",
+            "description": "Read the current immutable theme snapshot.",
+            "parameters": [],
+            "returns": "the current snapshot (stable reference until the next change)."
+          },
+          {
+            "signature": "setTheme(id: string): void",
+            "description": "Switch the theme preference — the only user preference write entry. Built-in preferences are written through the settings scope and every accepted value emits `theme/change`.",
+            "parameters": [
+              {
+                "name": "id",
+                "description": "a registered theme id or `system`; unknown ids throw."
+              }
+            ]
+          },
+          {
+            "signature": "register(definition: ThemeDefinition): () => void",
+            "description": "Register a theme. Duplicate id throws (single occupant per id; the built-in pair counts; `system` is a preference, not a registrable id).",
+            "parameters": [
+              {
+                "name": "definition",
+                "description": "theme id, colorScheme, and alias-token overrides."
+              }
+            ],
+            "returns": "disposer. Disposing the theme backing the active preference resets the preference to the default so the UI never keeps tokens of an unregistered theme."
+          },
+          {
+            "signature": "overrideTokens(source: string, tokens: ThemeTokenOverrides): () => void",
+            "description": "Stack a token override layer on top of the active theme — the token-level analogue of slot shading: the base theme stays untouched, layers compose in seq order with later layers winning per-token, and removing a layer restores whatever it covered. Calling again with the same source replaces that source's whole layer and restacks it on top (effect re-registration semantics). Emits `theme/change` with the recomposed snapshot.",
+            "parameters": [
+              {
+                "name": "source",
+                "description": "layer identity; one layer per source (dynamic packages pass their package id — the façade pins it, so it also names the layer's origin for inspection)."
+              },
+              {
+                "name": "tokens",
+                "description": "token-name → `{ light, dark }` value pairs. Validated at runtime (model-authored callers reach this boundary with untyped JS); a bare string value throws a teaching error."
+              }
+            ],
+            "returns": "disposer removing exactly the layer this call created; a no-op once the source has re-overridden (the newer layer is not torn down)."
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "timer": {
+      "mode": "service",
+      "service": {
+        "key": "timer",
+        "description": "Disposable timer helpers mixed into Cordis contexts.",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"timer\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "timer"
+            ],
+            "expression": "ctx.timer"
+          }
+        },
+        "methods": [
+          {
+            "signature": "timeout(callback: () => void, delay: number): () => void",
+            "description": "Run a callback once and return its disposer.",
+            "parameters": []
+          },
+          {
+            "signature": "timeout(delay: number): Promise<void>",
+            "description": "Resolve after a delay; disposal rejects the pending promise.",
+            "parameters": []
+          },
+          {
+            "signature": "interval(callback: () => void, delay: number): () => void",
+            "description": "Run a callback repeatedly and return its disposer.",
+            "parameters": []
+          },
+          {
+            "signature": "interval<R = any>(delay: number): AsyncIterableIterator<void, R, void>",
+            "description": "Return an async iterator of timer ticks.",
+            "parameters": []
+          },
+          {
+            "signature": "throttle<F extends (...args: any[]) => void>(callback: F, delay: number, noTrailing?: boolean): F & { dispose: () => void }",
+            "description": "Return a throttled function whose timer is disposed with the current fiber.",
+            "parameters": []
+          },
+          {
+            "signature": "debounce<F extends (...args: any[]) => void>(callback: F, delay: number): F & { dispose: () => void }",
+            "description": "Return a debounced function whose timer is disposed with the current fiber.",
+            "parameters": []
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "workspaces": {
+      "mode": "service",
+      "service": {
+        "key": "workspaces",
+        "description": "The workspaces-service face injected as `ctx.workspaces`.",
+        "access": {
+          "optional": {
+            "expression": "ctx.get(\"workspaces\")",
+            "requiresUndefinedCheck": true
+          },
+          "hardDependency": {
+            "inject": [
+              "workspaces"
+            ],
+            "expression": "ctx.workspaces"
+          }
+        },
+        "methods": [
+          {
+            "signature": "connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>",
+            "description": "Connect a Workspace to its reusable or freshly created blank session.",
+            "parameters": [
+              {
+                "name": "workspaceId",
+                "description": "target workspace."
+              }
+            ],
+            "returns": "the connected session id."
+          },
+          {
+            "signature": "startSession(workspaceId?: WorkspaceId): void",
+            "description": "The New Session flow: connect the explicit, current-Session, or recent Workspace and open the resulting session; failures surface on the session list state.",
+            "parameters": [
+              {
+                "name": "workspaceId",
+                "description": "explicit target; omitted inherits the current Session's Workspace before falling back to the recency projection."
+              }
+            ]
+          },
+          {
+            "signature": "create(input: { path: string }): Promise<WorkspaceView>",
+            "description": "Register an existing path as a Workspace.",
+            "parameters": [
+              {
+                "name": "input",
+                "description": "the Host create payload."
+              }
+            ],
+            "returns": "the created or idempotently resolved Workspace."
+          },
+          {
+            "signature": "pickDirectory(): Promise<string | null>",
+            "description": "Open the Host's native directory picker.",
+            "parameters": [],
+            "returns": "the selected path, or null when the user cancelled."
+          },
+          {
+            "signature": "listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>",
+            "description": "List one directory level through the Host's `browse` capability.",
+            "parameters": [
+              {
+                "name": "path",
+                "description": "absolute directory to list; absent lists the Host home directory."
+              },
+              {
+                "name": "signal",
+                "description": "aborts the wire request (and the Host's scan) when the caller supersedes it."
+              }
+            ],
+            "returns": "the level's listing with breadcrumb ancestry."
+          },
+          {
+            "signature": "createDirectory(path: string, name: string): Promise<string>",
+            "description": "Create one child directory through the Host's `browse` capability.",
+            "parameters": [
+              {
+                "name": "path",
+                "description": "absolute existing parent directory."
+              },
+              {
+                "name": "name",
+                "description": "single non-blank path segment."
+              }
+            ],
+            "returns": "the created directory's absolute path."
+          },
+          {
+            "signature": "openPath(path: string): Promise<void>",
+            "description": "Open a filesystem path with the Host operating system's default application.",
+            "parameters": [
+              {
+                "name": "path",
+                "description": "absolute or host-resolvable path."
+              }
+            ]
+          },
+          {
+            "signature": "rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView>",
+            "description": "Rename a Workspace.",
+            "parameters": [
+              {
+                "name": "workspaceId",
+                "description": "target workspace."
+              },
+              {
+                "name": "title",
+                "description": "the new display title."
+              }
+            ],
+            "returns": "the updated Workspace view."
+          },
+          {
+            "signature": "delete(workspaceId: WorkspaceId): Promise<void>",
+            "description": "Delete a Workspace (its sessions fall back to the unaccounted group).",
+            "parameters": [
+              {
+                "name": "workspaceId",
+                "description": "target workspace."
+              }
+            ]
+          },
+          {
+            "signature": "insertSessionBefore(workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId): Promise<WorkspaceView>",
+            "description": "Move an accounted session within/into a Workspace's ordered list.",
+            "parameters": [
+              {
+                "name": "workspaceId",
+                "description": "target workspace."
+              },
+              {
+                "name": "sessionId",
+                "description": "accounted session to move."
+              },
+              {
+                "name": "beforeSessionId",
+                "description": "accounted anchor to insert before; omitted appends."
+              }
+            ],
+            "returns": "the updated Workspace view."
+          },
+          {
+            "signature": "archiveSession(sessionId: SessionId): Promise<void>",
+            "description": "Archive a session into the registry-global set (hidden from grouping surfaces; session log and accounting slot remain). Archiving the current session clears the selection into the New Session view state.",
+            "parameters": [
+              {
+                "name": "sessionId",
+                "description": "session to archive."
+              }
+            ]
+          }
+        ]
+      },
+      "referencedTypes": []
+    }
+  },
+  "eventCatalog": {
+    "mode": "catalog",
+    "events": [
+      {
+        "name": "connection/reset",
+        "description": "A connection generation was (re-)established.",
+        "mode": "emit",
+        "signature": "'connection/reset'(): void"
+      },
+      {
+        "name": "locale/change",
+        "description": "The active locale switched.",
+        "mode": "emit",
+        "signature": "'locale/change'(snapshot: LocaleSnapshot): void"
+      },
+      {
+        "name": "slots/changed",
+        "description": "A slot's definition or registration set changed.",
+        "mode": "emit",
+        "signature": "'slots/changed'(key: string): void"
+      },
+      {
+        "name": "theme/change",
+        "description": "Theme state changed (preference switched, registry updated, or the OS color scheme changed while the preference is `system`).",
+        "mode": "emit",
+        "signature": "'theme/change'(snapshot: ThemeSnapshot): void"
+      }
+    ]
+  },
+  "events": {
+    "connection/reset": {
+      "mode": "event",
+      "event": {
+        "name": "connection/reset",
+        "description": "A connection generation was (re-)established. Wire-derived caches must treat their state as stale and repull (commands directory; the queue mirrors reset themselves through the session resync path).",
+        "mode": "emit",
+        "signature": "'connection/reset'(): void",
+        "parameters": []
+      },
+      "referencedTypes": []
+    },
+    "locale/change": {
+      "mode": "event",
+      "event": {
+        "name": "locale/change",
+        "description": "The active locale switched. Dictionary registrations do NOT emit this event (listeners may re-register slots in response, and boot registers one namespace per package); continuous render refresh rides the LocaleFace revision instead.",
+        "mode": "emit",
+        "signature": "'locale/change'(snapshot: LocaleSnapshot): void",
+        "parameters": [
+          {
+            "name": "snapshot",
+            "description": "Current immutable locale snapshot."
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "slots/changed": {
+      "mode": "event",
+      "event": {
+        "name": "slots/changed",
+        "description": "A slot's definition or registration set changed.",
+        "mode": "emit",
+        "signature": "'slots/changed'(key: string): void",
+        "parameters": [
+          {
+            "name": "key",
+            "description": "the mutated SlotMap key."
+          }
+        ]
+      },
+      "referencedTypes": []
+    },
+    "theme/change": {
+      "mode": "event",
+      "event": {
+        "name": "theme/change",
+        "description": "Theme state changed (preference switched, registry updated, or the OS color scheme changed while the preference is `system`).",
+        "mode": "emit",
+        "signature": "'theme/change'(snapshot: ThemeSnapshot): void",
+        "parameters": [
+          {
+            "name": "snapshot",
+            "description": "Current immutable theme snapshot."
+          }
+        ]
+      },
+      "referencedTypes": []
+    }
+  }
+}

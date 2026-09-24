@@ -1,0 +1,11 @@
+{
+  // Empty Host solution retained for TypeScript tooling. Root build and validation
+  // commands compile the Rust workspace; this file owns no implementation checks.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rewriteRelativeImportExtensions": false
+  },
+  "files": [],
+  "references": []
+}

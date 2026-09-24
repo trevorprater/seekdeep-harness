@@ -1,0 +1,13 @@
+[package]
+name = "seekdeep-repository-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Native launcher for repository gates that rebuild their own workspace"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

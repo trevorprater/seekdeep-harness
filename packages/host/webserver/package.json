@@ -1,0 +1,43 @@
+{
+  "name": "@seekdeep-ai/seekdeep-host-webserver",
+  "description": "Web route-registration plugin: HTTP and upgrade routes, index transform taps, and static dist fallback; knows no harness concepts",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/host/webserver"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@seekdeep-ai/seekdeep-attachment",
+  "version": "0.1.0-rc.5",
+  "description": "Durable immutable attachment storage seam for the SeekDeep Harness",
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/attachment/attachment"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

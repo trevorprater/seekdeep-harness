@@ -1,0 +1,31 @@
+[package]
+name = "seekdeep-host-directory-picker-browse"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bounded remote-safe Host directory browser"
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+futures.workspace = true
+icu_collator.workspace = true
+icu_locale.workspace = true
+ryu-js.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-host-directory-picker = { path = "../host-directory-picker" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+serde.workspace = true
+serde_json.workspace = true
+sys-locale.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

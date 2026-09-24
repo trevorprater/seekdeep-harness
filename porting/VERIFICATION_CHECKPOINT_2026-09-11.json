@@ -1,0 +1,35 @@
+{
+  "source_commit": "37200a934324dd7167ec8a8d3ac1fd01e2239909",
+  "scope": "35 priority production-code paths and their shared Rust/WASM integration",
+  "priority_verified": 33,
+  "priority_ported_awaiting_linux": 2,
+  "verified_integration": {
+    "real_host_chromium": "cargo xtask remote-loader exited 0 with Chromium 149.0.7827.55 and a freshly built Rust Host; 24 descriptors withdrew to zero, source maps and bundled Store passed, shutdown was unforced",
+    "cordis": "Actual package/declarations, 13 invariant-host cases, 170 source cases, 196 compiled gateway cases passed",
+    "hmr": "66 tests passed; all six actual Node/source lifecycle traces match; ownership and asynchronous disposal repairs verified",
+    "client": "155 native Runtime and 22 WASM tests; real source maps and current production packages verified",
+    "conversation": "12 native, 16 WASM and 12 details/reader cases passed",
+    "trajectory": "75 native and 13 actual WASM rendering/replay cases passed",
+    "tools": "265 tests across 23 packages and strict owned Clippy passed",
+    "client_connection": "69 tests including real HTTP/WebSocket raw downlinks and strict native/WASM checks passed",
+    "storage": "72 tests and final JSON/SQLite/workspace rechecks passed; strict scoped Clippy passed",
+    "core_goal_time_context": "Core 84, Goal 35 and time-context 32 tests passed with strict owned checks",
+    "workflow": "Eight focused cases passed after raw settlement decoding repair, including previously hanging real worker integrations",
+    "headless": "All 28 selected cases and owned all-target Clippy passed",
+    "doc_graphs": "Final four-test xtask suite passed against source inputs and all eight graph artifacts",
+    "landlock_bootstrap": "Independent real four-package workspace and 32-record frozen lock; frozen install, both workflow YAML files and 36 shell steps verified"
+  },
+  "remaining": [
+    "Matching Linux arm64/x64 static-musl build and real-kernel confinement/packed-install CI verification remain pending after the isolated Landlock bootstrap repair.",
+    "Goal driver blocked_goal_observer_work_remains_queued_without_reserving_again fails deterministically: observer-enqueued work reaches the adapter after blocking. The corresponding code and source-test manifest rows are ported, not verified.",
+    "Native OTEL SDK cannot represent lone UTF16 surrogates in strings or keys; it rejects explicitly. Source-compatible raw HTTP/JSON export is unverified and its manifest row is ported.",
+    "The last consolidated all-target check found remaining application/test caller adaptations in apps/seekdeep, host-apiproxy configuration tests and a jsonrpc-demo unused import. Production Host build and real browser integration passed, but the whole workspace is not green.",
+    "Full workspace Clippy and full workspace tests have not passed fresh. Seven ACP library lint findings are also recorded by the dependency-inclusive headless check.",
+    "The raw Host history/presenter regression initially had an invalid fixture schema; additionalProperties was corrected, but that correction has not been rerun.",
+    "Required real Codex fixture version is 0.147.0 while the installed executable is 0.154.0; the three required real-product gates remain distinct from passing local fixtures.",
+    "Existing broader Goal string, generic JavaScript observer/ctx.get, typed presentation and dynamic Cordis execution boundaries remain outside the completed scoped proofs. No repository-wide parity claim is made."
+  ],
+  "local_evidence_directory": "/tmp/seekdeep-finish35",
+  "build_policy": "Use python3 /tmp/seekdeep-priority-cargo.py for serialized Cargo with CARGO_INCREMENTAL=0; never cargo clean",
+  "checkpoint_policy": "Preserve all current code and evidence; final checkpoint is in progress, not a full release or repository-wide parity milestone"
+}

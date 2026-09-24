@@ -1,0 +1,42 @@
+[package]
+name = "seekdeep-client-ui-jobs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM background-job list models and UI semantics"
+autotests = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Node"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[[test]]
+name = "wasm_parity"
+path = "tests/wasm_parity.rs"

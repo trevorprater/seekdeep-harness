@@ -17,6 +17,24 @@ pub struct ToolSdkSchema {
     pub output: Value,
 }
 
+impl Drop for ToolSdkSchema {
+    fn drop(&mut self) {
+        drop_value_iteratively(std::mem::replace(&mut self.parameters, Value::Null));
+        drop_value_iteratively(std::mem::replace(&mut self.output, Value::Null));
+    }
+}
+
+fn drop_value_iteratively(root: Value) {
+    let mut pending = vec![root];
+    while let Some(mut value) = pending.pop() {
+        match &mut value {
+            Value::Array(values) => pending.append(values),
+            Value::Object(values) => pending.extend(std::mem::take(values).into_values()),
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+        }
+    }
+}
+
 #[derive(Debug)]
 struct TypeDocument {
     parts: Vec<DocumentPart>,
@@ -308,12 +326,12 @@ fn flatten_document(documents: &[TypeDocument], root: usize) -> String {
 
 fn render_constrained_scalar(object: &serde_json::Map<String, Value>, schema_type: &str) -> String {
     if let Some(constant) = object.get("const") {
-        return serde_json::to_string(constant).expect("scalar serializes");
+        return render_scalar(constant);
     }
     if let Some(enumeration) = object.get("enum").and_then(Value::as_array) {
         return enumeration
             .iter()
-            .map(|value| serde_json::to_string(value).expect("scalar serializes"))
+            .map(render_scalar)
             .collect::<Vec<_>>()
             .join(" | ");
     }
@@ -321,6 +339,20 @@ fn render_constrained_scalar(object: &serde_json::Map<String, Value>, schema_typ
         "number".to_owned()
     } else {
         schema_type.to_owned()
+    }
+}
+
+fn render_scalar(value: &Value) -> String {
+    match value {
+        Value::Number(number) => {
+            let number = number.as_f64().unwrap_or_default();
+            if number == 0.0 {
+                "0".to_owned()
+            } else {
+                ryu_js::Buffer::new().format_finite(number).to_owned()
+            }
+        }
+        _ => serde_json::to_string(value).expect("validated scalar serializes"),
     }
 }
 
@@ -346,12 +378,41 @@ fn doc_lines(description: &str, indent: usize) -> Vec<String> {
     if description.is_empty() {
         return Vec::new();
     }
-    let collapsed = description.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut collapsed = String::new();
+    let mut pending_space = false;
+    for character in description.chars() {
+        if is_js_whitespace(character) {
+            pending_space = !collapsed.is_empty();
+        } else {
+            if pending_space {
+                collapsed.push(' ');
+                pending_space = false;
+            }
+            collapsed.push(character);
+        }
+    }
     vec![format!(
         "{}/** {} */",
         pad(indent),
         collapsed.replace("*/", "*\\/")
     )]
+}
+
+fn is_js_whitespace(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0009}'..='\u{000d}'
+            | '\u{0020}'
+            | '\u{00a0}'
+            | '\u{1680}'
+            | '\u{2000}'..='\u{200a}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202f}'
+            | '\u{205f}'
+            | '\u{3000}'
+            | '\u{feff}'
+    )
 }
 
 const SDK_INSTRUCTIONS: &str = r#"## Writing code for run_code
@@ -369,7 +430,7 @@ The available tools:"#;
 #[must_use]
 pub fn render_tools_sdk(schemas: &[ToolSdkSchema]) -> String {
     let mut sorted = schemas.iter().collect::<Vec<_>>();
-    sorted.sort_by(|left, right| left.name.cmp(&right.name));
+    sorted.sort_by(|left, right| left.name.encode_utf16().cmp(right.name.encode_utf16()));
     let mut args_members = Vec::new();
     let mut output_members = Vec::new();
     for schema in sorted {
@@ -411,56 +472,137 @@ mod tests {
     use super::*;
 
     #[test]
-    fn maps_every_schema_construct() {
+    fn maps_every_unified_schema_construct() {
         for (schema, expected) in [
             (json!({"type": "string"}), "string"),
+            (json!({"type": "number"}), "number"),
             (json!({"type": "integer"}), "number"),
+            (json!({"type": "boolean"}), "boolean"),
             (json!({"type": "null"}), "null"),
             (
                 json!({"type": "string", "enum": ["a", "b"]}),
                 "\"a\" | \"b\"",
             ),
+            (json!({"type": "number", "enum": [1, 2]}), "1 | 2"),
+            (
+                json!({"type": "integer", "const": 1_152_921_504_606_846_976_u64}),
+                "1152921504606847000",
+            ),
+            (json!({"type": "number", "const": 1e-7}), "1e-7"),
+            (json!({"type": "integer", "const": 2}), "2"),
+            (json!({"type": "boolean", "const": true}), "true"),
+            (json!({"type": "null", "const": null}), "null"),
+            (
+                json!({"type": "string", "enum": ["a", "b"], "const": "a"}),
+                "\"a\"",
+            ),
+            (
+                json!({"oneOf": [{"type": "string"}, {"type": "null"}]}),
+                "string | null",
+            ),
             (
                 json!({"type": "array", "items": {"type": "number"}}),
                 "number[]",
             ),
+            (
+                json!({"type": "array", "items": {"type": "string", "enum": ["x", "y"]}}),
+                "(\"x\" | \"y\")[]",
+            ),
+            (json!({"type": "array"}), "JsonValue[]"),
             (json!({"type": "object"}), "Record<string, JsonValue>"),
             (
                 json!({"type": "object", "additionalProperties": false}),
                 "Record<string, never>",
             ),
+            (
+                json!({"type": "object", "properties": {}}),
+                "Record<string, JsonValue>",
+            ),
+            (
+                json!({"type": "object", "properties": {}, "additionalProperties": false}),
+                "Record<string, never>",
+            ),
+            (
+                json!({
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "label": {"type": "string"},
+                    },
+                    "required": ["id"],
+                }),
+                "{\n  id: number;\n  label?: string;\n}",
+            ),
             (json!({}), "JsonValue"),
         ] {
             assert_eq!(json_schema_to_ts(&schema, 0), expected);
         }
-        assert_eq!(
-            json_schema_to_ts(
-                &json!({"type": "array", "items": {"type": "string", "enum": ["x", "y"]}}),
-                0
-            ),
-            "(\"x\" | \"y\")[]"
-        );
     }
 
     #[test]
-    fn renders_nested_objects_docs_and_exotic_names() {
+    fn renders_required_optional_nested_shapes_and_property_docs() {
         let schema = json!({
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "Absolute file path"},
-                "my-key": {"type": "boolean"}
+                "limit": {"type": "number"},
+                "opts": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {"deep": {"type": "boolean"}},
+                    "required": ["deep"],
+                },
             },
             "required": ["path"]
         });
         assert_eq!(
             json_schema_to_ts(&schema, 0),
-            "{\n  /** Absolute file path */\n  path: string;\n  \"my-key\"?: boolean;\n} & Record<string, JsonValue>"
+            "{\n  /** Absolute file path */\n  path: string;\n  limit?: number;\n  opts?: {\n    deep: boolean;\n  } & Record<string, JsonValue>;\n} & Record<string, JsonValue>"
         );
     }
 
     #[test]
-    fn degrades_invalid_input_and_is_stack_safe() {
-        assert_eq!(json_schema_to_ts(&json!({"oneOf": []}), 0), "unknown");
+    fn unsupported_structural_inputs_degrade_to_unknown_without_panicking() {
+        for schema in [
+            Value::Null,
+            json!(42),
+            json!("string-schema"),
+            json!({"oneOf": [{"type": "string"}]}),
+            json!({"$ref": "#/defs/x"}),
+            json!({"type": "object", "properties": 7}),
+            json!({"type": "object", "properties": {"bad": {"$ref": "x"}}}),
+            json!({"type": "string", "enum": [1, 2]}),
+            json!({"type": "string", "enum": []}),
+            json!({"type": "object", "properties": {"a": {"type": "string"}}, "required": [7]}),
+            json!({"type": "object", "properties": {"weird": 42}}),
+        ] {
+            assert_eq!(json_schema_to_ts(&schema, 0), "unknown");
+        }
+        // Undefined, proxies, hostile getters, and exotic arrays cannot inhabit `Value`.
+    }
+
+    #[test]
+    fn escapes_comment_closers_and_collapses_javascript_whitespace() {
+        let rendered = json_schema_to_ts(
+            &json!({
+                "type": "object",
+                "properties": {
+                    "glob": {
+                        "type": "string",
+                        "description": "  a\tpattern like packages/*/tool-*/\nover here  ",
+                    },
+                },
+            }),
+            0,
+        );
+        assert!(!rendered.contains("tool-*/ over"));
+        assert!(rendered.contains("tool-*\\/ over here"));
+        assert!(rendered.contains("/** a pattern like"));
+    }
+
+    #[test]
+    fn renders_deeply_nested_unions_without_the_call_stack() {
         let mut schema = json!({"type": "string"});
         for _ in 0..5_000 {
             let mut object = serde_json::Map::new();
@@ -477,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_deterministic_sdk() {
+    fn declares_every_tool_in_js_lexicographic_order_and_quotes_exotic_keys() {
         let schemas = [
             ToolSdkSchema {
                 name: "my-mcp.tool".to_owned(),
@@ -502,8 +644,93 @@ mod tests {
             },
         ];
         let text = render_tools_sdk(&schemas);
+        assert!(text.contains("interface ToolArgsMap {"));
+        assert!(text.contains("interface ToolOutputMap {"));
+        assert!(text.contains("type ToolName = keyof ToolOutputMap"));
+        assert!(text.contains("declare class ToolCallError extends Error"));
         assert!(text.find("bash:").expect("bash") < text.find("\"my-mcp.tool\":").expect("mcp"));
+        assert!(text.contains("exitCode: number;"));
+        assert!(text.contains("\"my-mcp.tool\": string[];"));
+        assert!(
+            text.contains("[K in ToolName]: (args: ToolArgsMap[K]) => Promise<ToolOutputMap[K]>;")
+        );
+        assert!(text.contains("/** Run a shell command. */"));
+        assert!(text.contains("erasable syntax only"));
+        assert!(text.contains("rejects with `ToolCallError`"));
+        assert!(text.contains("MAY overlap under `Promise.all`"));
+        assert!(text.contains("lossless JSON"));
         assert!(text.contains("two required arguments"));
         assert!(text.contains("readonly toolName: ToolName;"));
+    }
+
+    #[test]
+    fn instructions_name_both_required_run_code_arguments() {
+        let text = render_tools_sdk(&[bash_schema()]);
+        assert!(text.contains("`code`"));
+        assert!(text.contains("`description`"));
+        assert!(text.contains("two required arguments"));
+    }
+
+    #[test]
+    fn sdk_is_deterministic_independent_of_input_order_and_uses_utf16_order() {
+        let bash = bash_schema();
+        let forward = render_tools_sdk(&[bash_schema(), exotic_schema()]);
+        let reverse = render_tools_sdk(&[exotic_schema(), bash_schema()]);
+        assert_eq!(forward, reverse);
+        assert_eq!(
+            render_tools_sdk(&[bash_schema(), bash]),
+            render_tools_sdk(&[bash_schema(), bash_schema()])
+        );
+
+        let supplementary = ToolSdkSchema {
+            name: "\u{10000}".to_owned(),
+            description: String::new(),
+            parameters: json!({"type": "object"}),
+            output: json!({"type": "null"}),
+        };
+        let bmp = ToolSdkSchema {
+            name: "\u{e000}".to_owned(),
+            description: String::new(),
+            parameters: json!({"type": "object"}),
+            output: json!({"type": "null"}),
+        };
+        let rendered = render_tools_sdk(&[bmp, supplementary]);
+        assert!(
+            rendered.find("\"𐀀\":").expect("supplementary") < rendered.find("\"\":").expect("bmp")
+        );
+    }
+
+    #[test]
+    fn renders_empty_interfaces_for_an_empty_tool_set() {
+        let text = render_tools_sdk(&[]);
+        assert!(text.contains("interface ToolArgsMap {}"));
+        assert!(text.contains("interface ToolOutputMap {}"));
+    }
+
+    fn bash_schema() -> ToolSdkSchema {
+        ToolSdkSchema {
+            name: "bash".to_owned(),
+            description: "Run a shell command.".to_owned(),
+            parameters: json!({
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            }),
+            output: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {"exitCode": {"type": "integer"}},
+                "required": ["exitCode"],
+            }),
+        }
+    }
+
+    fn exotic_schema() -> ToolSdkSchema {
+        ToolSdkSchema {
+            name: "my-mcp.tool".to_owned(),
+            description: "Exotic name.".to_owned(),
+            parameters: json!({"type": "object", "properties": {}}),
+            output: json!({"type": "array", "items": {"type": "string"}}),
+        }
     }
 }

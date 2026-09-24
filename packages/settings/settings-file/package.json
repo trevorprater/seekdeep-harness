@@ -1,0 +1,51 @@
+{
+  "name": "@seekdeep-ai/seekdeep-settings-file",
+  "description": "File-backed settings provider (settings.yaml) for the SeekDeep Harness",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/settings/settings-file"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-atomic-write": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-home-paths": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "@seekdeep-ai/schemastery": "workspace:^",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-atomic-write": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-home-paths": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}

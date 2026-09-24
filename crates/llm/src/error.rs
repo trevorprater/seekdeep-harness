@@ -1,6 +1,6 @@
 //! Harness errors and provider-neutral failure classification.
 
-use std::sync::OnceLock;
+use std::{collections::HashSet, sync::OnceLock};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,7 @@ pub struct LlmFailure {
 #[derive(Debug, Error)]
 #[error("{message}")]
 pub struct HarnessError {
+    name: String,
     message: String,
     code: String,
     #[source]
@@ -51,6 +52,22 @@ impl HarnessError {
     #[must_use]
     pub fn new(message: impl Into<String>, code: impl Into<String>) -> Self {
         Self {
+            name: "HarnessError".to_owned(),
+            message: message.into(),
+            code: code.into(),
+            cause: None,
+        }
+    }
+
+    /// Creates a named harness-error subclass equivalent.
+    #[must_use]
+    pub fn named(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        code: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
             message: message.into(),
             code: code.into(),
             cause: None,
@@ -70,6 +87,12 @@ impl HarnessError {
         &self.code
     }
 
+    /// Stable JavaScript error-class name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Human-readable message without its cause chain.
     #[must_use]
     pub fn message(&self) -> &str {
@@ -82,7 +105,9 @@ impl HarnessError {
 #[error("{failure_message}")]
 pub struct LlmError {
     failure_message: String,
-    failure: LlmFailure,
+    failure: Box<LlmFailure>,
+    #[source]
+    cause: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 impl LlmError {
@@ -93,13 +118,14 @@ impl LlmError {
         let code = code.into();
         Self {
             failure_message: message.clone(),
-            failure: LlmFailure {
+            failure: Box::new(LlmFailure {
                 message,
                 code,
                 status: None,
                 provider_retry_after_ms: None,
                 request_id: None,
-            },
+            }),
+            cause: None,
         }
     }
 
@@ -142,14 +168,22 @@ impl LlmError {
         }
         Ok(Self {
             failure_message: message.clone(),
-            failure: LlmFailure {
+            failure: Box::new(LlmFailure {
                 message,
                 code,
                 status,
                 provider_retry_after_ms,
                 request_id,
-            },
+            }),
+            cause: None,
         })
+    }
+
+    /// Attaches the original provider or transport failure.
+    #[must_use]
+    pub fn with_cause(mut self, cause: impl std::error::Error + Send + Sync + 'static) -> Self {
+        self.cause = Some(Box::new(cause));
+        self
     }
 
     /// Serializable provider-neutral facts.
@@ -163,6 +197,27 @@ impl LlmError {
     pub fn code(&self) -> &str {
         &self.failure.code
     }
+
+    /// Stable JavaScript error-class name.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        "LlmError"
+    }
+
+    /// Human-readable message without its cause chain.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.failure.message
+    }
+}
+
+/// Narrows a concrete Rust error to either shared harness-error class.
+///
+/// Like source `instanceof`, structurally similar foreign errors do not
+/// classify; only the actual [`HarnessError`] and [`LlmError`] types do.
+#[must_use]
+pub fn is_harness_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    error.is::<HarnessError>() || error.is::<LlmError>()
 }
 
 /// API-key normalization verdict.
@@ -179,7 +234,7 @@ pub enum ApiKeyCheck {
 /// Trims and validates one supplied provider API key.
 #[must_use]
 pub fn normalize_api_key(raw: &str) -> ApiKeyCheck {
-    let value = raw.trim();
+    let value = raw.trim_matches(is_ecmascript_trim_character);
     if value.is_empty() {
         ApiKeyCheck::Empty
     } else if value.bytes().all(|byte| (0x21..=0x7e).contains(&byte)) && value.is_ascii() {
@@ -187,6 +242,24 @@ pub fn normalize_api_key(raw: &str) -> ApiKeyCheck {
     } else {
         ApiKeyCheck::IllegalCharacters
     }
+}
+
+const fn is_ecmascript_trim_character(character: char) -> bool {
+    matches!(
+        character,
+        '\u{0009}'
+            ..='\u{000d}'
+                | '\u{0020}'
+                | '\u{00a0}'
+                | '\u{1680}'
+                | '\u{2000}'..='\u{200a}'
+                | '\u{2028}'
+                | '\u{2029}'
+                | '\u{202f}'
+                | '\u{205f}'
+                | '\u{3000}'
+                | '\u{feff}'
+    )
 }
 
 /// Returns a usable key or a secret-free diagnostic naming its source.
@@ -213,13 +286,14 @@ pub fn assert_usable_api_key(
 fn invalid_credential(message: String) -> LlmError {
     LlmError {
         failure_message: message.clone(),
-        failure: LlmFailure {
+        failure: Box::new(LlmFailure {
             message,
             code: INVALID_CREDENTIAL_CODE.to_owned(),
             status: None,
             provider_retry_after_ms: None,
             request_id: None,
-        },
+        }),
+        cause: None,
     }
 }
 
@@ -273,25 +347,227 @@ pub fn is_quota_exceeded_error(detail: &str) -> bool {
         .any(|pattern| pattern.is_match(detail))
 }
 
-/// Renders a standard Rust error and its source chain, suppressing verbatim repeats.
+/// A safely-inspected foreign value in an [`ErrorChainGraph`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ErrorChainNode {
+    Rendered(String),
+    Error {
+        name: String,
+        message: String,
+        members: Vec<usize>,
+        cause: Option<usize>,
+    },
+    Unrenderable,
+}
+
+/// Identity-preserving graph used by compatibility bindings to implement the
+/// source `errorChain(unknown)` contract.
+///
+/// Bindings inspect foreign values inside their own exception boundary, append
+/// nodes, and preserve object identity by reusing node indexes. That admits
+/// primitive throws, own data-backed structured messages, `AggregateError`
+/// members, diamond sharing, cycles, and hostile accessors without placing a
+/// foreign runtime object inside native Rust error chains.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ErrorChainGraph {
+    nodes: Vec<ErrorChainNode>,
+}
+
+impl ErrorChainGraph {
+    /// Reserves one identity before its properties are inspected, allowing a
+    /// binding to preserve self-references and mutually recursive graphs.
+    #[must_use]
+    pub fn reserve(&mut self) -> usize {
+        self.push(ErrorChainNode::Unrenderable)
+    }
+
+    /// Fills a previously reserved identity with safely-inspected Error data.
+    /// Returns `false` when `index` was not reserved in this graph.
+    #[must_use]
+    pub fn set_error(
+        &mut self,
+        index: usize,
+        name: impl Into<String>,
+        message: impl Into<String>,
+        members: Vec<usize>,
+        cause: Option<usize>,
+    ) -> bool {
+        let Some(node) = self.nodes.get_mut(index) else {
+            return false;
+        };
+        *node = ErrorChainNode::Error {
+            name: name.into(),
+            message: message.into(),
+            members,
+            cause,
+        };
+        true
+    }
+
+    /// Appends a value whose foreign string coercion succeeded.
+    #[must_use]
+    pub fn push_rendered(&mut self, rendered: impl Into<String>) -> usize {
+        self.push(ErrorChainNode::Rendered(rendered.into()))
+    }
+
+    /// Appends a value whose coercion or property inspection threw.
+    #[must_use]
+    pub fn push_unrenderable(&mut self) -> usize {
+        self.push(ErrorChainNode::Unrenderable)
+    }
+
+    /// Appends one safely-inspected foreign Error.
+    #[must_use]
+    pub fn push_error(
+        &mut self,
+        name: impl Into<String>,
+        message: impl Into<String>,
+        members: Vec<usize>,
+        cause: Option<usize>,
+    ) -> usize {
+        self.push(ErrorChainNode::Error {
+            name: name.into(),
+            message: message.into(),
+            members,
+            cause,
+        })
+    }
+
+    /// Renders one root node with active-path cycle detection.
+    #[must_use]
+    pub fn render(&self, root: usize) -> String {
+        self.render_node(root, &mut HashSet::new())
+    }
+
+    fn push(&mut self, node: ErrorChainNode) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(node);
+        index
+    }
+
+    fn render_node(&self, index: usize, path: &mut HashSet<usize>) -> String {
+        let Some(node) = self.nodes.get(index) else {
+            return "<unrenderable value>".to_owned();
+        };
+        if !path.insert(index) {
+            return "<circular cause>".to_owned();
+        }
+        let rendered = match node {
+            ErrorChainNode::Rendered(value) => value.clone(),
+            ErrorChainNode::Unrenderable => "<unrenderable value>".to_owned(),
+            ErrorChainNode::Error {
+                name,
+                message,
+                members,
+                cause,
+            } => {
+                let message = if message.is_empty() { name } else { message };
+                let members = if members.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " [{}]",
+                        members
+                            .iter()
+                            .map(|member| self.render_node(*member, path))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    )
+                };
+                let cause = cause
+                    .map(|cause| self.render_node(cause, path))
+                    .filter(|cause| !cause.is_empty() && cause != message)
+                    .map_or_else(String::new, |cause| format!(": {cause}"));
+                format!("{message}{members}{cause}")
+            }
+        };
+        path.remove(&index);
+        rendered
+    }
+}
+
+/// Renders a standard Rust error and its source chain, suppressing verbatim
+/// repeats at each recursive wrapper boundary.
 #[must_use]
 pub fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
-    let mut output = error.to_string();
-    let mut source = error.source();
-    while let Some(current) = source {
-        let message = current.to_string();
-        if !message.is_empty() && message != output {
-            output.push_str(": ");
-            output.push_str(&message);
+    fn render(error: &(dyn std::error::Error + 'static), path: &mut HashSet<usize>) -> String {
+        let identity = std::ptr::from_ref(error).cast::<()>() as usize;
+        if !path.insert(identity) {
+            return "<circular cause>".to_owned();
         }
-        source = current.source();
+        let raw_message = error.to_string();
+        let message = if raw_message.is_empty() {
+            if let Some(error) = error.downcast_ref::<HarnessError>() {
+                error.name().to_owned()
+            } else if let Some(error) = error.downcast_ref::<LlmError>() {
+                error.name().to_owned()
+            } else {
+                "Error".to_owned()
+            }
+        } else {
+            raw_message
+        };
+        let cause = error
+            .source()
+            .map(|source| render(source, path))
+            .filter(|cause| !cause.is_empty() && cause != &message)
+            .map_or_else(String::new, |cause| format!(": {cause}"));
+        path.remove(&identity);
+        format!("{message}{cause}")
     }
-    output
+
+    render(error, &mut HashSet::new())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn foreign_error_graph_handles_aggregates_diamonds_cycles_and_hostile_nodes() {
+        let mut graph = ErrorChainGraph::default();
+        let shared = graph.push_error("Error", "shared", Vec::new(), None);
+        let left = graph.push_error("Error", "a", Vec::new(), Some(shared));
+        let right = graph.push_error("Error", "b", Vec::new(), Some(shared));
+        let aggregate = graph.push_error("AggregateError", "agg", vec![left, right], None);
+        assert_eq!(graph.render(aggregate), "agg [a: shared; b: shared]");
+
+        let hostile = graph.push_unrenderable();
+        let outer = graph.push_error("Error", "outer", Vec::new(), Some(hostile));
+        assert_eq!(graph.render(outer), "outer: <unrenderable value>");
+
+        let circular = graph.push_error("Error", "cycle", Vec::new(), None);
+        let mut cyclic = ErrorChainGraph::default();
+        let identity = cyclic.reserve();
+        assert!(cyclic.set_error(identity, "Error", "outer", Vec::new(), Some(identity)));
+        assert_eq!(cyclic.render(0), "outer: <circular cause>");
+
+        assert_eq!(graph.render(circular), "cycle");
+        assert_eq!(graph.render(usize::MAX), "<unrenderable value>");
+    }
+
+    #[derive(Debug, Error)]
+    #[error("{message}")]
+    struct TestCause {
+        message: &'static str,
+        #[source]
+        source: Option<Box<TestCause>>,
+    }
+
+    #[test]
+    fn native_chain_collapses_a_repeated_nested_wrapper_at_its_own_boundary() {
+        let error = TestCause {
+            message: "outer",
+            source: Some(Box::new(TestCause {
+                message: "same",
+                source: Some(Box::new(TestCause {
+                    message: "same",
+                    source: None,
+                })),
+            })),
+        };
+        assert_eq!(error_chain(&error), "outer: same");
+    }
 
     #[test]
     fn api_keys_use_printable_ascii_without_spaces() {
@@ -307,6 +583,14 @@ mod tests {
         assert_eq!(
             normalize_api_key("!~"),
             ApiKeyCheck::Usable("!~".to_owned())
+        );
+        assert_eq!(
+            normalize_api_key("\u{feff}sk-bom\u{feff}"),
+            ApiKeyCheck::Usable("sk-bom".to_owned())
+        );
+        assert_eq!(
+            normalize_api_key("\u{0085}sk-nel\u{0085}"),
+            ApiKeyCheck::IllegalCharacters
         );
     }
 

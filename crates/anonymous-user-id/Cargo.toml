@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-anonymous-user-id"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Harness-home-scoped anonymous identity for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+seekdeep-cordis = { path = "../cordis" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

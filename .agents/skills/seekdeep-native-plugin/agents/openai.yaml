@@ -1,0 +1,4 @@
+interface:
+  display_name: "SeekDeep Native Plugin"
+  short_description: "Add or extend a SeekDeep Harness plugin as a Rust crate"
+  default_prompt: "Use $seekdeep-native-plugin to add or extend this SeekDeep Harness plugin crate."

@@ -1,0 +1,44 @@
+{
+  "name": "@seekdeep-ai/seekdeep-cmdline",
+  "description": "Immutable command-line handoff from a seekdeep launcher to any app plugin that injects cmdlineArgs",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/boot/cmdline"
+  },
+  "type": "module",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-include": "workspace:^",
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "commander": "^15.0.0",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "seekdeep": {
+    "compiled": true
+  }
+}
