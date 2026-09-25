@@ -1,5 +1,6 @@
 //! Dynamic HTTP and upgrade route registry for the `SeekDeep` Web composition.
 
+mod connection_io;
 mod invariant;
 
 use std::{
@@ -507,7 +508,10 @@ impl WebServer {
                 let watcher = tokio::spawn(async move {
                     watch_disconnect(watcher, shutdown, watcher_signal).await;
                 });
-                let io = TokioIo::new(stream);
+                let io = TokioIo::new(connection_io::ConnectionIo::new(
+                    stream,
+                    disconnected.signal(),
+                ));
                 let service = service_fn(move |request| {
                     let server = server.clone();
                     let disconnected = disconnected.clone();
@@ -637,26 +641,23 @@ async fn watch_disconnect(
             disconnected.0.signal.abort();
             return;
         }
+        () = disconnected.0.signal.cancelled() => return,
         () = disconnected.monitored() => {}
     }
     // The socket is shared with the connection that consumes it, so a peek observes either
-    // unread request bytes or the close. Wait for readiness instead of polling: an idle
-    // long-lived stream costs no wakeups, and pending bytes the connection has not drained
-    // yet are re-checked at a bounded pace rather than every millisecond.
+    // unread request bytes or the close. A pending peek waits for readiness; bytes the
+    // connection has not drained are re-checked at a bounded pace.
     let mut probe = [0_u8; 1];
     loop {
-        let ready = tokio::select! {
+        let peeked = tokio::select! {
             () = shutdown.cancelled() => {
                 disconnected.0.signal.abort();
                 return;
             }
-            ready = stream.readable() => ready,
+            () = disconnected.0.signal.cancelled() => return,
+            peeked = stream.peek(&mut probe) => peeked,
         };
-        if ready.is_err() {
-            disconnected.0.signal.abort();
-            return;
-        }
-        match stream.peek(&mut probe).await {
+        match peeked {
             Ok(0) | Err(_) => {
                 disconnected.0.signal.abort();
                 return;

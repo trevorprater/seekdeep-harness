@@ -95,7 +95,7 @@ fn run_native_process_exit_scenario(kind: &str) {
         .args([
             "--ignored",
             "--exact",
-            "process_exit_fixture_child",
+            "process_exit::process_exit_fixture_child",
             "--nocapture",
         ])
         .env(ROOT_ENV, temp.path())

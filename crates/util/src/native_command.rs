@@ -248,26 +248,18 @@ fn hide_windows_console(_command: &mut Command) {}
 mod tests {
     use super::*;
 
-    fn shell_command(script: &str) -> (String, Vec<String>) {
-        #[cfg(windows)]
-        {
-            (
-                "cmd.exe".to_owned(),
-                vec!["/C".to_owned(), script.to_owned()],
-            )
-        }
-        #[cfg(not(windows))]
-        {
-            ("sh".to_owned(), vec!["-c".to_owned(), script.to_owned()])
-        }
-    }
-
     #[tokio::test]
     async fn captures_utf8_stdout_and_stderr_on_zero_exit() {
-        let (command, args) = shell_command("printf 'out✓'; printf 'err' >&2");
-        let result = run_native_command(command, &args, &AbortSignal::default())
-            .await
-            .unwrap();
+        let result = run_native_command(
+            "node",
+            &[
+                "-e",
+                "process.stdout.write('out✓'); process.stderr.write('err')",
+            ],
+            &AbortSignal::default(),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             result,
             NativeCommandOutput {
@@ -279,8 +271,11 @@ mod tests {
 
     #[tokio::test]
     async fn nonzero_exit_carries_code_output_and_cause() {
-        let (command, args) = shell_command("printf 'partial'; printf 'boom' >&2; exit 3");
-        let error = run_native_command(command, &args, &AbortSignal::default())
+        let error = run_native_command(
+            "node",
+            &["-e", "process.stdout.write('partial'); process.stderr.write('boom'); process.exitCode = 3"],
+            &AbortSignal::default(),
+        )
             .await
             .unwrap_err();
         assert_eq!(error.code, NativeCommandCode::Exit(3));
@@ -303,11 +298,16 @@ mod tests {
 
     #[tokio::test]
     async fn abort_terminates_and_reaps_child() {
-        let (command, args) = shell_command("sleep 60");
         let signal = AbortSignal::default();
         let running_signal = signal.clone();
-        let pending =
-            tokio::spawn(async move { run_native_command(command, &args, &running_signal).await });
+        let pending = tokio::spawn(async move {
+            run_native_command(
+                "node",
+                &["-e", "setTimeout(() => {}, 60_000)"],
+                &running_signal,
+            )
+            .await
+        });
         signal.abort();
         let error = tokio::time::timeout(std::time::Duration::from_secs(3), pending)
             .await

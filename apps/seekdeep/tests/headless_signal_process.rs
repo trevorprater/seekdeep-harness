@@ -264,48 +264,93 @@ async fn held_loopback_endpoint() -> anyhow::Result<(
     let address = listener.local_addr()?;
     let (request_sender, request_receiver) = oneshot::channel();
     let server = tokio::spawn(async move {
-        let (mut stream, request) = loop {
-            let (mut stream, _) = listener.accept().await?;
-            let request = read_request(&mut stream).await?;
-            if request.body["max_tokens"] == 64 && request.body.get("tools").is_none() {
-                let body = concat!(
-                    "data: {\"choices\":[{\"delta\":{\"content\":\"Signal probe title\"}}]}\n\n",
-                    "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
-                    "data: [DONE]\n\n",
-                );
-                stream.write_all(format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}", body.len()
-                ).as_bytes()).await?;
-                continue;
-            }
-            break (stream, request);
-        };
-        request_sender
-            .send(request)
-            .map_err(|_| anyhow::anyhow!("signal test stopped before receiving the request"))?;
-
-        // Deliberately send no response. The child is now inside the real
-        // provider request, and process teardown must close this connection.
-        let mut trailing = [0_u8; 1024];
-        loop {
-            match stream.read(&mut trailing).await {
-                Ok(0) => return Ok(()),
-                Ok(_) => {}
-                Err(error)
-                    if matches!(
-                        error.kind(),
-                        std::io::ErrorKind::ConnectionReset
-                            | std::io::ErrorKind::BrokenPipe
-                            | std::io::ErrorKind::NotConnected
-                    ) =>
-                {
-                    return Ok(());
+        let request_sender = std::sync::Arc::new(parking_lot::Mutex::new(Some(request_sender)));
+        let mut connections = tokio::task::JoinSet::new();
+        let result = async {
+            loop {
+                tokio::select! {
+                    accepted = listener.accept() => {
+                        let (stream, _) = accepted?;
+                        let request_sender = request_sender.clone();
+                        connections.spawn(hold_main_request(stream, request_sender));
+                    },
+                    completed = connections.join_next(), if !connections.is_empty() => {
+                        if completed.expect("connection task exists")?? {
+                            return Ok(());
+                        }
+                    },
                 }
-                Err(error) => return Err(error.into()),
             }
         }
+        .await;
+        connections.shutdown().await;
+        result
     });
     Ok((format!("http://{address}"), request_receiver, server))
+}
+
+async fn hold_main_request(
+    mut stream: TcpStream,
+    request_sender: std::sync::Arc<parking_lot::Mutex<Option<oneshot::Sender<CapturedRequest>>>>,
+) -> anyhow::Result<bool> {
+    let request = read_request(&mut stream).await?;
+    if request.body["max_tokens"] == 64 && request.body.get("tools").is_none() {
+        let body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Signal probe title\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        stream.write_all(format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}", body.len()
+        ).as_bytes()).await?;
+        return Ok(false);
+    }
+    request_sender
+        .lock()
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("unexpected second main request"))?
+        .send(request)
+        .map_err(|_| anyhow::anyhow!("signal test stopped before receiving the request"))?;
+
+    // The main request stays unanswered while independent title requests remain serviceable.
+    let mut trailing = [0_u8; 1024];
+    loop {
+        match stream.read(&mut trailing).await {
+            Ok(0) => return Ok(true),
+            Ok(_) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::ConnectionReset
+                        | std::io::ErrorKind::BrokenPipe
+                        | std::io::ErrorKind::NotConnected
+                ) =>
+            {
+                return Ok(true);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+#[tokio::test]
+async fn held_main_request_keeps_late_title_requests_serviceable() -> anyhow::Result<()> {
+    let (base, request, server) = held_loopback_endpoint().await?;
+    let address = base.strip_prefix("http://").unwrap();
+    let mut main = TcpStream::connect(address).await?;
+    let body = "{\"tools\":[]}";
+    main.write_all(format!("POST /chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await?;
+    tokio::time::timeout(IO_TIMEOUT, request).await??;
+    let mut title = TcpStream::connect(address).await?;
+    let body = "{\"max_tokens\":64}";
+    title.write_all(format!("POST /chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await?;
+    let mut response = Vec::new();
+    let received = tokio::time::timeout(IO_TIMEOUT, title.read_to_end(&mut response)).await;
+    drop(main);
+    finish_server(server).await?;
+    received??;
+    assert!(String::from_utf8(response)?.contains("Signal probe title"));
+    Ok(())
 }
 
 async fn send_signal(pid: u32, signal: &str) -> anyhow::Result<()> {
@@ -488,7 +533,11 @@ async fn second_sigint_forces_exit_while_the_first_is_draining() -> anyhow::Resu
     let draining = temporary.path().join("draining");
     let executable = std::env::current_exe()?;
     let mut child = Command::new(executable)
-        .args(["--exact", "second_interrupt_fixture_process", "--nocapture"])
+        .args([
+            "--exact",
+            "headless_signal_process::second_interrupt_fixture_process",
+            "--nocapture",
+        ])
         .env(SHUTDOWN_FIXTURE_ENV, "1")
         .env(SHUTDOWN_READY_ENV, &ready)
         .env(SHUTDOWN_DRAINING_ENV, &draining)

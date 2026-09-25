@@ -361,6 +361,7 @@ mod tests {
         let mut wide = wide.open(&regular).await.unwrap();
         wide.write_all(b"old").await.unwrap();
         wide.shutdown().await.unwrap();
+        drop(wide);
         write_file_atomic(
             &regular,
             b"new",

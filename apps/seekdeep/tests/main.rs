@@ -17,3 +17,17 @@ mod workflow_worker_process;
 
 #[path = "support/web_replay_browser.rs"]
 mod browser_driver;
+
+fn node_current_dir(path: &std::path::Path) -> std::path::PathBuf {
+    let output = std::process::Command::new("node")
+        .args(["-e", "process.stdout.write(process.cwd())"])
+        .current_dir(path)
+        .output()
+        .expect("Node cwd oracle");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    std::path::PathBuf::from(String::from_utf8(output.stdout).expect("Node cwd is UTF-8"))
+}

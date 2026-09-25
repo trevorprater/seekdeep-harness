@@ -192,7 +192,8 @@ fn source(fixture: &Fixture, invocations: &[Invocation]) -> Vec<Observation> {
     let request = fixture.0.join("request.json");
     let output = fixture.0.join("source.json");
     std::fs::write(&request, serde_json::to_vec(invocations).unwrap()).unwrap();
-    let status = Command::new(source.join("node_modules/.bin/vitest"))
+    let status = Command::new("node")
+        .arg(source.join("node_modules/vitest/vitest.mjs"))
         .args(["run", "--config"])
         .arg(
             Path::new(env!("CARGO_MANIFEST_DIR"))

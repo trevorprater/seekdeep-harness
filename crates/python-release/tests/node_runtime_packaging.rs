@@ -475,7 +475,7 @@ fn python_relocated_child(executable: &Path, assets: &Path, version: &str) {
         .args([
             "--ignored",
             "--exact",
-            "relocated_runtime_child",
+            "node_runtime_packaging::relocated_runtime_child",
             "--nocapture",
         ])
         .env_clear()
@@ -500,7 +500,7 @@ fn relocated_child(executable: &Path, assets: &Path, version: &str, missing: boo
         .args([
             "--ignored",
             "--exact",
-            "relocated_runtime_child",
+            "node_runtime_packaging::relocated_runtime_child",
             "--nocapture",
         ])
         .env_clear()

@@ -736,12 +736,14 @@ mod tests {
         assert!(!writes.has_work());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn failed_background_batch_is_retained_and_flush_retries_it() {
         let attempts = Arc::new(AtomicUsize::new(0));
         let observed = Arc::new(AtomicUsize::new(0));
         let attempt_count = attempts.clone();
         let observed_count = observed.clone();
+        let failed = Arc::new(Notify::new());
+        let failure_observed = failed.clone();
         let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
         let sink = batches.clone();
         let writes = SessionWriteBehind::new(
@@ -762,10 +764,13 @@ mod tests {
             },
             move |_| {
                 observed_count.fetch_add(1, Ordering::SeqCst);
+                failure_observed.notify_one();
             },
         );
         writes.enqueue(&event(0)).expect("enqueue");
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::timeout(Duration::from_secs(1), failed.notified())
+            .await
+            .expect("background failure");
         assert!(writes.has_work());
         assert_eq!(observed.load(Ordering::SeqCst), 1);
         writes.enqueue(&event(1)).expect("enqueue");

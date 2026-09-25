@@ -20,14 +20,9 @@ use seekdeep_util::abort::AbortSignal as UtilAbortSignal;
 use serde_json::json;
 
 fn source_server_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .and_then(std::path::Path::parent)
-        .expect("workspace parent")
-        .join(
-            "deepseek-harness/packages/lsp/lsp-stdio/node_modules/.bin/typescript-language-server",
-        )
+    seekdeep_source_oracle::source_root(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .expect("pinned source checkout")
+        .join("packages/lsp/lsp-stdio/node_modules/typescript-language-server/lib/cli.mjs")
 }
 
 fn agent(context: &Context, cwd: &str) -> Arc<Agent> {
@@ -98,8 +93,8 @@ async fn definition_round_trips_through_real_typescript_provider_and_renders() {
     seekdeep_lsp_stdio::apply(
         &context,
         serde_json::from_value(json!({"servers": {"typescript": {
-            "command": server,
-            "args": ["--stdio"],
+            "command": "node",
+            "args": [server, "--stdio"],
             "extensionToLanguage": {".ts": "typescript"}
         }}}))
         .unwrap(),

@@ -96,6 +96,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: primary-rust-wasm
 
       - uses: ./.github/actions/prune-stale-v8-builds
@@ -132,7 +133,7 @@ jobs:
 
       - name: Run static gates
         env:
-          SEEKDEEP_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          SEEKDEEP_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: pnpm run check:ci:static
 
   node-24-coverage:
@@ -149,6 +150,7 @@ jobs:
     env:
       SEEKDEEP_COVERAGE_MAX_WORKERS: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '8' || '4' }}
       SEEKDEEP_GATE_CONCURRENCY: '1'
+      SEEKDEEP_GATE_STREAM_OUTPUT: '1'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -169,6 +171,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: coverage-rust-wasm
 
       - uses: ./.github/actions/prune-stale-v8-builds
@@ -265,6 +268,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: primary-rust-wasm
 
       - uses: ./.github/actions/prune-stale-v8-builds
@@ -338,6 +342,7 @@ jobs:
     name: ${{ matrix.name }}
     env:
       SEEKDEEP_GATE_CONCURRENCY: ${{ matrix.gate_concurrency }}
+      SEEKDEEP_GATE_STREAM_OUTPUT: '1'
     strategy:
       fail-fast: false
       matrix:
@@ -370,6 +375,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: node-compat-${{ matrix.node }}
 
       - uses: ./.github/actions/prune-stale-v8-builds
@@ -422,6 +428,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           # Bumped once when an entry restored a V8 build directory without its prebuilt
           # static library; the prune step below now repairs such restores everywhere.
           key: python-sdk-keyless-v2
@@ -548,6 +555,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: wine-gates
 
       - uses: ./.github/actions/prune-stale-v8-builds
@@ -617,6 +625,7 @@ jobs:
       SEEKDEEP_COVERAGE_MAX_WORKERS: '2'
       SEEKDEEP_GATE_CONCURRENCY: '1'
       SEEKDEEP_PUBLINT_CONCURRENCY: '2'
+      SEEKDEEP_GATE_STREAM_OUTPUT: '1'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -635,6 +644,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: windows-native-rust-wasm
 
       - uses: ./.github/actions/prune-stale-v8-builds

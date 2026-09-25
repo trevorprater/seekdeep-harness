@@ -8,6 +8,8 @@ autotests = false
 
 [dependencies]
 anyhow.workspace = true
+idna.workspace = true
+percent-encoding.workspace = true
 base64.workspace = true
 boa_engine.workspace = true
 futures.workspace = true

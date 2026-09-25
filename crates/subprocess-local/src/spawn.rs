@@ -975,6 +975,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn cancellation_terminates_the_detached_group() {
         let temp = tempfile::tempdir().unwrap();

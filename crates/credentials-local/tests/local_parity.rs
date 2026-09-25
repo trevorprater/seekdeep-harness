@@ -81,26 +81,26 @@ fn updates(context: &Context) -> Arc<Mutex<Vec<CredentialRef>>> {
 
 #[test]
 fn resolves_default_and_explicit_specs() {
+    let root = std::env::current_dir().unwrap();
+    let home = root.join("custom/home");
     let default = resolve_spec(&LocalCredentialConfig {
-        seekdeep_home: Some(PathBuf::from("/custom/home")),
+        seekdeep_home: Some(home.clone()),
         ..LocalCredentialConfig::default()
     })
     .unwrap();
-    assert_eq!(
-        default.filename,
-        Path::new("/custom/home").join(CREDENTIALS_FILENAME)
-    );
+    assert_eq!(default.filename, home.join(CREDENTIALS_FILENAME));
     assert!(default.watch);
     assert!((default.debounce_ms - 100.0).abs() < f64::EPSILON);
 
+    let filename = root.join("etc/seekdeep/creds.yaml");
     let explicit = resolve_spec(&LocalCredentialConfig {
-        path: Some(PathBuf::from("/etc/seekdeep/creds.yaml")),
+        path: Some(filename.clone()),
         seekdeep_home: Some(PathBuf::from("/ignored")),
         watch: false,
         debounce_ms: 5.0,
     })
     .unwrap();
-    assert_eq!(explicit.filename, Path::new("/etc/seekdeep/creds.yaml"));
+    assert_eq!(explicit.filename, filename);
     assert!(!explicit.watch);
     assert!((explicit.debounce_ms - 5.0).abs() < f64::EPSILON);
 }

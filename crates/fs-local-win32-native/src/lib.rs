@@ -1,8 +1,8 @@
-//! Narrow Win32 file-security and atomic-replacement primitives.
+//! Narrow Win32 file-security, metadata, and atomic-replacement primitives.
 //!
 //! # Safety boundary
 //!
-//! Win32 requires raw pointers for security descriptors and UTF-16 paths.
+//! Win32 requires raw pointers for security descriptors, file-information buffers, and UTF-16 paths.
 //! This crate NUL-terminates owned path buffers, keeps them alive across each
 //! call, sizes the descriptor before allocation, and exposes only owned Rust
 //! buffers and [`std::io::Result`] to the safe filesystem implementation.
@@ -10,6 +10,9 @@
 #![allow(unsafe_code)]
 
 use std::{io, path::Path};
+
+mod metadata;
+pub use metadata::{FileVersion, file_version};
 
 const DACL_SECURITY_INFORMATION: u32 = 0x0000_0004;
 const PROTECTED_DACL_SECURITY_INFORMATION: u32 = 0x8000_0000;

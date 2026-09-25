@@ -288,7 +288,7 @@ fn process_zone_fallback_honors_the_child_process_environment() {
     let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
         .args([
             "--exact",
-            "process_zone_fallback_honors_the_child_process_environment",
+            "time_context_parity::process_zone_fallback_honors_the_child_process_environment",
             "--nocapture",
         ])
         .env(CHILD, "1")

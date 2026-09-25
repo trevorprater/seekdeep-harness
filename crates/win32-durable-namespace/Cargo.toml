@@ -10,6 +10,9 @@ description = "Narrow MoveFileExW write-through namespace primitive"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
+[dev-dependencies]
+tempfile.workspace = true
+
 # This crate is the documented narrow native exception to the workspace's
 # unsafe ban. No other crate calls the raw platform API.
 [lints.rust]

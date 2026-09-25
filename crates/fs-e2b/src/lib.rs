@@ -384,14 +384,26 @@ impl FileSystem for E2bFileSystem {
     }
 
     fn file_url(&self, target: &FsTarget) -> String {
+        const COMPONENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+            .remove(b'/')
+            .remove(b'-')
+            .remove(b'_')
+            .remove(b'.')
+            .remove(b'!')
+            .remove(b'~')
+            .remove(b'*')
+            .remove(b'\'')
+            .remove(b'(')
+            .remove(b')');
         let path = self.process_path(target);
         assert!(
             path.starts_with('/'),
             "fs-e2b expected an absolute process path: {path:?}"
         );
-        url::Url::from_file_path(&path)
-            .expect("absolute POSIX paths have file URLs")
-            .to_string()
+        format!(
+            "file://{}",
+            percent_encoding::utf8_percent_encode(&path, COMPONENT)
+        )
     }
 
     fn contains(&self, parent: &FsTarget, child: &FsTarget) -> bool {

@@ -106,7 +106,8 @@ async fn javascript_expressions_use_an_injected_process_facade_and_preserve_raw_
 
 #[tokio::test]
 async fn file_backed_expression_scope_exposes_base_url_and_node_url_conversion() {
-    let catalog = PluginCatalog::new().with_expression_environment(deterministic_expressions());
+    let catalog =
+        PluginCatalog::new().with_expression_environment(ExpressionEnvironment::from_process());
     catalog
         .register_named(
             "capture",
@@ -130,7 +131,11 @@ async fn file_backed_expression_scope_exposes_base_url_and_node_url_conversion()
     let composition = catalog.load_yaml_at(&context, source, &path).await.unwrap();
     assert_eq!(
         context.get(OBSERVED).expect("capture")["skills"],
-        format!("{}/skills/", temporary.path().display())
+        format!(
+            "{}{}",
+            temporary.path().join("skills").display(),
+            std::path::MAIN_SEPARATOR
+        )
     );
     composition.dispose().await.unwrap();
 }

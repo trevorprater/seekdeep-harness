@@ -27,6 +27,50 @@ fn code(error: &anyhow::Error) -> FsErrorCode {
 }
 
 #[tokio::test]
+async fn stat_versions_match_nodes_complete_identity_and_timestamps() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("file.txt");
+    std::fs::write(&path, "value").unwrap();
+    let fs = filesystem(root.path(), None);
+    for path in [path.as_path(), root.path()] {
+        for follow in [false, true] {
+            let actual = if follow {
+                let target = fs
+                    .resolve(path.to_str().unwrap(), None, None)
+                    .await
+                    .unwrap();
+                fs.stat(&target, None).await.unwrap().unwrap().version
+            } else {
+                fs.lstat(path.to_str().unwrap(), None, None)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .version
+            };
+            let output = std::process::Command::new("node")
+                .args(["-e", r"
+                    const fs = require('node:fs');
+                    const stat = fs[process.argv[2] === 'follow' ? 'statSync' : 'lstatSync'](process.argv[1], {bigint:true});
+                    process.stdout.write([stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':'));
+                "])
+                .arg(path).arg(if follow { "follow" } else { "link" })
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                actual.as_str(),
+                String::from_utf8(output.stdout).unwrap(),
+                "{} follow={follow}",
+                path.display()
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn config_resolution_metadata_urls_and_lstat_match_the_source() {
     assert!(
         LocalFileSystem::new(Config {

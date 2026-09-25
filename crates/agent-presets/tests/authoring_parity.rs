@@ -1,6 +1,6 @@
 //! Constrained preset copy, read, and deletion parity.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use seekdeep_agent_presets::{
     AgentPreset, COMPOSITION_FILE, InvalidPresetIdError, METADATA_FILE, PresetExistsError,
@@ -332,8 +332,8 @@ async fn reading_and_deletion_preserve_the_writable_root_boundary() {
 
 #[test]
 fn authoring_uses_the_first_user_root_and_refuses_when_none_exists() {
-    let first = PathBuf::from("/first");
-    let second = PathBuf::from("/second");
+    let first = std::env::current_dir().unwrap().join("first");
+    let second = std::env::current_dir().unwrap().join("second");
     assert_eq!(
         writable_root(&[
             PresetRoot {

@@ -97,8 +97,8 @@ fn profile_dialects_are_exact_canonical_and_deduplicated() {
     };
     let profile = &seatbelt_profile_args(&temp_policy).unwrap()[1];
     let grant = format!(
-        "(subpath \"{}\")",
-        temp.path().canonicalize().unwrap().display()
+        "(subpath {})",
+        serde_json::to_string(&temp.path().canonicalize().unwrap()).unwrap()
     );
     assert_eq!(profile.matches(&grant).count(), 1);
 }

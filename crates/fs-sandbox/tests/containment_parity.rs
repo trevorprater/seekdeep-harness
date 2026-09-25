@@ -12,7 +12,12 @@ async fn equal_descendant_root_and_case_modes_match_the_source() {
             .await
             .unwrap()
     );
-    assert!(is_path_under(&base, "/", true).await.unwrap());
+    let volume = std::path::Path::new(&base).ancestors().last().unwrap();
+    assert!(
+        is_path_under(&base, &volume.to_string_lossy(), true)
+            .await
+            .unwrap()
+    );
     assert!(
         is_path_under(
             &format!("{}/child", base.to_uppercase()),

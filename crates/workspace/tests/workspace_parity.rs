@@ -188,11 +188,20 @@ async fn creates_newest_first_reuses_canonical_path_and_allows_duplicate_titles(
     );
     let right = harness.registry.create(
         first.join(".").to_string_lossy().into_owned(),
-        Some("lost".to_owned()),
+        Some("same".to_owned()),
     );
     let (left, right) = tokio::join!(left, right);
     let left = left.unwrap();
     assert!(Arc::ptr_eq(&left, &right.unwrap()));
+    let reused = harness
+        .registry
+        .create(
+            first.to_string_lossy().into_owned(),
+            Some("lost".to_owned()),
+        )
+        .await
+        .unwrap();
+    assert!(Arc::ptr_eq(&left, &reused));
     assert_eq!(left.title(), "same");
     #[cfg(unix)]
     assert!(Arc::ptr_eq(

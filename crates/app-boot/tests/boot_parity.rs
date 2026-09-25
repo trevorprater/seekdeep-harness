@@ -364,7 +364,7 @@ async fn boot_exposes_seekdeep_home_and_config_directory_to_expressions() -> any
         std::collections::BTreeMap::new(),
         temporary.path().to_path_buf(),
         "/bin/seekdeep".into(),
-        "linux",
+        if cfg!(windows) { "win32" } else { "linux" },
         "v22.0.0",
         home.clone(),
     ));
@@ -382,9 +382,13 @@ async fn boot_exposes_seekdeep_home_and_config_directory_to_expressions() -> any
     )?;
     let app = boot("seekdeep-test-bin", &path, &catalog, BootOptions::default()).await?;
     let expected = format!(
-        "\"{}\"|\"file://{}/\"",
-        home.join("sessions").display(),
-        temporary.path().display()
+        "{}|{}",
+        serde_json::json!(home.join("sessions")),
+        serde_json::json!(
+            url::Url::from_directory_path(temporary.path())
+                .unwrap()
+                .as_str()
+        )
     );
     assert_eq!(
         app.context().get(OBSERVED).as_deref().map(String::as_str),

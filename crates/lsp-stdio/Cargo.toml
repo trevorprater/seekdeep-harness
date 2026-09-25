@@ -26,6 +26,7 @@ seekdeep-util = { path = "../util" }
 tokio.workspace = true
 
 [dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
 seekdeep-fs-local = { path = "../fs-local" }
 seekdeep-sandbox = { path = "../sandbox" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }

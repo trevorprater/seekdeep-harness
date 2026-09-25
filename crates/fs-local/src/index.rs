@@ -224,7 +224,7 @@ impl FileSystem for LocalFileSystem {
                     FsPathKind::Other
                 };
                 Some(FsPathInfo {
-                    version: crate::fsio::version_of_meta(&meta),
+                    version: crate::fsio::version_of_path(&absolute, &meta, false).await?,
                     kind,
                     size: Some(meta.len()),
                 })

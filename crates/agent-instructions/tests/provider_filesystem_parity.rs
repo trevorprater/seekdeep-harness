@@ -45,14 +45,10 @@ impl RecordingFs {
     }
 
     fn absolute(path: &str, cwd: Option<&str>) -> String {
-        let path = Path::new(path);
-        if path.is_absolute() {
-            path.to_string_lossy().into_owned()
+        if path.starts_with('/') {
+            path.to_owned()
         } else {
-            Path::new(cwd.unwrap_or("/"))
-                .join(path)
-                .to_string_lossy()
-                .into_owned()
+            format!("{}/{path}", cwd.unwrap_or("/").trim_end_matches('/'))
         }
     }
 

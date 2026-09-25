@@ -113,6 +113,10 @@ fn main_pushes_and_manual_checks_run_the_complete_hosted_inventory() {
         job(&ci, "all-checks-passed")["if"],
         format!("always() && ({CHECKS_EVENT})")
     );
+    assert_eq!(
+        step(job(&ci, "node-24"), "Run static gates")["env"]["SEEKDEEP_ARCHIVE_BASE_REF"],
+        "${{ github.event.pull_request.base.sha || github.event.before || github.sha }}"
+    );
     for source in [
         include_str!("../../../.github/workflows/release.yml"),
         include_str!("../../../.github/workflows/release-vendor.yml"),
@@ -455,6 +459,7 @@ fn real_api_e2e_installs_the_rust_wasm_and_browser_build_dependencies_before_bui
     for required in [
         "cargo install --locked wasm-bindgen-cli --version 0.2.127",
         "pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend exec playwright install --with-deps chromium",
     ] {
         let step = setup
             .iter()
@@ -463,6 +468,26 @@ fn real_api_e2e_installs_the_rust_wasm_and_browser_build_dependencies_before_bui
         assert!(step["if"].is_null());
         assert!(step["continue-on-error"].is_null());
     }
+    let fixture = steps
+        .iter()
+        .position(|step| {
+            step["run"] == "cargo build --locked --package seekdeep --example keyless_web_host"
+        })
+        .expect("compiled browser fixture Host");
+    let live = steps
+        .iter()
+        .position(|step| step["run"] == "cargo xtask web-smoke --live")
+        .expect("real browser smoke");
+    assert!(build < fixture && fixture < live);
+    assert_eq!(
+        steps[live]["env"]["DEEPSEEK_API_KEY"],
+        "${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}"
+    );
+    assert_eq!(
+        steps[live]["env"]["DEEPSEEK_BASE_URL"],
+        "https://api.deepseek.com"
+    );
+    assert!(steps[live]["continue-on-error"].is_null());
 }
 
 #[test]

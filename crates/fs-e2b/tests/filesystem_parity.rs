@@ -517,6 +517,10 @@ async fn resolves_paths_projects_urls_containment_metadata_and_sorted_listing() 
         fs.file_url(&target("/workspace/b file")),
         "file:///workspace/b%20file"
     );
+    assert_eq!(
+        fs.file_url(&target("/workspace/a\\b #?%@!.txt")),
+        "file:///workspace/a%5Cb%20%23%3F%25%40!.txt"
+    );
     assert!(fs.contains(&target("/workspace"), &target("/workspace/a")));
     assert!(!fs.contains(&target("/workspace/a"), &target("/workspace/ab")));
 

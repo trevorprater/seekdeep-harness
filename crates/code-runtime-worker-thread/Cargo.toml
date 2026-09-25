@@ -9,6 +9,7 @@ autotests = false
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+dunce.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 parking_lot.workspace = true

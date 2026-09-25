@@ -25635,13 +25635,14 @@
       "targets": [
         "xtask/src/web_smoke_driver.rs",
         "xtask/src/web_settings.rs",
-        "xtask/src/main.rs"
+        "xtask/src/main.rs",
+        ".github/workflows/e2e.yml"
       ],
       "evidence": [
         "cargo xtask web-smoke (4 passed through the built npm launcher and real Rust Host: default loopback bind, workspace/runtime context, partial transport retry, and run_code provider-wire collapse)",
         "Local loopback-provider diagnostic executes the eight source browser cases against the real Rust Host and Rust/WASM bundles; all eight pass, including title projection, Bash execution, resize/reset, theme, reload, and no page errors."
       ],
-      "note": "Real DeepSeek browser verification remains pending explicit approval for its outgoing fixture payload and destination. The adapter preserves the source assertions and deadlines while translating the launcher/product identity, choosing the main code-mode request separately from asynchronous max_tokens=64 title requests, and acknowledging the fresh-install testing notice through its Continue button. Local mock-provider results do not verify the real-model row."
+      "note": "The credentialed DeepSeek workflow provisions Chromium, builds the Rust browser fixture Host, and runs cargo xtask web-smoke --live with the external API endpoint pinned. The outgoing fixture uses temporary workspaces, a fixed event-sourcing prompt and an echo command. A live hosted verdict remains required; local mock-provider results do not verify the real-model row."
     },
     {
       "source": "apps/web/tests/snapshots/access-confirmation/ui.expected.md",
@@ -34397,8 +34398,10 @@
         "examples/acp-agent/tests/snapshots/pwsh-tool-turn/tool-schemas.expected.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "mechanical rename port (dsh to seekdeep)",
+        "2026-09-25: the pinned TypeScript PowerShell snapshot fails against its stale schema. Keyless refresh into an isolated fixture copy passes eight source guards; the renamed generated schema passes the complete compiled ACP snapshot suite with PowerShell 7.6.6 available."
+      ],
+      "note": "The source-generated canonical tool ordering and current descriptions replace stale expected bytes; production ordering is unchanged."
     },
     {
       "source": "examples/acp-agent/tests/snapshots/read-image-text-route/input.json",
@@ -35087,11 +35090,15 @@
       "kind": "snapshot",
       "status": "verified",
       "targets": [
-        "examples/acp-agent/tests/snapshots/subagent-list-agents/input.json"
+        "examples/acp-agent/tests/snapshots/subagent-list-agents/input.json",
+        "crates/acp-snapshot/src/harness.rs",
+        "crates/acp-snapshot/tests/harness_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "mechanical rename port (dsh to seekdeep)",
+        "2026-09-25: the authored script waits for a durable closed turn at or beyond turn two. A regression rejects older closed turns and accepts already-completed qualifying turns; 101 ACP snapshot harness tests and the complete compiled ACP snapshot suite pass."
+      ],
+      "note": "An optional minimumTurn on waitForTurnEnd avoids missing a short open turn between polls. Existing open-turn waits retain their cancellation semantics."
     },
     {
       "source": "examples/acp-agent/tests/snapshots/subagent-list-agents/session.1.jsonl",
@@ -58254,7 +58261,7 @@
     {
       "source": "packages/core/session/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/core/src/lib.rs",
         "crates/core/src/session.rs",
@@ -58266,7 +58273,7 @@
         "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented",
         "cargo test -p seekdeep-core --all-features: contains_a_reentrant_observer_append_without_reordering_later_observers rejects the nested append with \"session append cannot reenter while another append is being published\" and keeps the later observer ordered"
       ],
-      "note": "Reentrant appends are rejected throughout session/event publication: the admission flag stays set while observers run, so an observer that appends fails with the source message and later observers still see the committed event in order. Source comparisons cover publication reentrancy and deferred disposal (12 cases), plus live-versus-seed admission, validation precedence, and clock consumption (91 cases). Full Session and SessionStore parity remains under audit; focused cases do not establish the entire surface."
+      "note": "Reentrant appends are rejected throughout session/event publication: the admission flag stays set while observers run, so an observer that appends fails with the source message and later observers still see the committed event in order. Source comparisons cover publication reentrancy and deferred disposal (12 cases), plus live-versus-seed admission, validation precedence, and clock consumption (91 cases). Full Session and SessionStore parity remains under audit; focused cases do not establish the entire surface. 2026-09-25: Session cwd validation uses rooted-path acceptance to match Node on Windows; the source comparison passes locally and native Windows execution is pending."
     },
     {
       "source": "packages/core/session/src/invariant.ts",
@@ -61962,26 +61969,30 @@
     {
       "source": "packages/fs/fs-local/src/fsio.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
-        "crates/fs-local/src/fsio.rs"
+        "crates/fs-local/src/fsio.rs",
+        "crates/fs-local-win32-native/src/metadata.rs",
+        "crates/fs-local/tests/filesystem_parity.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-fs-local --all-features",
         "cargo clippy -p seekdeep-fs-local --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "2026-09-25: File version timestamps now include seconds and nanoseconds on Unix and native file identity/change time on Windows. The Node stat/lstat comparison passes on macOS; native Windows execution is pending."
     },
     {
       "source": "packages/fs/fs-local/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/fs-local/src/index.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-fs-local --all-features",
         "cargo clippy -p seekdeep-fs-local --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "2026-09-25: Existing regular-file ancestors are rejected on Windows before resolving a missing descendant. Native Windows execution is pending."
     },
     {
       "source": "packages/fs/fs-local/src/invariant.ts",
@@ -66258,12 +66269,14 @@
       "status": "verified",
       "targets": [
         "crates/host-webserver/src/lib.rs",
-        "crates/host-webserver/tests/webserver_parity.rs"
+        "crates/host-webserver/tests/webserver_parity.rs",
+        "crates/host-webserver/src/connection_io.rs"
       ],
       "evidence": [
         "pnpm vitest run packages/host/webserver/tests/webserver.spec.ts",
         "cargo test -p seekdeep-host-webserver --all-features",
-        "cargo clippy -p seekdeep-host-webserver --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-host-webserver --all-targets --all-features -- -D warnings",
+        "2026-09-25: 84 host-webserver and client-connection tests passed; the closed-transport cancellation regression fails without the socket-owned signal and passes with it, including upgraded transport lifetimes."
       ]
     },
     {
@@ -73645,7 +73658,7 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/win32.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/session-persistence-jsonl/src/win32.rs",
         "crates/session-persistence-jsonl/src/backend.rs",
@@ -73658,7 +73671,7 @@
         "cargo clippy -p seekdeep-win32-durable-namespace -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings",
         "cargo check -p seekdeep-win32-durable-namespace --target x86_64-pc-windows-msvc"
       ],
-      "note": "safe Rust owns Node-style last-error mapping, short staging siblings, ancestor creation, max-length targets, non-directory refusal, and exact already-created race acceptance; one documented narrow native crate calls MoveFileExW with only MOVEFILE_WRITE_THROUGH, and the JSONL backend selects that move plus durable staged-directory publication on Windows"
+      "note": "safe Rust owns Node-style last-error mapping, short staging siblings, ancestor creation, max-length targets, non-directory refusal, and exact already-created race acceptance; one documented narrow native crate calls MoveFileExW with only MOVEFILE_WRITE_THROUGH, and the JSONL backend selects that move plus durable staged-directory publication on Windows 2026-09-25: The safe Win32 wrapper normalizes paths before adding the verbatim namespace and preserves UTF-16. MSVC Clippy passes; native publication, non-overwrite, and invalid-path tests still require the Windows runner."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/zstd-private-decoder.ts",
@@ -90020,7 +90033,8 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
-        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "2026-09-25: 28 fileURLToPath cases match Node across Windows and POSIX flavors, including UNC/IDN paths, encoded separators, malformed encoding, error codes, and input properties."
       ],
       "note": "evaluate/interpolate: !!js expression nodes evaluated against the loader context with an injected process facade; nested arrays and objects interpolated recursively; raw expressions preserved for write-back"
     },

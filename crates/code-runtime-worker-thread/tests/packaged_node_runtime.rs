@@ -54,14 +54,17 @@ fn packaged_artifacts_load_and_run_after_relocation() {
     );
     let bin = fixture.0.join("bin");
     std::fs::create_dir(&bin).unwrap();
-    let probe = bin.join("seekdeep-runtime-probe");
+    let probe = bin.join(format!(
+        "seekdeep-runtime-probe{}",
+        std::env::consts::EXE_SUFFIX
+    ));
     std::fs::copy(&executable, &probe).unwrap();
     let mut command = Command::new(probe);
     command
         .args([
             "--ignored",
             "--exact",
-            "packaged_runtime_child",
+            "packaged_node_runtime::packaged_runtime_child",
             "--nocapture",
         ])
         .env_remove("SEEKDEEP_CODE_RUNTIME_NODE_DIR")
@@ -113,7 +116,7 @@ async fn packaged_runtime_child() {
     assert!(Path::new(&directory).is_absolute());
     assert_eq!(
         node_runtime_assets().unwrap(),
-        Path::new(&directory).canonicalize().unwrap()
+        dunce::canonicalize(&directory).unwrap()
     );
     let context = Context::new();
     let fiber = context.plugin(plugin(), json!({})).unwrap();

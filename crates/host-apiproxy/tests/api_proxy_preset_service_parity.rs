@@ -389,7 +389,7 @@ async fn read_copy_open_and_remove_use_only_host_resolved_ids_and_paths() {
         .await,
     );
     assert_eq!(opened.lock().len(), 1);
-    assert!(opened.lock()[0].ends_with("/mine"));
+    assert!(std::path::Path::new(&opened.lock()[0]).ends_with("mine"));
     assert_eq!(
         error_code(
             invoke(
@@ -424,7 +424,7 @@ async fn no_native_opener_returns_the_resolved_user_directory_as_text() {
         .await,
     );
     assert_eq!(opened["opened"], false);
-    assert!(opened["path"].as_str().unwrap().ends_with("/minimal"));
+    assert!(std::path::Path::new(opened["path"].as_str().unwrap()).ends_with("minimal"));
 }
 
 #[tokio::test]

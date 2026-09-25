@@ -298,7 +298,7 @@ fn validate_assets(path: &Path) -> anyhow::Result<PathBuf> {
             path.join(name).display()
         );
     }
-    let path = path.canonicalize()?;
+    let path = dunce::canonicalize(path)?;
     crate::node_assets::verify_manifest(&path)?;
     if crate::node_assets::bundled_node_required(&path)? {
         executable(&path)?;

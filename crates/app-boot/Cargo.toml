@@ -25,6 +25,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+url.workspace = true
 serde_yml.workspace = true
 tempfile.workspace = true
 

@@ -250,7 +250,12 @@ fn startup_cancellation_and_timeout_reap_the_unready_process_and_endpoint() {
     std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o700)).unwrap();
     for mode in ["abort", "timeout"] {
         let child = Command::new(std::env::current_exe().unwrap())
-            .args(["--ignored", "--exact", "unready_node_child", "--nocapture"])
+            .args([
+                "--ignored",
+                "--exact",
+                "node_lifecycle::unready_node_child",
+                "--nocapture",
+            ])
             .env("SEEKDEEP_NODE_BINARY", &fake)
             .env("SEEKDEEP_UNREADY_NODE_MARKER", &marker)
             .env("SEEKDEEP_UNREADY_NODE_MODE", mode)

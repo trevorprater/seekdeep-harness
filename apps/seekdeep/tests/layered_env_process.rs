@@ -391,7 +391,7 @@ async fn bootstrap_only_file_value_has_one_exact_prefixed_diagnostic() -> anyhow
         &[("SEEKDEEP_HOME", home.as_os_str())],
     )
     .await?;
-    let canonical_dotenv = fs::canonicalize(&project)?.join(".env");
+    let canonical_dotenv = super::node_current_dir(&project).join(".env");
     let expected = format!(
         "seekdeep: {} sets \"DEEPSEEK_BASE_URL\", which only the launching environment may set \
          (it decides how this process starts, where its code and instructions load from, or how it \

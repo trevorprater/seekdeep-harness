@@ -31,25 +31,10 @@ impl CordisClock for FixedClock {
 fn source_root() -> &'static PathBuf {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
     ROOT.get_or_init(|| {
-        let snapshot = include_str!("../../../SOURCE_SNAPSHOT");
-        let field = |name: &str| {
-            snapshot
-                .lines()
-                .find_map(|line| line.strip_prefix(name))
-                .expect("source snapshot field")
-        };
-        let root = PathBuf::from(field("repository="));
-        let head = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(&root)
-            .output()
-            .expect("read source revision");
-        assert!(head.status.success());
-        assert_eq!(
-            String::from_utf8(head.stdout).unwrap().trim(),
-            field("commit=")
-        );
-        root
+        seekdeep_source_oracle::source_root(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        )
+        .expect("pinned source checkout")
     })
 }
 

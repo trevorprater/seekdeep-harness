@@ -62,6 +62,44 @@ fn status(response: &str) -> u16 {
 }
 
 #[tokio::test]
+async fn completed_connections_abort_their_signal_without_a_peek_watcher() {
+    let context = Context::new();
+    let server = WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::Loopback,
+            port: 0,
+        },
+    )
+    .await
+    .unwrap();
+    let captured = Arc::new(std::sync::Mutex::new(None));
+    let observed = captured.clone();
+    server
+        .register(WebRoute {
+            kind: WebRouteKind::Exact,
+            path: "/close".to_owned(),
+            handler: handler(move |request| {
+                *observed.lock().unwrap() = Some(
+                    request
+                        .extensions()
+                        .get::<seekdeep_host_webserver::WebConnectionSignal>()
+                        .unwrap()
+                        .signal(),
+                );
+                Ok(response(hyper::StatusCode::OK, "closed"))
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        status(&raw_request(server.port(), "GET", "/close").await.unwrap()),
+        200
+    );
+    assert!(captured.lock().unwrap().as_ref().unwrap().is_aborted());
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn serves_route_precedence_index_taps_fallback_and_disposal() {
     let context = Context::new();
@@ -290,8 +328,9 @@ async fn taken_port_fails_before_service_publication() {
     .await
     .unwrap_err();
     assert!(
-        error.to_string().contains("in use")
-            || error.to_string().contains("Address already in use")
+        error
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| { error.kind() == std::io::ErrorKind::AddrInUse })
     );
     assert!(
         second_context

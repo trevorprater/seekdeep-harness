@@ -103,8 +103,8 @@ fn version_of(meta: &std::fs::Metadata) -> FsVersion {
         meta.dev(),
         meta.ino(),
         meta.size(),
-        meta.mtime_nsec(),
-        meta.ctime_nsec()
+        i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec()),
+        i128::from(meta.ctime()) * 1_000_000_000 + i128::from(meta.ctime_nsec())
     ))
 }
 
@@ -133,6 +133,38 @@ fn mode_of(_meta: &std::fs::Metadata) -> u32 {
 #[must_use]
 pub fn version_of_meta(meta: &std::fs::Metadata) -> FsVersion {
     version_of(meta)
+}
+
+#[cfg_attr(
+    not(windows),
+    allow(
+        clippy::unused_async,
+        clippy::unnecessary_wraps,
+        reason = "only Windows needs a fallible blocking metadata query"
+    )
+)]
+pub(crate) async fn version_of_path(
+    path: &str,
+    meta: &std::fs::Metadata,
+    follow_symlinks: bool,
+) -> Result<FsVersion, FsError> {
+    #[cfg(windows)]
+    {
+        let _ = meta;
+        let path = Path::new(path).to_owned();
+        tokio::task::spawn_blocking(move || {
+            seekdeep_fs_local_win32_native::file_version(&path, follow_symlinks)
+        })
+        .await
+        .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?
+        .map(|version| FsVersion::new(version.as_str()))
+        .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (path, follow_symlinks);
+        Ok(version_of_meta(meta))
+    }
 }
 
 fn kind_of(meta: &std::fs::Metadata) -> FsKind {
@@ -221,6 +253,21 @@ pub async fn resolve_local_target(cwd: &str, path: &str) -> Result<LocalTarget, 
             loop {
                 match tokio::fs::canonicalize(&ancestor).await {
                     Ok(real_ancestor) => {
+                        #[cfg(windows)]
+                        if !tokio::fs::metadata(&real_ancestor)
+                            .await
+                            .map_err(|error| {
+                                FsError::new(error.to_string(), FsErrorCode::FsIoError)
+                            })?
+                            .is_dir()
+                        {
+                            return Err(FsError::new(
+                                format!(
+                                    "cannot resolve \"{display_path}\": a parent path segment is not a directory"
+                                ),
+                                FsErrorCode::FsNotFound,
+                            ));
+                        }
                         let mut joined = real_ancestor;
                         for part in missing.iter().rev() {
                             joined.push(part);
@@ -258,7 +305,7 @@ pub async fn resolve_local_target(cwd: &str, path: &str) -> Result<LocalTarget, 
 pub async fn probe(path: &str) -> Result<Option<PathInfo>, FsError> {
     match tokio::fs::metadata(path).await {
         Ok(meta) => Ok(Some(PathInfo {
-            version: version_of(&meta),
+            version: version_of_path(path, &meta, true).await?,
             mode: mode_of(&meta),
             kind: kind_of(&meta),
             size: meta.len(),

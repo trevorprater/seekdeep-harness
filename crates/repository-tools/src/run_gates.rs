@@ -2,7 +2,7 @@
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     io::Read,
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
@@ -1511,11 +1511,24 @@ pub fn run_gate(root: &Path, inherited: &BTreeMap<OsString, OsString>, gate: Gat
         }
     };
     let (sender, receiver) = mpsc::channel();
+    let stream_output = inherited
+        .get(OsStr::new("SEEKDEEP_GATE_STREAM_OUTPUT"))
+        .is_some_and(|value| value == "1");
     if let Some(stdout) = child.stdout.take() {
-        spawn_output_reader(stdout, GateOutputStream::Stdout, sender.clone());
+        spawn_output_reader(
+            stdout,
+            GateOutputStream::Stdout,
+            sender.clone(),
+            stream_output,
+        );
     }
     if let Some(stderr) = child.stderr.take() {
-        spawn_output_reader(stderr, GateOutputStream::Stderr, sender.clone());
+        spawn_output_reader(
+            stderr,
+            GateOutputStream::Stderr,
+            sender.clone(),
+            stream_output,
+        );
     }
     drop(sender);
     let status = child.wait();
@@ -1554,6 +1567,7 @@ fn spawn_output_reader(
     mut reader: impl Read + Send + 'static,
     stream: GateOutputStream,
     sender: mpsc::Sender<GateOutputChunk>,
+    stream_output: bool,
 ) {
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 8192];
@@ -1561,13 +1575,14 @@ fn spawn_output_reader(
             match reader.read(&mut buffer) {
                 Ok(0) | Err(_) => break,
                 Ok(length) => {
-                    if sender
-                        .send(GateOutputChunk {
-                            stream,
-                            text: String::from_utf8_lossy(&buffer[..length]).into_owned(),
-                        })
-                        .is_err()
-                    {
+                    let chunk = GateOutputChunk {
+                        stream,
+                        text: String::from_utf8_lossy(&buffer[..length]).into_owned(),
+                    };
+                    if stream_output {
+                        print_output(std::slice::from_ref(&chunk));
+                    }
+                    if sender.send(chunk).is_err() {
                         break;
                     }
                 }

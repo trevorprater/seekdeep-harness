@@ -560,7 +560,11 @@ impl ClientModuleHost {
             if error.kind() == io::ErrorKind::NotFound {
                 CompositionFailure::missing(name.clone(), metadata.client_path.clone())
             } else {
-                let failure = anyhow::anyhow!("{}: {}", io_error_label(&error), error);
+                let failure = anyhow::anyhow!(
+                    "{}: {}",
+                    io_error_label(&error, &metadata.client_path),
+                    error
+                );
                 CompositionFailure::other(&failure)
             }
         })?;
@@ -1059,8 +1063,8 @@ fn composition_failure(failures: &[CompositionFailure]) -> String {
     lines.join("\n")
 }
 
-fn io_error_label(error: &io::Error) -> &'static str {
-    if error.kind() == io::ErrorKind::IsADirectory {
+fn io_error_label(error: &io::Error, path: &Path) -> &'static str {
+    if error.kind() == io::ErrorKind::IsADirectory || cfg!(windows) && path.is_dir() {
         "EISDIR"
     } else {
         "I/O error"

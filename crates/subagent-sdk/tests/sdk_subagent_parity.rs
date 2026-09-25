@@ -517,7 +517,7 @@ async fn plugin_validates_registers_unwinds_and_honors_cwd_override() {
         )
         .await
         .unwrap();
-    let expected = std::fs::canonicalize(workspace.path()).unwrap();
+    let expected = dunce::canonicalize(workspace.path()).unwrap();
     assert!(text(&result(&run).await.output).contains(&format!("cwd={}", expected.display())));
     run.dispose().await.unwrap();
     fiber.dispose().await.unwrap();
@@ -590,7 +590,7 @@ async fn missing_cwd_fails_before_spawn_and_loader_composition_inherits_parent_w
         )
         .await
         .unwrap();
-    let expected = std::fs::canonicalize(workspace.path()).unwrap();
+    let expected = dunce::canonicalize(workspace.path()).unwrap();
     assert!(text(&result(&run).await.output).contains(&format!("cwd={}", expected.display())));
     run.dispose().await.unwrap();
     composition.dispose().await.unwrap();
@@ -751,7 +751,7 @@ mod complete_runtime_e2e {
         let temporary = tempfile::tempdir().unwrap();
         let workspace = temporary.path().join("workspace");
         std::fs::create_dir(&workspace).unwrap();
-        let workspace = std::fs::canonicalize(workspace).unwrap();
+        let workspace = dunce::canonicalize(workspace).unwrap();
         let context = Context::new();
         let dependencies = seekdeep_agent_loop_testkit::mount_agent_loop_test_dependencies(
             &context,
@@ -913,11 +913,13 @@ mod complete_runtime_e2e {
         assert_eq!(parent_files.len(), 1);
         assert_eq!(child_files.len(), 1);
         let parent_log = std::fs::read_to_string(&parent_files[0]).unwrap();
+        let encoded = serde_json::to_string(&expected).unwrap();
+        let encoded = &encoded[1..encoded.len() - 1];
         assert!(parent_log.contains("\"type\":\"tool/result\""));
-        assert!(parent_log.contains(&expected));
+        assert!(parent_log.contains(encoded));
         let child_log = std::fs::read_to_string(&child_files[0]).unwrap();
         assert!(child_log.contains("\"type\":\"user/message\""));
         assert!(child_log.contains("\"type\":\"assistant/message\""));
-        assert!(child_log.contains(&expected));
+        assert!(child_log.contains(encoded));
     }
 }

@@ -142,11 +142,14 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
     };
     read.expect("seekdeep PTY output must be readable");
     let status = status.expect("seekdeep PTY process must be waitable");
+    let raw = String::from_utf8(output).expect("seekdeep PTY stdout must be UTF-8");
+    // ConPTY adds cursor and console control sequences even when the child prints plain help.
+    let mut sanitizer = seekdeep_terminal_bash::TerminalSanitizer::new(4096);
+    let mut stdout = sanitizer.push(&raw).text;
+    stdout.push_str(&sanitizer.flush());
     ProcessResult {
         code: Some(i32::try_from(status.exit_code()).expect("PTY exit code fits i32")),
-        stdout: String::from_utf8(output)
-            .expect("seekdeep PTY stdout must be UTF-8")
-            .replace("\r\n", "\n"),
+        stdout,
         stderr: String::new(),
     }
 }
@@ -188,7 +191,7 @@ fn launcher_help_uses_the_live_stdout_terminal_width() {
     let result = run_help_in_pty(60);
     assert_eq!(result.code, Some(0));
     assert_eq!(result.stderr, "");
-    assert!(result.stdout.ends_with("\n\n"));
+    assert!(result.stdout.ends_with("\n\n"), "{:?}", result.stdout);
     assert!(result.stdout.contains(concat!(
         "seekdeep: boot a SeekDeep Harness profile — an ordered stack\n",
         "of plugin-bundle patch layers under your own overrides.\n",

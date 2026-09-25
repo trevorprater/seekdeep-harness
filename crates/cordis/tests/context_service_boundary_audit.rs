@@ -113,24 +113,10 @@ async fn provider_disposal_waits_for_affected_cleanup_without_waiting_for_other_
 fn source_disposal_trace() -> Value {
     use std::process::Command;
 
-    let snapshot = include_str!("../../../SOURCE_SNAPSHOT");
-    let field = |prefix| {
-        snapshot
-            .lines()
-            .find_map(|line| line.strip_prefix(prefix))
-            .expect("source snapshot field")
-    };
-    let source = field("repository=");
-    let head = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(source)
-        .output()
-        .unwrap();
-    assert!(head.status.success());
-    assert_eq!(
-        String::from_utf8(head.stdout).unwrap().trim(),
-        field("commit=")
-    );
+    let source = seekdeep_source_oracle::source_root(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+    )
+    .expect("pinned source checkout");
     let output = Command::new("node")
         .args([
             "--experimental-transform-types",

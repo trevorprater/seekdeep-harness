@@ -97,6 +97,13 @@ pub enum InputStep {
     },
     /// Wait for the latest durable turn to close.
     WaitForTurnEnd {
+        /// Optional minimum accepted closed turn number.
+        #[serde(
+            default,
+            rename = "minimumTurn",
+            skip_serializing_if = "Option::is_none"
+        )]
+        minimum_turn: Option<u64>,
         /// Optional timeout override in milliseconds.
         #[serde(default, rename = "timeoutMs")]
         timeout_ms: Option<u64>,
@@ -627,11 +634,15 @@ async fn run_step(
             )
             .await?;
         }
-        InputStep::WaitForTurnEnd { timeout_ms } => {
-            wait_for_persisted_turn_end(
+        InputStep::WaitForTurnEnd {
+            minimum_turn,
+            timeout_ms,
+        } => {
+            wait_for_persisted_turn_end_number(
                 sessions_root,
                 require_session(session_id.as_ref(), "waitForTurnEnd")?,
                 timeout(*timeout_ms),
+                *minimum_turn,
             )
             .await?;
         }
@@ -772,6 +783,44 @@ pub async fn wait_for_persisted_turn_end(
     timeout: Duration,
 ) -> anyhow::Result<()> {
     wait_for_log_predicate(root, session_id, timeout, latest_turn_is_closed, "turn/end").await
+}
+
+async fn wait_for_persisted_turn_end_number(
+    root: &Path,
+    session_id: &AcpSessionId,
+    timeout: Duration,
+    minimum_turn: Option<u64>,
+) -> anyhow::Result<()> {
+    let Some(minimum) = minimum_turn else {
+        return wait_for_persisted_turn_end(root, session_id, timeout).await;
+    };
+    poll_until(timeout, || async {
+        let Some(log) = harvest_session_logs(root)
+            .await?
+            .into_iter()
+            .find(|log| log.id == session_id.as_str())
+        else {
+            return Ok(false);
+        };
+        if !latest_turn_is_closed(&log.content) {
+            return Ok(false);
+        }
+        Ok(jsonl_values(complete_prefix(&log.content))?
+            .iter()
+            .rev()
+            .find(|event| event.get("type").and_then(Value::as_str) == Some("turn/end"))
+            .and_then(|event| event.pointer("/data/turn"))
+            .and_then(safe_positive_integer)
+            .is_some_and(|turn| turn >= minimum))
+    })
+    .await
+    .with_timeout_error(|| {
+        format!(
+            "snapshot-harness: session {:?} did not persist turn/end at or beyond turn {minimum} within {}ms",
+            session_id.as_str(),
+            timeout.as_millis()
+        )
+    })
 }
 
 /// Waits for the Nth harvested child to close model work after its descriptor.

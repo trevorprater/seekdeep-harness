@@ -305,8 +305,9 @@ fn build_instrumented(
         exported.status
     );
     let environment = parse_coverage_environment(&String::from_utf8(exported.stdout)?)?;
-    let members = workspace_packages(&cargo, repository)?;
-    let excluded = instrumented_exclusions(&members, repository, measured);
+    let workspace = workspace_metadata(&cargo, repository)?;
+    prepare_runtime_assets(&cargo, repository, &workspace)?;
+    let excluded = instrumented_exclusions(&workspace.packages, repository, measured);
     let excluded = excluded.iter().map(String::as_str).collect::<Vec<_>>();
     let build = build_command(arguments, &excluded);
     println!(
@@ -339,11 +340,12 @@ fn build_instrumented(
     Ok(i32::from(!status.success()))
 }
 
-/// The packages the repository's workspace defines: name to manifest directory.
-fn workspace_packages(
-    cargo: &OsStr,
-    repository: &Path,
-) -> anyhow::Result<BTreeMap<String, PathBuf>> {
+struct WorkspaceMetadata {
+    packages: BTreeMap<String, PathBuf>,
+    target_directory: PathBuf,
+}
+
+fn workspace_metadata(cargo: &OsStr, repository: &Path) -> anyhow::Result<WorkspaceMetadata> {
     let output = Command::new(cargo)
         .args(["metadata", "--no-deps", "--format-version", "1"])
         .current_dir(repository)
@@ -357,7 +359,7 @@ fn workspace_packages(
         output.status
     );
     let metadata: serde_json::Value = serde_json::from_slice(&output.stdout)?;
-    Ok(metadata["packages"]
+    let packages = metadata["packages"]
         .as_array()
         .into_iter()
         .flatten()
@@ -368,7 +370,50 @@ fn workspace_packages(
                 .unwrap_or_else(|_| manifest.parent().map(Path::to_path_buf).unwrap_or_default());
             Some((name, directory))
         })
-        .collect())
+        .collect();
+    let target_directory = PathBuf::from(
+        metadata["target_directory"]
+            .as_str()
+            .context("run-coverage: Cargo metadata has no target directory")?,
+    );
+    Ok(WorkspaceMetadata {
+        packages,
+        target_directory,
+    })
+}
+
+fn prepare_runtime_assets(
+    cargo: &OsStr,
+    repository: &Path,
+    workspace: &WorkspaceMetadata,
+) -> anyhow::Result<Vec<(&'static str, PathBuf)>> {
+    if !workspace
+        .packages
+        .contains_key("seekdeep-code-runtime-worker-thread")
+    {
+        return Ok(Vec::new());
+    }
+    let status = Command::new(cargo)
+        .args(["xtask", "host-assets"])
+        .current_dir(repository)
+        .status()
+        .context("run-coverage: prepare the compiled Host runtime")?;
+    anyhow::ensure!(
+        status.success(),
+        "run-coverage: cargo xtask host-assets exited with {status}"
+    );
+    Ok(vec![
+        (
+            "SEEKDEEP_CODE_RUNTIME_NODE_DIR",
+            workspace.target_directory.join("debug/code-runtime-node"),
+        ),
+        (
+            "SEEKDEEP_NODE_WASM",
+            workspace
+                .target_directory
+                .join("wasm32-unknown-unknown/release/seekdeep_code_runtime_node.wasm"),
+        ),
+    ])
 }
 
 fn run_instrumented(
@@ -389,8 +434,9 @@ fn run_instrumented(
         installed,
         "run-coverage: cargo-llvm-cov is not installed; run `cargo install --locked cargo-llvm-cov --version {CARGO_LLVM_COV_VERSION}` and `rustup component add llvm-tools-preview`"
     );
-    let members = workspace_packages(&cargo, repository)?;
-    let excluded = instrumented_exclusions(&members, repository, measured);
+    let workspace = workspace_metadata(&cargo, repository)?;
+    let runtime = prepare_runtime_assets(&cargo, repository, &workspace)?;
+    let excluded = instrumented_exclusions(&workspace.packages, repository, measured);
     let excluded = excluded.iter().map(String::as_str).collect::<Vec<_>>();
     let test = test_command(arguments, &excluded);
     println!(
@@ -404,6 +450,7 @@ fn run_instrumented(
     instrumented
         .args(&test)
         .current_dir(repository)
+        .envs(runtime)
         .env(COVERAGE_EXEMPT_ENV, "1");
     // Coverage mapping does not need full DWARF, and full debug info makes the instrumented
     // build several times larger than a hosted runner's disk; line tables keep panics readable.

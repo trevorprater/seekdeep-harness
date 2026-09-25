@@ -24,6 +24,7 @@ seekdeep-util = { path = "../util" }
 url.workspace = true
 
 [dev-dependencies]
+seekdeep-source-oracle = { path = "../source-oracle" }
 async-trait.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }

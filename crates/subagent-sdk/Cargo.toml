@@ -54,6 +54,7 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+dunce.workspace = true
 seekdeep-loader = { path = "../loader" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }

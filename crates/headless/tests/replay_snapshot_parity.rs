@@ -780,7 +780,7 @@ async fn thread_fallback_keeps_child_session_writers_alive() -> anyhow::Result<(
     command
         .args([
             "--exact",
-            "thread_fallback_keeps_child_session_writers_alive",
+            "replay_snapshot_parity::thread_fallback_keeps_child_session_writers_alive",
             "--nocapture",
         ])
         .env_clear()

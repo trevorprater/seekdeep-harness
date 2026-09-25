@@ -118,8 +118,9 @@ impl SessionHeader {
                 "session header createdAt must be a non-negative safe integer".to_owned(),
             ));
         }
+        // Node's path.isAbsolute accepts drive-rooted paths such as `\work` on Windows.
         if let Some(cwd) = &self.cwd
-            && !Path::new(cwd).is_absolute()
+            && !Path::new(cwd).has_root()
         {
             return Err(SessionError::InvalidHeader(format!(
                 "session header cwd must be an absolute path, got \"{cwd}\""

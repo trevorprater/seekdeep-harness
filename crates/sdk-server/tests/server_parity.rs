@@ -1063,7 +1063,7 @@ async fn failed_initialize_keeps_the_attempted_route_and_absent_llm_reports_no_a
                 .meta
                 .cwd
                 .as_deref()
-                .is_some_and(|cwd| cwd.ends_with("attempted/relative"))
+                .is_some_and(|cwd| std::path::Path::new(cwd).ends_with("attempted/relative"))
         );
     }
     harness.server.shutdown().await.unwrap();

@@ -10,15 +10,9 @@ use seekdeep_subprocess_local::LocalSubprocessRuntime;
 use serde_json::json;
 
 fn source_server_binary() -> PathBuf {
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    workspace
-        .parent()
-        .and_then(std::path::Path::parent)
-        .and_then(std::path::Path::parent)
-        .expect("workspace parent")
-        .join(
-            "deepseek-harness/packages/lsp/lsp-stdio/node_modules/.bin/typescript-language-server",
-        )
+    seekdeep_source_oracle::source_root(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .expect("pinned source checkout")
+        .join("packages/lsp/lsp-stdio/node_modules/typescript-language-server/lib/cli.mjs")
 }
 
 fn request(
@@ -91,8 +85,8 @@ async fn mount_server() -> (tempfile::TempDir, PathBuf, Context, Arc<Lsp>) {
         .plugin(
             plugin(),
             json!({"servers": {"typescript": {
-                "command": server,
-                "args": ["--stdio"],
+                "command": "node",
+                "args": [server, "--stdio"],
                 "extensionToLanguage": {
                     ".ts": "typescript",
                     ".tsx": "typescriptreact"

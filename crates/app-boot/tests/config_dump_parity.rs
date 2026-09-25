@@ -32,22 +32,22 @@ fn write_base(dir: &Path) -> PathBuf {
 
 #[test]
 fn replay_config_path_swaps_only_the_cordis_suffix() {
-    let cwd = Path::new("/workspace");
+    let cwd = std::env::current_dir().unwrap().join("workspace");
     assert_eq!(
-        resolve_config_path(Path::new("config/cordis.yml"), Some("replay"), cwd).unwrap(),
-        Path::new("/workspace/config/cordis.snapshot.yml")
+        resolve_config_path(Path::new("config/cordis.yml"), Some("replay"), &cwd).unwrap(),
+        cwd.join("config/cordis.snapshot.yml")
     );
     assert_eq!(
-        resolve_config_path(Path::new("config/mycordis.yaml"), Some("replay"), cwd).unwrap(),
-        Path::new("/workspace/config/mycordis.snapshot.yml")
+        resolve_config_path(Path::new("config/mycordis.yaml"), Some("replay"), &cwd).unwrap(),
+        cwd.join("config/mycordis.snapshot.yml")
     );
     assert_eq!(
-        resolve_config_path(Path::new("config/custom.yml"), Some("replay"), cwd).unwrap(),
-        Path::new("/workspace/config/custom.yml")
+        resolve_config_path(Path::new("config/custom.yml"), Some("replay"), &cwd).unwrap(),
+        cwd.join("config/custom.yml")
     );
     assert_eq!(
-        resolve_config_path(Path::new("cordis.yml"), Some("record"), cwd).unwrap(),
-        Path::new("/workspace/cordis.yml")
+        resolve_config_path(Path::new("cordis.yml"), Some("record"), &cwd).unwrap(),
+        cwd.join("cordis.yml")
     );
 }
 

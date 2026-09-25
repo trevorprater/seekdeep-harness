@@ -79,7 +79,10 @@ fn storing_outside_a_repository_fails_before_a_record_can_reference_it() {
 #[test]
 fn git_cannot_start_failure_is_clear() {
     let output = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "git_cannot_start_helper"])
+        .args([
+            "--exact",
+            "translation_pairing_git_parity::git_cannot_start_helper",
+        ])
         .env("SEEKDEEP_TEST_GIT_CANNOT_START", "1")
         .env("PATH", "")
         .output()

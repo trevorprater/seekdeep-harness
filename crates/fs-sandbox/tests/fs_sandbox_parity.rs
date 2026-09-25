@@ -20,7 +20,9 @@ struct Harness {
 }
 
 fn harness(mode: SandboxMode) -> Harness {
-    let home = std::env::var_os("HOME").expect("home");
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .expect("home");
     let base = tempfile::Builder::new()
         .prefix(".seekdeep-fs-sandbox-")
         .tempdir_in(home)

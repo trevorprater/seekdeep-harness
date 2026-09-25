@@ -481,6 +481,7 @@ async fn read_codex_auth(
         metadata.is_file(),
         "llm-pi-ai: {display_path} is not a regular file"
     );
+    #[cfg(unix)]
     ensure_owner_only(&metadata, display_path)?;
     anyhow::ensure!(
         metadata.len() <= MAX_CODEX_AUTH_BYTES,
@@ -509,11 +510,6 @@ fn ensure_owner_only(metadata: &std::fs::Metadata, display_path: &str) -> anyhow
         metadata.permissions().mode() & 0o077 == 0,
         "llm-pi-ai: {display_path} must be owner-only (mode 0600)"
     );
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn ensure_owner_only(_: &std::fs::Metadata, _: &str) -> anyhow::Result<()> {
     Ok(())
 }
 

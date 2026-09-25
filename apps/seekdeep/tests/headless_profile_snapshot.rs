@@ -317,10 +317,31 @@ fn prepare_profile(
     })
 }
 
-// This integration-test executable has one test: its process cwd belongs to the fixture.
+// The profile consumes process cwd, so its fixture must own a separate process.
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn complete_profile_matches_source_stdout_and_cold_session_log() -> anyhow::Result<()> {
+    if std::env::var("SEEKDEEP_HEADLESS_PROFILE_SNAPSHOT_CHILD").as_deref() != Ok("1") {
+        let output = tokio::time::timeout(
+            Duration::from_secs(120),
+            tokio::process::Command::new(std::env::current_exe()?)
+                .args(["--exact", "headless_profile_snapshot::complete_profile_matches_source_stdout_and_cold_session_log", "--nocapture"])
+                .env("SEEKDEEP_HEADLESS_PROFILE_SNAPSHOT_CHILD", "1")
+                .kill_on_drop(true)
+                .output(),
+        ).await??;
+        anyhow::ensure!(
+            output.status.success(),
+            "profile snapshot child failed: stdout: {}; stderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        anyhow::ensure!(
+            String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+            "profile snapshot child did not execute its test"
+        );
+        return Ok(());
+    }
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;

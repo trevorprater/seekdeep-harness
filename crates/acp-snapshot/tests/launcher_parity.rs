@@ -293,10 +293,11 @@ async fn launch_layers_custom_environment_but_owns_both_isolated_homes() {
         .filter_map(|update| update_text(&update).map(str::to_owned))
         .find(|text| text.starts_with("env:"))
         .unwrap();
-    assert!(environment.contains("layered"));
-    assert!(environment.contains(&cwd.path().join(".seekdeep").to_string_lossy().to_string()));
-    assert!(environment.contains(&cwd.path().join(".agents").to_string_lossy().to_string()));
-    assert!(!environment.contains("wrong"));
+    let environment: Value =
+        serde_json::from_str(environment.strip_prefix("env:").unwrap()).unwrap();
+    assert_eq!(environment["custom"], "layered");
+    assert_eq!(environment["home"], json!(cwd.path().join(".seekdeep")));
+    assert_eq!(environment["agentsHome"], json!(cwd.path().join(".agents")));
     launched.close(None).await.unwrap();
 }
 

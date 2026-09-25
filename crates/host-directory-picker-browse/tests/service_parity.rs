@@ -390,5 +390,8 @@ fn assert_picker_error(
         panic!("expected typed picker failure, got {failure}");
     };
     assert_eq!(*actual_code, code);
-    assert_eq!(actual_path, path);
+    assert_eq!(
+        std::path::Path::new(actual_path),
+        std::path::Path::new(path)
+    );
 }

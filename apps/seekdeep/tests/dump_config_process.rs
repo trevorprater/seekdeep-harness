@@ -144,9 +144,7 @@ fn full_dump_composes_profile_home_and_relative_overlay_in_order() {
     assert!(!stdout.contains("home-provider"));
     let profile_patch = profile.join("cordis.patch.yml");
     let home_patch = home.path().join("cordis.patch.yml");
-    let overlay = std::fs::canonicalize(cwd.path())
-        .unwrap()
-        .join("overlay.yml");
+    let overlay = super::node_current_dir(cwd.path()).join("overlay.yml");
     assert!(stdout.contains(&format!(
         "patched by {}, {}, {}",
         profile_patch.display(),

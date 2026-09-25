@@ -111,13 +111,14 @@ struct Harness {
 
 impl Harness {
     async fn new() -> Self {
-        #[cfg(unix)]
         let base = tempfile::Builder::new()
             .prefix("seekdeep-multi-project-")
-            .tempdir_in(std::env::var_os("HOME").expect("home"))
+            .tempdir_in(
+                std::env::var_os("HOME")
+                    .or_else(|| std::env::var_os("USERPROFILE"))
+                    .expect("home"),
+            )
             .unwrap();
-        #[cfg(not(unix))]
-        let base = tempfile::tempdir().unwrap();
         let fallback = base.path().join("fallback");
         let spill = base.path().join("spill");
         std::fs::create_dir(&fallback).unwrap();

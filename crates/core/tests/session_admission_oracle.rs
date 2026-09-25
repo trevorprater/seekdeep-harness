@@ -179,6 +179,28 @@ fn scenarios() -> Vec<Scenario> {
             });
         }
     }
+    let event = candidates().remove(0).1;
+    for cwd in [
+        "",
+        "relative",
+        "/work",
+        r"\work",
+        "C:work",
+        "C:/work",
+        r"C:\work",
+        r"\\server\share",
+    ] {
+        for mode in [Mode::Append, Mode::Seed] {
+            let mut header = SessionHeader::new_with_created_at(SessionId::new("admission"), 99);
+            header.cwd = Some(cwd.to_owned());
+            scenarios.push(Scenario {
+                name: format!("cwd-{cwd:?}"),
+                mode,
+                event: event.clone(),
+                header: Some(header),
+            });
+        }
+    }
     scenarios
 }
 

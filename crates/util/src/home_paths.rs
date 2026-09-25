@@ -264,9 +264,10 @@ mod tests {
     fn precedence_and_blank_environment_match_source() {
         let home = os_home().unwrap();
         let env = environment(&[(SEEKDEEP_HOME_ENV, "~/env-seekdeep")]);
+        let explicit = std::env::current_dir().unwrap().join("explicit-seekdeep");
         assert_eq!(
-            resolve_seekdeep_home(Some(OsStr::new("/tmp/explicit-seekdeep")), &env).unwrap(),
-            Path::new("/tmp/explicit-seekdeep")
+            resolve_seekdeep_home(Some(explicit.as_os_str()), &env).unwrap(),
+            explicit
         );
         assert_eq!(
             resolve_seekdeep_home(None, &env).unwrap(),

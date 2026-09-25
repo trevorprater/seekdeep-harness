@@ -5765,6 +5765,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -6720,6 +6721,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "dunce",
  "futures",
  "indexmap 2.14.0",
  "parking_lot",
@@ -7164,6 +7166,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "parking_lot",
+ "percent-encoding",
  "seekdeep-cordis",
  "seekdeep-e2b",
  "seekdeep-fs",
@@ -7174,7 +7177,6 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.20",
  "tokio",
- "url",
 ]
 
 [[package]]
@@ -7963,9 +7965,11 @@ dependencies = [
  "base64 0.22.1",
  "boa_engine",
  "futures",
+ "idna",
  "indexmap 2.14.0",
  "num-traits",
  "parking_lot",
+ "percent-encoding",
  "seekdeep-code-runtime",
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",
@@ -8062,6 +8066,7 @@ dependencies = [
  "seekdeep-lsp",
  "seekdeep-sandbox",
  "seekdeep-schemastery",
+ "seekdeep-source-oracle",
  "seekdeep-subprocess",
  "seekdeep-subprocess-local",
  "seekdeep-util",
@@ -9593,6 +9598,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "dunce",
  "futures",
  "parking_lot",
  "seekdeep-agent",
@@ -10070,6 +10076,7 @@ dependencies = [
  "seekdeep-lsp-stdio",
  "seekdeep-schemastery",
  "seekdeep-scope",
+ "seekdeep-source-oracle",
  "seekdeep-subprocess-local",
  "seekdeep-system-prompt",
  "seekdeep-tool-timeout-policy",
@@ -10753,6 +10760,7 @@ dependencies = [
 name = "seekdeep-win32-durable-namespace"
 version = "0.1.0-rc.5"
 dependencies = [
+ "tempfile",
  "windows-sys 0.61.2",
 ]
 

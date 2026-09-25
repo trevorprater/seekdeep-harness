@@ -94,6 +94,9 @@ jobs:
       - name: Install pinned browser build dependencies
         run: pnpm --dir support/browser-dependencies install --ignore-workspace --frozen-lockfile --config.strictDepBuilds=false
 
+      - name: Install Playwright Chromium and hosted dependencies
+        run: pnpm --filter @seekdeep-ai/seekdeep-web-frontend exec playwright install --with-deps chromium
+
       # The with-key escalation e2e self-skips without a usable runner. Install
       # bwrap so trusted CI exercises it; the userns knob is best-effort and the
       # test's functional probe decides.
@@ -128,6 +131,9 @@ jobs:
       - name: Build (lib for the e2e example bins)
         run: pnpm run build
 
+      - name: Build the browser fixture Host
+        run: cargo build --locked --package seekdeep --example keyless_web_host
+
       # Real-API end-to-end tests only. The keyless gates (lint/typecheck/
       # coverage/snapshot/etc.) already run in ci.yml on every push/PR.
       # DEEPSEEK_BASE_URL is pinned to the external API; the secret is scoped to
@@ -139,3 +145,18 @@ jobs:
           SEEKDEEP_E2E_MAX_WORKERS: 14
           SEEKDEEP_EXAMPLE_MODE: lib
         run: pnpm run test:e2e
+
+      - name: Browser E2E (real DeepSeek API)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+          DEEPSEEK_BASE_URL: https://api.deepseek.com
+        run: cargo xtask web-smoke --live
+
+      - name: Retain browser verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-api-browser-evidence
+          path: target/xtask/web-smoke/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,6 +1,6 @@
 //! JSON backend source specifics plus the shared KV backend contract.
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use seekdeep_cordis::Context;
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
@@ -575,5 +575,5 @@ async fn plugin_owns_registration_service_and_backend_teardown() {
 
 #[test]
 fn source_path_helper_stays_absolute_in_tests() {
-    assert!(Path::new("/tmp").is_absolute());
+    assert!(std::env::temp_dir().is_absolute());
 }

@@ -85,10 +85,11 @@ fn argument_argv_parsing_preview_sampling_and_relative_paths_match_source() {
             .is_some()
     );
     assert_eq!(preview_line("ééé", 5), "éé (line truncated)");
-    let paths = vec!["a/1".into(), "a/2".into(), "b/1".into(), "c/1".into()];
+    let paths =
+        ["a/1", "a/2", "b/1", "c/1"].map(|path| path.replace('/', std::path::MAIN_SEPARATOR_STR));
     assert_eq!(
         sample_across_top_level(&paths, 3, ".").0,
-        ["a/1", "b/1", "c/1"]
+        [paths[0].clone(), paths[2].clone(), paths[3].clone()]
     );
     assert_eq!(
         to_workdir_relative("/ws/src/lib.rs", std::path::Path::new("/ws")),

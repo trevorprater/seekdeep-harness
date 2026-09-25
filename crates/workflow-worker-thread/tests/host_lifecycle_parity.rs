@@ -330,7 +330,7 @@ async fn child_creation_and_result_polling_use_the_host_runtime() {
             tokio::process::Command::new(probe)
                 .args([
                     "--exact",
-                    "child_creation_and_result_polling_use_the_host_runtime",
+                    "host_lifecycle_parity::child_creation_and_result_polling_use_the_host_runtime",
                     "--nocapture",
                 ])
                 .env_clear()

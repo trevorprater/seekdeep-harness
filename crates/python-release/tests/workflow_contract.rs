@@ -10,7 +10,10 @@ fn workflow(source: &str) -> Value {
 fn keyless_sdk_ci_runs_native_contracts_and_the_pinned_source_specifications() {
     let ci = workflow(include_str!("../../../.github/workflows/ci.yml"));
     let job = &ci["jobs"]["python-sdk"];
-    assert_eq!(job["if"], "github.event_name == 'pull_request'");
+    assert_eq!(
+        job["if"],
+        "github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'"
+    );
     assert_eq!(job["env"]["CARGO_INCREMENTAL"], "0");
     let steps = job["steps"].as_array().unwrap();
     let oracle = steps

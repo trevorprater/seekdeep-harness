@@ -886,6 +886,7 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
     fn spec(script: &str) -> SubprocessTerminalSpawnSpec {
         SubprocessTerminalSpawnSpec {
             argv: vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()],
@@ -901,6 +902,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn real_pty_bridges_input_output_environment_and_exit() {
         let request = spec(
@@ -931,6 +933,7 @@ mod tests {
         handle.terminate().await.unwrap();
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn output_written_just_before_exit_arrives_before_the_end_marker() {
         let request = spec(
@@ -969,6 +972,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn foreground_shell_cannot_be_sigkilled_through_group_primitive() {
         let request = spec("IFS= read -r line");

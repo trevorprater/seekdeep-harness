@@ -450,7 +450,8 @@ async fn directory_view_filters_depth_sorts_and_clips_file_output() -> anyhow::R
     assert!(
         listing.contains(
             &root
-                .join("node_modules_old/kept.js")
+                .join("node_modules_old")
+                .join("kept.js")
                 .to_string_lossy()
                 .to_string()
         )
@@ -458,7 +459,8 @@ async fn directory_view_filters_depth_sorts_and_clips_file_output() -> anyhow::R
     assert!(
         listing.contains(
             &root
-                .join("__pycache__backup/kept.py")
+                .join("__pycache__backup")
+                .join("kept.py")
                 .to_string_lossy()
                 .to_string()
         )

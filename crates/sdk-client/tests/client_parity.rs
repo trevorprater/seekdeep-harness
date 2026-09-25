@@ -352,8 +352,9 @@ async fn handshake_payload_is_exact_once_and_relative_launch_cwd_is_absolute_on_
         })
         .await
         .unwrap();
+    assert!(std::path::Path::new(&identity.server_info.version).is_absolute());
     assert_eq!(
-        std::path::Path::new(&identity.server_info.version),
+        std::fs::canonicalize(&identity.server_info.version).unwrap(),
         std::fs::canonicalize(&worker).unwrap()
     );
     harness.close().await.unwrap();

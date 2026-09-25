@@ -118,16 +118,16 @@ fn spill_roots_are_scenario_keyed_fixed_length_and_platform_adjusted() {
     let other = Path::new("/repo/snapshots/other-turn/session.jsonl");
     let posix = snapshot_spill_root(fixture, SnapshotPlatform::Other);
     let windows = snapshot_spill_root(fixture, SnapshotPlatform::Windows);
+    assert_eq!(posix.parent(), Some(Path::new("/tmp")));
+    assert_eq!(windows.parent(), Some(Path::new("/t")));
     assert!(
         posix
+            .file_name()
+            .unwrap()
             .to_string_lossy()
-            .starts_with("/tmp/seekdeep-acp-snap-")
+            .starts_with("seekdeep-acp-snap-")
     );
-    assert!(
-        windows
-            .to_string_lossy()
-            .starts_with("/t/seekdeep-acp-snap-")
-    );
+    assert_eq!(posix.file_name(), windows.file_name());
     assert_eq!(
         posix.to_string_lossy().len(),
         windows.to_string_lossy().len() + 2
@@ -148,11 +148,9 @@ async fn scenario_runs_existing_plain_fixture_with_workspace_and_child_harvest()
         result.session_logs[1].parent_session.as_deref(),
         result.session_id.as_ref().map(AcpSessionId::as_str)
     );
-    assert!(
-        result.session_logs[0]
-            .content
-            .contains(&result.cwd.to_string_lossy().to_string())
-    );
+    let header: Value =
+        serde_json::from_str(result.session_logs[0].content.lines().next().unwrap()).unwrap();
+    assert_eq!(header["cwd"], json!(result.cwd));
     assert!(!result.cwd.exists());
     assert!(!result.cwd_aliases.is_empty());
 }
@@ -272,7 +270,12 @@ async fn prompt_waiter_and_scenario_environment_are_armed_before_the_matching_up
         .unwrap()
         .to_string_lossy()
         .into_owned();
-    let spill_root = snapshot_spill_root(&fixture_file, SnapshotPlatform::Other)
+    let platform = if cfg!(windows) {
+        SnapshotPlatform::Windows
+    } else {
+        SnapshotPlatform::Other
+    };
+    let spill_root = snapshot_spill_root(&fixture_file, platform)
         .to_string_lossy()
         .into_owned();
     let environment = result
@@ -331,7 +334,10 @@ async fn session_bound_steps_fail_before_any_session_is_created() {
             "waitForTurnStart",
         ),
         (
-            InputStep::WaitForTurnEnd { timeout_ms: None },
+            InputStep::WaitForTurnEnd {
+                minimum_turn: None,
+                timeout_ms: None,
+            },
             "waitForTurnEnd",
         ),
         (
@@ -470,6 +476,7 @@ async fn prompt_and_cancel_waits_for_durable_start_then_harvests_final_logs() {
                 wait_for_file: None,
             },
             InputStep::WaitForTurnEnd {
+                minimum_turn: None,
                 timeout_ms: Some(1_000),
             },
         ],
@@ -479,6 +486,47 @@ async fn prompt_and_cancel_waits_for_durable_start_then_harvests_final_logs() {
     assert_eq!(result.session_logs.len(), 1);
     assert!(latest_turn_is_closed(&result.session_logs[0].content));
     assert!(result.raw_stdout.contains("cancelled"));
+}
+
+#[tokio::test]
+async fn numbered_turn_end_wait_observes_completed_turns_and_rejects_older_ones() {
+    for closed_turn in [1, 2, 3] {
+        let fixture = tempfile::tempdir().unwrap();
+        let fixture_file = write_behavior(
+            fixture.path(),
+            &json!({
+                "prompt":"hang-until-cancel",
+                "persistLogsOnCancel":true,
+                "logs":[{"file":"bucket/main/session.jsonl","lines":[
+                    {"type":"session","id":"{{SID}}","createdAt":1,"cwd":"{{CWD}}"},
+                    {"type":"turn/start","seq":0,"time":1,"data":{"turn":closed_turn}},
+                    {"type":"turn/end","seq":1,"time":2,"data":{"turn":closed_turn,"kind":"completed"}}
+                ]}]
+            }),
+        );
+        let script: InputScript = serde_json::from_value(json!({"steps":[
+            {"op":"initialize"},
+            {"op":"newSession"},
+            {"op":"promptAndCancel","text":"hang"},
+            {"op":"waitForTurnEnd","minimumTurn":2,"timeoutMs":100}
+        ]}))
+        .unwrap();
+        let result = run_scenario(&script, options(fixture_file)).await;
+        if closed_turn < 2 {
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("turn/end at or beyond turn 2")
+            );
+        } else {
+            let result = result.unwrap();
+            assert_eq!(
+                latest_open_turn(&result.session_logs[0].content).unwrap(),
+                None
+            );
+        }
+    }
 }
 
 #[tokio::test]

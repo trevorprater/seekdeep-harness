@@ -1,7 +1,5 @@
 //! Compiler-independent workspace boundary and deterministic batch-merging contracts.
 
-use std::path::Path;
-
 use seekdeep_typert_generator::{
     analyzer::{
         client_export_subpaths, external_module_identity_for_file, host_export_subpaths,
@@ -81,9 +79,10 @@ fn source_paths_and_external_identities_preserve_the_authored_boundary() {
             root.join(expected)
         );
     }
+    let absolute = std::env::current_dir().unwrap().join("absolute.ts");
     assert_eq!(
-        source_path_for_export(&root, "/absolute.ts").unwrap(),
-        Path::new("/absolute.ts")
+        source_path_for_export(&root, absolute.to_str().unwrap()).unwrap(),
+        absolute
     );
     assert_eq!(
         serde_json::to_value(module_identity("@scope/package/nested/type")).unwrap(),
