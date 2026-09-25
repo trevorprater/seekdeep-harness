@@ -136,6 +136,6 @@ fn run_case_with(
         .envs(environment.iter().copied())
         .current_dir(metadata.workspace_root)
         .status()?;
-    anyhow::ensure!(status.success(), "settings browser path failed");
+    anyhow::ensure!(status.success(), "{name} browser path failed");
     Ok(())
 }

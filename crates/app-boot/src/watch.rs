@@ -138,9 +138,13 @@ impl ExactConfigWatcher {
         let key = canonical_watch_key(&target)?;
         let root = watch_root(&key)?;
         let (events_sender, mut events) = tokio::sync::mpsc::unbounded_channel();
-        let mut watcher = notify::recommended_watcher(move |event| {
-            let _ = events_sender.send(event);
-        })?;
+        let mut watcher =
+            notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+                if event.as_ref().is_ok_and(|event| event.kind.is_access()) {
+                    return;
+                }
+                let _ = events_sender.send(event);
+            })?;
         watcher.watch(&root, RecursiveMode::Recursive)?;
         let (cancel, mut cancellation) = tokio::sync::oneshot::channel();
         let task_target = target.clone();
@@ -152,17 +156,6 @@ impl ExactConfigWatcher {
             loop {
                 tokio::select! {
                     biased;
-                    event = events.recv() => {
-                        match event {
-                            Some(Ok(_)) => {
-                                refresh_if_changed(&task_target, &mut stamp, &refresh, &failure).await;
-                            }
-                            Some(Err(error)) => {
-                                report_failure(&failure, &task_target, error.into());
-                            }
-                            None => break,
-                        }
-                    }
                     _ = &mut cancellation => {
                         drop(watcher);
                         while let Ok(event) = events.try_recv() {
@@ -174,6 +167,17 @@ impl ExactConfigWatcher {
                             }
                         }
                         break;
+                    }
+                    event = events.recv() => {
+                        match event {
+                            Some(Ok(_)) => {
+                                refresh_if_changed(&task_target, &mut stamp, &refresh, &failure).await;
+                            }
+                            Some(Err(error)) => {
+                                report_failure(&failure, &task_target, error.into());
+                            }
+                            None => break,
+                        }
                     }
                 }
             }

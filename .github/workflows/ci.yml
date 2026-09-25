@@ -246,6 +246,7 @@ jobs:
     name: node 24 / snapshots and artifacts
     env:
       SEEKDEEP_GATE_CONCURRENCY: '1'
+      SEEKDEEP_GATE_STREAM_OUTPUT: '1'
       SEEKDEEP_OXLINT_THREADS: '2'
       SEEKDEEP_PUBLINT_CONCURRENCY: '2'
       SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY: ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '2' }}

@@ -44,3 +44,6 @@
                     - id: deepseek-v4-pro
           - id: parent-sandbox-override
             name: './tests/fixtures/parent-sandbox-override.ts'
+
+- id: settlement-fence
+  name: './tests/fixtures/subagent-report-fence.ts'

@@ -973,7 +973,8 @@ async fn wait_for_settle(
 }
 
 fn relevant_event(event: &notify::Event, target: &Path) -> bool {
-    event.paths.is_empty() || event.paths.iter().any(|path| path.clean() == target)
+    !event.kind.is_access()
+        && (event.paths.is_empty() || event.paths.iter().any(|path| path.clean() == target))
 }
 
 /// Builds the Cordis plugin.
@@ -1021,4 +1022,42 @@ pub fn install(
     config: LocalCredentialConfig,
 ) -> anyhow::Result<Arc<seekdeep_cordis::PluginFiber>> {
     Ok(context.plugin(plugin(), serde_json::to_value(config)?)?)
+}
+
+#[cfg(test)]
+mod read_event_tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn read_access_does_not_delay_a_pending_refresh() {
+        let target = PathBuf::from(".credentials.yaml");
+        let (events, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let (_stop, mut stopping) = watch::channel(false);
+        let task_target = target.clone();
+        let task = tokio::spawn(async move {
+            wait_for_settle(
+                &mut received,
+                &mut stopping,
+                &task_target,
+                Duration::from_millis(100),
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(50)).await;
+        events
+            .send(Ok(notify::Event::new(notify::EventKind::Access(
+                notify::event::AccessKind::Read,
+            ))
+            .add_path(target)))
+            .unwrap();
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(50)).await;
+        tokio::task::yield_now().await;
+        assert!(
+            task.is_finished(),
+            "observing a read must not postpone a pending reload"
+        );
+        assert!(!task.await.unwrap());
+    }
 }

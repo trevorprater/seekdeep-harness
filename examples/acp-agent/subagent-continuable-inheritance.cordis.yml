@@ -9,3 +9,6 @@
       - insert:
           - id: parent-sandbox-override
             name: './tests/fixtures/parent-sandbox-override.ts'
+
+- id: settlement-fence
+  name: './tests/fixtures/subagent-report-fence.ts'

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-25-native-ci-boundaries.md
-2026-09-25-native-ci-boundaries.md: 55e06033477cac42bfaabdb89abe191d0f978552
-2026-09-25-native-ci-boundaries.zh.md: 673dc827d40386905f7fe6395474262fba1b7b12
+2026-09-25-native-ci-boundaries.md: cbc8837c3bf9c358197e5fb6fb3f29795362b71c
+2026-09-25-native-ci-boundaries.zh.md: c60282e0c87b734a5407e92d9c0919ae058e2fe3

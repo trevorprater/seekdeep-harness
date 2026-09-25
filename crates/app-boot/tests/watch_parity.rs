@@ -263,7 +263,7 @@ async fn one_registry_serializes_refreshes_across_distinct_paths() -> anyhow::Re
     });
     let registry = ConfigWatchRegistry::new();
     let first_watcher = registry.register(&first, refresh.clone(), ignore_failure())?;
-    first_started.notified().await;
+    tokio::time::timeout(Duration::from_secs(10), first_started.notified()).await?;
     let second_watcher = registry.register(&second, refresh, ignore_failure())?;
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(active.load(std::sync::atomic::Ordering::Acquire), 1);
@@ -274,8 +274,11 @@ async fn one_registry_serializes_refreshes_across_distinct_paths() -> anyhow::Re
         "second path refresh",
     )
     .await;
-    second_watcher.dispose().await?;
-    first_watcher.dispose().await?;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        second_watcher.dispose().await?;
+        first_watcher.dispose().await
+    })
+    .await??;
     assert_eq!(max_active.load(std::sync::atomic::Ordering::Acquire), 1);
     Ok(())
 }

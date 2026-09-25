@@ -23502,8 +23502,10 @@
         "24 Rust policy tests pin visible-unit and details parsing, Owner rules, Issue metadata, PR labels and priorities, same-repository resolving references, and event-directed Project status transitions",
         "5 assembled runtime tests pin REST and GraphQL snapshots, Project mutations, audit comment ownership, PR reference filtering, lazy lifecycle effects, a real local HTTP header and JSON exchange, and the complete built PR command path",
         "built CLI tests pin usage, event-file, token-read, and irrelevant-event ordering",
-        "strict seekdeep-issue-policy Clippy passed with CARGO_INCREMENTAL=0"
-      ]
+        "strict seekdeep-issue-policy Clippy passed with CARGO_INCREMENTAL=0",
+        "2026-09-25: all 33 native policy tests passed; an assembled regression proves exempt bot, app, draft, and unreviewed PRs make no issue lookup"
+      ],
+      "note": "The PR checker applies the existing enforcement predicate before resolving issue references. This CI repair avoids lookups from quoted dependency release notes on exempt PRs; the pinned source resolved those unused references before checking the exemption. Enforced human-review PR validation and lifecycle transitions retain their existing contracts."
     },
     {
       "source": ".github/issue-management/policy.test.mjs",
@@ -25640,9 +25642,10 @@
       ],
       "evidence": [
         "cargo xtask web-smoke (4 passed through the built npm launcher and real Rust Host: default loopback bind, workspace/runtime context, partial transport retry, and run_code provider-wire collapse)",
-        "Local loopback-provider diagnostic executes the eight source browser cases against the real Rust Host and Rust/WASM bundles; all eight pass, including title projection, Bash execution, resize/reset, theme, reload, and no page errors."
+        "Local loopback-provider diagnostic executes the eight source browser cases against the real Rust Host and Rust/WASM bundles; all eight pass, including title projection, Bash execution, resize/reset, theme, reload, and no page errors.",
+        "2026-09-25 hosted run 36105390398 at 5418db5e233fc04b7d65e0f4290298a88dbd2fca passed all eight real-DeepSeek browser cases. The run failed the keyless interrupted-stream retry case; all four keyless cases pass locally and failure-only history capture retains the next hosted diagnostic."
       ],
-      "note": "The credentialed DeepSeek workflow provisions Chromium, builds the Rust browser fixture Host, and runs cargo xtask web-smoke --live with the external API endpoint pinned. The outgoing fixture uses temporary workspaces, a fixed event-sourcing prompt and an echo command. A live hosted verdict remains required; local mock-provider results do not verify the real-model row."
+      "note": "The credentialed DeepSeek workflow provisions Chromium, builds the Rust browser fixture Host, and runs cargo xtask web-smoke --live with the external API endpoint pinned. The outgoing fixture uses temporary workspaces, a fixed event-sourcing prompt and an echo command. All real-model cases have hosted evidence, but the complete hosted smoke must pass after the Linux watcher repair."
     },
     {
       "source": "apps/web/tests/snapshots/access-confirmation/ui.expected.md",
@@ -31559,12 +31562,15 @@
       "status": "verified",
       "targets": [
         "crates/acp-demo/tests/acp_snapshot_suite.rs",
-        "crates/acp-snapshot/src/suite.rs"
+        "crates/acp-snapshot/src/suite.rs",
+        "examples/acp-agent/subagent-list-agents.cordis.yml",
+        "examples/acp-agent/subagent-list-agents.cordis.snapshot.yml"
       ],
       "evidence": [
         "all 78 compiled ACP scenarios passed isolated refresh and repository replay at the source concurrency cap of 5",
         "packed fixture retains all three chunk-row kinds and decodes to the independent source recording",
-        "338-file structural oracle audit left only documented identity, native-process, and target job-admission deviations"
+        "338-file structural oracle audit left only documented identity, native-process, and target job-admission deviations",
+        "2026-09-25: both policy-inheritance and durable-catalog subagent scenarios replayed against unchanged transcripts with the existing parent-turn fence; all four native harness inventory and execution checks passed"
       ]
     },
     {
@@ -34851,7 +34857,7 @@
         "examples/acp-agent/tests/snapshots/subagent-continuable-inheritance/input.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "The authored scenario waits for the child and for durable parent turn two to finish; the existing fixture fence holds the child behind parent turn one, preserving next-turn settlement on slow and fast runners"
       ]
     },
     {
@@ -39294,7 +39300,7 @@
     {
       "source": "packages/boot/app-boot/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/app-boot/src/lib.rs",
         "crates/app-boot/src/environment.rs",
@@ -39313,7 +39319,7 @@
         "cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
         "cargo check -p seekdeep-app-boot --all-features --target x86_64-pc-windows-msvc"
       ],
-      "note": "the Rust app boot owns the complete config/profile/patch/root-Include transaction, source-compatible Loader expressions and dynamic JavaScript plugins, activation/load audits, source prompt section, fail-loud registration and bounded release, exact-path patch HMR, and Node-compatible dotenv parsing; inherited/project/home values commit as one immutable launch snapshot consumed by Cordis and Loader instead of unsafe process-global mutation"
+      "note": "The Rust app boot owns config/profile/patch/root-Include transactions, Loader expressions and dynamic JavaScript plugins, activation/load audits, source prompt placement, bounded release, patch HMR, and Node-compatible dotenv parsing. Inherited/project/home values commit as one immutable launch snapshot. Reopened for the Linux config-watcher read-notification loop: access events are filtered before queueing and cancellation precedes queued observations; ten local watcher and user-patch cases pass, with hosted Linux verification pending."
     },
     {
       "source": "packages/boot/app-boot/src/invariant.ts",
@@ -39398,7 +39404,7 @@
     {
       "source": "packages/boot/app-boot/tests/hmr-config.spec.ts",
       "kind": "test",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/app-boot/src/watch.rs",
         "crates/app-boot/tests/watch_parity.rs"
@@ -39410,7 +39416,7 @@
         "CARGO_INCREMENTAL=0 cargo test -p seekdeep-app-boot --test main watch_parity:: --all-features -- --test-threads=1",
         "CARGO_INCREMENTAL=0 cargo test -p seekdeep-app-boot --test main user_patch_watch_parity:: --all-features -- --test-threads=1"
       ],
-      "note": "one registry serializes refreshes across every watched user-layer path, failures remain contained, and disposal drains the admitted queue before releasing the Loader tree"
+      "note": "One registry serializes refreshes across watched user-layer paths, contains failures, and drains admitted refreshes before releasing the Loader tree. The native cross-path test now bounds initial readiness and disposal; it passes locally after the access-notification repair, with hosted Linux verification pending."
     },
     {
       "source": "packages/boot/app-boot/tests/profile.spec.ts",
@@ -59162,7 +59168,7 @@
     {
       "source": "packages/credentials/credentials-local/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/credentials-local/src/lib.rs"
       ],
@@ -59170,7 +59176,8 @@
         "pnpm exec vitest run packages/credentials/credentials-local/tests/local.spec.ts packages/credentials/credentials-local/tests/watcher.spec.ts packages/credentials/credentials-local/tests/drain.spec.ts packages/credentials/credentials-local/tests/review-fixes.spec.ts",
         "cargo test -p seekdeep-credentials-local --all-features",
         "cargo clippy -p seekdeep-credentials-local --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "Reopened for Linux read notifications postponing the watcher debounce window. A deterministic timer regression reproduces the delay; access events are now ignored, with hosted Linux verification pending."
     },
     {
       "source": "packages/credentials/credentials-local/src/invariant.ts",
@@ -75271,7 +75278,7 @@
     {
       "source": "packages/settings/settings-file/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "ported",
       "targets": [
         "crates/settings-file/src/lib.rs",
         "crates/settings-file/tests/file_parity.rs"
@@ -75282,7 +75289,8 @@
         "cargo test -p seekdeep-util --all-features atomic_write passed 6 lock, cleanup, permission, and replacement tests",
         "strict settings-file clippy passed",
         "Rust coverage includes resolution, YAML/JSON round-trip, comments, arrays, ownership modes, symlink safety, serialized writes, stale-lock refusal, watcher recovery, invalid-edit retention, removal, shutdown quiescence, and loader composition"
-      ]
+      ],
+      "note": "Reopened for Linux read notifications postponing the watcher debounce window. A deterministic timer regression reproduces the delay; access events are now ignored, with hosted Linux verification pending."
     },
     {
       "source": "packages/settings/settings-file/src/invariant.ts",

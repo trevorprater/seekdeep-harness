@@ -1,0 +1,8 @@
+# Replay retains the same parent-turn boundary before child settlement.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.snapshot.yml
+
+- id: settlement-fence
+  name: './tests/fixtures/subagent-report-fence.ts'

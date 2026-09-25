@@ -79,6 +79,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           key: real-api-e2e
 
       - uses: ./.github/actions/prune-stale-v8-builds

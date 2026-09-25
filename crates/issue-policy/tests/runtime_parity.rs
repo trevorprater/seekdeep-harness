@@ -207,6 +207,44 @@ async fn pull_request_check_fetches_real_issues_and_filters_pr_references() {
 }
 
 #[tokio::test]
+async fn exempt_pull_requests_do_not_resolve_quoted_issue_numbers() {
+    for (author, draft, reviewed) in [
+        ("Bot", false, true),
+        ("App", false, true),
+        ("User", true, true),
+        ("User", false, false),
+    ] {
+        let transport = FakeTransport::default();
+        transport.respond(ApiMethod::Get, repo_path("/pulls/7"), Some(json!({
+            "draft":draft,
+            "body":"<blockquote><a href=\"https://redirect.github.com/pnpm/action-setup/pull/156\">#156</a></blockquote>",
+            "user":{"type":author},
+            "labels":[],
+        })));
+        transport.respond(
+            ApiMethod::Get,
+            repo_path("/pulls/7/requested_reviewers"),
+            Some(json!({
+                "users": if reviewed { vec![json!({})] } else { Vec::new() }, "teams":[],
+            })),
+        );
+        transport.respond(
+            ApiMethod::Get,
+            repo_path("/pulls/7/reviews?per_page=100"),
+            Some(json!([])),
+        );
+        let result = IssuePolicyRuntime::new(config(), transport.clone())
+            .check_pull_request_event(&json!({"pull_request":{"number":7}}))
+            .await
+            .unwrap();
+        assert!(!result.enforced);
+        assert!(result.errors.is_empty());
+        assert_eq!(transport.requests().len(), 3);
+        transport.assert_drained();
+    }
+}
+
+#[tokio::test]
 async fn issue_open_sets_inbox_then_creates_one_audit_comment_for_invalid_metadata() {
     let transport = FakeTransport::default();
     transport.respond(

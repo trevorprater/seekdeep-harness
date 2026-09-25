@@ -606,6 +606,74 @@ fn fixture_workspace(root: &Path) {
     assert!(locked.success());
 }
 
+fn add_runtime_asset_fixture(root: &Path) {
+    write(
+        root,
+        "Cargo.toml",
+        "[workspace]\nmembers = [\"crates/covfix\", \"crates/runtime\", \"xtask\"]\nresolver = \"2\"\n",
+    );
+    write(
+        root,
+        ".cargo/config.toml",
+        "[alias]\nxtask = \"run --quiet --package xtask --\"\n",
+    );
+    write(
+        root,
+        "crates/runtime/Cargo.toml",
+        "[package]\nname = \"seekdeep-code-runtime-worker-thread\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    );
+    write(root, "crates/runtime/src/lib.rs", "");
+    write(
+        root,
+        "xtask/Cargo.toml",
+        "[package]\nname = \"xtask\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    );
+    write(
+        root,
+        "xtask/src/main.rs",
+        r#"fn main() {
+    let executable = std::env::current_exe().unwrap();
+    if executable.file_stem().unwrap() == "seekdeep-coverage-runtime-probe" {
+        println!("staged runtime executable");
+        return;
+    }
+    assert_eq!(std::env::args().nth(1).as_deref(), Some("host-assets"));
+    let target = std::path::PathBuf::from(std::env::var_os("CARGO_TARGET_DIR").unwrap());
+    let debug = target.join("debug");
+    let name = if cfg!(windows) { "seekdeep-coverage-runtime-probe.exe" } else { "seekdeep-coverage-runtime-probe" };
+    std::fs::copy(&executable, debug.join(name)).unwrap();
+    std::fs::create_dir_all(debug.join("code-runtime-node")).unwrap();
+    let wasm = target.join("wasm32-unknown-unknown/release/seekdeep_code_runtime_node.wasm");
+    std::fs::create_dir_all(wasm.parent().unwrap()).unwrap();
+    std::fs::write(wasm, b"fixture compiled boundary").unwrap();
+}
+"#,
+    );
+    write(
+        root,
+        "crates/covfix/tests/runtime.rs",
+        r#"#[test]
+fn consumes_staged_assets_from_the_instrumented_test_process() {
+    let node = std::env::var_os("SEEKDEEP_CODE_RUNTIME_NODE_DIR").unwrap();
+    assert!(std::path::Path::new(&node).is_dir());
+    let wasm = std::env::var_os("SEEKDEEP_NODE_WASM").unwrap();
+    assert!(std::path::Path::new(&wasm).is_file());
+    let result = std::process::Command::new("seekdeep-coverage-runtime-probe").output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(String::from_utf8(result.stdout).unwrap().trim(), "staged runtime executable");
+}
+"#,
+    );
+    assert!(
+        Command::new("cargo")
+            .args(["generate-lockfile", "--offline"])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
 fn run_entry(root: &Path, extra: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_run-coverage"));
     command
@@ -636,16 +704,19 @@ fn run_entry(root: &Path, extra: &[&str]) -> Output {
     command.output().unwrap()
 }
 
-#[test]
-fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
-    let available = Command::new("cargo")
+fn coverage_available() -> bool {
+    Command::new("cargo")
         .args(["llvm-cov", "--version"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .is_ok_and(|status| status.success());
-    if !available {
+        .is_ok_and(|status| status.success())
+}
+
+#[test]
+fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
+    if !coverage_available() {
         eprintln!("skipping: cargo-llvm-cov is not installed");
         return;
     }
@@ -714,5 +785,28 @@ fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
     assert!(!green_stderr.contains("ERROR:"), "{green_stderr}");
     println!(
         "real cargo llvm-cov lane passed: uncovered locations, Vitest-worded threshold failure, roster adoption, green rerun"
+    );
+}
+
+#[test]
+fn instrumented_processes_receive_the_staged_native_and_node_runtime_assets() {
+    if !coverage_available() {
+        eprintln!("skipping: cargo-llvm-cov is not installed");
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fixture_workspace(root);
+    add_runtime_asset_fixture(root);
+    let result = run_entry(root, &["--write-roster", "--maxWorkers=1"]);
+    assert!(
+        result.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&result.stdout)
+            .contains("consumes_staged_assets_from_the_instrumented_test_process ... ok")
     );
 }

@@ -113,6 +113,10 @@ const capture = 'resolveProviderRequest(JSON.parse(body) as CodeModeProviderRequ
 assert.equal(program.split(capture).length, 2, 'source code-mode request capture inventory');
 program = program.replace(capture, `const parsed = JSON.parse(body) as CodeModeProviderRequest & { max_tokens?: number }
         if (parsed.max_tokens !== 64) resolveProviderRequest(parsed)`);
+const retryHistory = 'let page: HistoryPage | undefined';
+assert.equal(program.split(retryHistory).length, 2, 'source retry history inventory');
+program = program.replace(retryHistory, `${retryHistory}
+      onTestFailed(() => writeFile(join(output, 'retry-history.json'), redact(JSON.stringify({mainAttempts, page}, null, 2)) + '\\n'))`);
 const supportPath = join(source, 'apps/web/tests/support.ts');
 const support = ts.createSourceFile(supportPath, await readFile(supportPath, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const names = ['connectFreshWorkspace', 'newEnglishPage', 'probeFreePort'];
@@ -127,7 +131,7 @@ async function connectFreshWorkspace(page, cwd) {
   await connectFreshWorkspaceSource(page, cwd);
 }
 `;
-const bindings = {spawn, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, createServer, createRequire, tmpdir, join, fileURLToPath, pathToFileURL, chromium: observedChromium, expect, describe, it, beforeAll, afterAll, onTestFailed, REPO_ROOT: root, requireDist, saveFailureShot};
+const bindings = {spawn, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, writeFile, createServer, createRequire, tmpdir, join, fileURLToPath, pathToFileURL, chromium: observedChromium, expect, describe, it, beforeAll, afterAll, onTestFailed, REPO_ROOT: root, requireDist, saveFailureShot, output, redact};
 const emitted = ts.transpileModule(adapt(prefix + '\n' + program), {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext}}).outputText;
 new Function(...Object.keys(bindings), emitted)(...Object.values(bindings));
 assert.equal(suites.length, 2);

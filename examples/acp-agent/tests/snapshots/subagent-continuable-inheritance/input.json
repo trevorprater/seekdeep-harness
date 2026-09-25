@@ -16,11 +16,8 @@
    "minimumTurn": 1
   },
   {
-   "op": "waitForTurnStart",
+   "op": "waitForTurnEnd",
    "minimumTurn": 2
-  },
-  {
-   "op": "waitForTurnEnd"
   }
  ]
 }

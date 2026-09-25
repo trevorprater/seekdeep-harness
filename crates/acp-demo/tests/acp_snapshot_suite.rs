@@ -387,7 +387,8 @@ fn scenarios(root: &Path) -> Vec<SnapshotScenario> {
             true,
             false,
             pins_child_tool_schemas = vec![1],
-            pins_child_system_prompts = vec![1]
+            pins_child_system_prompts = vec![1],
+            config_path = config(root, "subagent-list-agents.cordis.yml")
         ),
         snapshot!(
             "subagent-depth-two-rejection",

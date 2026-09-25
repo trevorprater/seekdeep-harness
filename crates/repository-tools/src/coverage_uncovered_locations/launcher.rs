@@ -386,7 +386,7 @@ fn prepare_runtime_assets(
     cargo: &OsStr,
     repository: &Path,
     workspace: &WorkspaceMetadata,
-) -> anyhow::Result<Vec<(&'static str, PathBuf)>> {
+) -> anyhow::Result<Vec<(&'static str, OsString)>> {
     if !workspace
         .packages
         .contains_key("seekdeep-code-runtime-worker-thread")
@@ -402,16 +402,25 @@ fn prepare_runtime_assets(
         status.success(),
         "run-coverage: cargo xtask host-assets exited with {status}"
     );
+    let mut search_path = vec![workspace.target_directory.join("debug")];
+    if let Some(inherited) = std::env::var_os("PATH") {
+        search_path.extend(std::env::split_paths(&inherited));
+    }
     Ok(vec![
+        ("PATH", std::env::join_paths(search_path)?),
         (
             "SEEKDEEP_CODE_RUNTIME_NODE_DIR",
-            workspace.target_directory.join("debug/code-runtime-node"),
+            workspace
+                .target_directory
+                .join("debug/code-runtime-node")
+                .into_os_string(),
         ),
         (
             "SEEKDEEP_NODE_WASM",
             workspace
                 .target_directory
-                .join("wasm32-unknown-unknown/release/seekdeep_code_runtime_node.wasm"),
+                .join("wasm32-unknown-unknown/release/seekdeep_code_runtime_node.wasm")
+                .into_os_string(),
         ),
     ])
 }

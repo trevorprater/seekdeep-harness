@@ -546,20 +546,26 @@ impl<T: GitHubTransport> IssuePolicyRuntime<T> {
             self.request(ApiMethod::Get, review_path, None),
             self.request(ApiMethod::Get, reviews_path, None),
         )?;
-        let resolving = self.resolving_references_snapshot(number, &pull).await?;
-        Ok(PullRequestSnapshot {
-            number: resolving.number,
+        let mut snapshot = PullRequestSnapshot {
+            number,
             is_draft: pull.draft,
             author_type: pull
                 .user
-                .and_then(|user| user.kind)
+                .as_ref()
+                .and_then(|user| user.kind.clone())
                 .unwrap_or_else(|| "User".to_owned()),
             review_request_count: review_requests.users.len() + review_requests.teams.len(),
             review_count: reviews.len(),
-            labels: pull.labels.into_iter().map(|label| label.name).collect(),
-            references: resolving.references,
-            issues: resolving.issues,
-        })
+            labels: pull.labels.iter().map(|label| label.name.clone()).collect(),
+            references: IssueReferences::default(),
+            issues: BTreeMap::new(),
+        };
+        if crate::requires_pull_request_policy(&snapshot) {
+            let resolving = self.resolving_references_snapshot(number, &pull).await?;
+            snapshot.references = resolving.references;
+            snapshot.issues = resolving.issues;
+        }
+        Ok(snapshot)
     }
 
     async fn lifecycle_pull_request_snapshot(

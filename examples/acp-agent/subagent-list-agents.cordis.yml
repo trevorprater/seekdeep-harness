@@ -1,0 +1,11 @@
+# The durable-catalog scenario observes child settlement after its parent's spawn turn.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+
+- id: settlement-marker
+  name: './tests/fixtures/subagent-settlement-marker.ts'
+
+- id: settlement-fence
+  name: './tests/fixtures/subagent-report-fence.ts'
