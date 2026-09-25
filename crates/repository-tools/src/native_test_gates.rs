@@ -38,7 +38,11 @@ pub enum NativeTestCommand {
     LspBuiltConsumer,
 }
 
-fn tests(package: &'static str, targets: &[&'static str]) -> NativeTestCommand {
+fn tests(
+    package: &'static str,
+    target: &'static str,
+    filters: &[&'static str],
+) -> NativeTestCommand {
     let mut args = vec![
         "test",
         "--locked",
@@ -46,9 +50,12 @@ fn tests(package: &'static str, targets: &[&'static str]) -> NativeTestCommand {
         "--all-features",
         "--package",
         package,
+        "--test",
+        target,
     ];
-    for target in targets {
-        args.extend(["--test", target]);
+    if !filters.is_empty() {
+        args.push("--");
+        args.extend_from_slice(filters);
     }
     NativeTestCommand::Cargo(args)
 }
@@ -64,43 +71,49 @@ pub fn native_suites(gate: NativeTestGate) -> Vec<NativeSuite> {
         NativeTestGate::BuiltBin => vec![
             suite(
                 "examples/headless-agent/tests/keyless-smoke.e2e.ts",
-                tests("seekdeep-headless", &["keyless_loader_smoke"]),
+                tests("seekdeep-headless", "main", &["keyless_loader_smoke::"]),
             ),
             suite(
                 "apps/cli/tests/built-bin.e2e.ts",
                 tests(
                     "seekdeep",
+                    "main",
                     &[
-                        "dump_config_process",
-                        "headless_process",
-                        "layered_env_process",
-                        "plugin_process",
-                        "source_launch_compat",
+                        "dump_config_process::",
+                        "headless_process::",
+                        "layered_env_process::",
+                        "plugin_process::",
+                        "source_launch_compat::",
                     ],
                 ),
             ),
             suite(
                 "packages/examples/acp-demo/tests/built-bin.e2e.ts",
-                tests("seekdeep-acp-demo", &["acp_demo_parity"]),
+                tests("seekdeep-acp-demo", "main", &["acp_demo_parity::"]),
             ),
             suite(
                 "packages/host/directory-picker-native/tests/built-worker.e2e.ts",
                 tests(
                     "seekdeep-host-directory-picker-native",
-                    &["win32_dialog_parity"],
+                    "main",
+                    &["win32_dialog_parity::"],
                 ),
             ),
             suite(
                 "packages/sdk/server/tests/built-scope-carrier.e2e.ts",
-                tests("seekdeep-sdk-server", &["server_parity"]),
+                tests("seekdeep-sdk-server", "server_parity", &[]),
             ),
             suite(
                 "packages/subagent/subagent-codex/tests/loader-composition.e2e.ts",
-                tests("seekdeep-subagent-codex", &["loader_composition"]),
+                tests("seekdeep-subagent-codex", "main", &["loader_composition::"]),
             ),
             suite(
                 "packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts",
-                tests("seekdeep-subagent-claude-code", &["loader_composition"]),
+                tests(
+                    "seekdeep-subagent-claude-code",
+                    "main",
+                    &["loader_composition::"],
+                ),
             ),
             suite(
                 "packages/api/remotes/tests/built-lib.e2e.ts",
@@ -108,13 +121,18 @@ pub fn native_suites(gate: NativeTestGate) -> Vec<NativeSuite> {
             ),
             suite(
                 "packages/workflow/workflow-worker-thread/tests/built-worker.e2e.ts",
-                tests("seekdeep-workflow-worker-thread", &["built_worker_e2e"]),
+                tests(
+                    "seekdeep-workflow-worker-thread",
+                    "main",
+                    &["built_worker_e2e::"],
+                ),
             ),
             suite(
                 "packages/code-runtime/code-runtime-worker-thread/tests/built-lib.e2e.ts",
                 tests(
                     "seekdeep-code-runtime-worker-thread",
-                    &["packaged_node_runtime", "node_api_parity"],
+                    "main",
+                    &["packaged_node_runtime::", "node_api_parity::"],
                 ),
             ),
             suite(
@@ -129,15 +147,23 @@ pub fn native_suites(gate: NativeTestGate) -> Vec<NativeSuite> {
             ),
             suite(
                 "scripts/install-lefthook.spec.ts",
-                tests("seekdeep-repository-tools", &["lefthook_installer_parity"]),
+                tests(
+                    "seekdeep-repository-tools",
+                    "main",
+                    &["lefthook_installer_parity::"],
+                ),
             ),
             suite(
                 "scripts/oxlint-contract.spec.ts",
-                tests("seekdeep-repository-tools", &["run_oxlint_parity"]),
+                tests(
+                    "seekdeep-repository-tools",
+                    "main",
+                    &["run_oxlint_parity::"],
+                ),
             ),
             suite(
                 "scripts/change-scope.spec.ts",
-                tests("seekdeep-change-scope", &["change_scope_parity"]),
+                tests("seekdeep-change-scope", "change_scope_parity", &[]),
             ),
         ],
     }
@@ -194,7 +220,10 @@ pub fn run_native_test_command(
             if arguments.first() == Some(&"test")
                 && let Some(workers) = workers
             {
-                process.arg("--").arg(format!("--test-threads={workers}"));
+                if !arguments.contains(&"--") {
+                    process.arg("--");
+                }
+                process.arg(format!("--test-threads={workers}"));
             }
             let status = process.status().context("execute compiled suite")?;
             anyhow::ensure!(

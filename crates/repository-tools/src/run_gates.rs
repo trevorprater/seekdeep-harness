@@ -563,7 +563,9 @@ const NODE_COMPAT_SMOKES: &[NodeCompatSmoke] = &[
             "seekdeep-workflow-worker-thread",
             "--all-features",
             "--test",
-            "start_validation_parity",
+            "main",
+            "--",
+            "start_validation_parity::",
         ],
     },
     NodeCompatSmoke {
@@ -589,7 +591,9 @@ const NODE_COMPAT_SMOKES: &[NodeCompatSmoke] = &[
             "seekdeep",
             "--all-features",
             "--test",
-            "source_launch_compat",
+            "main",
+            "--",
+            "source_launch_compat::",
         ],
     },
 ];
@@ -608,7 +612,9 @@ const CLI_LAZY_SEARCH_STARTUP_SMOKE: NodeCompatSmoke = NodeCompatSmoke {
         "seekdeep",
         "--all-features",
         "--test",
-        "shipped_cli_contracts",
+        "main",
+        "--",
+        "shipped_cli_contracts::",
     ],
 };
 
@@ -1088,11 +1094,11 @@ fn doc_sync_leaf_gates(environment: &GateEnvironment, options: DocSyncOptions) -
         "seekdeep-repository-tools",
         "--all-features",
         "--test",
-        "doc_site_projection_parity",
-        "--test",
-        "doc_site_configuration_parity",
-        "--test",
-        "doc_site_fragments_parity",
+        "main",
+        "--",
+        "doc_site_projection_parity::",
+        "doc_site_configuration_parity::",
+        "doc_site_fragments_parity::",
     ];
     gates.push(Gate {
         id: "docs-site-projection".to_owned(),

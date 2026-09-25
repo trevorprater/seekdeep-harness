@@ -15,6 +15,7 @@ use serde_json::Value;
 
 const RUNNER_PRIVATE_PNPM_DESTINATION: &str = "${{ runner.temp }}/setup-pnpm";
 const MASTER_PUSH_ONLY: &str = "github.event_name == 'push' && github.ref == 'refs/heads/master'";
+const CHECKS_EVENT: &str = "github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'";
 
 fn workflow(source: &str) -> Value {
     serde_yml::from_str(source).unwrap()
@@ -86,6 +87,49 @@ fn isolates_every_pnpm_action_setup_destination_per_runner() {
 }
 
 #[test]
+fn main_pushes_and_manual_checks_run_the_complete_hosted_inventory() {
+    let ci = ci();
+    assert_eq!(
+        ci["on"]["push"]["branches"],
+        serde_json::json!(["main", "master"])
+    );
+    assert_eq!(
+        ci["on"]["workflow_dispatch"]["inputs"]["suite"]["default"],
+        "checks"
+    );
+    for name in [
+        "node-24",
+        "node-24-coverage",
+        "node-24-consumers",
+        "node-compat",
+        "python-sdk",
+        "python-runtime",
+        "windows",
+        "windows-native",
+    ] {
+        assert_eq!(job(&ci, name)["if"], CHECKS_EVENT, "{name}");
+    }
+    assert_eq!(
+        job(&ci, "all-checks-passed")["if"],
+        format!("always() && ({CHECKS_EVENT})")
+    );
+    for source in [
+        include_str!("../../../.github/workflows/release.yml"),
+        include_str!("../../../.github/workflows/release-vendor.yml"),
+        include_str!("../../../.github/workflows/landlock-run.yml"),
+        include_str!("../../../.github/workflows/sandbox.yml"),
+    ] {
+        let workflow = workflow(source);
+        assert_eq!(
+            workflow["on"]["push"]["branches"],
+            serde_json::json!(["main", "master"]),
+            "{}",
+            workflow["name"]
+        );
+    }
+}
+
+#[test]
 fn keeps_a_required_wine_windows_job_a_non_blocking_native_windows_job_with_failover_and_a_master_only_standby()
  {
     let ci = ci();
@@ -98,7 +142,7 @@ fn keeps_a_required_wine_windows_job_a_non_blocking_native_windows_job_with_fail
     // Required PR job: Wine on ubuntu-latest, runs wine-windows-gates.sh.
     assert_eq!(windows["runs-on"], "ubuntu-latest");
     assert_eq!(windows["name"], "windows node 24 / wine blocking");
-    assert_eq!(windows["if"], "github.event_name == 'pull_request'");
+    assert_eq!(windows["if"], CHECKS_EVENT);
     assert!(
         run_steps(windows)
             .iter()
@@ -115,7 +159,7 @@ fn keeps_a_required_wine_windows_job_a_non_blocking_native_windows_job_with_fail
     assert!(native_pool.contains("SEEKDEEP_CI_HOSTED_WINDOWS_RUNNER"));
     assert!(native_pool.contains("'windows-latest'"));
     assert_eq!(windows_native["name"], "windows node 24 / native complete");
-    assert_eq!(windows_native["if"], "github.event_name == 'pull_request'");
+    assert_eq!(windows_native["if"], CHECKS_EVENT);
     assert!(run_steps(windows_native).contains(&"pnpm run check:ci:windows-complete"));
 
     // wine-apt-cache: master-only, seeds the Wine apt cache.
@@ -225,8 +269,8 @@ fn exempts_push_from_cancellation_so_one_master_merge_does_not_cancel_the_runnin
         assert_eq!(drill["if"], MASTER_PUSH_ONLY);
     }
 
-    // A master push may only carry the cache seeder and the two drills. Classification
-    // is an exact allowlist of the conditions in use, not a substring match.
+    // Hosted checks run on every push. The cache seeder and standby drills additionally
+    // run on master; benchmark dispatches keep their separate job inventory.
     let not_push_reachable = [
         "github.event_name == 'pull_request'",
         "always() && github.event_name == 'pull_request'",
@@ -249,9 +293,18 @@ fn exempts_push_from_cancellation_so_one_master_merge_does_not_cancel_the_runnin
     assert_eq!(
         push_reachable,
         [
+            "all-checks-passed",
+            "node-24",
+            "node-24-consumers",
+            "node-24-coverage",
+            "node-compat",
+            "python-runtime",
+            "python-sdk",
             "serial-linux-selfhosted",
             "serial-windows",
-            "wine-apt-cache"
+            "windows",
+            "windows-native",
+            "wine-apt-cache",
         ]
     );
 
@@ -281,10 +334,10 @@ fn native_windows_coverage_is_the_cargo_test_lane_and_carries_no_vitest_projects
 }
 
 #[test]
-fn requires_one_release_shaped_python_runtime_target_on_every_pull_request() {
+fn requires_one_release_shaped_python_runtime_target_on_every_checks_event() {
     let ci = ci();
     let python_runtime = job(&ci, "python-runtime");
-    assert_eq!(python_runtime["if"], "github.event_name == 'pull_request'");
+    assert_eq!(python_runtime["if"], CHECKS_EVENT);
     assert_eq!(
         python_runtime["name"],
         "python runtime / release-shaped Linux x64"
@@ -861,7 +914,7 @@ fn sandbox_legs_run_their_native_world_suites_and_require_them() {
     let sandbox = workflow(include_str!("../../../.github/workflows/sandbox.yml"));
     assert_eq!(
         sandbox["on"]["push"]["branches"],
-        serde_json::json!(["master"])
+        serde_json::json!(["main", "master"])
     );
     assert!(
         sandbox["on"]
@@ -887,10 +940,10 @@ fn sandbox_legs_run_their_native_world_suites_and_require_them() {
     let run = world["run"].as_str().unwrap();
     for expected in [
         "--locked",
-        "--test bwrap_e2e",
+        "--test main -- bwrap_e2e::",
         "--package seekdeep-landlock-run --all-targets",
-        "--test local_parity",
-        "--test seatbelt_e2e",
+        "--test main -- local_parity::",
+        "--test main -- seatbelt_e2e::",
     ] {
         assert!(run.contains(expected), "world step must run {expected}");
     }

@@ -2,16 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   pull_request:
   workflow_dispatch:
     inputs:
       suite:
         description: Manual CI suite to run
         required: true
-        default: larger-runner-benchmark
+        default: checks
         type: choice
         options:
+          - checks
           - larger-runner-benchmark
           - consolidated-runner-benchmark
 
@@ -65,7 +66,7 @@ jobs:
   # serial-linux-selfhosted standby lane below. The Windows failover switch is
   # the separate SEEKDEEP_CI_FAILOVER_WINDOWS variable on the windows-native job below.
   node-24:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: >-
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -135,7 +136,7 @@ jobs:
         run: pnpm run check:ci:static
 
   node-24-coverage:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: >-
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -233,7 +234,7 @@ jobs:
         run: rm -rf target/llvm-cov-target
 
   node-24-consumers:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: >-
       ${{ vars.SEEKDEEP_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -331,7 +332,7 @@ jobs:
 
 
   node-compat:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     # Each compatibility contract receives an independent standard hosted job.
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.name }}
@@ -388,7 +389,7 @@ jobs:
         run: pnpm run check:node-compat
 
   python-sdk:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: ubuntu-latest
     name: python 3.10 / keyless SDK
     env:
@@ -457,7 +458,7 @@ jobs:
   # The reusable builder owns the executable, snapshot, wheel, clean-install,
   # GLIBC, and manylinux checks; release validation retains all native targets.
   python-runtime:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     name: python runtime / release-shaped Linux x64
     uses: ./.github/workflows/build-exe-for-python-sdk.yml
     with:
@@ -475,7 +476,7 @@ jobs:
   # Current topology and fidelity limits live in
   # .agents/notes/implemented/process/2026-08-08-native-windows-pull-request-ci.md
   windows:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: ubuntu-latest
     name: windows node 24 / wine blocking
     # The site gate first runs the native docs preparation (a Rust/WASM build), which
@@ -601,7 +602,7 @@ jobs:
   # SEEKDEEP_CI_FAILOVER_LINUX variable that retargets the three required Linux jobs
   # and the all-checks-passed verdict above.
   windows-native:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'checks'
     runs-on: >-
       ${{ vars.SEEKDEEP_CI_FAILOVER_WINDOWS == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -1214,7 +1215,7 @@ jobs:
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
     needs: [node-24, node-24-coverage, node-24-consumers, node-compat, python-sdk, python-runtime, windows]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.suite == 'checks')
     steps:
       - name: Fail if any needed job did not succeed
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')

@@ -9,7 +9,7 @@ name: Sandbox
 
 on:
   push:
-    branches: [master]
+    branches: [main, master]
   # Manual runs let a branch prove the legs before its master merge; the
   # automatic trigger stays master-only.
   workflow_dispatch:
@@ -122,18 +122,18 @@ jobs:
             bwrap)
               cargo test --locked --all-features \
                 --package seekdeep-sandbox-local --package seekdeep-bash-sandbox \
-                --test bwrap_e2e
+                --test main -- bwrap_e2e::
               ;;
             landlock)
               cargo test --locked --all-features \
                 --package seekdeep-landlock-run --all-targets
               cargo test --locked --all-features \
-                --package seekdeep-sandbox-local --test local_parity
+                --package seekdeep-sandbox-local --test main -- local_parity::
               ;;
             seatbelt)
               cargo test --locked --all-features \
                 --package seekdeep-sandbox-local --package seekdeep-bash-sandbox \
-                --test seatbelt_e2e
+                --test main -- seatbelt_e2e::
               ;;
           esac
 

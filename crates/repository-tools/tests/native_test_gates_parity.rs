@@ -144,6 +144,58 @@ fn worker_limits_are_validated_before_any_suite_starts() {
 }
 
 #[test]
+fn e2e_lane_selects_multiple_modules_in_one_test_binary() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    std::fs::create_dir(root.join("scripts")).unwrap();
+    std::fs::create_dir_all(root.join("crates/fixture/tests")).unwrap();
+    std::fs::copy(
+        repository().join("scripts/run-e2e-lane.sh"),
+        root.join("scripts/run-e2e-lane.sh"),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/fixture\"]\nresolver = \"3\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("crates/fixture/Cargo.toml"),
+        "[package]\nname = \"e2e-lane-fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\nautotests = false\n[[test]]\nname = \"main\"\npath = \"tests/main.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("crates/fixture/tests/main.rs"),
+        "mod first;\nmod second;\n#[test]\nfn unselected() { panic!(\"keyless tests must not run\"); }\n",
+    )
+    .unwrap();
+    for name in ["first", "second"] {
+        std::fs::write(
+            root.join(format!("crates/fixture/tests/{name}.rs")),
+            "// DEEPSEEK_API_KEY\n#[test]\n#[ignore]\nfn selected() {}\n",
+        )
+        .unwrap();
+    }
+    let output = Command::new("bash")
+        .arg("scripts/run-e2e-lane.sh")
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", root.join("target"))
+        .env("SEEKDEEP_E2E_MAX_WORKERS", "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("test first::selected ... ok"), "{stdout}");
+    assert!(stdout.contains("test second::selected ... ok"), "{stdout}");
+    assert!(stdout.contains("2 passed; 0 failed; 0 ignored"), "{stdout}");
+}
+
+#[test]
 fn a_real_cargo_test_failure_remains_a_gate_failure() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
@@ -158,6 +210,8 @@ fn a_real_cargo_test_failure_remains_a_gate_failure() {
         "target",
         "--test",
         "suite",
+        "--",
+        "required_state",
     ]);
     run_native_test_command(root, &command, NonZeroUsize::new(1)).unwrap();
     std::fs::remove_file(root.join("accept")).unwrap();

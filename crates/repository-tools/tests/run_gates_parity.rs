@@ -106,11 +106,11 @@ fn documentation_site_gate_runs_all_ported_suites_and_owns_the_cargo_target() {
             "seekdeep-repository-tools",
             "--all-features",
             "--test",
-            "doc_site_projection_parity",
-            "--test",
-            "doc_site_configuration_parity",
-            "--test",
-            "doc_site_fragments_parity",
+            "main",
+            "--",
+            "doc_site_projection_parity::",
+            "doc_site_configuration_parity::",
+            "doc_site_fragments_parity::",
         ]
         .map(OsString::from)
     );
@@ -456,7 +456,7 @@ fn node_compat_smokes_run_the_verified_suites_on_every_node_line() {
             (
                 "source-worker-smoke",
                 "source worker smoke",
-                "test --locked -p seekdeep-workflow-worker-thread --all-features --test start_validation_parity",
+                "test --locked -p seekdeep-workflow-worker-thread --all-features --test main -- start_validation_parity::",
             ),
             (
                 "jsonl-zstd-smoke",
@@ -466,7 +466,7 @@ fn node_compat_smokes_run_the_verified_suites_on_every_node_line() {
             (
                 "seekdeep-source-launch-smoke",
                 "seekdeep source-launch smoke",
-                "test --locked -p seekdeep --all-features --test source_launch_compat",
+                "test --locked -p seekdeep --all-features --test main -- source_launch_compat::",
             ),
         ] {
             let smoke = node.iter().find(|gate| gate.id == id).unwrap();
@@ -498,7 +498,7 @@ fn node_compat_smokes_run_the_verified_suites_on_every_node_line() {
             );
             assert_eq!(
                 cli.display_command,
-                "cargo test --locked -p seekdeep --all-features --test shipped_cli_contracts"
+                "cargo test --locked -p seekdeep --all-features --test main -- shipped_cli_contracts::"
             );
             assert_eq!(cli.serial_group.as_deref(), Some("cargo-target"));
         } else {

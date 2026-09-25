@@ -10,7 +10,7 @@ name: Release (seekdeep)
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main, master]
   workflow_dispatch:
     inputs:
       publish:
