@@ -1,0 +1,1787 @@
+[
+ {
+  "start": 1.01,
+  "end": 8.63,
+  "text": "Hi, my name's Lauren. You might know me as poteto, and I work on Grok Bot at SpaceX AI."
+ },
+ {
+  "start": 9.47,
+  "end": 17.23,
+  "text": "So last month, I did something pretty crazy. I shipped 2,000 pull requests to production."
+ },
+ {
+  "start": 18.65,
+  "end": 30.85,
+  "text": "A lot of how I'm able to do this is through trust, and I think a lot about trust in terms of how I can trust my agents to produce high-quality work,"
+ },
+ {
+  "start": 31.01,
+  "end": 33.25,
+  "text": "even when I'm not there."
+ },
+ {
+  "start": 33.25,
+  "end": 36.31,
+  "text": "And my argument and thesis for this talk today"
+ },
+ {
+  "start": 36.31,
+  "end": 41.57,
+  "text": "is that if you set up your environment for your agents"
+ },
+ {
+  "start": 41.57,
+  "end": 44.01,
+  "text": "really, really well, you can end up with something"
+ },
+ {
+  "start": 44.01,
+  "end": 49.49,
+  "text": "that looks more like a personal or even team software factory,"
+ },
+ {
+  "start": 49.49,
+  "end": 52.81,
+  "text": "where you're producing very high quality code"
+ },
+ {
+  "start": 52.81,
+  "end": 55.93,
+  "text": "at much greater rates than before."
+ },
+ {
+  "start": 57.21,
+  "end": 60.51,
+  "text": "But I'm not a fan of the term software factory."
+ },
+ {
+  "start": 60.51,
+  "end": 71.91,
+  "text": "I like the analogy of a Michelin Kitchen better, where, you know, as technologists, we're not really producing, we're not mass-producing a product on an assembly line."
+ },
+ {
+  "start": 72.55,
+  "end": 81.19,
+  "text": "But the work that we do looks very creative, it's very, you know, it's the act of building a product and it's art in some sense."
+ },
+ {
+  "start": 81.73,
+  "end": 90.17,
+  "text": "So, you know, even though with agents, we're not cooking the individual components that go into the product anymore,"
+ },
+ {
+  "start": 90.51,
+  "end": 99.31,
+  "text": "we're still responsible for the final outcome and thinking about our kitchen setup, right?"
+ },
+ {
+  "start": 99.31,
+  "end": 117.99,
+  "text": "Because depending on how you set up, your line cooks, your sous chefs, you know, the kind of equipment they have, the kind of training they have, you know, dishwashers and the ratio, I guess, of line cooks to dishwashers, all of these ingredients go into making the final product."
+ },
+ {
+  "start": 117.99,
+  "end": 122.19,
+  "text": "and I think this analogy is really apt."
+ },
+ {
+  "start": 122.95,
+  "end": 129.13,
+  "text": "So I wanted to talk a little bit about a story before we begin,"
+ },
+ {
+  "start": 129.97,
+  "end": 133.39,
+  "text": "where six months ago, when I first joined Cursor,"
+ },
+ {
+  "start": 133.59,
+  "end": 135.41,
+  "text": "before we were a part of SpaceX AI,"
+ },
+ {
+  "start": 136.05,
+  "end": 140.95,
+  "text": "I obviously had, you know, no agent skills to use."
+ },
+ {
+  "start": 141.35,
+  "end": 142.55,
+  "text": "I just joined the company."
+ },
+ {
+  "start": 142.55,
+  "end": 146.95,
+  "text": "It was a fresh code base and a fresh product that I was working on."
+ },
+ {
+  "start": 147.99,
+  "end": 157.19,
+  "text": "So at the time, Cursor was building the replacement for the Cursor IDE, which is the new agent's window."
+ },
+ {
+  "start": 158.23,
+  "end": 164.03,
+  "text": "And before I joined, the Cursor agent window had quite a lot of performance issues."
+ },
+ {
+  "start": 164.87,
+  "end": 168.53,
+  "text": "And my manager at the time asked if I was able to help them."
+ },
+ {
+  "start": 169.57,
+  "end": 176.19,
+  "text": "And since I had spent some time on the React team before I joined Cursor, it seemed like a good fit."
+ },
+ {
+  "start": 176.19,
+  "end": 183.15,
+  "text": "But when I first started, I quickly realized how manual this process was."
+ },
+ {
+  "start": 184.05,
+  "end": 203.31,
+  "text": "Obviously, I have done performance work before, but at the rate at which pull requests were being landed, it was just, it felt almost an insurmountable wall of pull requests that just kept coming in, and I had no idea whether or not the performance of the app would be regressing, right?"
+ },
+ {
+  "start": 203.31,
+  "end": 216.81,
+  "text": "So a lot of my early time on the cursor team was spent looking at Chrome DevTools and doing performance traces and taking heap snapshots."
+ },
+ {
+  "start": 217.59,
+  "end": 220.61,
+  "text": "And it was extremely, extremely manual."
+ },
+ {
+  "start": 221.85,
+  "end": 223.67,
+  "text": "It was so manual."
+ },
+ {
+  "start": 223.97,
+  "end": 230.95,
+  "text": "It got to the point where I just got really frustrated and started to think about, you know, wait, we have agents."
+ },
+ {
+  "start": 231.07,
+  "end": 231.67,
+  "text": "What am I doing?"
+ },
+ {
+  "start": 231.67,
+  "end": 252.59,
+  "text": "And so I started thinking about verification skills, where, you know, what if my agent could actually run the application itself and take the traces for me, understand the traces and find the hot spots, and basically hill climb, you know, to a better performance in our application automatically."
+ },
+ {
+  "start": 254.15,
+  "end": 261.65,
+  "text": "And throughout the last six months of being a cursor and SpaceX AI, you can really see that my product,"
+ },
+ {
+  "start": 261.67,
+  "end": 269.51,
+  "text": "it really has skyrocketed. And, you know, I never set out to ship 2,000 pull requests a month."
+ },
+ {
+  "start": 269.69,
+  "end": 276.45,
+  "text": "That was not a goal of mine at all. But I realized that all of the skills, all of the tools and"
+ },
+ {
+  "start": 276.45,
+  "end": 283.05,
+  "text": "code-based changes I were making laddered up to this idea of trust. You know, I didn't know it at"
+ },
+ {
+  "start": 283.05,
+  "end": 290.39,
+  "text": "the time, but I had this thought in the back of my head, which was, you know, I am the bottleneck"
+ },
+ {
+  "start": 290.39,
+  "end": 304.17,
+  "text": "and I need to be able to take all of the knowledge that I have as an engineer and impart them into my team of agents so that I didn't need to be the blocker for everything."
+ },
+ {
+  "start": 304.67,
+  "end": 309.51,
+  "text": "And you can clearly see that it's paid off."
+ },
+ {
+  "start": 311.25,
+  "end": 320.37,
+  "text": "So I think it really comes down to trust, but how exactly do you build that trust?"
+ },
+ {
+  "start": 320.39,
+  "end": 327.01,
+  "text": "and where do you start if you are, you know, wherever you are in your journey of using agents?"
+ },
+ {
+  "start": 327.77,
+  "end": 334.13,
+  "text": "So when I started, obviously, I was in this category, you know, in the one to one to five range,"
+ },
+ {
+  "start": 334.97,
+  "end": 341.89,
+  "text": "where you still feel like you have to babysit every chat and conversation,"
+ },
+ {
+  "start": 342.67,
+  "end": 348.47,
+  "text": "and you're just constantly course correcting, you know, you're intervening, you're correcting your agent"
+ },
+ {
+  "start": 348.47,
+  "end": 350.41,
+  "text": "so that it does the right thing."
+ },
+ {
+  "start": 351.41,
+  "end": 355.45,
+  "text": "And if you're not there, basically nothing happens,"
+ },
+ {
+  "start": 356.01,
+  "end": 357.95,
+  "text": "and the agents do the wrong thing."
+ },
+ {
+  "start": 359.21,
+  "end": 362.73,
+  "text": "And I would actually argue that this phase of, you know,"
+ },
+ {
+  "start": 362.77,
+  "end": 365.19,
+  "text": "using agents is actually the hardest to get out of,"
+ },
+ {
+  "start": 365.61,
+  "end": 370.05,
+  "text": "because it's not always very clear how exactly you get out of it."
+ },
+ {
+  "start": 371.09,
+  "end": 373.87,
+  "text": "And again, it just comes down to trust."
+ },
+ {
+  "start": 375.03,
+  "end": 378.39,
+  "text": "You know, the reason you're unable to go from,"
+ },
+ {
+  "start": 378.47,
+  "end": 385.49,
+  "text": "one or one to five agents to something more like a hundred is because you don't have trust in your"
+ },
+ {
+  "start": 385.49,
+  "end": 390.81,
+  "text": "agents work yet. So if you don't have trust and you try to spawn a hundred sub-agents or cloud"
+ },
+ {
+  "start": 390.81,
+  "end": 396.07,
+  "text": "agents, you're going to quickly find that you're just going to get a ton of slop pull requests"
+ },
+ {
+  "start": 396.07,
+  "end": 401.21,
+  "text": "and, you know, a bunch of regressions and a bunch of bugs ship and no one's going to be very"
+ },
+ {
+  "start": 401.21,
+  "end": 409.22,
+  "text": "happy with them. So that begs to question, how do you trust your agents more?"
+ },
+ {
+  "start": 409.84,
+  "end": 424.78,
+  "text": "So for me, it came, it really started when I, like I said, I meant I joined the cursor team, and I was starting to work on performance, where I realized the need for verification."
+ },
+ {
+  "start": 425.7,
+  "end": 439.78,
+  "text": "So when I say verification, there are sort of levels to that because, you know, on the, I guess, the lower end of the scale for verification, you have things like the verification."
+ },
+ {
+  "start": 439.84,
+  "end": 446.8,
+  "text": "skills that I talk about where you teach your agent how to run your application and use"
+ },
+ {
+  "start": 446.8,
+  "end": 452.56,
+  "text": "things like the Chrome DevTools protocol or whatever other protocol that you have for debugging"
+ },
+ {
+  "start": 452.56,
+  "end": 458.96,
+  "text": "and teach them how to you know debug the application take performance traces"
+ },
+ {
+  "start": 461.12,
+  "end": 466.8,
+  "text": "take heap snapshots and so on and then on the opposite end of spectrum of the"
+ },
+ {
+  "start": 466.8,
+  "end": 473.48,
+  "text": "spectrum, which is much, much harder and still very much an open question, is like more formal"
+ },
+ {
+  "start": 473.48,
+  "end": 480.66,
+  "text": "verification, where, you know, maybe you rely on formal methods or, you know, languages like"
+ },
+ {
+  "start": 480.66,
+  "end": 488.16,
+  "text": "lean or TLA+ to do, you know, verification so that you can check that, you know, your"
+ },
+ {
+  "start": 488.16,
+  "end": 495.7,
+  "text": "business level or business logic invariants are, you know, are always true."
+ },
+ {
+  "start": 496.8,
+  "end": 503.8,
+  "text": "and that you can formally verify that your application is always in a correct state."
+ },
+ {
+  "start": 503.8,
+  "end": 512.8,
+  "text": "But I would say that even if you don't have the ability to run formal methods and very few people really do,"
+ },
+ {
+  "start": 512.8,
+  "end": 516.8,
+  "text": "that with verification skills you can get very far."
+ },
+ {
+  "start": 516.8,
+  "end": 522.8,
+  "text": "So when I joined the cursor and started to work on the cursor agent window,"
+ },
+ {
+  "start": 522.8,
+  "end": 526.3,
+  "text": "the first skill that I built was the skill called control glass,"
+ },
+ {
+  "start": 526.3,
+  "end": 534.96,
+  "text": "which is a verification skill that teaches the agent how to run the application and take traces, like I mentioned,"
+ },
+ {
+  "start": 535.46,
+  "end": 539.08,
+  "text": "and it does that through the Chrome DevTools Protocol."
+ },
+ {
+  "start": 541.35,
+  "end": 547.41,
+  "text": "Something interesting about that skill is, and I kind of iterated my way to this,"
+ },
+ {
+  "start": 547.83,
+  "end": 557.31,
+  "text": "it didn't start out this way, but the control or verification skill really has two components to it."
+ },
+ {
+  "start": 557.55,
+  "end": 587.11,
+  "text": "The first part is obviously a CLI, so you want your agents to be able to reproducibly be able to run the application and collect traces and collect evidence that, you know, empirical evidence, that, you know, code is working, that your performance bar is being met, and rather than have your agents create scripts every time, you know, that can differ between agents."
+ },
+ {
+  "start": 587.11,
+  "end": 594.53,
+  "text": "agent sessions, you can actually create a CLI that's within the skill directory,"
+ },
+ {
+  "start": 594.81,
+  "end": 600.89,
+  "text": "and then your agents will just use that every time. And then, of course, you need to actually"
+ },
+ {
+  "start": 600.89,
+  "end": 605.93,
+  "text": "invest in it and make it good so that it can handle all sorts of different use cases"
+ },
+ {
+  "start": 605.93,
+  "end": 613.87,
+  "text": "and be able to, you know, run the application correctly."
+ },
+ {
+  "start": 613.87,
+  "end": 620.91,
+  "text": "Another thing that's also really important is this idea of a feature map."
+ },
+ {
+  "start": 622.03,
+  "end": 630.03,
+  "text": "So a feature map really is something that I kind of coined, I guess, where, you know, we started"
+ },
+ {
+  "start": 630.03,
+  "end": 636.03,
+  "text": "using these control skills within cursor. Then we quickly realized that, you know, a Slack report"
+ },
+ {
+  "start": 636.03,
+  "end": 642.19,
+  "text": "would come in and a user would post a very vague screenshot, right? Like a very small slice of the"
+ },
+ {
+  "start": 642.19,
+  "end": 648.13,
+  "text": "UI and just like three question marks. And the agents using our control skills are just no idea."
+ },
+ {
+  "start": 648.13,
+  "end": 662.03,
+  "text": "Like it could run the application, but it was just guessing at what exactly the user meant. And so I had this idea to create something called a feature map, which is, I guess, kind of inspired by like a site map."
+ },
+ {
+  "start": 662.95,
+  "end": 672.17,
+  "text": "It essentially is a form of materialized memory. You know, like how exactly does your application work? What features"
+ },
+ {
+  "start": 672.19,
+  "end": 679.07,
+  "text": "does it have, how does a user reach it, you know, in terms of keyboard shortcuts or what DOM"
+ },
+ {
+  "start": 679.07,
+  "end": 684.27,
+  "text": "elements to click on, you know, things like that, and what all the different features do."
+ },
+ {
+  "start": 686.11,
+  "end": 693.63,
+  "text": "And they are these, this feature map is stored in the skill itself in the code base as part"
+ },
+ {
+  "start": 693.63,
+  "end": 699.39,
+  "text": "of the skill directory. And we have an automation that maintains this feature map as well."
+ },
+ {
+  "start": 699.39,
+  "end": 721.87,
+  "text": "But when we combine the CLI and the feature map, we quickly realized that this combination was very, very powerful because now agents could not only, you know, reproducibly control the application and take traces, but it could also understand requests that came in from internal users as well as external users."
+ },
+ {
+  "start": 721.87,
+  "end": 737.47,
+  "text": "And so we very quickly realized that the control verification skills were so useful that they've become more or less critical infrastructure for our team, and we constantly maintain it."
+ },
+ {
+  "start": 738.11,
+  "end": 751.85,
+  "text": "But the ability for an agent to verify its own work is extremely powerful, and we have spent a lot of time on this skill, and it's very, very powerful for building that trust."
+ },
+ {
+  "start": 751.87,
+  "end": 761.37,
+  "text": "trust. In addition to verification, of course, you want, because verification is really about"
+ },
+ {
+  "start": 761.37,
+  "end": 768.37,
+  "text": "correctness. Correctness to me is really about, does the thing, that's the feature or code"
+ },
+ {
+  "start": 768.37,
+  "end": 773.93,
+  "text": "do the thing that you want it to do, right? Like, does the, you know, the checkout button, does it"
+ },
+ {
+  "start": 773.93,
+  "end": 780.07,
+  "text": "actually check out the card? Verification is really important for that because you can get"
+ },
+ {
+  "start": 780.07,
+  "end": 785.75,
+  "text": "empirical evidence that this feature actually works. But it doesn't tell you much about,"
+ },
+ {
+  "start": 785.75,
+  "end": 793.15,
+  "text": "you know, the performance or the code quality of that feature. And that's where you start thinking"
+ },
+ {
+  "start": 793.15,
+  "end": 802.59,
+  "text": "about skills that teach agents to work like real software engineers. So I've built a plugin called"
+ },
+ {
+  "start": 802.59,
+  "end": 809.91,
+  "text": "pstack. I'm not going to talk about the plugin too much today, but a lot of inspiration"
+ },
+ {
+  "start": 809.91,
+  "end": 817.65,
+  "text": "for that plugin, which is a collection of skills that I've created, are inspired by the kind of"
+ },
+ {
+  "start": 817.65,
+  "end": 825.37,
+  "text": "workflows that I personally have used in my time doing software engineering for all sorts of"
+ },
+ {
+  "start": 825.37,
+  "end": 832.75,
+  "text": "different types of tasks. So debugging, you know, feature development, prototyping, there's a whole"
+ },
+ {
+  "start": 832.75,
+  "end": 839.75,
+  "text": "bunch of different playbooks and skills that ship in pstack that teach your agents how to write code"
+ },
+ {
+  "start": 839.75,
+  "end": 841.21,
+  "text": "the way that you want them to."
+ },
+ {
+  "start": 842.09,
+  "end": 847.13,
+  "text": "And, you know, this is where, you know, the more experienced engineers on your team can really"
+ },
+ {
+  "start": 847.13,
+  "end": 856.03,
+  "text": "contribute to set up a team repository of skills that just make your agents a lot smarter."
+ },
+ {
+  "start": 857.87,
+  "end": 864.93,
+  "text": "And when you combine those skills with verification skills, then you're able to get the point"
+ },
+ {
+  "start": 864.93,
+  "end": 869.73,
+  "text": "where your agents are able to not just verify that the work that they're doing is correct."
+ },
+ {
+  "start": 869.75,
+  "end": 871.95,
+  "text": "but that is also high quality."
+ },
+ {
+  "start": 872.83,
+  "end": 875.05,
+  "text": "And again, because of verification,"
+ },
+ {
+  "start": 875.73,
+  "end": 879.01,
+  "text": "you can collect real performance metrics,"
+ },
+ {
+  "start": 879.19,
+  "end": 882.15,
+  "text": "you can get real numbers and statistics and telemetry"
+ },
+ {
+  "start": 882.15,
+  "end": 887.37,
+  "text": "on the performance of the application."
+ },
+ {
+  "start": 889.93,
+  "end": 893.49,
+  "text": "So I think that's a really important part to invest in."
+ },
+ {
+  "start": 895.69,
+  "end": 897.47,
+  "text": "Another thing I think is really important"
+ },
+ {
+  "start": 897.47,
+  "end": 899.73,
+  "text": "is refactoring and rewriting"
+ },
+ {
+  "start": 899.75,
+  "end": 902.73,
+  "text": "your architector to be more agent-friendly."
+ },
+ {
+  "start": 904.11,
+  "end": 911.51,
+  "text": "And I almost want to say that this is one of the most important things you can do as a software"
+ },
+ {
+  "start": 911.51,
+  "end": 917.55,
+  "text": "engineering team, because if you really truly believe that agents are going to be writing"
+ },
+ {
+  "start": 917.55,
+  "end": 923.63,
+  "text": "all the code in the future, then we need to design our code bases so that they do the right"
+ },
+ {
+  "start": 923.63,
+  "end": 924.69,
+  "text": "thing by default."
+ },
+ {
+  "start": 925.47,
+  "end": 929.35,
+  "text": "And you'll find that there's this, I almost want to say like a,"
+ },
+ {
+  "start": 929.75,
+  "end": 937.43,
+  "text": "a scale or continuum between, you know, these different pieces of building trust in your agents,"
+ },
+ {
+  "start": 938.39,
+  "end": 944.07,
+  "text": "where on, you know, I have like five of these points here, where, uh,"
+ },
+ {
+  "start": 945.59,
+  "end": 952.63,
+  "text": "the code base is really like the best form of memory because agents love to extend existing"
+ },
+ {
+  "start": 952.63,
+  "end": 959.59,
+  "text": "patterns that they see. Um, and, you know, uh, I think this is just the nature of how LLMs work."
+ },
+ {
+  "start": 959.75,
+  "end": 967.75,
+  "text": "where they're more likely to use whatever it is in their context window to make changes."
+ },
+ {
+  "start": 967.75,
+  "end": 974.75,
+  "text": "And of course the files that the agents read and opens are part of its context window,"
+ },
+ {
+  "start": 974.75,
+  "end": 978.75,
+  "text": "and therefore the code base is a really important part of that."
+ },
+ {
+  "start": 978.75,
+  "end": 984.75,
+  "text": "Because, you know, agents aren't going to just refactor your code in every single PR."
+ },
+ {
+  "start": 984.75,
+  "end": 987.75,
+  "text": "They're going to just look at what's already there and just extend."
+ },
+ {
+  "start": 987.75,
+  "end": 1013.07,
+  "text": "The next level I think is about static analysis, where you have linters, you have compiler diagnostics, you have continuous integration, and these are guidelines and constraints that you can enforce in your code base so that whenever you correct your agent, you find that, you know, they just keep making the same mistake."
+ },
+ {
+  "start": 1013.07,
+  "end": 1024.31,
+  "text": "you can add those as lint rules or even better you can refactor your code base so that the mistake that the agent is making becomes categorically impossible"
+ },
+ {
+  "start": 1024.31,
+  "end": 1043.05,
+  "text": "and then a step above that right where and this is where we're trying to get more into less of like a hard constraint and enforcement and more into the realm of guidance you have things like rules you have Bugbot you have skills which"
+ },
+ {
+  "start": 1043.07,
+  "end": 1048.67,
+  "text": "you know, your agents will obviously sometimes and mostly use when they're doing their work,"
+ },
+ {
+  "start": 1048.81,
+  "end": 1054.09,
+  "text": "but there is also a chance that it might, for various reasons, you know, forget to read a rule"
+ },
+ {
+  "start": 1054.09,
+  "end": 1059.43,
+  "text": "or maybe the user that is piloting the agent, ignores them."
+ },
+ {
+  "start": 1060.13,
+  "end": 1068.39,
+  "text": "So these aren't quite as enforceable, but also an important part of setting up your environment"
+ },
+ {
+  "start": 1068.39,
+  "end": 1071.07,
+  "text": "so that you can really trust what your agents are doing."
+ },
+ {
+  "start": 1073.07,
+  "end": 1078.99,
+  "text": "And then finally you have a style guide, which is really only enforceable by humans in a code review."
+ },
+ {
+  "start": 1079.43,
+  "end": 1083.61,
+  "text": "I guess you could put these in your rules and Bugbot and skills as well."
+ },
+ {
+  "start": 1084.09,
+  "end": 1090.57,
+  "text": "But if you don't, then you have this big glaring hole in your review process,"
+ },
+ {
+  "start": 1090.57,
+  "end": 1097.13,
+  "text": "where now humans have to, you know, look at every single line that's being changed and remember the comment."
+ },
+ {
+  "start": 1097.59,
+  "end": 1102.29,
+  "text": "And with the rate of pull requests that are coming in, it just becomes impossible."
+ },
+ {
+  "start": 1103.07,
+  "end": 1106.81,
+  "text": "So I definitely wouldn't recommend, you know, relying only on the style guide."
+ },
+ {
+  "start": 1106.81,
+  "end": 1115.19,
+  "text": "I think the style guide or, you know, like looking at human reviews, is a good place to start in terms of what's missing."
+ },
+ {
+  "start": 1115.67,
+  "end": 1133.05,
+  "text": "But you should really invest the time to think about the other four parts, you know, your code base, making things categorically impossible through better data structures or algorithms, static analysis, and then, of course, you layer that with rules."
+ },
+ {
+  "start": 1133.07,
+  "end": 1134.97,
+  "text": "and Bugbot and skills."
+ },
+ {
+  "start": 1137.01,
+  "end": 1138.77,
+  "text": "On the code base front,"
+ },
+ {
+  "start": 1141.83,
+  "end": 1143.53,
+  "text": "and in the Grok Bot code base,"
+ },
+ {
+  "start": 1144.07,
+  "end": 1146.29,
+  "text": "we actually have invested into"
+ },
+ {
+  "start": 1146.29,
+  "end": 1148.63,
+  "text": "setting something up that we call"
+ },
+ {
+  "start": 1148.63,
+  "end": 1152.07,
+  "text": "Dune, which is our agent-friendly framework."
+ },
+ {
+  "start": 1153.13,
+  "end": 1156.93,
+  "text": "So the inspiration for Dune really came about"
+ },
+ {
+  "start": 1156.93,
+  "end": 1158.59,
+  "text": "from a lot of the performance issues"
+ },
+ {
+  "start": 1158.59,
+  "end": 1162.39,
+  "text": "we were seeing in the cursor agent window."
+ },
+ {
+  "start": 1163.43,
+  "end": 1164.43,
+  "text": "And so a lot of lessons"
+ },
+ {
+  "start": 1164.45,
+  "end": 1173.33,
+  "text": "came out of that exploration, but the key principle that we landed on is really that agents love"
+ },
+ {
+  "start": 1173.33,
+  "end": 1181.87,
+  "text": "taking shortcuts. So what if we designed a framework such that the shortcut, you know, the easy path"
+ },
+ {
+  "start": 1181.87,
+  "end": 1188.89,
+  "text": "is the right path for agents. And also one that would be a code base that is, you know,"
+ },
+ {
+  "start": 1188.89,
+  "end": 1194.43,
+  "text": "maybe pretty annoying for humans to work in because it's so locked down in terms of what you"
+ },
+ {
+  "start": 1194.45,
+  "end": 1200.01,
+  "text": "can do and what you can't do. But it actually creates the perfect environment for agents,"
+ },
+ {
+  "start": 1200.41,
+  "end": 1205.73,
+  "text": "especially ones that have very minimal context because, you know, not every contributor to your"
+ },
+ {
+  "start": 1205.73,
+  "end": 1210.41,
+  "text": "codebase is going to be an engineer anymore. You can have designers, you can have product"
+ },
+ {
+  "start": 1210.41,
+  "end": 1216.99,
+  "text": "managers, you can have CEOs, you know, going into the codebase and shipping features. So we want"
+ },
+ {
+  "start": 1216.99,
+  "end": 1224.11,
+  "text": "to really think a lot about how we invest and set up our codebases so that, you know, even"
+ },
+ {
+  "start": 1224.11,
+  "end": 1230.03,
+  "text": "agents that are piloted by busy people with not a lot of context can do a good job by default."
+ },
+ {
+  "start": 1231.71,
+  "end": 1239.31,
+  "text": "And like I mentioned before, your codebase is really a form of memory for agents because they"
+ },
+ {
+  "start": 1239.31,
+  "end": 1245.39,
+  "text": "love to extend the existing patterns that they see. And the reverse is actually also true,"
+ },
+ {
+  "start": 1245.71,
+  "end": 1251.63,
+  "text": "right? You can invest a time to set up your code base in a way that things are, you know,"
+ },
+ {
+  "start": 1251.63,
+  "end": 1253.87,
+  "text": "bad patterns are categorically impossible."
+ },
+ {
+  "start": 1254.11,
+  "end": 1256.95,
+  "text": "or you have lint rules that prevent them"
+ },
+ {
+  "start": 1256.95,
+  "end": 1260.19,
+  "text": "but the reverse is also true in the sense that"
+ },
+ {
+  "start": 1260.19,
+  "end": 1263.65,
+  "text": "if you have existing anti-patterns"
+ },
+ {
+  "start": 1263.65,
+  "end": 1266.57,
+  "text": "you'll actually find that these will spread"
+ },
+ {
+  "start": 1266.57,
+  "end": 1268.07,
+  "text": "kind of like a virus"
+ },
+ {
+  "start": 1268.07,
+  "end": 1272.87,
+  "text": "where you have like one small workaround"
+ },
+ {
+  "start": 1272.87,
+  "end": 1275.53,
+  "text": "or a comment that explains a workaround"
+ },
+ {
+  "start": 1275.53,
+  "end": 1279.29,
+  "text": "and you'll quickly find that agents just love to copy that"
+ },
+ {
+  "start": 1279.29,
+  "end": 1283.11,
+  "text": "and then in a matter of a few days or a few weeks"
+ },
+ {
+  "start": 1283.11,
+  "end": 1285.99,
+  "text": "you'll find that the workaround has spread everywhere"
+ },
+ {
+  "start": 1285.99,
+  "end": 1291.91,
+  "text": "and it's now becomes, it has become like a de facto pattern for all agents."
+ },
+ {
+  "start": 1292.07,
+  "end": 1294.41,
+  "text": "And that's a really, really bad place to be in."
+ },
+ {
+  "start": 1295.21,
+  "end": 1298.31,
+  "text": "And that goes back to what I was saying about why it's really important,"
+ },
+ {
+  "start": 1298.31,
+  "end": 1301.23,
+  "text": "you know, whenever you're correcting your agents,"
+ },
+ {
+  "start": 1301.43,
+  "end": 1305.67,
+  "text": "that you invest the time into thinking about code-based changes"
+ },
+ {
+  "start": 1305.67,
+  "end": 1312.29,
+  "text": "and static analysis and, of course, layering them with rules, good rules,"
+ },
+ {
+  "start": 1312.29,
+  "end": 1322.61,
+  "text": "and Bugbot and skills because of that reason and another analogy that I like in addition to the"
+ },
+ {
+  "start": 1322.61,
+  "end": 1328.13,
+  "text": "Michelin Kitchen is this idea that you know your codebase is kind of like a garden where you"
+ },
+ {
+  "start": 1328.13,
+  "end": 1336.53,
+  "text": "have workarounds you know that seem seemingly that seem kind of innocent at first but then because"
+ },
+ {
+  "start": 1336.53,
+  "end": 1342.13,
+  "text": "of the nature of agents you just copy that pattern over and over again and you quickly end up with"
+ },
+ {
+  "start": 1342.13,
+  "end": 1349.55,
+  "text": "a very, you know, vibe-coded codebase that is, you know, a pain in the butt to maintain"
+ },
+ {
+  "start": 1349.55,
+  "end": 1356.45,
+  "text": "and has a lot of performance issues. So in my opinion, the perfect agent code base is one"
+ },
+ {
+  "start": 1356.45,
+  "end": 1361.41,
+  "text": "that's so locked down that, you know, it's, again, it's like really annoying for humans to"
+ },
+ {
+  "start": 1361.41,
+  "end": 1369.89,
+  "text": "write code in, but it's so conventional, it's so standardized that, you know, even innocent-looking"
+ },
+ {
+  "start": 1369.89,
+  "end": 1376.63,
+  "text": "patterns are just forbidden. And the best example of this I have is actually something that"
+ },
+ {
+  "start": 1376.63,
+  "end": 1381.49,
+  "text": "seems very, very innocent when you look at it, but when you think about it, it's actually"
+ },
+ {
+  "start": 1381.49,
+  "end": 1390.41,
+  "text": "really bad. And that pattern is agent leaving comments in the code. Now, you know, when I first"
+ },
+ {
+  "start": 1390.41,
+  "end": 1396.49,
+  "text": "saw agents starting to do this, I initially wasn't, well, I did think that a lot of them"
+ },
+ {
+  "start": 1396.49,
+  "end": 1400.87,
+  "text": "slop, but I also thought that, you know, it actually doesn't, it's not a bad thing, right,"
+ },
+ {
+  "start": 1400.87,
+  "end": 1406.65,
+  "text": "I guess, if the agents are leaving comments in the code, because as humans, we left comments"
+ },
+ {
+  "start": 1406.65,
+  "end": 1412.65,
+  "text": "in the code whenever we saw, you know, edge cases, or we needed to actually make a workaround"
+ },
+ {
+  "start": 1412.65,
+  "end": 1419.21,
+  "text": "or, you know, leave a note to ourselves or a colleague on a particularly tricky part of the"
+ },
+ {
+  "start": 1419.21,
+  "end": 1426.47,
+  "text": "code base. But what I quickly realized when we saw this happening in the cursor codebase,"
+ },
+ {
+  "start": 1426.49,
+  "end": 1436.49,
+  "text": "was that agents were just using the comments around the code as justification for why it wasn't going to solve the actual problem"
+ },
+ {
+  "start": 1436.49,
+  "end": 1442.73,
+  "text": "and instead paper over it with a band-aid or a short-term solution."
+ },
+ {
+  "start": 1443.99,
+  "end": 1451.17,
+  "text": "So in Dune, which is, again, the framework that powers Grok Bot, we made the choice to"
+ },
+ {
+  "start": 1451.17,
+  "end": 1455.99,
+  "text": "we made the choice to actually ban comments"
+ },
+ {
+  "start": 1455.99,
+  "end": 1457.59,
+  "text": "for that reason"
+ },
+ {
+  "start": 1457.59,
+  "end": 1460.23,
+  "text": "so that agents would not just copy"
+ },
+ {
+  "start": 1460.23,
+  "end": 1462.29,
+  "text": "that pattern and"
+ },
+ {
+  "start": 1462.29,
+  "end": 1466.11,
+  "text": "propagate it everywhere in the codebase"
+ },
+ {
+  "start": 1466.11,
+  "end": 1471.84,
+  "text": "so my pitch here"
+ },
+ {
+  "start": 1471.84,
+  "end": 1474.08,
+  "text": "is that every team really needs something that"
+ },
+ {
+  "start": 1474.08,
+  "end": 1476.6,
+  "text": "a role that I'm calling a gardener"
+ },
+ {
+  "start": 1476.6,
+  "end": 1478.96,
+  "text": "in the same way that"
+ },
+ {
+  "start": 1478.96,
+  "end": 1481.26,
+  "text": "you know with a real garden"
+ },
+ {
+  "start": 1481.26,
+  "end": 1482.94,
+  "text": "you need someone who is thinking"
+ },
+ {
+  "start": 1482.96,
+  "end": 1490.92,
+  "text": "a lot about the, you know, things that can kind of creep in and grow in ways that you don't want."
+ },
+ {
+  "start": 1491.06,
+  "end": 1497.36,
+  "text": "Like, you know, you have weeds, you have, you know, just other types of organic growth."
+ },
+ {
+  "start": 1497.84,
+  "end": 1499.48,
+  "text": "I don't really know gardening that well."
+ },
+ {
+  "start": 1500.6,
+  "end": 1505.76,
+  "text": "But you have things that, you know, unwanted pests and stuff like that that kind of creep in"
+ },
+ {
+  "start": 1505.76,
+  "end": 1506.6,
+  "text": "empirical based."
+ },
+ {
+  "start": 1507.26,
+  "end": 1512.18,
+  "text": "And so you want to nip them in the bud as soon as possible before they start propagating"
+ },
+ {
+  "start": 1512.18,
+  "end": 1519.42,
+  "text": "everywhere. A lot of the principles behind Dune are really centered around these three things."
+ },
+ {
+  "start": 1520.26,
+  "end": 1525.58,
+  "text": "First of all, we want to delete tech debt that we already have for, you know, for reasons I just"
+ },
+ {
+  "start": 1525.58,
+  "end": 1533.98,
+  "text": "mentioned. We want to keep or enforce a single paved path for most blessed patterns."
+ },
+ {
+  "start": 1535.08,
+  "end": 1540.18,
+  "text": "You know, there should be one conventional way to do some things so that agents don't really need"
+ },
+ {
+  "start": 1540.18,
+  "end": 1547.22,
+  "text": "to guess and there should be enough guidance in the code base, in CI, in lint rules,"
+ },
+ {
+  "start": 1547.86,
+  "end": 1551.44,
+  "text": "so that the agents are guided to follow that path."
+ },
+ {
+  "start": 1552.98,
+  "end": 1557.38,
+  "text": "And then finally, whenever you see tech-dap or bad patterns,"
+ },
+ {
+  "start": 1557.96,
+  "end": 1561.2,
+  "text": "your instinct should be, I need to write a lint rule against it."
+ },
+ {
+  "start": 1561.66,
+  "end": 1566.02,
+  "text": "You don't always have to clean it up immediately because if you write a lint rule,"
+ },
+ {
+  "start": 1566.02,
+  "end": 1570.16,
+  "text": "you can at least stop the bleeding, and which doesn't stop."
+ },
+ {
+  "start": 1570.18,
+  "end": 1575.66,
+  "text": "the problem entirely, but it at least prevents it from growing. So I definitely recommend, you know,"
+ },
+ {
+  "start": 1575.68,
+  "end": 1584.16,
+  "text": "really thinking a lot about how you can guard against anti-patterns so that they don't spread like a virus."
+ },
+ {
+  "start": 1584.16,
+  "end": 1590.56,
+  "text": "And then also spend time to actually, you know, get your agents to clean them up so that your"
+ },
+ {
+  "start": 1590.56,
+  "end": 1597.34,
+  "text": "code base is just constantly kept in a state where you would be happy if an agent were to copy."
+ },
+ {
+  "start": 1597.34,
+  "end": 1600.92,
+  "text": "that's the kind of mindset that I would recommend having."
+ },
+ {
+  "start": 1602.42,
+  "end": 1605.46,
+  "text": "And then I won't actually go through all the details of Dune itself,"
+ },
+ {
+  "start": 1606.06,
+  "end": 1608.62,
+  "text": "but I'll just kind of gloss through some interesting parts."
+ },
+ {
+  "start": 1609.52,
+  "end": 1610.82,
+  "text": "So again, as a reminder,"
+ },
+ {
+  "start": 1610.98,
+  "end": 1612.08,
+  "text": "doing this the architecture,"
+ },
+ {
+  "start": 1612.52,
+  "end": 1615.2,
+  "text": "the client framework that we built to power Grok Bot."
+ },
+ {
+  "start": 1616.72,
+  "end": 1619.48,
+  "text": "We've invested a lot into all the things I was saying,"
+ },
+ {
+  "start": 1619.48,
+  "end": 1621.88,
+  "text": "where we have conventions."
+ },
+ {
+  "start": 1622.1,
+  "end": 1624.5,
+  "text": "We have a lot of conventions about where code should live"
+ },
+ {
+  "start": 1624.5,
+  "end": 1630.88,
+  "text": "and where and how code should be imported between them."
+ },
+ {
+  "start": 1631.38,
+  "end": 1636.54,
+  "text": "So in Dune applications, you know, there's different concepts where, like, for example,"
+ },
+ {
+  "start": 1636.62,
+  "end": 1638.92,
+  "text": "features are all co-located in a single folder."
+ },
+ {
+  "start": 1639.78,
+  "end": 1645.54,
+  "text": "You have an entry point that's, you know, in the React part of the code that determines,"
+ },
+ {
+  "start": 1646.06,
+  "end": 1647.42,
+  "text": "you can kind of think of it like a route."
+ },
+ {
+  "start": 1648.26,
+  "end": 1651.78,
+  "text": "You have transcript cards that show up in the Grok Bot application."
+ },
+ {
+  "start": 1651.78,
+  "end": 1656.92,
+  "text": "You have a host that runs on the, you know, the Grok Bot virtual machine,"
+ },
+ {
+  "start": 1657.38,
+  "end": 1663.64,
+  "text": "and then, of course, you have your client, which powers the overall Dune application."
+ },
+ {
+  "start": 1664.44,
+  "end": 1669.98,
+  "text": "And we have a lot of strict boundaries between these things,"
+ },
+ {
+  "start": 1669.98,
+  "end": 1676.4,
+  "text": "where, just as an example, things that run on the main process"
+ },
+ {
+  "start": 1676.4,
+  "end": 1681.42,
+  "text": "or the main thread in electron aren't allowed to be run on the renderer thread."
+ },
+ {
+  "start": 1681.78,
+  "end": 1688.78,
+  "text": "and we keep that separation very intentionally because of lessons we learned from cursor's agent window,"
+ },
+ {
+  "start": 1688.78,
+  "end": 1697.78,
+  "text": "where we would sometimes see code accidentally get imported into the renderer thread and, you know, slow code."
+ },
+ {
+  "start": 1697.78,
+  "end": 1711.76,
+  "text": "And since on the render thread you want your UI to be very smooth and performant, you need to make sure that you don't have any long tasks or, you know, things that take long,"
+ },
+ {
+  "start": 1711.78,
+  "end": 1719.78,
+  "text": "longer than 16 milliseconds, or if you want like 60 frames per second, or 8 milliseconds if you want 120 frames per second."
+ },
+ {
+  "start": 1719.78,
+  "end": 1731.78,
+  "text": "And so your renderer has to be constantly in a state where it is, you can really kind of chunk up the work and not do them all at once."
+ },
+ {
+  "start": 1731.78,
+  "end": 1741.78,
+  "text": "And so we have code within Dune that enforces these boundaries through the import and dependency graph."
+ },
+ {
+  "start": 1741.78,
+  "end": 1755.78,
+  "text": "But yeah, it's just an example of a pattern that we saw lead to really bad performance that we categorically eliminated through the architecture of the of Dune."
+ },
+ {
+  "start": 1757.78,
+  "end": 1769.78,
+  "text": "And then all of these other pieces aren't that interesting, but again, the core theme here, you know, it's not about Dune, but the idea that"
+ },
+ {
+  "start": 1769.78,
+  "end": 1777.76,
+  "text": "an agent-friendly framework of your own is actually very, very powerful, and you can encode all"
+ },
+ {
+  "start": 1777.76,
+  "end": 1786.16,
+  "text": "of the learnings that you and your best engineers on your team have tribal knowledge of, and"
+ },
+ {
+  "start": 1786.16,
+  "end": 1792.46,
+  "text": "I think the lesson here is that how do you take that away from, you know, what used to be"
+ },
+ {
+  "start": 1792.46,
+  "end": 1799.76,
+  "text": "in the style guide process of reviewing code and, you know, engineers reviewing other engineers"
+ },
+ {
+  "start": 1799.78,
+  "end": 1806.56,
+  "text": "work and leaving comments to extract almost like extracting that knowledge and encoding"
+ },
+ {
+  "start": 1806.56,
+  "end": 1812.44,
+  "text": "that into the framework into the codebase itself so that the codebase access the memory"
+ },
+ {
+  "start": 1812.44,
+  "end": 1817.76,
+  "text": "right it's the the thing I keep coming back to this idea that you know the codebase is"
+ },
+ {
+  "start": 1817.76,
+  "end": 1824.36,
+  "text": "just the thing that it's the the materialized snapshot of the state in which you want"
+ },
+ {
+  "start": 1824.36,
+  "end": 1829.76,
+  "text": "your agents to extend and you want that code base to be so pristine so great that"
+ },
+ {
+  "start": 1829.78,
+  "end": 1836.2,
+  "text": "that the next agent that comes along is just very likely to continue that pattern and keep it really, really good."
+ },
+ {
+  "start": 1838.0,
+  "end": 1847.32,
+  "text": "And if you spend enough time on this process, like I mentioned, you can really set up a Michelin Kitchen or a software factory,"
+ },
+ {
+  "start": 1848.24,
+  "end": 1856.8,
+  "text": "where because you've spent so much time on, you know, all of these pieces that allow you to trust your agents,"
+ },
+ {
+  "start": 1856.8,
+  "end": 1874.16,
+  "text": "whether it's in the code base, whether it's lint rules, whether it is, you know, diagnostics or rules or Bugbot or skills, these layers come together and provide you a lot of trust."
+ },
+ {
+  "start": 1874.52,
+  "end": 1879.04,
+  "text": "Because now, you know, just imagine for a moment you're working in the Grok Bot code base."
+ },
+ {
+  "start": 1880.88,
+  "end": 1885.46,
+  "text": "It's super locked down, you know, it's like almost impossible to write bad code."
+ },
+ {
+  "start": 1885.46,
+  "end": 1892.42,
+  "text": "so you know you can even an agent with very little context you know even an agent with not a lot of"
+ },
+ {
+  "start": 1892.42,
+  "end": 1899.54,
+  "text": "reasoning can come in and actually write code that's good and going back to my example about the"
+ },
+ {
+  "start": 1899.54,
+  "end": 1905.22,
+  "text": "michelin factory i think there's a lot here right where you know we're setting up our agents our"
+ },
+ {
+  "start": 1905.22,
+  "end": 1912.2,
+  "text": "bots with skills and tools you know we're training them we're sitting up our kitchen in a way that"
+ },
+ {
+  "start": 1912.2,
+  "end": 1919.56,
+  "text": "makes sense, right? For the agents and bots to do the right thing by default. You know,"
+ },
+ {
+  "start": 1919.56,
+  "end": 1925.7,
+  "text": "whenever we see, for example, in the kitchen example, if we notice that one of our cooks or"
+ },
+ {
+  "start": 1925.7,
+  "end": 1930.52,
+  "text": "dishwashers is constantly tripping over something, of course we need to fix that, right? We need"
+ },
+ {
+  "start": 1930.52,
+  "end": 1934.94,
+  "text": "to problem solve and ensure that, you know, others don't trip as well because, you know,"
+ },
+ {
+  "start": 1934.94,
+  "end": 1939.48,
+  "text": "in a kitchen is a very dangerous place and you don't want to hurt yourself. It's the same"
+ },
+ {
+  "start": 1939.48,
+  "end": 1947.02,
+  "text": "mindset I think that we should have with our codebases, how do we set it up so that even agents"
+ },
+ {
+  "start": 1947.02,
+  "end": 1957.2,
+  "text": "without a lot of knowledge can do a good job? And I think with, you know, Grok Bot,"
+ },
+ {
+  "start": 1957.92,
+  "end": 1964.28,
+  "text": "Grok Bot and cursor play an interesting role together, where Grok Bot is really great at"
+ },
+ {
+  "start": 1964.28,
+  "end": 1969.46,
+  "text": "providing what I call the outer loop because you can connect Grok Bot to"
+ },
+ {
+  "start": 1969.48,
+  "end": 1979.3,
+  "text": "to lots of different connectors like Slack to Datadog, Sentry, PlanetScale, whatever services that you use."
+ },
+ {
+  "start": 1979.9,
+  "end": 1985.34,
+  "text": "And you can aggregate all of that information together and use that to make really good decisions for itself."
+ },
+ {
+  "start": 1987.22,
+  "end": 1989.38,
+  "text": "Some people call this like a company brain."
+ },
+ {
+  "start": 1990.14,
+  "end": 1997.26,
+  "text": "I don't really think, I personally don't think you need anything that sophisticated here because agents are really good at using tools."
+ },
+ {
+  "start": 1997.26,
+  "end": 2000.54,
+  "text": "and so if you connect these tools to Grok Bot"
+ },
+ {
+  "start": 2000.54,
+  "end": 2007.78,
+  "text": "and you start having your Grok Bot's auto kickoff things like cloud agents"
+ },
+ {
+  "start": 2007.78,
+  "end": 2010.1,
+  "text": "you can actually find that it's really not"
+ },
+ {
+  "start": 2010.1,
+  "end": 2016.68,
+  "text": "you don't really have to invest in a lot of infrastructure to build a software factory"
+ },
+ {
+  "start": 2016.68,
+  "end": 2022.34,
+  "text": "in fact I'm going to you know cross cross out this this term"
+ },
+ {
+  "start": 2022.34,
+  "end": 2023.7,
+  "text": "because I don't like this term"
+ },
+ {
+  "start": 2023.7,
+  "end": 2027.24,
+  "text": "I think you can set up this"
+ },
+ {
+  "start": 2027.26,
+  "end": 2028.24,
+  "text": "personal"
+ },
+ {
+  "start": 2028.24,
+  "end": 2030.14,
+  "text": "Michelin Kitchen for yourself"
+ },
+ {
+  "start": 2030.14,
+  "end": 2031.3,
+  "text": "through Grok Bot"
+ },
+ {
+  "start": 2031.3,
+  "end": 2032.62,
+  "text": "things like Grok Bot routines"
+ },
+ {
+  "start": 2032.62,
+  "end": 2034.82,
+  "text": "which let you subscribe to"
+ },
+ {
+  "start": 2034.82,
+  "end": 2036.3,
+  "text": "Slack threads to"
+ },
+ {
+  "start": 2036.3,
+  "end": 2039.16,
+  "text": "Sentry alerts that let you kick off"
+ },
+ {
+  "start": 2039.16,
+  "end": 2040.4,
+  "text": "things automatically"
+ },
+ {
+  "start": 2040.4,
+  "end": 2043.46,
+  "text": "and when you combine all of these"
+ },
+ {
+  "start": 2043.46,
+  "end": 2045.46,
+  "text": "things that I've been mentioning, you know, your code base"
+ },
+ {
+  "start": 2045.46,
+  "end": 2047.94,
+  "text": "your rules, your skills"
+ },
+ {
+  "start": 2047.94,
+  "end": 2049.84,
+  "text": "they all compound"
+ },
+ {
+  "start": 2049.84,
+  "end": 2050.98,
+  "text": "and"
+ },
+ {
+  "start": 2050.98,
+  "end": 2053.98,
+  "text": "Grok Bot will be able to"
+ },
+ {
+  "start": 2053.98,
+  "end": 2055.44,
+  "text": "you know automatically respond"
+ },
+ {
+  "start": 2055.44,
+  "end": 2057.12,
+  "text": "to events"
+ },
+ {
+  "start": 2057.12,
+  "end": 2061.22,
+  "text": "that come from the outer loop and then kick off cloud agents."
+ },
+ {
+  "start": 2062.0,
+  "end": 2070.24,
+  "text": "And you can also set up cursor automations and use our SDK to set up additional bots as well"
+ },
+ {
+  "start": 2070.24,
+  "end": 2078.5,
+  "text": "that reuse a lot of these pieces of agent infra that you've set up and allow them to do much more"
+ },
+ {
+  "start": 2078.5,
+  "end": 2087.78,
+  "text": "complicated tasks. So if you've done all this, then I think you can get to a point where, you know,"
+ },
+ {
+  "start": 2087.78,
+  "end": 2095.74,
+  "text": "I have some screenshots here of some of our automations and our agents that work on cursor,"
+ },
+ {
+  "start": 2096.2,
+  "end": 2103.7,
+  "text": "where we are automatically reproducing bug reports, we're automatically opening pull requests,"
+ },
+ {
+  "start": 2103.7,
+  "end": 2113.2,
+  "text": "we are essentially adding a lot of value to the entire team because all of these things compound."
+ },
+ {
+  "start": 2113.2,
+  "end": 2146.83,
+  "text": "So if we kind of zoom out again and go back to this graph, I think that to kind of close off the talk, if you spend a lot of time thinking about all of the pieces that you need to be able to ascend the trust graph, you start getting to a place where you can really trust your agents more and parallelize your work and also empower your entire team to build on top of"
+ },
+ {
+  "start": 2146.85,
+  "end": 2154.93,
+  "text": "of these pieces of infrastructure for your agents and empower everyone, you know, every engineer"
+ },
+ {
+  "start": 2154.93,
+  "end": 2160.85,
+  "text": "on your team, every builder to be extremely productive and be able to write high quality code."
+ },
+ {
+  "start": 2161.81,
+  "end": 2164.85,
+  "text": "So the last thing I want to leave you with is actually this piece."
+ },
+ {
+  "start": 2166.69,
+  "end": 2171.09,
+  "text": "Sorry, not that piece, but this piece. I think if there's only one thing you take"
+ },
+ {
+  "start": 2171.09,
+  "end": 2176.69,
+  "text": "away from my talk, it should be this slide here, which is, you know, these are the"
+ },
+ {
+  "start": 2176.69,
+  "end": 2183.51,
+  "text": "These are the activities that will help you build up towards a high trust environment."
+ },
+ {
+  "start": 2183.51,
+  "end": 2188.95,
+  "text": "Whenever you find yourself correcting and intervening your agent, you really want to think"
+ },
+ {
+  "start": 2188.95,
+  "end": 2192.05,
+  "text": "about it from these five pieces."
+ },
+ {
+  "start": 2192.05,
+  "end": 2205.53,
+  "text": "And where is the most effective step in this sequence in order to make your agent much more trustworthy?"
+ },
+ {
+  "start": 2205.53,
+  "end": 2212.29,
+  "text": "And of course, I definitely recommend thinking about it in this order, where, you know, you either"
+ },
+ {
+  "start": 2212.29,
+  "end": 2218.29,
+  "text": "invest the time to make that pattern categorically impossible through your code base and"
+ },
+ {
+  "start": 2218.29,
+  "end": 2224.13,
+  "text": "architecture and data structures, or you start looking at things like static analysis, and"
+ },
+ {
+  "start": 2224.13,
+  "end": 2229.35,
+  "text": "then you layer that on with rules and Bugbot and skills."
+ },
+ {
+  "start": 2229.35,
+  "end": 2235.51,
+  "text": "If you do all of that, and you also spend some time, you know, thinking about your code quality,"
+ },
+ {
+  "start": 2235.53,
+  "end": 2245.81,
+  "text": "in terms of skills, you get to a place where you trust the environment so much that your agents"
+ },
+ {
+  "start": 2245.81,
+  "end": 2253.37,
+  "text": "can just be free. Right. And personally, I have spent a lot of time for this for Grok Bot's"
+ },
+ {
+  "start": 2253.37,
+  "end": 2259.67,
+  "text": "codebase, for example, and this is really the secret. Well, it's not really a secret. It's a lot of"
+ },
+ {
+  "start": 2259.67,
+  "end": 2264.97,
+  "text": "hard work, but I hope you found this talk useful. And"
+ },
+ {
+  "start": 2265.53,
+  "end": 2269.93,
+  "text": "please reach out to me on X. My handle is poteto with an e."
+ },
+ {
+  "start": 2271.29,
+  "end": 2279.13,
+  "text": "And I hope that you'll have a lot of fun and success in your own Michelin Kitchen."
+ },
+ {
+  "start": 2279.93,
+  "end": 2280.73,
+  "text": "Thanks for watching."
+ }
+]
