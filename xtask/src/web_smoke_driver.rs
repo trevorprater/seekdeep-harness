@@ -47,7 +47,10 @@ const children = [], browsers = new Set();
 function spawn(command, argv, options) {
   assert.equal(command, process.execPath);
   assert.equal(argv[0], join(root, 'apps/cli/lib/bin.js'));
-  const env = {...options.env, SEEKDEEP_EXECUTABLE: executable, SEEKDEEP_TELEMETRY_DISABLED: '1', SEEKDEEP_BUNDLED_SKILL_DIR: join(options.cwd, '.bundled-skills')};
+  // Missing skill roots are watched through their nearest existing ancestor.
+  // Keep the user skill root inside this case's workspace so Linux does not
+  // recursively watch the runner's real home (including its build caches).
+  const env = {...options.env, SEEKDEEP_AGENTS_HOME: options.env.SEEKDEEP_AGENTS_HOME ?? join(options.cwd, '.agents'), SEEKDEEP_EXECUTABLE: executable, SEEKDEEP_TELEMETRY_DISABLED: '1', SEEKDEEP_BUNDLED_SKILL_DIR: join(options.cwd, '.bundled-skills')};
   const child = nativeSpawn(command, argv, {...options, env, detached: process.platform !== 'win32'});
   const owned = {child, output: '', closed: false};
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { owned.output += chunk.toString(); });
