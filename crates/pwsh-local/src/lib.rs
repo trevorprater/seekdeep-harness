@@ -733,7 +733,9 @@ pub async fn build(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
         context,
         &shell_settings_namespace(),
         config_schema(),
-        serde_json::to_value(config)?,
+        // Config contains only strings and finite numbers checked above; its derived
+        // serializer cannot fail. Construct the JSON value without a fictitious error path.
+        serde_json::json!(config),
         Some(validator),
         Arc::new(|| Ok(())),
     )?;
@@ -769,8 +771,8 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
-            let resolved = resolve_config_value(&config)?;
-            let config: Config = serde_json::from_value(resolved)?;
+            // The loader validator has already normalized this configuration.
+            let config: Config = serde_json::from_value(config)?;
             apply(&context, config).await?;
             Ok(())
         })

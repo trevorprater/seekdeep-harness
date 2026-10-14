@@ -54,7 +54,7 @@ fn default_dump_initializes_and_prints_headless_without_host_or_browser_layers()
     assert!(!stdout.contains("name: '@seekdeep-ai/seekdeep-host-"));
     assert!(!stdout.contains("name: '@seekdeep-ai/seekdeep-web-app'"));
     assert!(!stdout.contains("name: '@seekdeep-ai/seekdeep-client-"));
-    let profile = home.path().join("profiles/headless");
+    let profile = home.path().join("profiles").join("headless");
     assert!(profile.join("package.json").is_file());
     assert!(
         home.path()
@@ -82,7 +82,7 @@ fn full_dump_composes_profile_home_and_relative_overlay_in_order() {
         &["--profile", "headless", "--dump-default-config"],
     );
     assert!(initial.status.success());
-    let profile = home.path().join("profiles/headless");
+    let profile = home.path().join("profiles").join("headless");
     std::fs::write(
         profile.join("cordis.patch.yml"),
         concat!(

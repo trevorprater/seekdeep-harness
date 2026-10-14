@@ -349,8 +349,8 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Sand
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
-            let resolved = resolve_config_value(&config)?;
-            let config: Config = serde_json::from_value(resolved)?;
+            // The loader validator has already normalized this configuration.
+            let config: Config = serde_json::from_value(config)?;
             apply(&context, config).await?;
             Ok(())
         })

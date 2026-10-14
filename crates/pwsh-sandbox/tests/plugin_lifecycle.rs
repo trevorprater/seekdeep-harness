@@ -82,3 +82,50 @@ async fn sandbox_capabilities_do_not_replace_the_required_subprocess_provider() 
     assert!(error.to_string().contains("requires subprocess"));
     assert!(context.get(seekdeep_shell::SHELL).is_none());
 }
+
+#[tokio::test]
+async fn duplicate_shell_registration_keeps_the_original_sandbox_provider() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    SandboxService::new(Arc::new(PassthroughSandbox))
+        .provide(&context)
+        .unwrap();
+    SandboxPolicyService::new(SandboxPolicyConfig::default())
+        .unwrap()
+        .provide(&context)
+        .unwrap();
+    seekdeep_pwsh_sandbox::apply(&context, seekdeep_pwsh_sandbox::Config::default())
+        .await
+        .unwrap();
+    let original = context.get(seekdeep_shell::SHELL).unwrap();
+    let error = seekdeep_pwsh_sandbox::apply(&context, seekdeep_pwsh_sandbox::Config::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("shell"));
+    assert!(Arc::ptr_eq(
+        &original,
+        &context.get(seekdeep_shell::SHELL).unwrap()
+    ));
+}
+
+#[tokio::test]
+async fn loader_rejects_invalid_configuration_before_startup() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    SandboxService::new(Arc::new(PassthroughSandbox))
+        .provide(&context)
+        .unwrap();
+    SandboxPolicyService::new(SandboxPolicyConfig::default())
+        .unwrap()
+        .provide(&context)
+        .unwrap();
+    let mounted = context
+        .plugin(
+            seekdeep_pwsh_sandbox::plugin(),
+            serde_json::json!({"graceMs": 0}),
+        )
+        .unwrap();
+    let error = mounted.await_settled().await.unwrap_err();
+    assert!(error.to_string().contains("graceMs"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}

@@ -198,3 +198,46 @@ async fn loader_validation_and_missing_dependency_fail_before_publishing_shell()
     mounted.dispose().await.unwrap();
     assert!(context.get(seekdeep_shell::SHELL).is_none());
 }
+
+#[tokio::test]
+async fn typed_builder_rejects_invalid_configuration_before_installing_settings() {
+    let context = Context::new();
+    let error = seekdeep_pwsh_local::build(
+        &context,
+        Config {
+            grace_ms: 0.0,
+            ..Config::default()
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(error.to_string().contains("graceMs"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}
+
+#[tokio::test]
+async fn duplicate_shell_registration_keeps_the_original_provider() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    apply(&context, Config::default()).await.unwrap();
+    let original = context.get(seekdeep_shell::SHELL).unwrap();
+    let error = apply(&context, Config::default()).await.unwrap_err();
+    assert!(error.to_string().contains("shell"));
+    let installed = context.get(seekdeep_shell::SHELL).unwrap();
+    assert!(std::sync::Arc::ptr_eq(&original, &installed));
+}
+
+#[tokio::test]
+async fn loader_rejects_invalid_configuration_before_startup() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    let mounted = context
+        .plugin(
+            seekdeep_pwsh_local::plugin(),
+            serde_json::json!({"graceMs": 0}),
+        )
+        .unwrap();
+    let error = mounted.await_settled().await.unwrap_err();
+    assert!(error.to_string().contains("graceMs"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}

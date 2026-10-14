@@ -518,3 +518,16 @@ async fn background_diagnostics_preserve_lifecycle_and_typed_spawn_errors() {
         assert_eq!(failure.to_string(), error);
     }
 }
+
+#[tokio::test]
+async fn direct_argv_execution_rejects_an_invalid_deadline_before_spawning() {
+    let harness = setup(Config::default()).await;
+    let mut spec = harness.pwsh.resolve(request("true")).unwrap();
+    spec.timeout_ms = f64::NAN;
+    let error = harness
+        .pwsh
+        .run_argv(spec, vec!["/bin/true".to_owned()])
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("deadline timeoutMs"));
+}

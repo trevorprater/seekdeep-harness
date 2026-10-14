@@ -29,6 +29,7 @@ enum Behavior {
     Denied,
     RunnerFatal,
     MissingRunner,
+    ConfinementError,
 }
 
 #[derive(Debug)]
@@ -73,6 +74,7 @@ impl SandboxProvider for RecordingSandbox {
                 "-c".to_owned(),
                 "printf 'runner partial\\nRUNNER FATAL: unavailable\\n' >&2; exit 127".to_owned(),
             ],
+            Behavior::ConfinementError => anyhow::bail!("fixture confinement unavailable"),
             Behavior::MissingRunner => vec!["/nonexistent/seekdeep-sandbox-runner".to_owned()],
         };
         Ok(ConfinedArgv {
@@ -403,4 +405,36 @@ async fn a_file_workdir_retains_its_spawn_error_without_claiming_runner_failure(
         .await
         .unwrap_err();
     assert!(error.downcast_ref::<SandboxUnavailableError>().is_none());
+}
+
+#[tokio::test]
+async fn confinement_errors_preserve_their_cause_for_foreground_and_background() {
+    let harness = harness(SandboxMode::ReadOnly).await;
+    harness.sandbox.set(Behavior::ConfinementError);
+    let spec = harness.executor.resolve(request("probe")).unwrap();
+    let error = harness.executor.run(spec.clone()).await.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("fixture confinement unavailable")
+    );
+    let Err(error) = harness.executor.start(spec) else {
+        panic!("confinement failure must prevent a process from starting");
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("fixture confinement unavailable")
+    );
+    assert_eq!(harness.sandbox.calls().len(), 2);
+}
+
+#[tokio::test]
+async fn invalid_request_timeout_is_rejected_before_confinement() {
+    let harness = harness(SandboxMode::ReadOnly).await;
+    let mut request = request("probe");
+    request.timeout_ms = Some(f64::NAN);
+    let error = harness.executor.resolve(request).unwrap_err();
+    assert!(error.to_string().contains("request.timeoutMs"));
+    assert!(harness.sandbox.calls().is_empty());
 }
