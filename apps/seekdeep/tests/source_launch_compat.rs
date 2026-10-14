@@ -125,13 +125,20 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
     let mut killer = child.clone_killer();
     let mut reader = pair.master.try_clone_reader().expect("seekdeep PTY reader");
     drop(pair.slave);
-    drop(pair.master);
+    // A ConPTY reader clones only the output pipe, not the pseudoconsole.
+    // Retain the master until the child exits so terminal-width queries still
+    // see the allocated console. Drain concurrently before closing the master.
+    let child_exit = std::thread::spawn(move || {
+        let status = child.wait();
+        drop(pair.master);
+        status
+    });
 
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let mut output = Vec::new();
         let read = reader.read_to_end(&mut output);
-        let status = child.wait();
+        let status = child_exit.join().expect("seekdeep PTY waiter must finish");
         let _ = sender.send((read, status, output));
     });
     let (read, status, output) = match receiver.recv_timeout(Duration::from_secs(10)) {

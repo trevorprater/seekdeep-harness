@@ -91,10 +91,24 @@ async fn run_goal_scenario(root: &Path, name: &str) -> GoalScenarioResult {
         std::fs::write(scenario.join("stdout.expected.jsonl"), &stdout).unwrap();
         std::fs::write(scenario.join("session.expected.jsonl"), &session).unwrap();
     }
-    assert_eq!(
-        stdout,
-        std::fs::read_to_string(scenario.join("stdout.expected.jsonl")).unwrap()
-    );
+    let expected_stdout = std::fs::read_to_string(scenario.join("stdout.expected.jsonl")).unwrap();
+    if name == "goal-round-driver" {
+        // ACP settles at whole-agent idle, while the goal driver independently
+        // starts autonomous rounds. The pinned ACP source explicitly allows
+        // other producers to run further turns before prompt settlement. These
+        // two final frames therefore have no cross-task ordering guarantee.
+        // Preserve every frame and all other ordering; do not sort the stream.
+        let mut concurrent_order = expected_stdout.lines().collect::<Vec<_>>();
+        assert_eq!(concurrent_order.len(), 5);
+        concurrent_order.swap(3, 4);
+        let concurrent_order = format!("{}\n", concurrent_order.join("\n"));
+        assert!(
+            stdout == expected_stdout || stdout == concurrent_order,
+            "unexpected goal stdout:\n{stdout}\nexpected:\n{expected_stdout}\nor:\n{concurrent_order}"
+        );
+    } else {
+        assert_eq!(stdout, expected_stdout);
+    }
     assert_eq!(
         session,
         std::fs::read_to_string(scenario.join("session.expected.jsonl")).unwrap()
