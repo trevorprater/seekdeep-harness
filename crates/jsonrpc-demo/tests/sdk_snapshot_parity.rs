@@ -240,6 +240,9 @@ async fn compiled_runtime_replays_every_sdk_snapshot_scenario() {
             "{}",
             scenario.name
         );
+        // The source snapshot harness closes the runtime before harvesting its
+        // durable logs and filesystem effects; close drains queued persistence.
+        harness.close().await.unwrap();
         assert_eq!(
             jsonl_files(&cwd.join(".sessions")).len(),
             scenario.child_count + 1,
@@ -252,6 +255,5 @@ async fn compiled_runtime_replays_every_sdk_snapshot_scenario() {
                 "target:\n\tnew\n"
             );
         }
-        harness.close().await.unwrap();
     }
 }

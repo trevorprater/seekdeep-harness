@@ -178,6 +178,7 @@ fn set_directory_permissions(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)] // Keep the fallible Unix implementation's interface.
 fn set_directory_permissions(_path: &Path) -> io::Result<()> {
     Ok(())
 }
@@ -211,6 +212,7 @@ fn sync_directory(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)] // Keep the fallible Unix implementation's interface.
 fn sync_directory(_path: &Path) -> io::Result<()> {
     Ok(())
 }

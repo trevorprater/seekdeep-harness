@@ -829,7 +829,14 @@ async fn run_escalation_world_case(permission: PermissionPolicy, should_write: b
     assert_eq!(reason, seekdeep_acp::AcpStopReason::EndTurn);
     let proof = root.path().join("escalated.txt");
     if should_write {
-        assert_eq!(std::fs::read_to_string(proof).unwrap(), "ACP_ESCALATION_OK");
+        let contents = std::fs::read_to_string(&proof).unwrap_or_else(|error| {
+            panic!(
+                "missing escalation proof {}: {error}; model requests: {:?}; ACP output: {raw_output:?}",
+                proof.display(),
+                server.requests.lock(),
+            )
+        });
+        assert_eq!(contents, "ACP_ESCALATION_OK");
     } else {
         assert!(!proof.exists());
     }

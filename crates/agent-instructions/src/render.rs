@@ -111,7 +111,7 @@ struct RenderStyle {
 }
 
 fn dirname(path: &str) -> String {
-    match path.rfind('/') {
+    match path.rfind(std::path::is_separator) {
         Some(index) if index > 0 => path[..index].to_owned(),
         Some(_) => "/".to_owned(),
         None => ".".to_owned(),
@@ -119,7 +119,7 @@ fn dirname(path: &str) -> String {
 }
 
 fn basename(path: &str) -> String {
-    match path.rfind('/') {
+    match path.rfind(std::path::is_separator) {
         Some(index) => path[index + 1..].to_owned(),
         None => path.to_owned(),
     }
@@ -593,6 +593,11 @@ mod tests {
     fn derives_scope_keys() {
         assert_eq!(scope_for_display_path("AGENTS.md"), ".");
         assert_eq!(scope_for_display_path("sub/CLAUDE.md"), "sub");
+        // relative_display follows the host's node:path-compatible separators.
+        let native = std::path::Path::new("sub").join("CLAUDE.md");
+        let native = native.to_str().unwrap();
+        assert_eq!(scope_for_display_path(native), "sub");
+        assert_eq!(instruction_scope_key(native), "sub\u{0}CLAUDE.md");
         assert_eq!(
             scope_for_display_path("~/.seekdeep/AGENTS.md"),
             "user-global"

@@ -746,11 +746,16 @@ impl NodeRealm {
 
 impl Drop for NodeRealm {
     fn drop(&mut self) {
+        #[cfg(not(windows))]
         let _ = self.writer.get_mut().shutdown(Shutdown::Both);
+        // Stop the owned child before closing its transport. On Windows, closing
+        // TCP first can deliver ECONNRESET to its event loop before kill arrives.
         let mut child = self.child.lock();
         let _ = child.kill();
         let _ = child.wait();
         drop(child);
+        #[cfg(windows)]
+        let _ = self.writer.get_mut().shutdown(Shutdown::Both);
         if let Some(reader) = self.reader.get_mut().take() {
             let _ = reader.join();
         }

@@ -94,7 +94,7 @@ fn argument_argv_parsing_preview_sampling_and_relative_paths_match_source() {
     let workdir = std::path::absolute("/ws").unwrap();
     assert_eq!(
         to_workdir_relative(workdir.join("src/lib.rs").to_str().unwrap(), &workdir),
-        std::path::Path::new("src").join("lib.rs").to_string_lossy()
+        "src/lib.rs"
     );
     assert_eq!(
         to_workdir_relative("relative", std::path::Path::new("/ws")),

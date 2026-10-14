@@ -202,18 +202,21 @@ fn launcher_help_uses_the_live_stdout_terminal_width() {
     let result = run_help_in_pty(60);
     assert_eq!(result.code, Some(0));
     assert_eq!(result.stderr, "");
+    // ConPTY renders some line transitions as cursor moves, which the capture
+    // sanitizer removes. The non-PTY oracle above checks exact output bytes.
+    #[cfg(not(windows))]
     assert!(result.stdout.ends_with("\n\n"), "{:?}", result.stdout);
     assert!(
         result.stdout.contains(concat!(
             "seekdeep: boot a SeekDeep Harness profile — an ordered stack\n",
-            "of plugin-bundle patch layers under your own overrides.\n",
+            "of plugin-bundle patch layers under your own overrides.",
         )),
         "{:?}",
         result.stdout
     );
     assert!(!result.stdout.contains(concat!(
         "seekdeep: boot a SeekDeep Harness profile — an ordered stack of plugin-bundle\n",
-        "patch layers under your own overrides.\n",
+        "patch layers under your own overrides.",
     )));
 }
 
