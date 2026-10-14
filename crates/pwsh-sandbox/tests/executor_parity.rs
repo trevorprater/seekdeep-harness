@@ -438,3 +438,18 @@ async fn invalid_request_timeout_is_rejected_before_confinement() {
     assert!(error.to_string().contains("request.timeoutMs"));
     assert!(harness.sandbox.calls().is_empty());
 }
+
+#[tokio::test]
+async fn pre_cancelled_background_start_preserves_cancellation_as_its_cause() {
+    let harness = harness(SandboxMode::ReadOnly).await;
+    let signal = AbortSignal::default();
+    signal.abort();
+    let mut request = request("probe");
+    request.signal = Some(signal);
+    let spec = harness.executor.resolve(request).unwrap();
+    let Err(error) = harness.executor.start(spec) else {
+        panic!("a pre-cancelled request must not start a process");
+    };
+    assert!(error.to_string().contains("aborted before spawn"));
+    assert!(error.downcast_ref::<SandboxUnavailableError>().is_none());
+}

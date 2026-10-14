@@ -241,3 +241,44 @@ async fn loader_rejects_invalid_configuration_before_startup() {
     assert!(error.to_string().contains("graceMs"));
     assert!(context.get(seekdeep_shell::SHELL).is_none());
 }
+
+#[tokio::test]
+async fn disposed_owner_cannot_install_settings_or_publish_a_shell() {
+    let root = Context::new();
+    LocalSubprocessRuntime::install(&root).unwrap();
+    let owner = seekdeep_cordis::Fiber::active_child("disposed-pwsh-owner");
+    owner.dispose().await.unwrap();
+    let context = root.with_fiber(owner);
+    let error = seekdeep_pwsh_local::build(&context, Config::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("inactive context"));
+    assert!(root.get(seekdeep_shell::SHELL).is_none());
+}
+
+#[tokio::test]
+async fn duplicate_plugin_mount_preserves_the_active_provider_and_its_cleanup() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    let first = context
+        .plugin(seekdeep_pwsh_local::plugin(), serde_json::json!({}))
+        .unwrap();
+    first.await_settled().await.unwrap();
+    let original = context.get(seekdeep_shell::SHELL).unwrap();
+    let second = context
+        .plugin(seekdeep_pwsh_local::plugin(), serde_json::json!({}))
+        .unwrap();
+    let error = second.await_settled().await.unwrap_err();
+    assert!(error.to_string().contains("shell"));
+    assert!(std::sync::Arc::ptr_eq(
+        &original,
+        &context.get(seekdeep_shell::SHELL).unwrap()
+    ));
+    second.dispose().await.unwrap();
+    assert!(std::sync::Arc::ptr_eq(
+        &original,
+        &context.get(seekdeep_shell::SHELL).unwrap()
+    ));
+    first.dispose().await.unwrap();
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}

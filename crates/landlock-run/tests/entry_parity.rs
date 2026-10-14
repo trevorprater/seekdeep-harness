@@ -2,7 +2,6 @@
 
 use std::{
     ffi::OsString,
-    fs,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -79,13 +78,27 @@ fn parser_preserves_exact_grammar_order_and_usage_diagnostics() {
 #[cfg(unix)]
 #[test]
 fn probe_classifies_missing_full_partial_failure_and_timeout() {
-    use std::os::unix::fs::PermissionsExt as _;
-
-    let directory = tempfile::tempdir().unwrap();
-    let fake = |name: &str, script: &str| {
+    let executable = std::env::current_exe().unwrap();
+    let directory = tempfile::tempdir_in(executable.parent().unwrap()).unwrap();
+    let fixture = directory.path().join("probe-fixture");
+    let compiler = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let output = std::process::Command::new(compiler)
+        .arg("--edition=2024")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/probe_fixture.rs"))
+        .arg("-o")
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Match the immutable native launcher. Building in a child process avoids
+    // sharing a writable executable fd with concurrently forked test children.
+    let fake = |name: &str| {
         let path = directory.path().join(name);
-        fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&fixture, &path).unwrap();
         path
     };
     assert_eq!(
@@ -93,28 +106,19 @@ fn probe_classifies_missing_full_partial_failure_and_timeout() {
         LandlockEnforcement::Unusable
     );
     assert_eq!(
-        probe(
-            &fake("full", "echo 'landlock: fully enforced'; exit 0"),
-            Duration::from_secs(1)
-        ),
+        probe(&fake("full"), Duration::from_secs(1)),
         LandlockEnforcement::Full
     );
     assert_eq!(
-        probe(
-            &fake(
-                "partial",
-                "echo 'landlock: partially enforced (older ABI)'; exit 0"
-            ),
-            Duration::from_secs(1)
-        ),
+        probe(&fake("partial"), Duration::from_secs(1)),
         LandlockEnforcement::Partial
     );
     assert_eq!(
-        probe(&fake("failure", "exit 125"), Duration::from_secs(1)),
+        probe(&fake("failure"), Duration::from_secs(1)),
         LandlockEnforcement::Unusable
     );
     assert_eq!(
-        probe(&fake("timeout", "sleep 10"), Duration::from_millis(50)),
+        probe(&fake("timeout"), Duration::from_millis(50)),
         LandlockEnforcement::Unusable
     );
 }

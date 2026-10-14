@@ -192,3 +192,18 @@ async fn no_provider_keeps_composition_entry_and_executor_unload_releases_namesp
     );
     assert!(bench.root.get(seekdeep_shell::SHELL).is_none());
 }
+
+#[tokio::test]
+async fn invalid_persisted_settings_fail_construction_before_publishing_a_shell() {
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    let storage = Arc::new(MemoryStorage::default());
+    storage.document.lock().insert(
+        shell_settings_namespace().as_str().to_owned(),
+        json!({"graceMs": 0}),
+    );
+    SettingsService::install(&context, storage).await.unwrap();
+    let error = apply(&context, Config::default()).await.unwrap_err();
+    assert!(error.to_string().contains("graceMs"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}
