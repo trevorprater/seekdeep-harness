@@ -124,7 +124,7 @@ fn batch_merge_keeps_last_packages_first_nodes_and_host_first_faces() {
     if let TypeNodeModel::Defined(node) = &mut second.faces[0].graph.nodes[0] {
         node.kind = seekdeep_typert_generator::model::TypeNodeKind::This;
     }
-    let merged = merge_workspace_models([first.clone(), second]);
+    let merged = merge_workspace_models(vec![first.clone(), second]);
     assert_eq!(merged.faces[0].face.as_str(), "host");
     assert_eq!(merged.faces[1].packages[0].root, "replacement");
     assert_eq!(
@@ -137,5 +137,9 @@ fn batch_merge_keeps_last_packages_first_nodes_and_host_first_faces() {
     );
     assert_eq!(merged.faces[1].graph, first.faces[1].graph);
     assert_eq!(merged.cross_face_links, first.cross_face_links);
-    assert!(merge_workspace_models([]).faces.is_empty());
+    assert!(
+        merge_workspace_models(Vec::<WorkspaceModel>::new())
+            .faces
+            .is_empty()
+    );
 }
