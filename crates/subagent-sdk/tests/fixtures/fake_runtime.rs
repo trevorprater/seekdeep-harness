@@ -95,7 +95,9 @@ fn assistant_text() -> String {
     if variable("SEEKDEEP_SDK_FIXTURE_ECHO_CWD").is_some() {
         lines.push(format!(
             "cwd={}",
-            std::env::current_dir().unwrap().display()
+            dunce::canonicalize(std::env::current_dir().unwrap())
+                .unwrap()
+                .display()
         ));
     }
     for name in variable("SEEKDEEP_SDK_FIXTURE_ECHO_ENV")

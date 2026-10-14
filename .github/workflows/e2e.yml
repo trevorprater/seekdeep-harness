@@ -151,7 +151,10 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
           DEEPSEEK_BASE_URL: https://api.deepseek.com
-        run: cargo xtask web-smoke --live
+        # Build already produced xtask. Re-entering Cargo here re-unifies the
+        # feature graph after the per-package API suites and rebuilds the Host
+        # dependencies, consuming the remaining job budget before smoke starts.
+        run: ./target/debug/xtask web-smoke --live
 
       - name: Retain browser verification evidence
         if: always()

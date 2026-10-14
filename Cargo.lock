@@ -9680,6 +9680,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "filedescriptor",
  "futures",
  "nix 0.30.1",
  "parking_lot",

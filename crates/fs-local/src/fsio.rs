@@ -783,8 +783,26 @@ struct StagingDirGuard {
 }
 
 impl StagingDirGuard {
-    fn new(path: PathBuf) -> Self {
-        Self { path: Some(path) }
+    fn create(directory: &str, filename: &str) -> std::io::Result<Self> {
+        loop {
+            let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let path = Path::new(directory).join(format!(
+                ".{filename}.{}.{sequence}.tmpdir",
+                std::process::id()
+            ));
+            #[allow(unused_mut)]
+            let mut builder = std::fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt as _;
+                builder.mode(0o700);
+            }
+            match builder.create(&path) {
+                Ok(()) => return Ok(Self { path: Some(path) }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
     }
 }
 
@@ -801,13 +819,32 @@ impl Drop for StagingDirGuard {
 /// # Errors
 ///
 /// Returns structured I/O, permission, or abort failures.
-#[allow(clippy::too_many_lines)]
 pub async fn write_file_atomic(
     absolute_path: &str,
     content: &str,
     mode: Option<u32>,
     signal: Option<&AbortSignal>,
     create_if_absent_display: Option<&str>,
+) -> Result<(), FsError> {
+    write_file_atomic_after_stage(
+        absolute_path,
+        content,
+        mode,
+        signal,
+        create_if_absent_display,
+        std::future::ready(()),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_lines)]
+async fn write_file_atomic_after_stage(
+    absolute_path: &str,
+    content: &str,
+    mode: Option<u32>,
+    signal: Option<&AbortSignal>,
+    create_if_absent_display: Option<&str>,
+    after_stage: impl std::future::Future<Output = ()>,
 ) -> Result<(), FsError> {
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt as _;
@@ -818,26 +855,14 @@ pub async fn write_file_atomic(
         .await
         .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
     ensure_not_aborted(signal, "write")?;
-    let staging_dir = loop {
-        let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let candidate = Path::new(&directory).join(format!(
-            ".{}.{}.{sequence}.tmpdir",
-            basename(absolute_path),
-            std::process::id()
-        ));
-        #[allow(unused_mut)]
-        let mut builder = tokio::fs::DirBuilder::new();
-        #[cfg(unix)]
-        builder.mode(0o700);
-        match builder.create(&candidate).await {
-            Ok(()) => break candidate,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => {
-                return Err(FsError::new(error.to_string(), FsErrorCode::FsIoError));
-            }
-        }
-    };
-    let staging_guard = StagingDirGuard::new(staging_dir.clone());
+    let filename = basename(absolute_path);
+    let staging_guard =
+        tokio::task::spawn_blocking(move || StagingDirGuard::create(&directory, &filename))
+            .await
+            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?
+            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+    let staging_dir = staging_guard.path.as_ref().expect("live staging directory");
+    after_stage.await;
     let temp_path = staging_dir.join(format!("{}.tmp", basename(absolute_path)));
     let result = async {
         #[cfg(unix)]
@@ -943,6 +968,37 @@ pub async fn write_file_atomic(
 #[cfg(test)]
 mod tests {
     use super::locale_compare;
+
+    #[tokio::test]
+    async fn dropping_the_publish_future_releases_its_staging_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("cancelled/file.txt");
+        let target = path.to_string_lossy().into_owned();
+        let (staged, ready) = tokio::sync::oneshot::channel();
+        let operation = tokio::spawn(async move {
+            super::write_file_atomic_after_stage(&target, "payload", None, None, None, async {
+                staged.send(()).unwrap();
+                std::future::pending::<()>().await;
+            })
+            .await
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(5), ready)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            1
+        );
+        assert!(!path.exists());
+        operation.abort();
+        assert!(operation.await.unwrap_err().is_cancelled());
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            0
+        );
+        assert!(!path.exists());
+    }
 
     #[test]
     fn locale_compare_orders_letters_case_insensitively() {

@@ -363,8 +363,21 @@ fn compiled_catalog_resolves_adaptive_picker_children_and_badge_surface() -> any
     Ok(())
 }
 
+async fn profile_stage<T>(
+    name: &str,
+    future: impl std::future::Future<Output = anyhow::Result<T>>,
+) -> anyhow::Result<T> {
+    use std::io::Write as _;
+    writeln!(std::io::stderr(), "shipped Web profile: {name}")?;
+    tokio::time::timeout(std::time::Duration::from_secs(30), future)
+        .await
+        .map_err(|error| anyhow::anyhow!("shipped Web profile {name}: {error}"))?
+}
+
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn shipped_web_profile_mounts_all_shipped_agents_with_isolated_tools() -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
@@ -380,11 +393,14 @@ async fn shipped_web_profile_mounts_all_shipped_agents_with_isolated_tools() -> 
         None,
     )?;
     let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
-    let running = run_profile_process(
-        plan,
-        &catalog,
-        LaunchEnvironmentSnapshot::default(),
-        Vec::new(),
+    let running = profile_stage(
+        "boot",
+        run_profile_process(
+            plan,
+            &catalog,
+            LaunchEnvironmentSnapshot::default(),
+            Vec::new(),
+        ),
     )
     .await?;
     let context = running.context().clone();
@@ -403,18 +419,26 @@ async fn shipped_web_profile_mounts_all_shipped_agents_with_isolated_tools() -> 
     let agents = context
         .get(AGENTS)
         .ok_or_else(|| anyhow::anyhow!("shipped Web agent registry missing"))?;
-    let minimal = agents
-        .create(create_preset_options(roster.clone(), "minimal"))
-        .await?;
-    let standard = agents
-        .create(create_preset_options(roster.clone(), "standard"))
-        .await?;
-    let code = agents
-        .create(create_preset_options(roster.clone(), "code"))
-        .await?;
-    let cordis = agents
-        .create(create_preset_options(roster, "cordis"))
-        .await?;
+    let minimal = profile_stage(
+        "create minimal",
+        agents.create(create_preset_options(roster.clone(), "minimal")),
+    )
+    .await?;
+    let standard = profile_stage(
+        "create standard",
+        agents.create(create_preset_options(roster.clone(), "standard")),
+    )
+    .await?;
+    let code = profile_stage(
+        "create code",
+        agents.create(create_preset_options(roster.clone(), "code")),
+    )
+    .await?;
+    let cordis = profile_stage(
+        "create cordis",
+        agents.create(create_preset_options(roster, "cordis")),
+    )
+    .await?;
     let mut minimal_tools = scoped_tool_names(&tools, &minimal.agent);
     minimal_tools.sort();
     assert_eq!(minimal_tools, ["bash", "str_replace_editor"]);
@@ -430,34 +454,38 @@ async fn shipped_web_profile_mounts_all_shipped_agents_with_isolated_tools() -> 
     let cordis_tools = scoped_tool_names(&tools, &cordis.agent);
     assert!(cordis_tools.contains(&"cordis_define".to_owned()));
     assert!(cordis_tools.contains(&"bash".to_owned()));
-    let prompt = context
-        .get(SYSTEM_PROMPT)
-        .ok_or_else(|| anyhow::anyhow!("shipped Web system prompt missing"))?;
-    let code_prompt = prompt
-        .assemble(AssembleContext {
-            scope: Some(code.agent.scope_key()),
-            ..AssembleContext::default()
-        })
-        .await?;
-    assert_eq!(
-        code_prompt
-            .tools
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<Vec<_>>(),
-        ["run_code"]
-    );
-    minimal.dispose().await?;
+    profile_stage("assemble code prompt", async {
+        let prompt = context
+            .get(SYSTEM_PROMPT)
+            .ok_or_else(|| anyhow::anyhow!("shipped Web system prompt missing"))?;
+        let assembly = prompt
+            .assemble(AssembleContext {
+                scope: Some(code.agent.scope_key()),
+                ..AssembleContext::default()
+            })
+            .await?;
+        assert_eq!(
+            assembly
+                .tools
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            ["run_code"]
+        );
+        Ok(())
+    })
+    .await?;
+    profile_stage("dispose minimal", minimal.dispose()).await?;
     assert!(
         tools
             .schemas(Some(standard.agent.scope_key()))
             .iter()
             .any(|schema| schema.name == "bash")
     );
-    code.dispose().await?;
-    cordis.dispose().await?;
-    standard.dispose().await?;
+    profile_stage("dispose code", code.dispose()).await?;
+    profile_stage("dispose cordis", cordis.dispose()).await?;
+    profile_stage("dispose standard", standard.dispose()).await?;
     assert!(tools.schemas(None).is_empty());
-    assert_eq!(running.shutdown(0).await?, 0);
+    assert_eq!(profile_stage("shutdown", running.shutdown(0)).await?, 0);
     Ok(())
 }

@@ -48,3 +48,37 @@ async fn plugin_waits_for_all_dependencies_and_disposal_releases_shell_and_setti
     plugin.dispose().await.expect("dispose");
     assert!(context.get(seekdeep_shell::SHELL).is_none());
 }
+
+#[tokio::test]
+async fn missing_capabilities_fail_without_installing_a_shell() {
+    let context = Context::new();
+    let error = seekdeep_pwsh_sandbox::apply(&context, seekdeep_pwsh_sandbox::Config::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("requires sandbox"));
+    SandboxService::new(Arc::new(PassthroughSandbox))
+        .provide(&context)
+        .unwrap();
+    let error = seekdeep_pwsh_sandbox::apply(&context, seekdeep_pwsh_sandbox::Config::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("requires sandboxPolicy"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}
+
+#[tokio::test]
+async fn sandbox_capabilities_do_not_replace_the_required_subprocess_provider() {
+    let context = Context::new();
+    SandboxService::new(Arc::new(PassthroughSandbox))
+        .provide(&context)
+        .unwrap();
+    SandboxPolicyService::new(SandboxPolicyConfig::default())
+        .unwrap()
+        .provide(&context)
+        .unwrap();
+    let error = seekdeep_pwsh_sandbox::apply(&context, seekdeep_pwsh_sandbox::Config::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("requires subprocess"));
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}

@@ -33,6 +33,7 @@ test-runtime-fixture = [
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+dunce.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
@@ -54,7 +55,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-dunce.workspace = true
 seekdeep-loader = { path = "../loader" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }

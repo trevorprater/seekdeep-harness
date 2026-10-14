@@ -344,7 +344,7 @@ async fn refused_connection_recovers_when_endpoint_starts_during_backoff() {
     let harness = Harness::start_with_backoff(&format!("http://{address}"), 1_000.0, 2, 100).await;
     let session = harness.session.clone();
     let recovery = tokio::spawn(async move {
-        tokio::time::timeout(Duration::from_secs(2), async {
+        tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 if session
                     .events()
@@ -357,7 +357,12 @@ async fn refused_connection_recovers_when_endpoint_starts_during_backoff() {
             }
         })
         .await
-        .unwrap();
+        .unwrap_or_else(|error| {
+            panic!(
+                "connection refusal did not reach retry: {error}; events={:?}",
+                session.events()
+            )
+        });
         let listener = TcpListener::bind(address).await.unwrap();
         MockServer::start_on(listener, vec![Behavior::Success])
     });

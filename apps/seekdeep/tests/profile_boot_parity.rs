@@ -217,6 +217,7 @@ fn value_plugin() -> Plugin {
 #[tokio::test]
 async fn minimal_profile_boots_with_watch_only_hmr_and_recomposes_both_user_layers()
 -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
@@ -296,6 +297,7 @@ async fn minimal_profile_boots_with_watch_only_hmr_and_recomposes_both_user_laye
 #[tokio::test]
 async fn app_exit_during_boot_waits_for_publication_and_disposes_before_process_completion()
 -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
@@ -361,6 +363,7 @@ async fn app_exit_during_boot_waits_for_publication_and_disposes_before_process_
 #[tokio::test]
 async fn compiled_foundation_catalog_activates_real_services_and_agent_loop() -> anyhow::Result<()>
 {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
@@ -437,6 +440,7 @@ async fn compiled_foundation_catalog_activates_real_services_and_agent_loop() ->
 #[tokio::test]
 async fn web_help_disposes_raw_boot_context_while_web_startup_consumers_are_pending()
 -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");

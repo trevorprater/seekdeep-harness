@@ -287,6 +287,13 @@ impl LocalTerminalHandle {
             })?));
         let killer = Arc::new(Mutex::new(child.clone_killer()));
         let mut reader = pair.master.try_clone_reader()?;
+        #[cfg(unix)]
+        let poll_reader = filedescriptor::FileDescriptor::dup(
+            &pair
+                .master
+                .as_raw_fd()
+                .ok_or_else(|| anyhow::anyhow!("native PTY lacks a reader descriptor"))?,
+        )?;
         let writer = Arc::new(Mutex::new(pair.master.take_writer()?));
         drop(pair.slave);
         drop(pair.master);
@@ -294,10 +301,31 @@ impl LocalTerminalHandle {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         let end_sender = sender.clone();
         let (reader_done, reader_done_receiver) = tokio::sync::oneshot::channel();
+        #[cfg(unix)]
+        let stop_reader = Arc::new(AtomicBool::new(false));
+        #[cfg(unix)]
+        let reader_stopped = stop_reader.clone();
         tokio::task::spawn_blocking(move || {
             let mut buffer = vec![0_u8; 16 * 1024];
             let mut decoder = Utf8StreamDecoder::default();
             loop {
+                #[cfg(unix)]
+                {
+                    use filedescriptor::AsRawFileDescriptor as _;
+                    if reader_stopped.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let mut descriptors = [filedescriptor::pollfd {
+                        fd: poll_reader.as_raw_file_descriptor(),
+                        events: filedescriptor::POLLIN,
+                        revents: 0,
+                    }];
+                    match filedescriptor::poll(&mut descriptors, Some(Duration::from_millis(20))) {
+                        Ok(0) => continue,
+                        Ok(_) => {}
+                        Err(_) => break,
+                    }
+                }
                 match reader.read(&mut buffer) {
                     Ok(0) | Err(_) => break,
                     Ok(read) => {
@@ -346,11 +374,20 @@ impl LocalTerminalHandle {
             let outcome = outcome_receiver.await.unwrap_or_else(|_| {
                 StoredDone::Failure(Arc::from("terminal exit observer stopped"))
             });
-            // node-pty reports exit only once the PTY has closed and every byte was
-            // delivered, so the end marker follows the reader's own finish rather than a
-            // deadline: a reader still draining after the exit can never enqueue data behind
-            // `End`, which the channel reader treats as final. A descendant that keeps the PTY
-            // open delays the exit the same way it does in the source.
+            // node-pty caps Unix post-exit draining at 200 ms. Join the stopped reader
+            // before `End` so no bytes can be queued behind the final marker.
+            #[cfg(unix)]
+            {
+                let mut reader_done_receiver = reader_done_receiver;
+                if tokio::time::timeout(Duration::from_millis(200), &mut reader_done_receiver)
+                    .await
+                    .is_err()
+                {
+                    stop_reader.store(true, Ordering::Release);
+                    let _ = reader_done_receiver.await;
+                }
+            }
+            #[cfg(not(unix))]
             let _ = reader_done_receiver.await;
             let _ = end_sender.send(ChannelMessage::End);
             wait_done.complete(outcome);

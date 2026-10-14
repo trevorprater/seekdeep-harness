@@ -12,6 +12,7 @@ use serde_json::Value;
 
 mod lane;
 mod launcher;
+mod llvm_export;
 pub use lane::{
     ADOPTION_REASON, CARGO_LLVM_COV_VERSION, Evaluation, FileCoverage, Host, MANIFEST_PATH,
     MeasuredSet, Metric, ROSTER_NOTE, ROSTER_PATH, Roster, RosterEntry, evaluate,

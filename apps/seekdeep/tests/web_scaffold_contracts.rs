@@ -220,6 +220,7 @@ fn repository_root() -> PathBuf {
 #[tokio::test]
 async fn shipped_projection_cache_checkpoints_survive_profile_shutdown_and_reopen()
 -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let scaffold = launch_web_scaffold(temporary.path(), &[]).await?;
     let register = |context: &seekdeep_cordis::Context| -> anyhow::Result<()> {
@@ -287,6 +288,7 @@ async fn shipped_projection_cache_checkpoints_survive_profile_shutdown_and_reope
 #[tokio::test]
 async fn assembles_the_shipped_web_catalog_file_reference_guidance_and_confined_access_default()
 -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let scaffold = launch_web_scaffold(temporary.path(), &[]).await?;
     let context = scaffold.context().clone();
@@ -391,6 +393,7 @@ async fn assembles_the_shipped_web_catalog_file_reference_guidance_and_confined_
 
 #[tokio::test]
 async fn lets_a_preset_producer_reach_the_background_job_registry() -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let scaffold = launch_web_scaffold(temporary.path(), &[]).await?;
     let context = scaffold.context().clone();
@@ -484,6 +487,7 @@ fn write_skill(root: &Path, name: &str) -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn isolates_replay_skill_discovery_from_every_ambient_host_root() -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let ambient = temporary.path().join("ambient");
     let seekdeep_home = ambient.join("seekdeep-home");

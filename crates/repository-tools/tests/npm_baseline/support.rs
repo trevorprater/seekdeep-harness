@@ -299,7 +299,7 @@ pub(super) fn environment() -> BTreeMap<OsString, OsString> {
 
 pub(super) fn source_call(input: &Value) -> Value {
     use std::io::Write as _;
-    let source_root = repository_root().parent().unwrap().join("deepseek-harness");
+    let source_root = seekdeep_source_oracle::source_root(&repository_root()).unwrap();
     let source =
         std::fs::read_to_string(source_root.join("scripts/publish-npm-baseline.ts")).unwrap();
     let source = source.split("\ntry {\n  await main()\n}").next().unwrap();

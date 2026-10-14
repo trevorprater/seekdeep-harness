@@ -255,6 +255,7 @@ fn assert_run_and_requests(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     let temporary = tempfile::tempdir()?;
     let workspace = temporary.path().join("workspace");
     std::fs::create_dir(&workspace)?;

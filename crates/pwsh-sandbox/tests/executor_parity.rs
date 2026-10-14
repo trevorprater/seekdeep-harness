@@ -355,3 +355,52 @@ async fn full_access_background_bypasses_confine_and_carries_no_facts() {
     assert_eq!(process.sandbox(), None);
     assert!(harness.sandbox.calls().is_empty());
 }
+
+#[tokio::test]
+async fn resolved_policy_and_background_lifecycle_are_preserved() {
+    let harness = harness(SandboxMode::ReadOnly).await;
+    assert_eq!(harness.executor.sandbox_mode(), Some(SandboxMode::ReadOnly));
+    assert!(format!("{:?}", harness.executor).contains("SandboxPwshExecutor"));
+    let mut spec = harness.executor.resolve(request("probe")).unwrap();
+    spec.sandbox_policy = None;
+    assert!(
+        harness
+            .executor
+            .run(spec.clone())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("missing sandboxPolicy")
+    );
+    assert!(
+        harness
+            .executor
+            .start(spec)
+            .unwrap_err()
+            .to_string()
+            .contains("missing sandboxPolicy")
+    );
+    let child = harness
+        .executor
+        .start(harness.executor.resolve(request("probe")).unwrap())
+        .unwrap();
+    child.done().await;
+    assert_eq!(child.exit_code(), Some(0));
+    assert_eq!(child.signal(), None);
+    assert!(!child.kill());
+}
+
+#[tokio::test]
+async fn a_file_workdir_retains_its_spawn_error_without_claiming_runner_failure() {
+    let harness = harness(SandboxMode::ReadOnly).await;
+    let workdir = harness.temp.path().join("not-a-directory");
+    fs::write(&workdir, "file").unwrap();
+    let mut requested = request("probe");
+    requested.workdir = Some(workdir);
+    let error = harness
+        .executor
+        .run(harness.executor.resolve(requested).unwrap())
+        .await
+        .unwrap_err();
+    assert!(error.downcast_ref::<SandboxUnavailableError>().is_none());
+}

@@ -12,6 +12,7 @@ async fn installed_seekdeep_binary_can_host_the_scrubbed_worker_process() {
     let mut command = tokio::process::Command::new(env!("CARGO_BIN_EXE_seekdeep"));
     command
         .env_clear()
+        .envs(super::platform_environment())
         .env("SEEKDEEP_INTERNAL_WORKFLOW_WORKER", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

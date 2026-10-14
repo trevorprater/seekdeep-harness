@@ -68,7 +68,10 @@ async fn resolution_precedence_keeps_mode_root_and_typed_session_identity_togeth
         .resolve(SandboxPolicyRequest::default())
         .unwrap();
     assert_eq!(agentless.mode, SandboxMode::WorkspaceWrite);
-    assert_eq!(agentless.workspace_root, PathBuf::from("/fallback"));
+    assert_eq!(
+        agentless.workspace_root,
+        std::path::absolute("/fallback").unwrap()
+    );
     assert_eq!(agentless.session_id, None);
 
     let first_policy = installation
@@ -80,7 +83,7 @@ async fn resolution_precedence_keeps_mode_root_and_typed_session_identity_togeth
     assert_eq!(first_policy.mode, SandboxMode::WorkspaceWrite);
     assert_eq!(
         first_policy.workspace_root,
-        PathBuf::from("/projects/first")
+        std::path::absolute("/projects/first").unwrap()
     );
     assert_eq!(
         first_policy.session_id.as_ref().map(SessionId::as_str),
@@ -105,8 +108,14 @@ async fn resolution_precedence_keeps_mode_root_and_typed_session_identity_togeth
         })
         .unwrap();
     assert_eq!(approved.mode, SandboxMode::DangerFullAccess);
-    assert_eq!(approved.workspace_root, PathBuf::from("/projects/second"));
-    assert_eq!(installation.workspace_root, PathBuf::from("/fallback"));
+    assert_eq!(
+        approved.workspace_root,
+        std::path::absolute("/projects/second").unwrap()
+    );
+    assert_eq!(
+        installation.workspace_root,
+        std::path::absolute("/fallback").unwrap()
+    );
 
     installation.dispose().await.unwrap();
     assert!(context.get(SANDBOX_POLICY).is_none());

@@ -32,7 +32,7 @@ struct RecordingFs {
 
 impl RecordingFs {
     fn insert(&self, path: impl Into<String>, kind: FsKind, content: &str, size: Option<u64>) {
-        let path = path.into();
+        let path = Self::absolute(&path.into(), None);
         self.entries.lock().insert(
             path.clone(),
             Entry {
@@ -45,11 +45,15 @@ impl RecordingFs {
     }
 
     fn absolute(path: &str, cwd: Option<&str>) -> String {
-        if path.starts_with('/') {
-            path.to_owned()
+        let path = if Path::new(path).has_root() {
+            Path::new(path).to_path_buf()
         } else {
-            format!("{}/{path}", cwd.unwrap_or("/").trim_end_matches('/'))
-        }
+            Path::new(cwd.unwrap_or("/")).join(path)
+        };
+        std::path::absolute(path)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned()
     }
 
     fn observe_signal(&self, signal: Option<&AbortSignal>) -> anyhow::Result<()> {
@@ -88,11 +92,7 @@ impl FileSystem for RecordingFs {
     }
 
     fn contains(&self, parent: &FsTarget, child: &FsTarget) -> bool {
-        child.target_key == parent.target_key
-            || child
-                .target_key
-                .as_str()
-                .starts_with(&format!("{}/", parent.target_key))
+        Path::new(child.target_key.as_str()).starts_with(parent.target_key.as_str())
     }
 
     async fn stat(
@@ -105,7 +105,7 @@ impl FileSystem for RecordingFs {
             .stat_failures
             .lock()
             .iter()
-            .any(|path| path == target.target_key.as_str())
+            .any(|path| Self::absolute(path, None) == target.target_key.as_str())
         {
             anyhow::bail!("stat failed: {}", target.display_path);
         }
@@ -153,7 +153,7 @@ impl FileSystem for RecordingFs {
             .read_failures
             .lock()
             .iter()
-            .any(|path| path == target.target_key.as_str())
+            .any(|path| Self::absolute(path, None) == target.target_key.as_str())
         {
             anyhow::bail!("read failed: {}", target.display_path);
         }
@@ -242,7 +242,10 @@ async fn loads_provider_visible_files_absent_from_host_and_reads_through_provide
         .unwrap()
         .unwrap();
     assert!(set.rendered.text.contains("provider-only instructions"));
-    assert_eq!(fs.reads.lock().as_slice(), ["/virtual/project/AGENTS.md"]);
+    assert_eq!(
+        fs.reads.lock().as_slice(),
+        [RecordingFs::absolute("/virtual/project/AGENTS.md", None)]
+    );
     assert!(!Path::new("/virtual/project/AGENTS.md").exists());
 }
 

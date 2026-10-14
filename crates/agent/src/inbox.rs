@@ -1,8 +1,8 @@
 //! Incremental projection of durable agent inbox splices.
 
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{ReentrantMutex, ReentrantMutexGuard, RwLock};
 use seekdeep_core::session::{AppendOptions, JsonValue, Session};
 use seekdeep_llm::{MessageId, UserMessage};
 use serde::{Deserialize, Serialize};
@@ -127,7 +127,15 @@ pub struct Inbox {
     session: Arc<Session>,
     notifications: Arc<dyn InboxNotifications>,
     state: RwLock<InboxState>,
-    mutation: Mutex<()>,
+    mutation: ReentrantMutex<Cell<bool>>,
+}
+
+struct MutationGuard<'a>(ReentrantMutexGuard<'a, Cell<bool>>);
+
+impl Drop for MutationGuard<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 
 impl std::fmt::Debug for Inbox {
@@ -176,7 +184,7 @@ impl Inbox {
             session,
             notifications,
             state: RwLock::new(state),
-            mutation: Mutex::new(()),
+            mutation: ReentrantMutex::new(Cell::new(false)),
         })
     }
 
@@ -197,6 +205,17 @@ impl Inbox {
     pub fn has_pending(&self) -> bool {
         let state = self.state.read();
         !state.next_turn.is_empty() || !state.next_step.is_empty()
+    }
+
+    // Other threads serialize; only nested mutation on the owning thread is
+    // reentry. A nonblocking mutex cannot distinguish these two cases.
+    fn begin_mutation(&self) -> Result<MutationGuard<'_>, InboxError> {
+        let guard = self.mutation.lock();
+        if guard.get() {
+            return Err(InboxError::ReentrantMutation);
+        }
+        guard.set(true);
+        Ok(MutationGuard(guard))
     }
 
     /// Durably cancels all pending input, next-step before next-turn.
@@ -236,10 +255,7 @@ impl Inbox {
     /// Returns for duplicate identity or durable append failure.
     pub fn append(&self, target: InboxTarget, message: UserMessage) -> Result<(), InboxError> {
         let outcome = {
-            let _guard = self
-                .mutation
-                .try_lock()
-                .ok_or(InboxError::ReentrantMutation)?;
+            let _guard = self.begin_mutation()?;
             let start = self.state.read().list(target).len();
             self.mutate_locked(target, start, 0, vec![message], true)?
         };
@@ -254,10 +270,7 @@ impl Inbox {
     /// Returns for duplicate identity or durable append failure.
     pub fn prepend(&self, target: InboxTarget, message: UserMessage) -> Result<(), InboxError> {
         let outcome = {
-            let _guard = self
-                .mutation
-                .try_lock()
-                .ok_or(InboxError::ReentrantMutation)?;
+            let _guard = self.begin_mutation()?;
             self.mutate_locked(target, 0, 0, vec![message], true)?
         };
         self.publish(outcome, true);
@@ -275,10 +288,7 @@ impl Inbox {
         replacement: UserMessage,
     ) -> Result<bool, InboxError> {
         let outcome = {
-            let _guard = self
-                .mutation
-                .try_lock()
-                .ok_or(InboxError::ReentrantMutation)?;
+            let _guard = self.begin_mutation()?;
             let Some((target, index)) = self.state.read().locate(message_id) else {
                 return Ok(false);
             };
@@ -295,10 +305,7 @@ impl Inbox {
     /// Returns validation or durable append failures.
     pub fn remove(&self, message_id: &MessageId) -> Result<bool, InboxError> {
         let outcome = {
-            let _guard = self
-                .mutation
-                .try_lock()
-                .ok_or(InboxError::ReentrantMutation)?;
+            let _guard = self.begin_mutation()?;
             let Some((target, index)) = self.state.read().locate(message_id) else {
                 return Ok(false);
             };
@@ -332,10 +339,7 @@ impl Inbox {
         discard_removed: bool,
     ) -> Result<Vec<UserMessage>, InboxError> {
         let outcome = {
-            let _guard = self
-                .mutation
-                .try_lock()
-                .ok_or(InboxError::ReentrantMutation)?;
+            let _guard = self.begin_mutation()?;
             let len = self.state.read().list(target).len();
             let actual_start = normalize_start(start, len);
             let actual_delete = normalize_delete_count(delete_count, len - actual_start);
@@ -504,6 +508,90 @@ mod tests {
     fn session() -> Arc<Session> {
         let id = SessionId::new("agent");
         Session::create(&id, None, Some(SessionHeader::new(id.clone()))).expect("session")
+    }
+
+    #[test]
+    fn concurrent_claim_serializes_with_insertion() {
+        use std::{sync::mpsc, time::Duration};
+
+        let (entered, entry) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let released = Mutex::new(released);
+        let first = std::sync::atomic::AtomicBool::new(true);
+        let id = SessionId::new("serialized-inbox");
+        let session = Session::create_with_clock(
+            &id,
+            None,
+            Some(SessionHeader::new_with_created_at(id.clone(), 0)),
+            Arc::new(move || {
+                if first.swap(false, std::sync::atomic::Ordering::AcqRel) {
+                    entered.send(()).unwrap();
+                    released.lock().recv().unwrap();
+                }
+                0
+            }),
+        )
+        .unwrap();
+        let inbox =
+            Arc::new(Inbox::new(session.clone(), Arc::new(NoopInboxNotifications)).unwrap());
+        let expected = message("pending");
+        let insertion = std::thread::spawn({
+            let inbox = inbox.clone();
+            let message = expected.clone();
+            move || inbox.append(InboxTarget::NextTurn, message)
+        });
+        entry.recv_timeout(Duration::from_secs(2)).unwrap();
+        let (attempted, attempt) = mpsc::channel();
+        let (completed, completion) = mpsc::channel();
+        let claim = std::thread::spawn({
+            let inbox = inbox.clone();
+            move || {
+                attempted.send(()).unwrap();
+                completed
+                    .send(inbox.claim(InboxTarget::NextTurn, 1))
+                    .unwrap();
+            }
+        });
+        attempt.recv_timeout(Duration::from_secs(2)).unwrap();
+        let early = completion.recv_timeout(Duration::from_millis(100));
+        release.send(()).unwrap();
+        insertion.join().unwrap().unwrap();
+        claim.join().unwrap();
+        let claimed =
+            early.unwrap_or_else(|_| completion.recv_timeout(Duration::from_secs(2)).unwrap());
+        assert_eq!(claimed.unwrap(), [expected]);
+        assert!(!inbox.has_pending());
+        assert_eq!(session.events().len(), 2);
+    }
+
+    #[test]
+    fn nested_mutation_is_rejected_and_the_guard_is_released() {
+        let observed = Arc::new(Mutex::new(std::sync::Weak::<Inbox>::new()));
+        let during_append = observed.clone();
+        let id = SessionId::new("nested-inbox");
+        let session = Session::create_with_clock(
+            &id,
+            None,
+            Some(SessionHeader::new_with_created_at(id.clone(), 0)),
+            Arc::new(move || {
+                let inbox = during_append.lock().upgrade().unwrap();
+                assert!(matches!(
+                    inbox.append(InboxTarget::NextStep, message("nested")),
+                    Err(InboxError::ReentrantMutation)
+                ));
+                0
+            }),
+        )
+        .unwrap();
+        let inbox = Arc::new(Inbox::new(session, Arc::new(NoopInboxNotifications)).unwrap());
+        *observed.lock() = Arc::downgrade(&inbox);
+        inbox
+            .append(InboxTarget::NextTurn, message("first"))
+            .unwrap();
+        inbox
+            .append(InboxTarget::NextTurn, message("second"))
+            .unwrap();
+        assert_eq!(inbox.next_turn().len(), 2);
     }
 
     #[test]

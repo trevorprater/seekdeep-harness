@@ -1,16 +1,18 @@
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const fixture = dirname(fileURLToPath(import.meta.url));
-const source = process.env.SEEKDEEP_SOURCE_ORACLE_ROOT ?? '/Users/trevor/ws/deepseek-harness';
+const source = process.env.SEEKDEEP_SOURCE_ORACLE_ROOT;
+if (!source) throw new Error('pinned source root is required');
 const requireSource = createRequire(resolve(source, 'package.json'));
 const tsconfigPaths = (await import(pathToFileURL(requireSource.resolve('vite-tsconfig-paths')).href)).default;
 const { standardDecoratorPlugin, vitestExecArgv } = await import(pathToFileURL(resolve(source, 'vitest.shared.ts')).href);
 
 export default {
   root: source,
-  cacheDir: '/tmp/seekdeep-tools-lossless-json-vite-cache',
+  cacheDir: resolve(tmpdir(), 'seekdeep-tools-lossless-json-vite-cache'),
   plugins: [
     tsconfigPaths({ projects: [resolve(source, 'tsconfig.base.json')] }),
     standardDecoratorPlugin(),
@@ -30,7 +32,7 @@ export default {
     pool: 'forks',
     execArgv: vitestExecArgv,
     maxWorkers: 1,
-    include: [resolve(fixture, 'lossless-code-json.spec.ts')],
+    include: [resolve(fixture, 'lossless-code-json.spec.ts').replaceAll('\\', '/')],
     testTimeout: 60_000,
   },
 };

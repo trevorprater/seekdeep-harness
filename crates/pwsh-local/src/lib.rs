@@ -175,11 +175,10 @@ pub fn resolve_pwsh_path(
 
 fn resolve_current_pwsh_path(configured: Option<&str>) -> String {
     let environment = std::env::vars().collect::<BTreeMap<_, _>>();
-    let platform = if cfg!(windows) {
-        PwshPlatform::Windows
-    } else {
-        PwshPlatform::Other
-    };
+    #[cfg(windows)]
+    let platform = PwshPlatform::Windows;
+    #[cfg(not(windows))]
+    let platform = PwshPlatform::Other;
     resolve_pwsh_path(configured, &environment, platform)
 }
 
@@ -491,10 +490,9 @@ impl ShellExecutor for LocalPwshExecutor {
         Ok(ShellExecSpec {
             command: request.command,
             workdir: request.workdir.unwrap_or_else(|| {
-                config.cwd.map_or_else(
-                    || std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-                    PathBuf::from,
-                )
+                config
+                    .cwd
+                    .map_or_else(|| current_workdir(std::env::current_dir()), PathBuf::from)
             }),
             timeout_ms,
             stdout_max_bytes,
@@ -515,6 +513,10 @@ impl ShellExecutor for LocalPwshExecutor {
         let argv = self.argv(&spec);
         self.start_argv(&spec, argv)
     }
+}
+
+fn current_workdir(result: std::io::Result<PathBuf>) -> PathBuf {
+    result.unwrap_or_else(|_| PathBuf::from("."))
 }
 
 fn final_output(reader: &SubprocessOutputReaderHandle) -> CollectedOutput {
@@ -775,3 +777,6 @@ pub fn plugin() -> Plugin {
     })
     .with_config_validator(resolve_config_value)
 }
+
+#[cfg(test)]
+mod contract_tests;

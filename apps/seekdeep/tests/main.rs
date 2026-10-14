@@ -18,6 +18,25 @@ mod workflow_worker_process;
 #[path = "support/web_replay_browser.rs"]
 mod browser_driver;
 
+// A production profile owns process-global signal/shutdown hooks and the shared
+// Node integration. Keep those in-process fixtures from overlapping; assertions
+// within each fixture, including explicit concurrent operations, remain intact.
+static PROFILE_FIXTURE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+async fn profile_fixture_guard() -> tokio::sync::MutexGuard<'static, ()> {
+    PROFILE_FIXTURE_LOCK.lock().await
+}
+
+fn platform_environment() -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    ["SystemRoot", "SystemDrive", "WINDIR", "COMSPEC", "PATHEXT"]
+        .into_iter()
+        .filter_map(|name| std::env::var_os(name).map(|value| (name.into(), value)))
+        .collect()
+}
+
 fn node_current_dir(path: &std::path::Path) -> std::path::PathBuf {
     let output = std::process::Command::new("node")
         .args(["-e", "process.stdout.write(process.cwd())"])

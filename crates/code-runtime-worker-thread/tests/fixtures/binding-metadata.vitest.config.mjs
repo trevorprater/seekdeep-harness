@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const fixture = dirname(fileURLToPath(import.meta.url));
@@ -11,7 +12,7 @@ const { standardDecoratorPlugin, vitestExecArgv } = await import(pathToFileURL(r
 
 export default {
   root: source,
-  cacheDir: '/tmp/seekdeep-binding-metadata-vite-cache',
+  cacheDir: resolve(tmpdir(), 'seekdeep-binding-metadata-vite-cache'),
   plugins: [tsconfigPaths({ projects: [resolve(source, 'tsconfig.base.json')] }), standardDecoratorPlugin()],
   resolve: {
     alias: [
@@ -22,6 +23,6 @@ export default {
   },
   test: {
     name: 'source-binding-metadata', pool: 'forks', execArgv: vitestExecArgv,
-    maxWorkers: 1, include: [resolve(fixture, 'binding-metadata.spec.ts')], testTimeout: 60_000,
+    maxWorkers: 1, include: [resolve(fixture, 'binding-metadata.spec.ts').replaceAll('\\', '/')], testTimeout: 60_000,
   },
 };

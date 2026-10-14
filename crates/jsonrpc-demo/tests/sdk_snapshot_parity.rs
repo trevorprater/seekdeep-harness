@@ -22,10 +22,60 @@ struct Scenario {
 }
 
 fn hydrate(source: &Path, destination: &Path, cwd: &Path) {
-    let content = std::fs::read_to_string(source)
-        .unwrap()
-        .replace("{{cwd}}", &cwd.to_string_lossy());
+    fn replace(value: &mut serde_json::Value, cwd: &str, property: Option<&str>) {
+        match value {
+            serde_json::Value::String(text) => {
+                let escaped = serde_json::to_string(cwd).unwrap();
+                let replacement = if matches!(property, Some("arguments" | "argumentsDelta")) {
+                    &escaped[1..escaped.len() - 1]
+                } else {
+                    cwd
+                };
+                *text = text.replace("{{cwd}}", replacement);
+            }
+            serde_json::Value::Array(values) => {
+                for value in values {
+                    replace(value, cwd, None);
+                }
+            }
+            serde_json::Value::Object(values) => {
+                for (name, value) in values {
+                    replace(value, cwd, Some(name));
+                }
+            }
+            serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+            }
+        }
+    }
+    let mut content = String::new();
+    for line in std::fs::read_to_string(source).unwrap().lines() {
+        if !line.trim().is_empty() {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            replace(&mut record, &cwd.to_string_lossy(), None);
+            content.push_str(&serde_json::to_string(&record).unwrap());
+        }
+        content.push('\n');
+    }
     std::fs::write(destination, content).unwrap();
+}
+
+#[test]
+fn hydrates_windows_paths_in_both_record_and_tool_argument_strings() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source.jsonl");
+    let target = temporary.path().join("target.jsonl");
+    std::fs::write(
+        &source,
+        "{\"cwd\":\"{{cwd}}\",\"arguments\":\"{\\\"path\\\":\\\"{{cwd}}/note.txt\\\"}\"}\n",
+    )
+    .unwrap();
+    hydrate(&source, &target, Path::new(r"C:\fixture\workspace"));
+    let record: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(target).unwrap()).unwrap();
+    assert_eq!(record["cwd"], r"C:\fixture\workspace");
+    let arguments: serde_json::Value =
+        serde_json::from_str(record["arguments"].as_str().unwrap()).unwrap();
+    assert_eq!(arguments["path"], r"C:\fixture\workspace/note.txt");
 }
 
 fn jsonl_files(root: &Path) -> Vec<PathBuf> {

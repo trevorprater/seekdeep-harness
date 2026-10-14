@@ -475,14 +475,22 @@ fn run_instrumented(
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let report = Command::new(&cargo)
-        .args(report_command(&output))
-        .current_dir(repository)
-        .status()
-        .context("run-coverage: export the coverage report")?;
-    anyhow::ensure!(
-        report.success(),
-        "run-coverage: cargo llvm-cov report exited with {report}"
-    );
+    if cfg!(windows) || std::env::var("SEEKDEEP_COVERAGE_RESPONSE_FILES").as_deref() == Ok("1") {
+        super::llvm_export::export(
+            repository,
+            &workspace.target_directory.join("llvm-cov-target"),
+            &output,
+        )?;
+    } else {
+        let report = Command::new(&cargo)
+            .args(report_command(&output))
+            .current_dir(repository)
+            .status()
+            .context("run-coverage: export the coverage report")?;
+        anyhow::ensure!(
+            report.success(),
+            "run-coverage: cargo llvm-cov report exited with {report}"
+        );
+    }
     Ok((output, status.success()))
 }

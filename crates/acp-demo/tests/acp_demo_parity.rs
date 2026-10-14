@@ -795,7 +795,7 @@ async fn compiled_binary_hook_blocks_the_world_effect_but_the_turn_completes() {
 async fn run_escalation_world_case(permission: PermissionPolicy, should_write: bool) {
     let root = tempfile::tempdir().unwrap();
     let base_arguments = json!({
-        "command":"printf 'ACP_ESCALATION_OK' > escalated.txt",
+        "command":"node -e \"require('node:fs').writeFileSync('escalated.txt','ACP_ESCALATION_OK')\"",
         "description":"Write escalated proof file"
     });
     let mut elevated_arguments = base_arguments.clone();

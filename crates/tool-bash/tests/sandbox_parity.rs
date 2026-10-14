@@ -413,7 +413,10 @@ async fn session_override_sets_root_and_widening_floor_while_optional_facts_stay
     let widened = call(&harness, escalation("danger-full-access"), Some(owner)).await;
     assert!(!widened.is_error(), "{}", text(&widened));
     let specs = harness.shell.specs.lock();
-    assert_eq!(specs[0].workdir, PathBuf::from("/session-workspace"));
+    assert_eq!(
+        specs[0].workdir,
+        std::path::absolute("/session-workspace").unwrap()
+    );
     assert_eq!(
         specs
             .iter()

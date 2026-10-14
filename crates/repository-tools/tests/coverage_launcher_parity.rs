@@ -682,6 +682,7 @@ fn run_entry(root: &Path, extra: &[&str]) -> Output {
         .arg(root)
         .args(extra)
         .env("CARGO_TARGET_DIR", root.join("target"))
+        .env("SEEKDEEP_COVERAGE_RESPONSE_FILES", "1")
         .env("NO_COLOR", "1");
     // An outer instrumented run must not leak its flags into the fixture's own run.
     for (key, _) in std::env::vars_os() {
@@ -720,7 +721,10 @@ fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
         eprintln!("skipping: cargo-llvm-cov is not installed");
         return;
     }
-    let directory = tempfile::tempdir().unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("coverage response files λ ")
+        .tempdir()
+        .unwrap();
     let root = directory.path();
     fixture_workspace(root);
     // The warm-up compiles into cargo-llvm-cov's own target directory, so the run reuses it.
@@ -783,6 +787,7 @@ fn the_public_entry_measures_a_fixture_workspace_end_to_end() {
     let green_stderr = String::from_utf8_lossy(&green.stderr);
     assert!(green.status.success(), "{green_stderr}");
     assert!(!green_stderr.contains("ERROR:"), "{green_stderr}");
+    assert!(String::from_utf8_lossy(&green.stdout).contains("through LLVM response files"));
     println!(
         "real cargo llvm-cov lane passed: uncovered locations, Vitest-worded threshold failure, roster adoption, green rerun"
     );

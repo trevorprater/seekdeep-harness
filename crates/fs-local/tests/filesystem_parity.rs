@@ -111,6 +111,15 @@ async fn config_resolution_metadata_urls_and_lstat_match_the_source() {
     assert_eq!(before.kind, FsKind::File);
     assert_eq!(before.size, Some(5));
     std::fs::write(&path, "other").expect("same-size rewrite");
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(
+            std::fs::FileTimes::new()
+                .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(42)),
+        )
+        .unwrap();
     let after = fs.stat(&target, None).await.unwrap().expect("stat after");
     assert_ne!(before.version, after.version);
     assert!(

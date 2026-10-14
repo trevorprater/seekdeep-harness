@@ -203,9 +203,11 @@ async fn run_seekdeep(
         .current_dir(cwd)
         .args(args)
         .env_clear()
+        .envs(super::platform_environment())
         // The Node plugin realm resolves `node` through the child's PATH.
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .envs(environment.iter().copied())
+        .env("SEEKDEEP_AGENTS_HOME", cwd.join(".agents"))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

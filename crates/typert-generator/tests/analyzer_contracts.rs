@@ -116,6 +116,9 @@ fn batch_merge_keeps_last_packages_first_nodes_and_host_first_faces() {
     let mut second = first.clone();
     second.faces.reverse();
     second.faces[0].packages[0].root = "replacement".to_owned();
+    let mut additional = second.faces[0].packages[0].clone();
+    additional.name = "@fixture/z-client".to_owned();
+    second.faces[0].packages.insert(0, additional);
     second.faces[0].graph.declarations[0].text =
         "must not replace the first declaration".to_owned();
     if let TypeNodeModel::Defined(node) = &mut second.faces[0].graph.nodes[0] {
@@ -124,6 +127,14 @@ fn batch_merge_keeps_last_packages_first_nodes_and_host_first_faces() {
     let merged = merge_workspace_models([first.clone(), second]);
     assert_eq!(merged.faces[0].face.as_str(), "host");
     assert_eq!(merged.faces[1].packages[0].root, "replacement");
+    assert_eq!(
+        merged.faces[1]
+            .packages
+            .iter()
+            .map(|package| package.name.as_str())
+            .collect::<Vec<_>>(),
+        ["@fixture/client", "@fixture/z-client"]
+    );
     assert_eq!(merged.faces[1].graph, first.faces[1].graph);
     assert_eq!(merged.cross_face_links, first.cross_face_links);
     assert!(merge_workspace_models([]).faces.is_empty());

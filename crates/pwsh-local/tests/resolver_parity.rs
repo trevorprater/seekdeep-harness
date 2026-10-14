@@ -172,3 +172,29 @@ async fn argv_keeps_the_command_in_one_utf8_prefixed_element() {
     assert!(ENCODING_PREAMBLE.contains("[Console]::OutputEncoding"));
     assert!(ENCODING_PREAMBLE.contains("$OutputEncoding"));
 }
+
+#[tokio::test]
+async fn loader_validation_and_missing_dependency_fail_before_publishing_shell() {
+    use seekdeep_pwsh_local::{plugin, resolve_config_value};
+    use serde_json::json;
+    assert!(resolve_config_value(&json!({"cwd": 42})).is_err());
+    assert!(resolve_config_value(&json!({"graceMs": 0})).is_err());
+    let empty = Context::new();
+    assert!(
+        apply(&empty, Config::default())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("requires subprocess")
+    );
+    let context = Context::new();
+    LocalSubprocessRuntime::install(&context).unwrap();
+    let mounted = context
+        .plugin(plugin(), json!({"pwshPath": "fixture-pwsh"}))
+        .unwrap();
+    mounted.await_settled().await.unwrap();
+    let shell = context.get(seekdeep_shell::SHELL).unwrap();
+    assert!(shell.resolve(ShellExecRequest::new("probe")).is_ok());
+    mounted.dispose().await.unwrap();
+    assert!(context.get(seekdeep_shell::SHELL).is_none());
+}

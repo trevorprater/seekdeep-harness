@@ -252,7 +252,9 @@ fn scrub_string(value: &str, context: &NormalizeContext, cwd_path_mode: CwdPathM
     if cwd_path_mode == CwdPathMode::Canonical {
         output = cwd_rooted_path_re()
             .replace_all(&output, |captures: &Captures<'_>| {
-                captures[0].replace('\\', "/")
+                windows_separator_re()
+                    .replace_all(&captures[0], "/")
+                    .into_owned()
             })
             .into_owned();
         output = canonicalize_embedded_paths(&output);
@@ -326,8 +328,25 @@ fn replace_spill_paths(value: &str, expression: &Regex) -> String {
 fn cwd_spellings(context: &NormalizeContext) -> Vec<String> {
     let mut spellings = Vec::<String>::new();
     for spelling in std::iter::once(&context.cwd).chain(context.cwd_aliases.iter()) {
-        if !spelling.is_empty() && !spellings.contains(spelling) {
-            spellings.push(spelling.clone());
+        if spelling.is_empty() {
+            continue;
+        }
+        let mut variants = vec![spelling.clone()];
+        if let Some(plain) = spelling.strip_prefix(r"\\?\UNC\") {
+            variants.push(format!(r"\\{plain}"));
+        } else if let Some(plain) = spelling.strip_prefix(r"\\?\") {
+            variants.push(plain.to_owned());
+        }
+        for variant in variants {
+            if !spellings.contains(&variant) {
+                spellings.push(variant.clone());
+            }
+            let encoded =
+                serde_json::to_string(&variant).expect("a path string serializes as JSON");
+            let encoded = encoded[1..encoded.len() - 1].to_owned();
+            if !spellings.contains(&encoded) {
+                spellings.push(encoded);
+            }
         }
     }
     let mac_aliases = spellings
@@ -541,6 +560,11 @@ fn local_spill_path_re() -> &'static Regex {
 fn cwd_rooted_path_re() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
     regex(&VALUE, r#"\{\{cwd\}\}(?:[\\/][^\s<>"'`]+)+"#)
+}
+
+fn windows_separator_re() -> &'static Regex {
+    static VALUE: OnceLock<Regex> = OnceLock::new();
+    regex(&VALUE, r"\\+")
 }
 
 fn path_tag_re() -> &'static Regex {

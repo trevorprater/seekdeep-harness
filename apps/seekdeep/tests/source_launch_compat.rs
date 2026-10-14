@@ -81,6 +81,7 @@ fn run_seekdeep(args: &[&str], cwd: Option<&Path>) -> ProcessResult {
     command
         .args(args)
         .env_clear()
+        .envs(super::platform_environment())
         .env("SEEKDEEP_HOME", &home)
         .current_dir(cwd.unwrap_or(&default_cwd));
     process_result(command.output().expect("seekdeep binary must launch"))
@@ -112,6 +113,9 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
     command.arg("--help");
     command.cwd(&workspace);
     command.env_clear();
+    for (name, value) in super::platform_environment() {
+        command.env(name, value);
+    }
     command.env("SEEKDEEP_HOME", &home);
     command.env("TERM", "dumb");
     let mut child = pair
@@ -192,10 +196,14 @@ fn launcher_help_uses_the_live_stdout_terminal_width() {
     assert_eq!(result.code, Some(0));
     assert_eq!(result.stderr, "");
     assert!(result.stdout.ends_with("\n\n"), "{:?}", result.stdout);
-    assert!(result.stdout.contains(concat!(
-        "seekdeep: boot a SeekDeep Harness profile — an ordered stack\n",
-        "of plugin-bundle patch layers under your own overrides.\n",
-    )));
+    assert!(
+        result.stdout.contains(concat!(
+            "seekdeep: boot a SeekDeep Harness profile — an ordered stack\n",
+            "of plugin-bundle patch layers under your own overrides.\n",
+        )),
+        "{:?}",
+        result.stdout
+    );
     assert!(!result.stdout.contains(concat!(
         "seekdeep: boot a SeekDeep Harness profile — an ordered stack of plugin-bundle\n",
         "patch layers under your own overrides.\n",
@@ -270,6 +278,7 @@ fn missing_profile_and_invalid_overlay_fail_loud_through_the_compiled_entry() {
         .args(["web", "--patch"])
         .arg(fixture)
         .env_clear()
+        .envs(super::platform_environment())
         .env("SEEKDEEP_HOME", home)
         .env("DEEPSEEK_API_KEY", "keyless-invalid-config")
         .env("SEEKDEEP_TELEMETRY_DISABLED", "1")

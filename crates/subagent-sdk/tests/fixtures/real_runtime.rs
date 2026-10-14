@@ -66,7 +66,7 @@ async fn run() -> anyhow::Result<()> {
         &context,
         seekdeep_agent_loop_testkit::AgentLoopTestDependenciesOptions::default(),
     )?;
-    let cwd = std::fs::canonicalize(std::env::current_dir()?)?;
+    let cwd = dunce::canonicalize(std::env::current_dir()?)?;
     dependencies.llm.register_adapter(
         &["mock".to_owned()],
         Arc::new(CwdEchoAdapter {

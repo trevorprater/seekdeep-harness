@@ -63,9 +63,11 @@ impl SpawnedProcess {
             .current_dir(workspace)
             .args(["--profile", "headless", TASK])
             .env_clear()
+            .envs(super::platform_environment())
             // The Node plugin realm resolves `node` through the child's PATH.
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("SEEKDEEP_HOME", home)
+            .env("SEEKDEEP_AGENTS_HOME", home.join(".agents"))
             .env("DEEPSEEK_API_KEY", API_KEY)
             .env("DEEPSEEK_BASE_URL", base_url)
             .env("SEEKDEEP_TOOLS_MODE", "native")

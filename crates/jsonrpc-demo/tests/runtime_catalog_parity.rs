@@ -74,6 +74,10 @@ async fn node_file_handoff_keeps_sdk_stdio_open_until_a_delayed_request() {
             "SEEKDEEP_CWD".to_owned(),
             root.path().to_string_lossy().into_owned(),
         ),
+        (
+            "SEEKDEEP_AGENTS_HOME".to_owned(),
+            root.path().join(".agents").to_string_lossy().into_owned(),
+        ),
         ("DEEPSEEK_API_KEY".to_owned(), "sk-keyless-probe".to_owned()),
     ]));
     launch.request_timeout_ms = Some(5_000.0);

@@ -476,7 +476,7 @@ fn real_api_e2e_installs_the_rust_wasm_and_browser_build_dependencies_before_bui
         .expect("compiled browser fixture Host");
     let live = steps
         .iter()
-        .position(|step| step["run"] == "cargo xtask web-smoke --live")
+        .position(|step| step["run"] == "./target/debug/xtask web-smoke --live")
         .expect("real browser smoke");
     assert!(build < fixture && fixture < live);
     assert_eq!(

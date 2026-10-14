@@ -480,7 +480,7 @@ async fn wraps_exact_argv_policy_spawn_shape_and_returns_initialized_session() {
     );
     assert_eq!(
         calls[0].1.workspace_root,
-        std::path::PathBuf::from("/workspace")
+        std::path::absolute("/workspace").unwrap()
     );
     assert_eq!(
         calls[0].1.session_id.as_ref().map(SessionId::as_str),

@@ -321,6 +321,7 @@ fn prepare_profile(
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn complete_profile_matches_source_stdout_and_cold_session_log() -> anyhow::Result<()> {
+    let _profile_fixture = super::profile_fixture_guard().await;
     if std::env::var("SEEKDEEP_HEADLESS_PROFILE_SNAPSHOT_CHILD").as_deref() != Ok("1") {
         let output = tokio::time::timeout(
             Duration::from_secs(120),

@@ -91,6 +91,46 @@ fn stdout_scrubs_cwd_and_session_identity_at_any_depth() {
 }
 
 #[test]
+fn escaped_windows_workspace_aliases_normalize_inside_diagnostics_and_json_text() {
+    let context = NormalizeContext {
+        session_ids: Vec::new(),
+        cwd: r"C:\Users\RUNNER~1\Temp\workspace".to_owned(),
+        cwd_aliases: vec![
+            r"\\?\C:\Users\runneradmin\Temp\workspace".to_owned(),
+            r"\\?\UNC\server\share\workspace".to_owned(),
+        ],
+    };
+    for root in [
+        &context.cwd,
+        &context.cwd_aliases[0],
+        &r"C:\Users\runneradmin\Temp\workspace".to_owned(),
+        &context.cwd_aliases[1],
+        &r"\\server\share\workspace".to_owned(),
+    ] {
+        let path = format!(r"{root}\nested\settings.txt");
+        let quoted = serde_json::to_string(&path).unwrap();
+        let raw = compact(&json!({"params":{
+            "diagnostic":format!("cannot read {quoted}: not found"),
+            "jsonText":serde_json::to_string(&json!({"path":path})).unwrap(),
+            "authoredSeparators":format!("{root}/nested//settings.txt"),
+        }}));
+        let normalized: Value =
+            serde_json::from_str(normalized_stdout(&raw, &context).trim()).unwrap();
+        assert_eq!(
+            normalized["params"]["diagnostic"],
+            "cannot read \"{{cwd}}/nested/settings.txt\": not found"
+        );
+        let embedded: Value =
+            serde_json::from_str(normalized["params"]["jsonText"].as_str().unwrap()).unwrap();
+        assert_eq!(embedded["path"], "{{cwd}}/nested/settings.txt");
+        assert_eq!(
+            normalized["params"]["authoredSeparators"],
+            "{{cwd}}/nested//settings.txt"
+        );
+    }
+}
+
+#[test]
 fn stdout_cwd_matching_honors_file_uri_and_punctuation_boundaries() {
     let context = context();
     let raw = compact(&json!({

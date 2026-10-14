@@ -491,3 +491,30 @@ fn process_probe(pid: i32) -> i32 {
         .status()
         .map_or(-1, |status| status.code().unwrap_or(-1))
 }
+
+#[tokio::test]
+async fn background_diagnostics_preserve_lifecycle_and_typed_spawn_errors() {
+    let harness = setup(Config::default()).await;
+    assert!(format!("{:?}", harness.pwsh).contains("LocalPwshExecutor"));
+    let child = harness
+        .pwsh
+        .start(harness.pwsh.resolve(request("sleep 30")).unwrap())
+        .unwrap();
+    assert!(format!("{child:?}").contains("LocalPwshProcess"));
+    assert!(child.kill());
+    child.done().await;
+    assert!(!child.kill());
+    for error in [
+        "No such file",
+        "not found",
+        "permission denied",
+        "access is denied",
+        "os error 2",
+        "os error 5",
+        "os error 13",
+    ] {
+        let failure = seekdeep_pwsh_local::PwshSpawnFailure::new(error);
+        assert_eq!(failure.clone(), failure);
+        assert_eq!(failure.to_string(), error);
+    }
+}
