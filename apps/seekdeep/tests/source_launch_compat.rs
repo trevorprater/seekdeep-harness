@@ -173,9 +173,11 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
     let (read, status, output) = match receiver.recv_timeout(Duration::from_secs(10)) {
         Ok(result) => result,
         Err(error) => {
-            let killed = killer.kill();
+            let termination = killer.kill();
             let cleanup = receiver.recv_timeout(Duration::from_secs(5));
-            panic!("seekdeep PTY help timed out: {error}; kill: {killed:?}; cleanup: {cleanup:#?}");
+            panic!(
+                "seekdeep PTY help timed out: {error}; kill: {termination:?}; cleanup: {cleanup:#?}"
+            );
         }
     };
     read.expect("seekdeep PTY output must be readable");
