@@ -246,6 +246,6 @@ async fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
-async fn set_mode(_path: &Path, _mode: u32) -> std::io::Result<()> {
-    Ok(())
+fn set_mode(_path: &Path, _mode: u32) -> std::future::Ready<std::io::Result<()>> {
+    std::future::ready(Ok(()))
 }
