@@ -118,6 +118,7 @@ pub async fn boot_selected(
 
 /// Runs the process launcher and returns its selected exit status.
 pub fn process_main(packaged: bool) -> ExitCode {
+    #[cfg(unix)]
     if let Err(error) = prepare_standard_streams() {
         eprintln!("{NAME}: standard stream setup failed: {error}");
         return ExitCode::FAILURE;
@@ -185,11 +186,6 @@ fn prepare_standard_streams() -> anyhow::Result<()> {
             fcntl(descriptor, FcntlArg::F_SETFL(flags & !OFlag::O_NONBLOCK))?;
         }
     }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn prepare_standard_streams() -> anyhow::Result<()> {
     Ok(())
 }
 
