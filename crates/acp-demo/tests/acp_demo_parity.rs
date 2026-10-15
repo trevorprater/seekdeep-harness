@@ -307,6 +307,10 @@ fn hook_enabled_deepseek_config(
     )
 }
 
+// The pinned Bash executor is POSIX-only (bash-local/README.md); the source
+// escalation suite likewise requires bwrap or Seatbelt. Windows keeps its
+// native ACL and PowerShell executor tests, rather than requiring Bash here.
+#[cfg(not(windows))]
 fn escalation_deepseek_config(url: &str, root: &std::path::Path) -> String {
     format!(
         concat!(
@@ -792,6 +796,7 @@ async fn compiled_binary_hook_blocks_the_world_effect_but_the_turn_completes() {
     assert_json_rpc_stdout(&raw_output);
 }
 
+#[cfg(not(windows))]
 async fn run_escalation_world_case(permission: PermissionPolicy, should_write: bool) {
     let root = tempfile::tempdir().unwrap();
     let base_arguments = json!({
@@ -850,11 +855,13 @@ async fn run_escalation_world_case(permission: PermissionPolicy, should_write: b
     assert_json_rpc_stdout(&raw_output);
 }
 
+#[cfg(not(windows))]
 #[tokio::test]
 async fn compiled_binary_escalation_allow_once_lands_the_world_effect() {
     run_escalation_world_case(PermissionPolicy::Allow, true).await;
 }
 
+#[cfg(not(windows))]
 #[tokio::test]
 async fn compiled_binary_escalation_rejection_leaves_the_world_unchanged() {
     run_escalation_world_case(PermissionPolicy::Reject, false).await;

@@ -107,7 +107,17 @@ impl MeasuredSet {
             return false;
         }
         let inside = &relative[name.len() + "/src/".len()..];
-        inside != "main.rs" && !inside.starts_with("bin/")
+        // These split modules are declared under #[cfg(test)] in their parent
+        // sources. Treat them like tests/ rather than production coverage. Keep
+        // the list explicit: a production file with a test-like name still counts.
+        inside != "main.rs"
+            && !inside.starts_with("bin/")
+            && !matches!(
+                relative,
+                "crates/code-runtime-worker-thread/src/engine_tests.rs"
+                    | "crates/pwsh-local/src/contract_tests.rs"
+                    | "crates/terminal/src/tests.rs"
+            )
     }
 }
 

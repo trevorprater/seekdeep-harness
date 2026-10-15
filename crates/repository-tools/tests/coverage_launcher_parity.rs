@@ -164,6 +164,44 @@ fn the_measured_set_follows_verified_package_sources_and_skips_entry_points() {
     );
 }
 
+#[test]
+fn split_test_modules_are_not_production_coverage_targets() {
+    let measured = MeasuredSet::of(&[
+        "crates/code-runtime-worker-thread",
+        "crates/pwsh-local",
+        "crates/terminal",
+        "crates/example",
+    ]);
+    for (path, parent, declaration) in [
+        (
+            "crates/code-runtime-worker-thread/src/engine_tests.rs",
+            include_str!("../../code-runtime-worker-thread/src/engine.rs"),
+            "#[cfg(test)]\n#[path = \"engine_tests.rs\"]\nmod engine_tests;",
+        ),
+        (
+            "crates/pwsh-local/src/contract_tests.rs",
+            include_str!("../../pwsh-local/src/lib.rs"),
+            "#[cfg(test)]\nmod contract_tests;",
+        ),
+        (
+            "crates/terminal/src/tests.rs",
+            include_str!("../../terminal/src/lib.rs"),
+            "#[cfg(test)]\nmod tests;",
+        ),
+    ] {
+        assert!(parent.contains(declaration), "{path} must remain test-only");
+        assert!(!measured.measures(path), "{path}");
+    }
+    for production in [
+        "crates/code-runtime-worker-thread/src/engine.rs",
+        "crates/pwsh-local/src/lib.rs",
+        "crates/terminal/src/lib.rs",
+        "crates/example/src/tests.rs",
+    ] {
+        assert!(measured.measures(production), "{production}");
+    }
+}
+
 fn summary(lines: (u64, u64), functions: (u64, u64), regions: (u64, u64)) -> Value {
     let zero = json!({"count": 0, "covered": 0, "notcovered": 0, "percent": 0.0});
     json!({

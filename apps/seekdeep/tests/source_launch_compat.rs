@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    io::Read as _,
+    io::{self, Read, Write},
     path::Path,
     process::{Command, Output},
     sync::mpsc,
@@ -95,6 +95,34 @@ fn process_result(output: Output) -> ProcessResult {
     }
 }
 
+fn capture_pty_output(
+    mut reader: impl Read,
+    mut writer: impl Write,
+    output: &mut Vec<u8>,
+) -> io::Result<()> {
+    let mut buffer = [0_u8; 4096];
+    loop {
+        let count = match reader.read(&mut buffer) {
+            Ok(0) => return Ok(()),
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        let start = output.len().saturating_sub(3);
+        output.extend_from_slice(&buffer[..count]);
+        // portable-pty enables PSEUDOCONSOLE_INHERIT_CURSOR. ConPTY waits for
+        // this reply even for --help. Our freshly allocated terminal starts at
+        // row 1, column 1. Queries can cross read boundaries; retain every byte.
+        // https://learn.microsoft.com/en-us/windows/console/createpseudoconsole
+        for sequence in output[start..].windows(4) {
+            if sequence == b"\x1b[6n" {
+                writer.write_all(b"\x1b[1;1R")?;
+                writer.flush()?;
+            }
+        }
+    }
+}
+
 fn run_help_in_pty(columns: u16) -> ProcessResult {
     let sandbox = tempfile::tempdir().expect("temporary seekdeep PTY sandbox");
     let home = sandbox.path().join("home");
@@ -123,7 +151,8 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
         .spawn_command(command)
         .expect("seekdeep PTY process must launch");
     let mut killer = child.clone_killer();
-    let mut reader = pair.master.try_clone_reader().expect("seekdeep PTY reader");
+    let reader = pair.master.try_clone_reader().expect("seekdeep PTY reader");
+    let writer = pair.master.take_writer().expect("seekdeep PTY writer");
     drop(pair.slave);
     // A ConPTY reader clones only the output pipe, not the pseudoconsole.
     // Retain the master until the child exits so terminal-width queries still
@@ -137,18 +166,16 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let mut output = Vec::new();
-        let read = reader.read_to_end(&mut output);
+        let read = capture_pty_output(reader, writer, &mut output);
         let status = child_exit.join().expect("seekdeep PTY waiter must finish");
         let _ = sender.send((read, status, output));
     });
     let (read, status, output) = match receiver.recv_timeout(Duration::from_secs(10)) {
         Ok(result) => result,
         Err(error) => {
-            killer
-                .kill()
-                .expect("timed-out seekdeep PTY must be killed");
+            let killed = killer.kill();
             let cleanup = receiver.recv_timeout(Duration::from_secs(5));
-            panic!("seekdeep PTY help timed out: {error}; cleanup: {cleanup:#?}");
+            panic!("seekdeep PTY help timed out: {error}; kill: {killed:?}; cleanup: {cleanup:#?}");
         }
     };
     read.expect("seekdeep PTY output must be readable");
@@ -163,6 +190,17 @@ fn run_help_in_pty(columns: u16) -> ProcessResult {
         stdout,
         stderr: String::new(),
     }
+}
+
+#[test]
+fn pty_capture_replies_to_split_cursor_queries_without_altering_output() {
+    let reader =
+        io::Cursor::new(b"\x1b[".as_slice()).chain(io::Cursor::new(b"6n\x1b[6nhelp".as_slice()));
+    let mut replies = Vec::new();
+    let mut output = Vec::new();
+    capture_pty_output(reader, &mut replies, &mut output).unwrap();
+    assert_eq!(output, b"\x1b[6n\x1b[6nhelp");
+    assert_eq!(replies, b"\x1b[1;1R\x1b[1;1R");
 }
 
 #[test]
