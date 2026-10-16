@@ -160,7 +160,7 @@ jobs:
           echo "CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo" >> "$GITHUB_ENV"
           echo "RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ${{ env.CARGO_HOME }}
